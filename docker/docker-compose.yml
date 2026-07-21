@@ -1,0 +1,27 @@
+# Local development database for Winnow.
+# The app itself runs on the host via `pnpm dev` in Phase 0; the app container
+# is added in Checkpoint 0.4 (self-hosted deploy).
+name: winnow
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: winnow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: winnow
+      POSTGRES_PASSWORD: winnow
+      POSTGRES_DB: winnow
+    ports:
+      # Bind to localhost only — never expose the dev DB on the LAN/tailnet.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U winnow -d winnow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
