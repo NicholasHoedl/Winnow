@@ -1,12 +1,36 @@
-export default function MealsPage() {
+import { APP_TIME_ZONE } from "@/lib/config"
+import {
+  getFoods,
+  getMacroTargets,
+  getMealEntries,
+} from "@/modules/meals/queries"
+import { todayInZone } from "@/modules/todos/service"
+
+import { MealsView } from "./_components/meals-view"
+
+export default async function MealsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ date?: string }>
+}) {
+  const params = await searchParams
+  const today = todayInZone(new Date(), APP_TIME_ZONE)
+  const date =
+    params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today
+
+  const [entries, foods, targets] = await Promise.all([
+    getMealEntries(date),
+    getFoods(),
+    getMacroTargets(),
+  ])
+
   return (
-    <div className="mx-auto w-full max-w-5xl p-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">
-        Meals
-      </h1>
-      <p className="text-muted-foreground mt-2 text-sm">
-        This module arrives in Phase 2.
-      </p>
-    </div>
+    <MealsView
+      date={date}
+      today={today}
+      entries={entries}
+      foods={foods}
+      targets={targets}
+    />
   )
 }

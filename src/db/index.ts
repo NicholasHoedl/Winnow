@@ -4,10 +4,11 @@ import { Pool } from "pg"
 
 import * as coreSchema from "./schema"
 import * as todosSchema from "@/modules/todos/schema"
+import * as mealsSchema from "@/modules/meals/schema"
 
 // Each domain module contributes its tables; merge them into one schema object
 // so the Drizzle client's relational queries (db.query.*) see everything.
-const schema = { ...coreSchema, ...todosSchema }
+const schema = { ...coreSchema, ...todosSchema, ...mealsSchema }
 
 // Reuse a single Pool across dev HMR reloads to avoid exhausting Postgres
 // connections (a new module instance is created on every hot reload otherwise).

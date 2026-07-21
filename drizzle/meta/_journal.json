@@ -15,6 +15,13 @@
       "when": 1784659156313,
       "tag": "0001_slim_whizzer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784664628219,
+      "tag": "0002_rich_multiple_man",
+      "breakpoints": true
     }
   ]
 }
