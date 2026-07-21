@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { dueStatus, summarizeTasks, todayInZone } from "./service"
+import {
+  dueStatus,
+  isValidDateString,
+  summarizeTasks,
+  todayInZone,
+} from "./service"
 
 const TZ = "America/Chicago"
 
@@ -68,5 +73,20 @@ describe("summarizeTasks", () => {
     expect(summary.dueTodayCount).toBe(1)
     expect(summary.dueToday).toHaveLength(1)
     expect(summary.dueToday[0].dueDate).toBe("2026-07-21")
+  })
+})
+
+describe("isValidDateString", () => {
+  it("accepts real calendar dates", () => {
+    expect(isValidDateString("2026-07-21")).toBe(true)
+    expect(isValidDateString("2024-02-29")).toBe(true) // leap day
+  })
+
+  it("rejects malformed or impossible dates", () => {
+    expect(isValidDateString("2026-13-40")).toBe(false) // month/day overflow
+    expect(isValidDateString("2026-02-30")).toBe(false) // Feb 30
+    expect(isValidDateString("2025-02-29")).toBe(false) // not a leap year
+    expect(isValidDateString("2026-7-1")).toBe(false) // wrong format
+    expect(isValidDateString("garbage")).toBe(false)
   })
 })

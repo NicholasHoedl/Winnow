@@ -35,7 +35,7 @@ export function TaskItem({
   timeZone: string
   onToggle: (id: string) => void
   onEdit: (task: Task) => void
-  onDelete: (id: string) => void
+  onDelete: (task: Task) => void
 }) {
   const done = task.status === "done"
   const status = dueStatus(task.dueDate, new Date(), timeZone)
@@ -101,7 +101,7 @@ export function TaskItem({
             <Pencil className="size-4" />
             Edit
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={() => onDelete(task.id)}>
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(task)}>
             <Trash2 className="size-4" />
             Delete
           </DropdownMenuItem>

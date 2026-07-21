@@ -7,6 +7,7 @@ import { z } from "zod"
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 
+import type { Task } from "./queries"
 import { lists, tasks } from "./schema"
 import { listInputSchema, taskInputSchema } from "./validation"
 
@@ -76,9 +77,39 @@ export async function updateTask(id: string, input: unknown): Promise<ActionResu
   return { ok: true }
 }
 
-export async function deleteTask(id: string): Promise<ActionResult> {
+export type DeleteTaskResult =
+  | { ok: true; task: Task | null }
+  | { ok: false; error: string }
+
+export async function deleteTask(id: string): Promise<DeleteTaskResult> {
   const userId = await requireUserId()
-  await db.delete(tasks).where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+  const [deleted] = await db
+    .delete(tasks)
+    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+    .returning()
+  revalidatePath("/todos")
+  revalidatePath("/")
+  return { ok: true, task: deleted ?? null }
+}
+
+/** Re-inserts a task removed via {@link deleteTask} (the "undo" path). The user
+ * id is always taken from the session — any client-supplied one is ignored. */
+export async function restoreTask(task: Task): Promise<ActionResult> {
+  const userId = await requireUserId()
+  await db
+    .insert(tasks)
+    .values({
+      id: task.id,
+      userId,
+      title: task.title,
+      notes: task.notes,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      status: task.status,
+      completedAt: task.completedAt,
+      createdAt: task.createdAt,
+    })
+    .onConflictDoNothing()
   revalidatePath("/todos")
   revalidatePath("/")
   return { ok: true }

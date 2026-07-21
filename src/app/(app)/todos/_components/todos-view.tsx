@@ -4,7 +4,7 @@ import * as React from "react"
 import { Plus, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { deleteTask, toggleTaskStatus } from "@/modules/todos/actions"
+import { deleteTask, restoreTask, toggleTaskStatus } from "@/modules/todos/actions"
 import type { List, Task } from "@/modules/todos/queries"
 import { dueStatus } from "@/modules/todos/service"
 import { Button } from "@/components/ui/button"
@@ -59,10 +59,24 @@ export function TodosView({
     })
   }
 
-  function handleDelete(id: string) {
+  function handleDelete(task: Task) {
     startTransition(async () => {
-      const result = await deleteTask(id)
-      if (!result.ok) toast.error(result.error)
+      const result = await deleteTask(task.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      const restorable = result.task ?? task
+      toast("Task deleted", {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            startTransition(async () => {
+              const restored = await restoreTask(restorable)
+              if (!restored.ok) toast.error(restored.error)
+            }),
+        },
+      })
     })
   }
 

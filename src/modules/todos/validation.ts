@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { isValidDateString } from "./service"
+
 // Shared by the React Hook Form resolver (client) and the Server Actions
 // (server re-validation). Kept free of DB/Drizzle imports so it's client-safe.
 
@@ -9,11 +11,13 @@ export type Priority = (typeof PRIORITIES)[number]
 export const taskInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
-  // date-only 'YYYY-MM-DD', or empty (no due date)
+  // date-only 'YYYY-MM-DD' (a real calendar date), or empty (no due date)
   dueDate: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date")
-    .or(z.literal(""))
+    .refine(
+      (value) => value === "" || isValidDateString(value),
+      "Enter a valid date",
+    )
     .optional(),
   priority: z.enum(PRIORITIES).default("medium"),
   listId: z.string().uuid("Invalid list").or(z.literal("")).optional(),
