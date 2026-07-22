@@ -2,7 +2,10 @@ import Link from "next/link"
 import { CalendarDays, ListTodo, Utensils, Wallet } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { cn } from "@/lib/utils"
 import { APP_TIME_ZONE } from "@/lib/config"
+import { getBudgetSummary } from "@/modules/budget/queries"
+import { formatCents } from "@/modules/budget/service"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTaskSummary } from "@/modules/todos/queries"
 import { todayInZone } from "@/modules/todos/service"
@@ -14,10 +17,9 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-// Stub cards go live in their own phases (Budget → P3, Today/Calendar → P4).
+// Stub cards go live in their own phases (Today/Calendar → P4).
 const stubCards = [
   { href: "/calendar", title: "Today", icon: CalendarDays, hint: "Your schedule" },
-  { href: "/budget", title: "Budget", icon: Wallet, hint: "This month" },
 ]
 
 const MACRO_ROWS = [
@@ -29,10 +31,11 @@ const MACRO_ROWS = [
 
 export default async function DashboardPage() {
   const today = todayInZone(new Date(), APP_TIME_ZONE)
-  const [session, tasks, macros] = await Promise.all([
+  const [session, tasks, macros, budget] = await Promise.all([
     auth(),
     getTaskSummary(APP_TIME_ZONE),
     getMacroSummary(today),
+    getBudgetSummary(today.slice(0, 7)),
   ])
   const name = session?.user?.name ?? "there"
 
@@ -126,6 +129,52 @@ export default async function DashboardPage() {
               className="text-muted-foreground hover:text-foreground mt-auto text-sm underline-offset-4 hover:underline"
             >
               Open log →
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Live Budget card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wallet className="size-4" />
+              Budget
+            </CardTitle>
+            <CardDescription>This month</CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-24 flex-col gap-3">
+            <div className="flex gap-6">
+              <div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {formatCents(budget.expenseCents)}
+                </div>
+                <div className="text-muted-foreground text-xs">Spent</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {formatCents(budget.totalBudgetedCents)}
+                </div>
+                <div className="text-muted-foreground text-xs">Budgeted</div>
+              </div>
+            </div>
+            <div className="text-sm">
+              Net{" "}
+              <span
+                className={cn(
+                  "font-semibold tabular-nums",
+                  budget.netCents < 0
+                    ? "text-destructive"
+                    : "text-emerald-600 dark:text-emerald-400",
+                )}
+              >
+                {formatCents(budget.netCents)}
+              </span>
+            </div>
+            <Link
+              href="/budget"
+              className="text-muted-foreground hover:text-foreground mt-auto text-sm underline-offset-4 hover:underline"
+            >
+              Open budget →
             </Link>
           </CardContent>
         </Card>
