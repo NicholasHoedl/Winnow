@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { APP_TIME_ZONE } from "@/lib/config"
 import { getBudgetSummary } from "@/modules/budget/queries"
 import { formatCents } from "@/modules/budget/service"
+import { getDayEvents } from "@/modules/calendar/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTaskSummary } from "@/modules/todos/queries"
 import { todayInZone } from "@/modules/todos/service"
@@ -17,11 +18,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-// Stub cards go live in their own phases (Today/Calendar → P4).
-const stubCards = [
-  { href: "/calendar", title: "Today", icon: CalendarDays, hint: "Your schedule" },
-]
-
 const MACRO_ROWS = [
   { key: "calories", label: "Calories", unit: "kcal" },
   { key: "protein", label: "Protein", unit: "g" },
@@ -31,11 +27,12 @@ const MACRO_ROWS = [
 
 export default async function DashboardPage() {
   const today = todayInZone(new Date(), APP_TIME_ZONE)
-  const [session, tasks, macros, budget] = await Promise.all([
+  const [session, tasks, macros, budget, events] = await Promise.all([
     auth(),
     getTaskSummary(APP_TIME_ZONE),
     getMacroSummary(today),
     getBudgetSummary(today.slice(0, 7)),
+    getDayEvents(today),
   ])
   const name = session?.user?.name ?? "there"
 
@@ -179,25 +176,42 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {stubCards.map((card) => (
-          <Card key={card.href}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <card.icon className="size-4" />
-                {card.title}
-              </CardTitle>
-              <CardDescription>{card.hint}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-24 items-center justify-center">
-              <Link
-                href={card.href}
-                className="text-muted-foreground hover:text-foreground text-sm underline-offset-4 hover:underline"
-              >
-                Coming in a later checkpoint →
-              </Link>
-            </CardContent>
-          </Card>
-        ))}
+        {/* Live Today (events) card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="size-4" />
+              Today
+            </CardTitle>
+            <CardDescription>Your schedule</CardDescription>
+          </CardHeader>
+          <CardContent className="flex min-h-24 flex-col gap-3">
+            <div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {events.length}
+              </div>
+              <div className="text-muted-foreground text-xs">
+                {events.length === 1 ? "event" : "events"}
+              </div>
+            </div>
+            {events.length > 0 && (
+              <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
+                {events.slice(0, 3).map((occ, i) => (
+                  <li key={`${occ.event.id}-${i}`} className="truncate">
+                    <span className="tabular-nums">{occ.time ?? "All day"}</span> ·{" "}
+                    {occ.event.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link
+              href="/calendar"
+              className="text-muted-foreground hover:text-foreground mt-auto text-sm underline-offset-4 hover:underline"
+            >
+              Open calendar →
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
