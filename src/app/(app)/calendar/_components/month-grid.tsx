@@ -55,7 +55,7 @@ export function MonthGrid({
                 className={cn(
                   "text-xs font-medium tabular-nums",
                   isToday &&
-                    "bg-primary text-primary-foreground flex size-5 items-center justify-center rounded-full",
+                    "bg-brand-accent text-brand-accent-foreground flex size-5 items-center justify-center rounded-full",
                 )}
               >
                 {Number(date.slice(8))}

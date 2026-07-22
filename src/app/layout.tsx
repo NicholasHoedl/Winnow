@@ -4,25 +4,32 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 
+// Variable fonts — full weight range loaded so we can use the extremes
+// (extralight display numerals ↔ extrabold headings) per the type system.
 const bricolage = Bricolage_Grotesque({
   variable: "--font-bricolage",
   subsets: ["latin"],
+  display: "swap",
 })
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
+  display: "swap",
+  axes: ["opsz"],
 })
 
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+  display: "swap",
 })
 
 export const metadata: Metadata = {
   title: "Winnow",
   description: "Your life, organized in one place.",
-  // PWA groundwork — full manifest, icons, and service worker land in 0.4.
+  // Installable PWA — manifest + icons live in app/manifest.ts and app/apple-icon.
+  // (A service worker for offline is a post-MVP add.)
   appleWebApp: {
     capable: true,
     title: "Winnow",
@@ -33,8 +40,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#fbfbfe" },
+    { media: "(prefers-color-scheme: dark)", color: "#17171f" },
   ],
 }
 
