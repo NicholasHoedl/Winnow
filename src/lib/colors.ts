@@ -29,6 +29,26 @@ export function categoryAccent(index: number): CategoryAccent {
   return ACCENTS[((index % ACCENTS.length) + ACCENTS.length) % ACCENTS.length]
 }
 
+/** Accent for a 1-based palette slot (1–6), as stored on a calendar's `color`. */
+export function accentForSlot(slot: number): CategoryAccent {
+  return categoryAccent((slot || 1) - 1)
+}
+
+export const COLOR_SLOTS = [1, 2, 3, 4, 5, 6]
+
+/** Accent for an event: its calendar's colour, or a hashed fallback when the
+ *  event has no calendar. Used at every event-chip render site. */
+export function accentForCalendar(
+  calendarId: string | null,
+  calendars: readonly { id: string; color: number }[],
+  fallbackKey: string,
+): CategoryAccent {
+  const cal = calendarId
+    ? calendars.find((c) => c.id === calendarId)
+    : undefined
+  return cal ? accentForSlot(cal.color) : accentForKey(fallbackKey)
+}
+
 /** Stable accent derived from a string key, so the same id always maps to the
  *  same color regardless of ordering. */
 export function accentForKey(key: string): CategoryAccent {

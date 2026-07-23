@@ -1,9 +1,13 @@
 "use client"
 
 import { cn } from "@/lib/utils"
-import { accentForKey } from "@/lib/colors"
+import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
-import type { EventOccurrence, EventRow } from "@/modules/calendar/queries"
+import type {
+  Calendar,
+  EventOccurrence,
+  EventRow,
+} from "@/modules/calendar/queries"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -20,6 +24,7 @@ export function MonthGrid({
   byDay,
   month,
   today,
+  calendars,
   onSelectDay,
   onEditEvent,
 }: {
@@ -27,6 +32,7 @@ export function MonthGrid({
   byDay: Record<string, EventOccurrence[]>
   month: string
   today: string
+  calendars: Calendar[]
   onSelectDay: (date: string) => void
   onEditEvent: (event: EventRow) => void
 }) {
@@ -72,7 +78,11 @@ export function MonthGrid({
               </span>
               <div className="flex flex-col gap-0.5">
                 {dayEvents.slice(0, MAX_CHIPS).map((occ, i) => {
-                  const accent = accentForKey(occ.event.id)
+                  const accent = accentForCalendar(
+                    occ.event.calendarId,
+                    calendars,
+                    occ.event.id,
+                  )
                   return (
                     <button
                       key={`${occ.event.id}-${i}`}

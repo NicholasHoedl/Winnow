@@ -9,9 +9,10 @@ import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
 import type { EventRow } from "./queries"
-import { events, goals, milestones } from "./schema"
+import { calendars, events, goals, milestones } from "./schema"
 import { zonedDateTimeToUtc } from "./service"
 import {
+  calendarInputSchema,
   eventInputSchema,
   goalInputSchema,
   milestoneInputSchema,
@@ -79,6 +80,7 @@ export async function createEvent(input: unknown): Promise<ActionResult> {
   const { startAt, endAt } = toTimestamps(d, timeZone)
   await db.insert(events).values({
     userId,
+    calendarId: d.calendarId || null,
     title: d.title,
     notes: nullify(d.notes),
     startAt,
@@ -108,6 +110,7 @@ export async function updateEvent(
   await db
     .update(events)
     .set({
+      calendarId: d.calendarId || null,
       title: d.title,
       notes: nullify(d.notes),
       startAt,
@@ -145,6 +148,7 @@ export async function restoreEvent(ev: EventRow): Promise<ActionResult> {
     .values({
       id: ev.id,
       userId,
+      calendarId: ev.calendarId,
       title: ev.title,
       notes: ev.notes,
       startAt: ev.startAt,
@@ -240,5 +244,48 @@ export async function deleteMilestone(id: string): Promise<ActionResult> {
     .delete(milestones)
     .where(and(eq(milestones.id, id), eq(milestones.userId, userId)))
   revalidatePath("/calendar")
+  return { ok: true }
+}
+
+// --- Calendars ---
+
+export async function createCalendar(input: unknown): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = calendarInputSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  await db.insert(calendars).values({ userId, ...parsed.data })
+  revalidateCalendar()
+  return { ok: true }
+}
+
+export async function updateCalendar(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = calendarInputSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  await db
+    .update(calendars)
+    .set(parsed.data)
+    .where(and(eq(calendars.id, id), eq(calendars.userId, userId)))
+  revalidateCalendar()
+  return { ok: true }
+}
+
+export async function deleteCalendar(id: string): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const owned = await db.query.calendars.findMany({
+    where: eq(calendars.userId, userId),
+    columns: { id: true },
+  })
+  if (owned.length <= 1) {
+    return { ok: false, error: "You need at least one calendar." }
+  }
+  // The FK cascade removes this calendar's events along with it.
+  await db
+    .delete(calendars)
+    .where(and(eq(calendars.id, id), eq(calendars.userId, userId)))
+  revalidateCalendar()
   return { ok: true }
 }

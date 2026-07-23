@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation"
 import { ArrowUpRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { accentForKey } from "@/lib/colors"
+import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
-import type { EventOccurrence } from "@/modules/calendar/queries"
+import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
@@ -43,15 +43,17 @@ function shortDate(date: string): string {
 function EventChip({
   occ,
   onOpen,
+  calendars,
   use24Hour,
   withTime,
 }: {
   occ: EventOccurrence
   onOpen: (e: React.MouseEvent) => void
+  calendars: Calendar[]
   use24Hour: boolean
   withTime?: boolean
 }) {
-  const accent = accentForKey(occ.event.id)
+  const accent = accentForCalendar(occ.event.calendarId, calendars, occ.event.id)
   return (
     <button
       type="button"
@@ -81,6 +83,7 @@ function MonthView({
   month,
   today,
   headers,
+  calendars,
   use24Hour,
   onDay,
   onEvent,
@@ -90,6 +93,7 @@ function MonthView({
   month: string
   today: string
   headers: string[]
+  calendars: Calendar[]
   use24Hour: boolean
   onDay: (date: string) => void
   onEvent: (e: React.MouseEvent) => void
@@ -135,6 +139,7 @@ function MonthView({
                     key={`${occ.event.id}-${i}`}
                     occ={occ}
                     onOpen={onEvent}
+                    calendars={calendars}
                     use24Hour={use24Hour}
                   />
                 ))}
@@ -156,6 +161,7 @@ function WeekView({
   weekRow,
   byDay,
   today,
+  calendars,
   use24Hour,
   onDay,
   onEvent,
@@ -163,6 +169,7 @@ function WeekView({
   weekRow: string[]
   byDay: Record<string, EventOccurrence[]>
   today: string
+  calendars: Calendar[]
   use24Hour: boolean
   onDay: (date: string) => void
   onEvent: (e: React.MouseEvent) => void
@@ -202,6 +209,7 @@ function WeekView({
                       key={`${occ.event.id}-${i}`}
                       occ={occ}
                       onOpen={onEvent}
+                      calendars={calendars}
                       use24Hour={use24Hour}
                       withTime
                     />
@@ -221,11 +229,13 @@ export function DashboardCalendar({
   today,
   grid,
   byDay,
+  calendars,
 }: {
   month: string
   today: string
   grid: string[][]
   byDay: Record<string, EventOccurrence[]>
+  calendars: Calendar[]
 }) {
   const router = useRouter()
   const { weekStartsOn, use24HourTime } = usePreferences()
@@ -288,6 +298,7 @@ export function DashboardCalendar({
             month={month}
             today={today}
             headers={headers}
+            calendars={calendars}
             use24Hour={use24HourTime}
             onDay={onDay}
             onEvent={onEvent}
@@ -297,6 +308,7 @@ export function DashboardCalendar({
             weekRow={weekRow}
             byDay={byDay}
             today={today}
+            calendars={calendars}
             use24Hour={use24HourTime}
             onDay={onDay}
             onEvent={onEvent}

@@ -7,7 +7,7 @@ import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { createEvent, updateEvent } from "@/modules/calendar/actions"
-import type { EventRow } from "@/modules/calendar/queries"
+import type { Calendar, EventRow } from "@/modules/calendar/queries"
 import {
   localDateTime,
   type RecurrenceFreq,
@@ -15,6 +15,7 @@ import {
 } from "@/modules/calendar/service"
 import { eventInputSchema } from "@/modules/calendar/validation"
 import { cn } from "@/lib/utils"
+import { accentForSlot } from "@/lib/colors"
 import { numberField } from "@/lib/forms"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -39,6 +40,7 @@ import {
 type EventFormValues = {
   title: string
   notes?: string
+  calendarId: string
   allDay: boolean
   startDate: string
   startTime?: string
@@ -95,10 +97,11 @@ function monthlyLabels(date: string): { dayOfMonth: string; nthWeekday: string }
   return { dayOfMonth: `day ${d}`, nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}` }
 }
 
-function emptyValues(defaultDate: string): EventFormValues {
+function emptyValues(defaultDate: string, calendarId = ""): EventFormValues {
   return {
     title: "",
     notes: "",
+    calendarId,
     allDay: false,
     startDate: defaultDate,
     startTime: "09:00",
@@ -116,6 +119,7 @@ export function EventDialog({
   timeZone,
   defaultDate,
   event,
+  calendars,
   open,
   onOpenChange,
   onDelete,
@@ -123,6 +127,7 @@ export function EventDialog({
   timeZone: string
   defaultDate: string
   event: EventRow | null
+  calendars: Calendar[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onDelete: (event: EventRow) => void
@@ -138,7 +143,7 @@ export function EventDialog({
     formState: { errors, isSubmitting },
   } = useForm<EventFormValues>({
     resolver: standardSchemaResolver(eventInputSchema),
-    defaultValues: emptyValues(defaultDate),
+    defaultValues: emptyValues(defaultDate, calendars[0]?.id ?? ""),
   })
 
   React.useEffect(() => {
@@ -149,6 +154,7 @@ export function EventDialog({
       reset({
         title: event.title,
         notes: event.notes ?? "",
+        calendarId: event.calendarId ?? "",
         allDay: event.allDay,
         startDate: start.date,
         startTime: event.allDay ? "09:00" : start.time,
@@ -161,9 +167,9 @@ export function EventDialog({
         recurrenceEndDate: event.recurrenceEndDate ?? "",
       })
     } else {
-      reset(emptyValues(defaultDate))
+      reset(emptyValues(defaultDate, calendars[0]?.id ?? ""))
     }
-  }, [open, event, defaultDate, timeZone, reset])
+  }, [open, event, defaultDate, timeZone, calendars, reset])
 
   const onSubmit = handleSubmit(async (data) => {
     const result = isEdit
@@ -212,6 +218,44 @@ export function EventDialog({
               <Input id="e-notes" placeholder="Optional" {...register("notes")} />
               <FieldError errors={[errors.notes]} />
             </Field>
+
+            {calendars.length > 0 && (
+              <Field>
+                <FieldLabel>Calendar</FieldLabel>
+                <Controller
+                  control={control}
+                  name="calendarId"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || undefined}
+                      onValueChange={(value) => value && field.onChange(value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {(value) =>
+                            calendars.find((c) => c.id === value)?.name ??
+                            "Select…"
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {calendars.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            <span
+                              className={cn(
+                                "size-2.5 shrink-0 self-center rounded-full",
+                                accentForSlot(c.color).bar,
+                              )}
+                            />
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+            )}
 
             <Controller
               control={control}

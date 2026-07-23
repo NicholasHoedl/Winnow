@@ -27,6 +27,21 @@ export const recurrenceMonthlyModeEnum = pgEnum("recurrence_monthly_mode", [
   "nth_weekday",
 ])
 
+// Named calendars (Personal, Work, …). `color` is a palette slot (1–6) mapped
+// to --cat-1..6 for colour-coding; no colour hex is stored.
+export const calendars = pgTable("calendars", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: integer("color").notNull().default(1),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})
+
 // Events store instants in `start_at`/`end_at` (timestamptz). Recurring
 // occurrences are expanded on read in service.ts, never materialized as rows.
 export const events = pgTable("events", {
@@ -34,6 +49,10 @@ export const events = pgTable("events", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  // Deleting a calendar removes its events (cascade).
+  calendarId: uuid("calendar_id").references(() => calendars.id, {
+    onDelete: "cascade",
+  }),
   title: text("title").notNull(),
   notes: text("notes"),
   startAt: timestamp("start_at", { withTimezone: true }).notNull(),

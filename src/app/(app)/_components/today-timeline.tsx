@@ -2,9 +2,9 @@ import Link from "next/link"
 import { CalendarPlus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { accentForKey } from "@/lib/colors"
+import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
-import type { EventOccurrence } from "@/modules/calendar/queries"
+import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import {
   Card,
   CardContent,
@@ -14,9 +14,11 @@ import {
 
 export function TodayTimeline({
   events,
+  calendars,
   use24Hour,
 }: {
   events: EventOccurrence[]
+  calendars: Calendar[]
   use24Hour: boolean
 }) {
   return (
@@ -53,7 +55,11 @@ export function TodayTimeline({
         ) : (
           <ol className="flex flex-col gap-2">
             {events.map((occ, i) => {
-              const accent = accentForKey(occ.event.id)
+              const accent = accentForCalendar(
+                occ.event.calendarId,
+                calendars,
+                occ.event.id,
+              )
               return (
                 <li key={`${occ.event.id}-${i}`}>
                   <Link href="/calendar" className="flex items-stretch gap-3">

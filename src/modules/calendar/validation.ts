@@ -26,6 +26,7 @@ export const eventInputSchema = z
   .object({
     title: z.string().trim().min(1, "Title is required").max(200),
     notes: z.string().trim().max(2000).or(z.literal("")).optional(),
+    calendarId: z.string().uuid().or(z.literal("")),
     allDay: z.boolean(),
     startDate: z.string().refine(isValidDateString, "Enter a valid date"),
     startTime: optionalTime,
@@ -77,3 +78,9 @@ export const milestoneInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
 })
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>
+
+export const calendarInputSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(60),
+  color: z.number().int().min(1).max(6),
+})
+export type CalendarInput = z.infer<typeof calendarInputSchema>

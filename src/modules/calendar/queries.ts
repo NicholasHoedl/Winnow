@@ -4,7 +4,7 @@ import { and, asc, eq, gte, isNull, lt, or } from "drizzle-orm"
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 
-import { events, goals, milestones } from "./schema"
+import { calendars, events, goals, milestones } from "./schema"
 import {
   addDays,
   bucketByDay,
@@ -21,6 +21,32 @@ export type MilestoneRow = typeof milestones.$inferSelect
 export type GoalWithProgress = GoalRow & {
   milestones: MilestoneRow[]
   progress: { done: number; total: number; percent: number }
+}
+export type Calendar = typeof calendars.$inferSelect
+
+// Seed the two default calendars the first time a user has none (no seed-script
+// exists; this also provisions the pre-existing account). Idempotent.
+async function ensureDefaultCalendars(userId: string): Promise<void> {
+  const existing = await db.query.calendars.findFirst({
+    where: eq(calendars.userId, userId),
+  })
+  if (existing) return
+  await db
+    .insert(calendars)
+    .values([
+      { userId, name: "Personal", color: 1, sortOrder: 0 },
+      { userId, name: "Work", color: 3, sortOrder: 1 },
+    ])
+    .onConflictDoNothing()
+}
+
+export async function getCalendars(): Promise<Calendar[]> {
+  const userId = await requireUserId()
+  await ensureDefaultCalendars(userId)
+  return db.query.calendars.findMany({
+    where: eq(calendars.userId, userId),
+    orderBy: [asc(calendars.sortOrder), asc(calendars.createdAt)],
+  })
 }
 
 // A series can produce an occurrence in a view only if it starts before the view

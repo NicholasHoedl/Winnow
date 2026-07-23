@@ -2,12 +2,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CalendarPlus, ChevronLeft, ChevronRight } from "lucide-react"
+import { CalendarPlus, ChevronLeft, ChevronRight, Layers } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
+import { accentForSlot } from "@/lib/colors"
 import { deleteEvent, restoreEvent } from "@/modules/calendar/actions"
 import type {
+  Calendar,
   EventOccurrence,
   EventRow,
   GoalWithProgress,
@@ -15,6 +17,7 @@ import type {
 import { Button, buttonVariants } from "@/components/ui/button"
 
 import { AgendaView } from "./agenda-view"
+import { CalendarManager } from "./calendar-manager"
 import { EventDialog } from "./event-dialog"
 import { GoalsPanel } from "./goals-panel"
 import { MonthGrid } from "./month-grid"
@@ -44,6 +47,7 @@ export function CalendarView({
   byDay,
   occurrences,
   goals,
+  calendars,
 }: {
   month: string
   today: string
@@ -52,14 +56,36 @@ export function CalendarView({
   byDay: Record<string, EventOccurrence[]>
   occurrences: EventOccurrence[]
   goals: GoalWithProgress[]
+  calendars: Calendar[]
 }) {
   const [view, setView] = React.useState<CalendarView>("month")
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingEvent, setEditingEvent] = React.useState<EventRow | null>(null)
   const [defaultDate, setDefaultDate] = React.useState(today)
+  const [managerOpen, setManagerOpen] = React.useState(false)
+  // Per-session calendar visibility (empty = show all; resets on reload).
+  const [hiddenIds, setHiddenIds] = React.useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  )
   const [, startTransition] = React.useTransition()
 
   const currentMonth = today.slice(0, 7)
+
+  const isVisible = (occ: EventOccurrence) =>
+    !occ.event.calendarId || !hiddenIds.has(occ.event.calendarId)
+  const shownOccurrences = occurrences.filter(isVisible)
+  const shownByDay = Object.fromEntries(
+    Object.entries(byDay).map(([d, list]) => [d, list.filter(isVisible)]),
+  )
+
+  function toggleCalendar(id: string) {
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   function openCreate(date: string = today) {
     setEditingEvent(null)
@@ -122,12 +148,50 @@ export function CalendarView({
               </button>
             ))}
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Manage calendars"
+            onClick={() => setManagerOpen(true)}
+          >
+            <Layers className="size-4" />
+          </Button>
           <Button onClick={() => openCreate()}>
             <CalendarPlus className="size-4" />
             Add event
           </Button>
         </div>
       </header>
+
+      {calendars.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+          {calendars.map((cal) => {
+            const hidden = hiddenIds.has(cal.id)
+            return (
+              <button
+                key={cal.id}
+                type="button"
+                aria-pressed={!hidden}
+                onClick={() => toggleCalendar(cal.id)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                  hidden
+                    ? "text-muted-foreground border-dashed opacity-60"
+                    : "hover:bg-accent",
+                )}
+              >
+                <span
+                  className={cn(
+                    "size-2.5 rounded-full",
+                    hidden ? "bg-muted-foreground/40" : accentForSlot(cal.color).bar,
+                  )}
+                />
+                {cal.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="mb-4 flex items-center justify-center gap-1">
         <Link
@@ -160,17 +224,19 @@ export function CalendarView({
       {view === "month" ? (
         <MonthGrid
           grid={grid}
-          byDay={byDay}
+          byDay={shownByDay}
           month={month}
           today={today}
+          calendars={calendars}
           onSelectDay={openCreate}
           onEditEvent={openEdit}
         />
       ) : (
         <AgendaView
-          occurrences={occurrences}
+          occurrences={shownOccurrences}
           month={month}
           today={today}
+          calendars={calendars}
           onEditEvent={openEdit}
           onDelete={handleDelete}
         />
@@ -182,9 +248,15 @@ export function CalendarView({
         timeZone={timeZone}
         defaultDate={defaultDate}
         event={editingEvent}
+        calendars={calendars}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onDelete={handleDelete}
+      />
+      <CalendarManager
+        calendars={calendars}
+        open={managerOpen}
+        onOpenChange={setManagerOpen}
       />
     </div>
   )

@@ -1,4 +1,8 @@
-import { getGoals, getMonthEvents } from "@/modules/calendar/queries"
+import {
+  getCalendars,
+  getGoals,
+  getMonthEvents,
+} from "@/modules/calendar/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/modules/todos/service"
 
@@ -18,9 +22,10 @@ export default async function CalendarPage({
       ? params.month
       : currentMonth
 
-  const [{ grid, byDay, occurrences }, goals] = await Promise.all([
+  const [{ grid, byDay, occurrences }, goals, calendars] = await Promise.all([
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(),
+    getCalendars(),
   ])
 
   return (
@@ -32,6 +37,7 @@ export default async function CalendarPage({
       byDay={byDay}
       occurrences={occurrences}
       goals={goals}
+      calendars={calendars}
     />
   )
 }

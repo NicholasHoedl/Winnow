@@ -2,8 +2,14 @@
 
 import { MoreVertical, Pencil, Trash2 } from "lucide-react"
 
+import { cn } from "@/lib/utils"
+import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
-import type { EventOccurrence, EventRow } from "@/modules/calendar/queries"
+import type {
+  Calendar,
+  EventOccurrence,
+  EventRow,
+} from "@/modules/calendar/queries"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -28,12 +34,14 @@ export function AgendaView({
   occurrences,
   month,
   today,
+  calendars,
   onEditEvent,
   onDelete,
 }: {
   occurrences: EventOccurrence[]
   month: string
   today: string
+  calendars: Calendar[]
   onEditEvent: (event: EventRow) => void
   onDelete: (event: EventRow) => void
 }) {
@@ -67,7 +75,11 @@ export function AgendaView({
             {group.items.map((occ, i) => (
               <div
                 key={`${occ.event.id}-${i}`}
-                className="bg-card flex items-center gap-3 rounded-lg border p-3"
+                className={cn(
+                  "bg-card flex items-center gap-3 rounded-lg border border-l-2 p-3",
+                  accentForCalendar(occ.event.calendarId, calendars, occ.event.id)
+                    .border,
+                )}
               >
                 <span className="text-muted-foreground w-16 shrink-0 text-xs tabular-nums">
                   {occ.time ? formatTime(occ.time, use24HourTime) : "All day"}

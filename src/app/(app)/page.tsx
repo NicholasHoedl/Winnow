@@ -4,6 +4,7 @@ import { CalendarPlus, Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
+  getCalendars,
   getDayEvents,
   getGoals,
   getMonthEvents,
@@ -40,17 +41,27 @@ export default async function DashboardPage() {
   const month = today.slice(0, 7)
   const nowTime = localDateTime(new Date(), timeZone).time
 
-  const [session, tasks, macros, budget, categories, dayEvents, monthData, goals] =
-    await Promise.all([
-      auth(),
-      getTaskSummary(timeZone),
-      getMacroSummary(today),
-      getBudgetSummary(month),
-      getCategories(),
-      getDayEvents(today, timeZone),
-      getMonthEvents(month, timeZone, weekStartsOn),
-      getGoals(),
-    ])
+  const [
+    session,
+    tasks,
+    macros,
+    budget,
+    categories,
+    dayEvents,
+    monthData,
+    goals,
+    calendars,
+  ] = await Promise.all([
+    auth(),
+    getTaskSummary(timeZone),
+    getMacroSummary(today),
+    getBudgetSummary(month),
+    getCategories(),
+    getDayEvents(today, timeZone),
+    getMonthEvents(month, timeZone, weekStartsOn),
+    getGoals(),
+    getCalendars(),
+  ])
 
   const name = session?.user?.name ?? "there"
   const nextEvent =
@@ -103,6 +114,7 @@ export default async function DashboardPage() {
               today={today}
               grid={monthData.grid}
               byDay={monthData.byDay}
+              calendars={calendars}
             />
           </Reveal>
           <Reveal delay={0.1}>
@@ -114,7 +126,11 @@ export default async function DashboardPage() {
             />
           </Reveal>
           <Reveal delay={0.15}>
-            <TodayTimeline events={dayEvents} use24Hour={use24HourTime} />
+            <TodayTimeline
+              events={dayEvents}
+              calendars={calendars}
+              use24Hour={use24HourTime}
+            />
           </Reveal>
         </div>
 
