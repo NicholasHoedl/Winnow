@@ -3,6 +3,7 @@ import { CalendarPlus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { accentForKey } from "@/lib/colors"
+import { formatTime } from "@/lib/format"
 import type { EventOccurrence } from "@/modules/calendar/queries"
 import {
   Card,
@@ -11,7 +12,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-export function TodayTimeline({ events }: { events: EventOccurrence[] }) {
+export function TodayTimeline({
+  events,
+  use24Hour,
+}: {
+  events: EventOccurrence[]
+  use24Hour: boolean
+}) {
   return (
     <Card className="flex-1">
       <CardHeader>
@@ -51,7 +58,7 @@ export function TodayTimeline({ events }: { events: EventOccurrence[] }) {
                 <li key={`${occ.event.id}-${i}`}>
                   <Link href="/calendar" className="flex items-stretch gap-3">
                     <span className="text-muted-foreground w-14 shrink-0 pt-2 text-right text-xs tabular-nums">
-                      {occ.time ?? "all-day"}
+                      {occ.time ? formatTime(occ.time, use24Hour) : "all-day"}
                     </span>
                     <span
                       className={cn(

@@ -219,15 +219,17 @@ export function expandOccurrences<E extends RecurringEvent>(
 
 // --- month grid + day bucketing ---
 
-/** A Sunday-started rectangular grid (weeks × 7 YYYY-MM-DD) covering `month`
- *  ('YYYY-MM'), padded with adjacent-month days. */
-export function monthGrid(month: string): string[][] {
+/** A rectangular grid (weeks × 7 YYYY-MM-DD) covering `month` ('YYYY-MM'),
+ *  padded with adjacent-month days. `weekStartsOn`: 0 = Sunday, 1 = Monday. */
+export function monthGrid(month: string, weekStartsOn = 0): string[][] {
   const [y, m] = parse(month)
   const first = fmt(y, m, 1)
   const firstDow = new Date(`${first}T00:00:00Z`).getUTCDay() // 0 = Sunday
   const last = fmt(y, m, daysInMonth(y, m))
 
-  let cursor = addDays(first, -firstDow)
+  // Days to back up so the first row begins on `weekStartsOn`.
+  const lead = (firstDow - weekStartsOn + 7) % 7
+  let cursor = addDays(first, -lead)
   const weeks: string[][] = []
   do {
     const week: string[] = []
@@ -241,12 +243,15 @@ export function monthGrid(month: string): string[][] {
 }
 
 /** The visible month grid plus its half-open date range [start, end). */
-export function gridRange(month: string): {
+export function gridRange(
+  month: string,
+  weekStartsOn = 0,
+): {
   grid: string[][]
   start: string
   end: string
 } {
-  const grid = monthGrid(month)
+  const grid = monthGrid(month, weekStartsOn)
   return {
     grid,
     start: grid[0][0],

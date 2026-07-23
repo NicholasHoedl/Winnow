@@ -2,13 +2,17 @@
 
 import { cn } from "@/lib/utils"
 import { accentForKey } from "@/lib/colors"
+import { formatTime } from "@/lib/format"
 import type { EventOccurrence, EventRow } from "@/modules/calendar/queries"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const MAX_CHIPS = 3
 
-function chipLabel(occ: EventOccurrence): string {
-  return occ.time ? `${occ.time} ${occ.event.title}` : occ.event.title
+function chipLabel(occ: EventOccurrence, use24Hour: boolean): string {
+  return occ.time
+    ? `${formatTime(occ.time, use24Hour)} ${occ.event.title}`
+    : occ.event.title
 }
 
 export function MonthGrid({
@@ -26,10 +30,15 @@ export function MonthGrid({
   onSelectDay: (date: string) => void
   onEditEvent: (event: EventRow) => void
 }) {
+  const { weekStartsOn, use24HourTime } = usePreferences()
+  const headers = [
+    ...WEEKDAYS.slice(weekStartsOn),
+    ...WEEKDAYS.slice(0, weekStartsOn),
+  ]
   return (
     <div className="overflow-hidden rounded-xl border">
       <div className="bg-muted/40 grid grid-cols-7 border-b">
-        {WEEKDAYS.map((d) => (
+        {headers.map((d) => (
           <div
             key={d}
             className="text-muted-foreground p-2 text-center text-xs font-medium"
@@ -72,14 +81,14 @@ export function MonthGrid({
                         e.stopPropagation()
                         onEditEvent(occ.event)
                       }}
-                      title={chipLabel(occ)}
+                      title={chipLabel(occ, use24HourTime)}
                       className={cn(
                         "text-foreground truncate rounded border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
                         accent.tint,
                         accent.border,
                       )}
                     >
-                      {chipLabel(occ)}
+                      {chipLabel(occ, use24HourTime)}
                     </button>
                   )
                 })}

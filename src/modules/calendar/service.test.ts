@@ -226,6 +226,17 @@ describe("monthGrid", () => {
     expect(flat).toContain("2026-07-01")
     expect(flat).toContain("2026-07-31")
   })
+
+  it("starts on Monday when weekStartsOn is 1", () => {
+    const grid = monthGrid("2026-07", 1)
+    expect(grid.every((week) => week.length === 7)).toBe(true)
+    const flat = grid.flat()
+    // Starts on a Monday, ends on a Sunday.
+    expect(new Date(`${flat[0]}T00:00:00Z`).getUTCDay()).toBe(1)
+    expect(new Date(`${flat.at(-1)}T00:00:00Z`).getUTCDay()).toBe(0)
+    expect(flat).toContain("2026-07-01")
+    expect(flat).toContain("2026-07-31")
+  })
 })
 
 describe("bucketByDay", () => {

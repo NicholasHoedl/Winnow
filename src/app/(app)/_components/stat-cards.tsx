@@ -60,10 +60,12 @@ export function StatCards({
   tasks,
   macros,
   budget,
+  currency,
 }: {
   tasks: TasksLite
   macros: { progress: MacroProgressSet }
   budget: MonthSummary
+  currency: string
 }) {
   const nothingLogged = MACROS.every(
     ({ key }) => macros.progress[key].consumed === 0,
@@ -140,10 +142,10 @@ export function StatCards({
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between">
               <span className="text-lg font-semibold tabular-nums">
-                {formatCents(budget.expenseCents)}
+                {formatCents(budget.expenseCents, currency)}
               </span>
               <span className="text-muted-foreground text-xs tabular-nums">
-                of {formatCents(budget.totalBudgetedCents)}
+                of {formatCents(budget.totalBudgetedCents, currency)}
               </span>
             </div>
             <Bar
@@ -158,7 +160,7 @@ export function StatCards({
                   budget.netCents < 0 ? "text-destructive" : "text-cat-5",
                 )}
               >
-                {formatCents(budget.netCents)}
+                {formatCents(budget.netCents, currency)}
               </span>
             </p>
           </div>

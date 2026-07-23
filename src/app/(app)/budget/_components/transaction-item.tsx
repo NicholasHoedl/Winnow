@@ -5,6 +5,7 @@ import { MoreVertical, Pencil, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Transaction } from "@/modules/budget/queries"
 import { formatCents } from "@/modules/budget/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ export function TransactionItem({
   onEdit: (tx: Transaction) => void
   onDelete: (tx: Transaction) => void
 }) {
+  const { currency } = usePreferences()
   const isIncome = transaction.type === "income"
   const description = transaction.description?.trim()
   const title = description || categoryName
@@ -62,7 +64,7 @@ export function TransactionItem({
         )}
       >
         {isIncome ? "+" : "-"}
-        {formatCents(transaction.amountCents)}
+        {formatCents(transaction.amountCents, currency)}
       </span>
 
       <DropdownMenu>

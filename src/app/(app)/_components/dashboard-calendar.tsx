@@ -7,14 +7,19 @@ import { ArrowUpRight } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { accentForKey } from "@/lib/colors"
+import { formatTime } from "@/lib/format"
 import type { EventOccurrence } from "@/modules/calendar/queries"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+// Sunday-indexed absolute day names (the week view looks these up by getUTCDay).
+const ABSOLUTE_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const MONTH_MAX_CHIPS = 3
 
-function chipLabel(occ: EventOccurrence): string {
-  return occ.time ? `${occ.time} ${occ.event.title}` : occ.event.title
+function chipLabel(occ: EventOccurrence, use24Hour: boolean): string {
+  return occ.time
+    ? `${formatTime(occ.time, use24Hour)} ${occ.event.title}`
+    : occ.event.title
 }
 
 function monthLabel(month: string): string {
@@ -38,10 +43,12 @@ function shortDate(date: string): string {
 function EventChip({
   occ,
   onOpen,
+  use24Hour,
   withTime,
 }: {
   occ: EventOccurrence
   onOpen: (e: React.MouseEvent) => void
+  use24Hour: boolean
   withTime?: boolean
 }) {
   const accent = accentForKey(occ.event.id)
@@ -49,7 +56,7 @@ function EventChip({
     <button
       type="button"
       onClick={onOpen}
-      title={chipLabel(occ)}
+      title={chipLabel(occ, use24Hour)}
       className={cn(
         "truncate rounded border-l-2 px-1.5 py-1 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
         accent.tint,
@@ -58,11 +65,11 @@ function EventChip({
     >
       {withTime && (
         <span className="text-muted-foreground block tabular-nums">
-          {occ.time ?? "all-day"}
+          {occ.time ? formatTime(occ.time, use24Hour) : "all-day"}
         </span>
       )}
       <span className="block truncate font-medium">
-        {withTime ? occ.event.title : chipLabel(occ)}
+        {withTime ? occ.event.title : chipLabel(occ, use24Hour)}
       </span>
     </button>
   )
@@ -73,6 +80,8 @@ function MonthView({
   byDay,
   month,
   today,
+  headers,
+  use24Hour,
   onDay,
   onEvent,
 }: {
@@ -80,13 +89,15 @@ function MonthView({
   byDay: Record<string, EventOccurrence[]>
   month: string
   today: string
+  headers: string[]
+  use24Hour: boolean
   onDay: (date: string) => void
   onEvent: (e: React.MouseEvent) => void
 }) {
   return (
     <div className="overflow-hidden rounded-lg border">
       <div className="bg-muted/40 grid grid-cols-7 border-b">
-        {WEEKDAYS.map((d) => (
+        {headers.map((d) => (
           <div
             key={d}
             className="text-muted-foreground p-1.5 text-center text-xs font-medium"
@@ -120,7 +131,12 @@ function MonthView({
               </span>
               <div className="flex flex-col gap-0.5">
                 {dayEvents.slice(0, MONTH_MAX_CHIPS).map((occ, i) => (
-                  <EventChip key={`${occ.event.id}-${i}`} occ={occ} onOpen={onEvent} />
+                  <EventChip
+                    key={`${occ.event.id}-${i}`}
+                    occ={occ}
+                    onOpen={onEvent}
+                    use24Hour={use24Hour}
+                  />
                 ))}
                 {dayEvents.length > MONTH_MAX_CHIPS && (
                   <span className="text-muted-foreground px-1 text-[0.65rem]">
@@ -140,12 +156,14 @@ function WeekView({
   weekRow,
   byDay,
   today,
+  use24Hour,
   onDay,
   onEvent,
 }: {
   weekRow: string[]
   byDay: Record<string, EventOccurrence[]>
   today: string
+  use24Hour: boolean
   onDay: (date: string) => void
   onEvent: (e: React.MouseEvent) => void
 }) {
@@ -167,7 +185,7 @@ function WeekView({
                 )}
               >
                 <span className="text-[0.65rem] font-medium uppercase">
-                  {WEEKDAYS[dow]}
+                  {ABSOLUTE_WEEKDAYS[dow]}
                 </span>
                 <span className="text-sm font-semibold tabular-nums">
                   {Number(date.slice(8))}
@@ -184,6 +202,7 @@ function WeekView({
                       key={`${occ.event.id}-${i}`}
                       occ={occ}
                       onOpen={onEvent}
+                      use24Hour={use24Hour}
                       withTime
                     />
                   ))
@@ -209,8 +228,13 @@ export function DashboardCalendar({
   byDay: Record<string, EventOccurrence[]>
 }) {
   const router = useRouter()
+  const { weekStartsOn, use24HourTime } = usePreferences()
   const [view, setView] = React.useState<"month" | "week">("month")
   const weekRow = grid.find((w) => w[0] <= today && today <= w[6]) ?? grid[0]
+  const headers = [
+    ...ABSOLUTE_WEEKDAYS.slice(weekStartsOn),
+    ...ABSOLUTE_WEEKDAYS.slice(0, weekStartsOn),
+  ]
 
   const onDay = (date: string) =>
     router.push(`/calendar?month=${date.slice(0, 7)}`)
@@ -263,6 +287,8 @@ export function DashboardCalendar({
             byDay={byDay}
             month={month}
             today={today}
+            headers={headers}
+            use24Hour={use24HourTime}
             onDay={onDay}
             onEvent={onEvent}
           />
@@ -271,6 +297,7 @@ export function DashboardCalendar({
             weekRow={weekRow}
             byDay={byDay}
             today={today}
+            use24Hour={use24HourTime}
             onDay={onDay}
             onEvent={onEvent}
           />

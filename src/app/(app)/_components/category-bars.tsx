@@ -14,9 +14,11 @@ import {
 export function CategoryBars({
   budget,
   categories,
+  currency,
 }: {
   budget: MonthSummary
   categories: Category[]
+  currency: string
 }) {
   const rows = budget.byCategory
     .filter((c) => c.budgetedCents > 0 || c.spentCents > 0)
@@ -67,9 +69,9 @@ export function CategoryBars({
                       </span>
                     </span>
                     <span className="text-muted-foreground shrink-0 tabular-nums">
-                      {formatCents(row.spentCents)}
+                      {formatCents(row.spentCents, currency)}
                       {row.budgetedCents > 0 &&
-                        ` / ${formatCents(row.budgetedCents)}`}
+                        ` / ${formatCents(row.budgetedCents, currency)}`}
                     </span>
                   </div>
                   <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">

@@ -1,5 +1,5 @@
-import { APP_TIME_ZONE } from "@/lib/config"
 import { getGoals, getMonthEvents } from "@/modules/calendar/queries"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/modules/todos/service"
 
 import { CalendarView } from "./_components/calendar-view"
@@ -10,7 +10,8 @@ export default async function CalendarPage({
   searchParams: Promise<{ month?: string }>
 }) {
   const params = await searchParams
-  const today = todayInZone(new Date(), APP_TIME_ZONE)
+  const { timeZone, weekStartsOn } = await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone)
   const currentMonth = today.slice(0, 7)
   const month =
     params.month && /^\d{4}-\d{2}$/.test(params.month)
@@ -18,7 +19,7 @@ export default async function CalendarPage({
       : currentMonth
 
   const [{ grid, byDay, occurrences }, goals] = await Promise.all([
-    getMonthEvents(month),
+    getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(),
   ])
 
@@ -26,7 +27,7 @@ export default async function CalendarPage({
     <CalendarView
       month={month}
       today={today}
-      timeZone={APP_TIME_ZONE}
+      timeZone={timeZone}
       grid={grid}
       byDay={byDay}
       occurrences={occurrences}

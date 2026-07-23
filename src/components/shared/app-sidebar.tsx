@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LogOut } from "lucide-react"
+import { LogOut, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import { ModeToggle } from "./mode-toggle"
 export function AppSidebar({ userName }: { userName: string }) {
   const pathname = usePathname()
   const initial = userName.charAt(0).toUpperCase() || "?"
+  const settingsActive = isNavActive(pathname, "/settings")
 
   return (
     <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 flex-col border-r md:flex">
@@ -65,19 +66,36 @@ export function AppSidebar({ userName }: { userName: string }) {
         })}
       </nav>
 
-      <div className="border-sidebar-border flex items-center justify-between gap-2 border-t p-3">
-        <ModeToggle />
-        <form action={signOutAction}>
-          <Button
-            type="submit"
-            variant="ghost"
-            size="sm"
-            className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          >
-            <LogOut className="size-4" />
-            Sign out
-          </Button>
-        </form>
+      <div className="border-sidebar-border flex flex-col gap-1 border-t p-3">
+        <Link
+          href="/settings"
+          aria-current={settingsActive ? "page" : undefined}
+          className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            settingsActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+          )}
+        >
+          <Settings
+            className={cn("size-4", settingsActive && "text-sidebar-primary")}
+          />
+          Settings
+        </Link>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <ModeToggle />
+          <form action={signOutAction}>
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              className="text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+          </form>
+        </div>
       </div>
     </aside>
   )

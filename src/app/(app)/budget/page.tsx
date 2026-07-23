@@ -1,10 +1,10 @@
-import { APP_TIME_ZONE } from "@/lib/config"
 import {
   getCategories,
   getMonthBudgets,
   getMonthTransactions,
 } from "@/modules/budget/queries"
 import { summarizeMonth } from "@/modules/budget/service"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/modules/todos/service"
 
 import { BudgetView } from "./_components/budget-view"
@@ -15,7 +15,8 @@ export default async function BudgetPage({
   searchParams: Promise<{ month?: string }>
 }) {
   const params = await searchParams
-  const today = todayInZone(new Date(), APP_TIME_ZONE) // YYYY-MM-DD
+  const { timeZone } = await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone) // YYYY-MM-DD
   const currentMonth = today.slice(0, 7) // YYYY-MM
   const month =
     params.month && /^\d{4}-\d{2}$/.test(params.month)

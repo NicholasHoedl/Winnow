@@ -2,7 +2,9 @@
 
 import { MoreVertical, Pencil, Trash2 } from "lucide-react"
 
+import { formatTime } from "@/lib/format"
 import type { EventOccurrence, EventRow } from "@/modules/calendar/queries"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -35,6 +37,7 @@ export function AgendaView({
   onEditEvent: (event: EventRow) => void
   onDelete: (event: EventRow) => void
 }) {
+  const { use24HourTime } = usePreferences()
   const groups: { date: string; items: EventOccurrence[] }[] = []
   for (const occ of occurrences.filter((o) => o.date.slice(0, 7) === month)) {
     const last = groups.at(-1)
@@ -67,7 +70,7 @@ export function AgendaView({
                 className="bg-card flex items-center gap-3 rounded-lg border p-3"
               >
                 <span className="text-muted-foreground w-16 shrink-0 text-xs tabular-nums">
-                  {occ.time ?? "All day"}
+                  {occ.time ? formatTime(occ.time, use24HourTime) : "All day"}
                 </span>
                 <button
                   type="button"

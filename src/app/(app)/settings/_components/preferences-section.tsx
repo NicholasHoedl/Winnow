@@ -1,0 +1,214 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { Controller, useForm } from "react-hook-form"
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
+import { toast } from "sonner"
+
+import { cn } from "@/lib/utils"
+import {
+  CURRENCIES,
+  PRIORITY_OPTIONS,
+  WEEK_START_OPTIONS,
+  timeZoneOptions,
+  type UserPreferences,
+} from "@/lib/preferences"
+import { setUserPreferences } from "@/modules/preferences/actions"
+import {
+  userPreferencesSchema,
+  type UserPreferencesInput,
+} from "@/modules/preferences/validation"
+import { Button } from "@/components/ui/button"
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+import { SettingsSection } from "./settings-section"
+
+function Segmented<T extends string | number | boolean>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T
+  onChange: (v: T) => void
+  options: readonly { value: T; label: string }[]
+}) {
+  return (
+    <div className="bg-muted inline-flex rounded-lg p-0.5">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={cn(
+            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            value === o.value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const TIME_FORMAT_OPTIONS: readonly { value: boolean; label: string }[] = [
+  { value: false, label: "12-hour" },
+  { value: true, label: "24-hour" },
+]
+
+export function PreferencesSection({
+  preferences,
+}: {
+  preferences: UserPreferences
+}) {
+  const router = useRouter()
+  const zones = timeZoneOptions()
+  const {
+    control,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<UserPreferencesInput>({
+    resolver: standardSchemaResolver(userPreferencesSchema),
+    defaultValues: preferences,
+  })
+
+  const onSubmit = handleSubmit(async (data) => {
+    const result = await setUserPreferences(data)
+    if (!result.ok) {
+      toast.error(result.error)
+      return
+    }
+    toast.success("Preferences saved")
+    // Timezone / week-start / currency / time-format re-render server + client.
+    router.refresh()
+  })
+
+  return (
+    <SettingsSection
+      title="Preferences"
+      description="Regional formatting and defaults."
+    >
+      <form onSubmit={onSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="tz-trigger">Time zone</FieldLabel>
+            <Controller
+              control={control}
+              name="timeZone"
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => v && field.onChange(v)}
+                >
+                  <SelectTrigger id="tz-trigger" className="w-full">
+                    <SelectValue>
+                      {(val) => (val as string)?.replace(/_/g, " ") || "Select…"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {zones.map((tz) => (
+                      <SelectItem key={tz} value={tz}>
+                        {tz.replace(/_/g, " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="cur-trigger">Currency</FieldLabel>
+            <Controller
+              control={control}
+              name="currency"
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => v && field.onChange(v)}
+                >
+                  <SelectTrigger id="cur-trigger" className="w-full">
+                    <SelectValue>
+                      {(val) =>
+                        CURRENCIES.find((c) => c.code === val)?.label ??
+                        (val as string)
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Week starts on</FieldLabel>
+            <Controller
+              control={control}
+              name="weekStartsOn"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={WEEK_START_OPTIONS}
+                />
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Time format</FieldLabel>
+            <Controller
+              control={control}
+              name="use24HourTime"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={TIME_FORMAT_OPTIONS}
+                />
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Default task priority</FieldLabel>
+            <Controller
+              control={control}
+              name="defaultTaskPriority"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={PRIORITY_OPTIONS}
+                />
+              )}
+            />
+          </Field>
+
+          <div>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Saving…" : "Save preferences"}
+            </Button>
+          </div>
+        </FieldGroup>
+      </form>
+    </SettingsSection>
+  )
+}

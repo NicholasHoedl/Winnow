@@ -10,6 +10,7 @@ import { categoryAccent } from "@/lib/colors"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
 import type { Budget, Category, Transaction } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button, buttonVariants } from "@/components/ui/button"
 
 import { BudgetsDialog } from "./budgets-dialog"
@@ -71,6 +72,8 @@ export function BudgetView({
   const [categoriesOpen, setCategoriesOpen] = React.useState(false)
   const [budgetsOpen, setBudgetsOpen] = React.useState(false)
   const [, startTransition] = React.useTransition()
+  const { currency } = usePreferences()
+  const money = (cents: number) => formatCents(cents, currency)
 
   const currentMonth = today.slice(0, 7)
   const defaultDate = month === currentMonth ? today : `${month}-01`
@@ -187,13 +190,13 @@ export function BudgetView({
       <div className="grid grid-cols-3 gap-4 rounded-xl border p-4">
         <Stat
           label="Income"
-          value={formatCents(summary.incomeCents)}
+          value={money(summary.incomeCents)}
           className="text-emerald-600 dark:text-emerald-400"
         />
-        <Stat label="Expenses" value={formatCents(summary.expenseCents)} />
+        <Stat label="Expenses" value={money(summary.expenseCents)} />
         <Stat
           label="Net"
-          value={formatCents(summary.netCents)}
+          value={money(summary.netCents)}
           className={
             summary.netCents < 0
               ? "text-destructive"
@@ -228,11 +231,11 @@ export function BudgetView({
                       </span>
                     </span>
                     <span className="text-muted-foreground shrink-0 tabular-nums">
-                      {formatCents(row.spentCents)}
+                      {money(row.spentCents)}
                       {hasBudget && (
                         <span className="text-muted-foreground/70">
                           {" "}
-                          / {formatCents(row.budgetedCents)}
+                          / {money(row.budgetedCents)}
                         </span>
                       )}
                     </span>
@@ -256,8 +259,8 @@ export function BudgetView({
                       )}
                     >
                       {over
-                        ? `${formatCents(-row.remainingCents)} over`
-                        : `${formatCents(row.remainingCents)} left`}
+                        ? `${money(-row.remainingCents)} over`
+                        : `${money(row.remainingCents)} left`}
                     </div>
                   )}
                 </div>

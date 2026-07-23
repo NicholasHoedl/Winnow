@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, CalendarClock, ListTodo, Sparkles } from "lucide-react"
 
+import { formatTime } from "@/lib/format"
 import type { EventOccurrence } from "@/modules/calendar/queries"
 
 type TasksLite = { overdueCount: number; dueTodayCount: number }
@@ -63,16 +64,19 @@ export function UpNext({
   nextEvent,
   tasks,
   today,
+  use24Hour,
 }: {
   nextEvent: EventOccurrence | null
   tasks: TasksLite
   today: string
+  use24Hour: boolean
 }) {
   if (nextEvent) {
+    const time = nextEvent.time ? formatTime(nextEvent.time, use24Hour) : null
     const when =
       nextEvent.date === today
-        ? (nextEvent.time ?? "All day")
-        : `${formatDay(nextEvent.date, today)}${nextEvent.time ? ` · ${nextEvent.time}` : ""}`
+        ? (time ?? "All day")
+        : `${formatDay(nextEvent.date, today)}${time ? ` · ${time}` : ""}`
     return (
       <Hero
         href="/calendar"

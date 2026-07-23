@@ -7,6 +7,7 @@ import * as todosSchema from "@/modules/todos/schema"
 import * as mealsSchema from "@/modules/meals/schema"
 import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
+import * as preferencesSchema from "@/modules/preferences/schema"
 
 // Each domain module contributes its tables; merge them into one schema object
 // so the Drizzle client's relational queries (db.query.*) see everything.
@@ -16,6 +17,7 @@ const schema = {
   ...mealsSchema,
   ...budgetSchema,
   ...calendarSchema,
+  ...preferencesSchema,
 }
 
 // Reuse a single Pool across dev HMR reloads to avoid exhausting Postgres

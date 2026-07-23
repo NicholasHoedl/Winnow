@@ -2,7 +2,6 @@ import "server-only"
 import { and, asc, eq, gte, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
-import { APP_TIME_ZONE } from "@/lib/config"
 import { requireUserId } from "@/lib/session"
 
 import { events, goals, milestones } from "./schema"
@@ -42,27 +41,34 @@ function byDateThenTime(a: EventOccurrence, b: EventOccurrence): number {
   )
 }
 
-export async function getMonthEvents(month: string) {
+export async function getMonthEvents(
+  month: string,
+  tz: string,
+  weekStartsOn = 0,
+) {
   const userId = await requireUserId()
-  const { grid, start, end } = gridRange(month)
+  const { grid, start, end } = gridRange(month, weekStartsOn)
   const rows = await db.query.events.findMany({
     where: candidateWhere(userId, start, end),
   })
   const occurrences = rows
-    .flatMap((e) => expandOccurrences(e, start, end, APP_TIME_ZONE))
+    .flatMap((e) => expandOccurrences(e, start, end, tz))
     .sort(byDateThenTime)
   return { month, grid, byDay: bucketByDay(occurrences), occurrences }
 }
 
 /** Occurrences landing on a single day, sorted (all-day first). Dashboard uses this. */
-export async function getDayEvents(date: string): Promise<EventOccurrence[]> {
+export async function getDayEvents(
+  date: string,
+  tz: string,
+): Promise<EventOccurrence[]> {
   const userId = await requireUserId()
   const end = addDays(date, 1)
   const rows = await db.query.events.findMany({
     where: candidateWhere(userId, date, end),
   })
   return rows
-    .flatMap((e) => expandOccurrences(e, date, end, APP_TIME_ZONE))
+    .flatMap((e) => expandOccurrences(e, date, end, tz))
     .sort(byDateThenTime)
 }
 

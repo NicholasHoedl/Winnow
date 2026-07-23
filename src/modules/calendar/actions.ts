@@ -5,8 +5,8 @@ import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
-import { APP_TIME_ZONE } from "@/lib/config"
 import { requireUserId } from "@/lib/session"
+import { getUserPreferences } from "@/modules/preferences/queries"
 
 import type { EventRow } from "./queries"
 import { events, goals, milestones } from "./schema"
@@ -75,7 +75,8 @@ export async function createEvent(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return invalid(parsed.error)
 
   const d = parsed.data
-  const { startAt, endAt } = toTimestamps(d, APP_TIME_ZONE)
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = toTimestamps(d, timeZone)
   await db.insert(events).values({
     userId,
     title: d.title,
@@ -100,7 +101,8 @@ export async function updateEvent(
   if (!parsed.success) return invalid(parsed.error)
 
   const d = parsed.data
-  const { startAt, endAt } = toTimestamps(d, APP_TIME_ZONE)
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = toTimestamps(d, timeZone)
   await db
     .update(events)
     .set({

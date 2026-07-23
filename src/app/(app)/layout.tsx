@@ -1,9 +1,14 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
 import { BottomNav } from "@/components/shared/bottom-nav"
 import { ModeToggle } from "@/components/shared/mode-toggle"
+import { PreferencesProvider } from "@/components/preferences/preferences-provider"
+import { buttonVariants } from "@/components/ui/button"
 
 // Authenticated app frame: responsive nav shell (desktop sidebar / mobile
 // bottom tab bar) around the routed page. The session gate here is the
@@ -19,6 +24,7 @@ export default async function AppLayout({
   }
 
   const userName = session.user.name ?? "Account"
+  const preferences = await getUserPreferences()
 
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
@@ -30,10 +36,23 @@ export default async function AppLayout({
           <span className="font-display text-xl font-semibold tracking-tight">
             Winnow
           </span>
-          <ModeToggle />
+          <div className="flex items-center gap-1">
+            <Link
+              href="/settings"
+              aria-label="Settings"
+              className={buttonVariants({ variant: "ghost", size: "icon" })}
+            >
+              <Settings className="size-5" />
+            </Link>
+            <ModeToggle />
+          </div>
         </header>
 
-        <main className="flex-1 pb-20 md:pb-0">{children}</main>
+        <main className="flex-1 pb-20 md:pb-0">
+          <PreferencesProvider value={preferences}>
+            {children}
+          </PreferencesProvider>
+        </main>
       </div>
 
       <BottomNav />

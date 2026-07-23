@@ -21,8 +21,13 @@ export const authConfig = {
       // Everything else requires a session.
       return isLoggedIn
     },
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) token.id = user.id
+      // Profile edits call unstable_update({ user: { name } }); merge it into the
+      // token so session.user.name refreshes without a re-login.
+      if (trigger === "update" && typeof session?.user?.name === "string") {
+        token.name = session.user.name
+      }
       return token
     },
     session({ session, token }) {

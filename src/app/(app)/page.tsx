@@ -2,7 +2,6 @@ import Link from "next/link"
 import { CalendarPlus, Plus } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { APP_TIME_ZONE } from "@/lib/config"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getDayEvents,
@@ -10,6 +9,7 @@ import {
   getMonthEvents,
 } from "@/modules/calendar/queries"
 import { localDateTime } from "@/modules/calendar/service"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTaskSummary } from "@/modules/todos/queries"
 import { todayInZone } from "@/modules/todos/service"
@@ -34,19 +34,21 @@ function formatToday(today: string): string {
 }
 
 export default async function DashboardPage() {
-  const today = todayInZone(new Date(), APP_TIME_ZONE)
+  const { timeZone, weekStartsOn, currency, use24HourTime } =
+    await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
-  const nowTime = localDateTime(new Date(), APP_TIME_ZONE).time
+  const nowTime = localDateTime(new Date(), timeZone).time
 
   const [session, tasks, macros, budget, categories, dayEvents, monthData, goals] =
     await Promise.all([
       auth(),
-      getTaskSummary(APP_TIME_ZONE),
+      getTaskSummary(timeZone),
       getMacroSummary(today),
       getBudgetSummary(month),
       getCategories(),
-      getDayEvents(today),
-      getMonthEvents(month),
+      getDayEvents(today, timeZone),
+      getMonthEvents(month, timeZone, weekStartsOn),
       getGoals(),
     ])
 
@@ -104,20 +106,34 @@ export default async function DashboardPage() {
             />
           </Reveal>
           <Reveal delay={0.1}>
-            <StatCards tasks={tasks} macros={macros} budget={budget} />
+            <StatCards
+              tasks={tasks}
+              macros={macros}
+              budget={budget}
+              currency={currency}
+            />
           </Reveal>
           <Reveal delay={0.15}>
-            <TodayTimeline events={dayEvents} />
+            <TodayTimeline events={dayEvents} use24Hour={use24HourTime} />
           </Reveal>
         </div>
 
         {/* Rail */}
         <div className="flex min-w-0 flex-col gap-6">
           <Reveal delay={0.1}>
-            <UpNext nextEvent={nextEvent} tasks={tasks} today={today} />
+            <UpNext
+              nextEvent={nextEvent}
+              tasks={tasks}
+              today={today}
+              use24Hour={use24HourTime}
+            />
           </Reveal>
           <Reveal delay={0.15}>
-            <CategoryBars budget={budget} categories={categories} />
+            <CategoryBars
+              budget={budget}
+              categories={categories}
+              currency={currency}
+            />
           </Reveal>
           <Reveal delay={0.2}>
             <GoalsSummary goals={goals} />

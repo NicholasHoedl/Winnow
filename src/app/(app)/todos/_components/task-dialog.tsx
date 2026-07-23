@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { createTask, updateTask } from "@/modules/todos/actions"
 import type { List, Task } from "@/modules/todos/queries"
 import { taskInputSchema, type TaskInput } from "@/modules/todos/validation"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -42,6 +43,7 @@ export function TaskDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!task
+  const { defaultTaskPriority } = usePreferences()
   const {
     register,
     handleSubmit,
@@ -55,7 +57,7 @@ export function TaskDialog({
       title: "",
       notes: "",
       dueDate: "",
-      priority: "medium",
+      priority: defaultTaskPriority,
       listId: "",
     },
   })
@@ -66,11 +68,12 @@ export function TaskDialog({
         title: task?.title ?? "",
         notes: task?.notes ?? "",
         dueDate: task?.dueDate ?? "",
-        priority: task?.priority ?? "medium",
+        // New tasks default to the user's preferred priority; edits keep theirs.
+        priority: task?.priority ?? defaultTaskPriority,
         listId: task?.listId ?? "",
       })
     }
-  }, [open, task, reset])
+  }, [open, task, reset, defaultTaskPriority])
 
   const onSubmit = handleSubmit(async (data) => {
     const result = isEdit
