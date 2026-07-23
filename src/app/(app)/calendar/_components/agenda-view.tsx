@@ -42,7 +42,7 @@ export function AgendaView({
   month: string
   today: string
   calendars: Calendar[]
-  onEditEvent: (event: EventRow) => void
+  onEditEvent: (occ: EventOccurrence) => void
   onDelete: (event: EventRow) => void
 }) {
   const { use24HourTime } = usePreferences()
@@ -86,7 +86,7 @@ export function AgendaView({
                 </span>
                 <button
                   type="button"
-                  onClick={() => onEditEvent(occ.event)}
+                  onClick={() => onEditEvent(occ)}
                   className="min-w-0 flex-1 text-left"
                 >
                   <span className="block truncate text-sm font-medium">
@@ -111,13 +111,13 @@ export function AgendaView({
                     <MoreVertical className="size-4" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEditEvent(occ.event)}>
+                    <DropdownMenuItem onClick={() => onEditEvent(occ)}>
                       <Pencil className="size-4" />
                       Edit
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       variant="destructive"
-                      onClick={() => onDelete(occ.event)}
+                      onClick={() => onDelete(occ.seriesEvent)}
                     >
                       <Trash2 className="size-4" />
                       Delete

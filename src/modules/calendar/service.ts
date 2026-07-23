@@ -24,7 +24,8 @@ export type RecurringEvent = {
 }
 
 export type Occurrence<E extends RecurringEvent = RecurringEvent> = {
-  event: E
+  event: E // effective event (series row, with any per-occurrence override applied)
+  seriesEvent: E // the underlying series row (== event unless overridden)
   date: string // YYYY-MM-DD local start date
   endDate: string // YYYY-MM-DD local end date (== date unless multi-day)
   time: string | null // HH:MM local start, null when all-day
@@ -153,6 +154,7 @@ export function expandOccurrences<E extends RecurringEvent>(
 
   const make = (date: string): Occurrence<E> => ({
     event,
+    seriesEvent: event,
     date,
     endDate: endOffset > 0 ? addDays(date, endOffset) : date,
     time,
@@ -262,6 +264,92 @@ export function expandOccurrences<E extends RecurringEvent>(
   for (let guard = 0; guard < CAP; guard++, y += interval) {
     if (fmt(y, 1, 1) >= hardEnd) break
     if (daysInMonth(y, anchorMonth) >= anchorDay) emit(fmt(y, anchorMonth, anchorDay))
+  }
+  return out
+}
+
+// --- per-occurrence exceptions (read-time overlay) ---
+
+// A per-occurrence override or skip. The DB row (`event_exceptions`) satisfies this
+// structurally; null override fields inherit from the series.
+export type ExceptionOverlay = {
+  eventId: string
+  originalDate: string // the occurrence's natural date — matches Occurrence.date
+  canceled: boolean
+  startAt: Date | string | null
+  endAt: Date | string | null
+  allDay: boolean | null
+  title: string | null
+  notes: string | null
+  calendarId: string | null
+}
+
+// The event fields the overlay reads/replaces beyond the recurrence shape. EventRow has them.
+type OverlayableEvent = RecurringEvent & {
+  id: string
+  title: string
+  notes: string | null
+  calendarId: string | null
+}
+
+/** Apply per-occurrence exceptions to expanded occurrences (pure, order-preserving):
+ *  - canceled → the occurrence is dropped ("skip this day");
+ *  - override → `event` becomes the effective event (series + defined overrides) and
+ *    time/endTime/endDate are recomputed from the override instants; the untouched
+ *    series stays on `seriesEvent`. v1 locks the occurrence to its original date;
+ *  - no match → passed through unchanged.
+ *  Keyed on (eventId, originalDate) = the occurrence's RECURRENCE-ID. */
+export function applyExceptions<E extends OverlayableEvent>(
+  occurrences: Occurrence<E>[],
+  exceptions: ExceptionOverlay[],
+  tz: string,
+): Occurrence<E>[] {
+  if (exceptions.length === 0) return occurrences
+  const byKey = new Map<string, ExceptionOverlay>()
+  for (const ex of exceptions) byKey.set(`${ex.eventId}::${ex.originalDate}`, ex)
+
+  const out: Occurrence<E>[] = []
+  for (const occ of occurrences) {
+    const ex = byKey.get(`${occ.seriesEvent.id}::${occ.date}`)
+    if (!ex) {
+      out.push(occ)
+      continue
+    }
+    if (ex.canceled) continue
+
+    const series = occ.seriesEvent
+    const startAt = ex.startAt ?? series.startAt
+    const endAt = ex.endAt ?? series.endAt
+    const allDay = ex.allDay ?? series.allDay
+    const effective = {
+      ...series,
+      startAt,
+      endAt,
+      allDay,
+      title: ex.title ?? series.title,
+      notes: ex.notes ?? series.notes,
+      calendarId: ex.calendarId ?? series.calendarId,
+    } as E
+    // Derive the local time-of-day and multi-day span from the effective instants,
+    // but keep the occurrence anchored on occ.date. endAt may be inherited from the
+    // series anchor (a different calendar day), so use only its offset in days — never
+    // its absolute date, which would push endDate onto the anchor's day.
+    const start = localDateTime(new Date(startAt), tz)
+    let endOffset = 0
+    let endTime: string | null = null
+    if (endAt) {
+      const end = localDateTime(new Date(endAt), tz)
+      endOffset = Math.max(0, dayDiff(start.date, end.date))
+      endTime = allDay ? null : end.time
+    }
+    out.push({
+      event: effective,
+      seriesEvent: series,
+      date: occ.date, // locked to the original occurrence date in v1
+      endDate: endOffset > 0 ? addDays(occ.date, endOffset) : occ.date,
+      time: allDay ? null : start.time,
+      endTime,
+    })
   }
   return out
 }

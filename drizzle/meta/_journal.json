@@ -57,6 +57,13 @@
       "when": 1784831947870,
       "tag": "0007_cooing_skullbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784837504511,
+      "tag": "0008_wandering_marvex",
+      "breakpoints": true
     }
   ]
 }

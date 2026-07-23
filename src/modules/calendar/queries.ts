@@ -1,12 +1,13 @@
 import "server-only"
-import { and, asc, eq, gte, isNull, lt, or } from "drizzle-orm"
+import { and, asc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 
-import { calendars, events, goals, milestones } from "./schema"
+import { calendars, eventExceptions, events, goals, milestones } from "./schema"
 import {
   addDays,
+  applyExceptions,
   bucketByDay,
   expandOccurrences,
   goalProgress,
@@ -67,6 +68,29 @@ function byDateThenTime(a: EventOccurrence, b: EventOccurrence): number {
   )
 }
 
+// Overlay per-occurrence exceptions (edits/skips) onto expanded occurrences. Fetches
+// the exceptions for the in-play series whose original date falls in [start, end) —
+// v1 locks an occurrence to its original date, so that window covers every one in view.
+async function overlayExceptions(
+  userId: string,
+  seriesIds: string[],
+  occurrences: EventOccurrence[],
+  start: string,
+  end: string,
+  tz: string,
+): Promise<EventOccurrence[]> {
+  if (seriesIds.length === 0) return occurrences
+  const exceptions = await db.query.eventExceptions.findMany({
+    where: and(
+      eq(eventExceptions.userId, userId),
+      inArray(eventExceptions.eventId, seriesIds),
+      gte(eventExceptions.originalDate, start),
+      lt(eventExceptions.originalDate, end),
+    ),
+  })
+  return applyExceptions(occurrences, exceptions, tz)
+}
+
 export async function getMonthEvents(
   month: string,
   tz: string,
@@ -77,9 +101,17 @@ export async function getMonthEvents(
   const rows = await db.query.events.findMany({
     where: candidateWhere(userId, start, end),
   })
-  const occurrences = rows
-    .flatMap((e) => expandOccurrences(e, start, end, tz))
-    .sort(byDateThenTime)
+  const expanded = rows.flatMap((e) => expandOccurrences(e, start, end, tz))
+  const occurrences = (
+    await overlayExceptions(
+      userId,
+      rows.map((e) => e.id),
+      expanded,
+      start,
+      end,
+      tz,
+    )
+  ).sort(byDateThenTime)
   return { month, grid, byDay: bucketByDay(occurrences), occurrences }
 }
 
@@ -93,9 +125,17 @@ export async function getDayEvents(
   const rows = await db.query.events.findMany({
     where: candidateWhere(userId, date, end),
   })
-  return rows
-    .flatMap((e) => expandOccurrences(e, date, end, tz))
-    .sort(byDateThenTime)
+  const expanded = rows.flatMap((e) => expandOccurrences(e, date, end, tz))
+  return (
+    await overlayExceptions(
+      userId,
+      rows.map((e) => e.id),
+      expanded,
+      date,
+      end,
+      tz,
+    )
+  ).sort(byDateThenTime)
 }
 
 export async function getGoals(): Promise<GoalWithProgress[]> {

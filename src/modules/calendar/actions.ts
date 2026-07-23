@@ -7,15 +7,18 @@ import { z } from "zod"
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
+import { isValidDateString } from "@/modules/todos/service"
 
 import type { EventRow } from "./queries"
-import { calendars, events, goals, milestones } from "./schema"
+import { calendars, eventExceptions, events, goals, milestones } from "./schema"
 import { zonedDateTimeToUtc } from "./service"
 import {
   calendarInputSchema,
+  eventExceptionSchema,
   eventInputSchema,
   goalInputSchema,
   milestoneInputSchema,
+  type EventExceptionInput,
   type EventInput,
 } from "./validation"
 
@@ -162,6 +165,115 @@ export async function restoreEvent(ev: EventRow): Promise<ActionResult> {
       createdAt: ev.createdAt,
     })
     .onConflictDoNothing()
+  revalidateCalendar()
+  return { ok: true }
+}
+
+// --- Per-occurrence exceptions ("This event" edit / skip) ---
+
+// Like toTimestamps, but the date is locked to the occurrence's original date, so
+// both instants land on that day (v1 keeps an edited occurrence where it was).
+function exceptionTimestamps(
+  d: EventExceptionInput,
+  tz: string,
+): { startAt: Date; endAt: Date | null } {
+  const startAt = zonedDateTimeToUtc(
+    d.originalDate,
+    d.allDay ? "00:00" : d.startTime || "00:00",
+    tz,
+  )
+  const endAt =
+    !d.allDay && d.endTime
+      ? zonedDateTimeToUtc(d.originalDate, d.endTime, tz)
+      : null
+  return { startAt, endAt }
+}
+
+// Confirm the series belongs to the caller before touching its exceptions.
+async function ownsEvent(userId: string, eventId: string): Promise<boolean> {
+  const row = await db.query.events.findFirst({
+    where: and(eq(events.id, eventId), eq(events.userId, userId)),
+    columns: { id: true },
+  })
+  return !!row
+}
+
+// Upsert a single-occurrence override (the "This event" save). Keyed on
+// (eventId, originalDate); re-saving the same day replaces the prior override.
+export async function setEventException(
+  eventId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = eventExceptionSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  if (!(await ownsEvent(userId, eventId))) {
+    return { ok: false, error: "Event not found." }
+  }
+
+  const d = parsed.data
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = exceptionTimestamps(d, timeZone)
+  const fields = {
+    canceled: false,
+    startAt,
+    endAt,
+    allDay: d.allDay,
+    title: d.title,
+    notes: nullify(d.notes),
+    calendarId: d.calendarId || null,
+  }
+  await db
+    .insert(eventExceptions)
+    .values({ userId, eventId, originalDate: d.originalDate, ...fields })
+    .onConflictDoUpdate({
+      target: [eventExceptions.eventId, eventExceptions.originalDate],
+      set: { ...fields, updatedAt: new Date() },
+    })
+  revalidateCalendar()
+  return { ok: true }
+}
+
+// Skip a single occurrence ("This event" delete). Upserts a canceled marker; any
+// prior override on that day is left in place but ignored while canceled.
+export async function skipOccurrence(
+  eventId: string,
+  originalDate: string,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  if (!isValidDateString(originalDate)) {
+    return { ok: false, error: "Invalid date." }
+  }
+  if (!(await ownsEvent(userId, eventId))) {
+    return { ok: false, error: "Event not found." }
+  }
+  await db
+    .insert(eventExceptions)
+    .values({ userId, eventId, originalDate, canceled: true })
+    .onConflictDoUpdate({
+      target: [eventExceptions.eventId, eventExceptions.originalDate],
+      set: { canceled: true, updatedAt: new Date() },
+    })
+  revalidateCalendar()
+  return { ok: true }
+}
+
+// Remove a single occurrence's exception row — un-skip or reset it to the series
+// default. This is the undo target for skipOccurrence.
+export async function clearEventException(
+  eventId: string,
+  originalDate: string,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  await db
+    .delete(eventExceptions)
+    .where(
+      and(
+        eq(eventExceptions.userId, userId),
+        eq(eventExceptions.eventId, eventId),
+        eq(eventExceptions.originalDate, originalDate),
+      ),
+    )
   revalidateCalendar()
   return { ok: true }
 }

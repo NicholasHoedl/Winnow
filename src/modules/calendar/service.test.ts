@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applyExceptions,
   bucketByDay,
   expandOccurrences,
   goalProgress,
   localDateTime,
   monthGrid,
   zonedDateTimeToUtc,
+  type ExceptionOverlay,
   type RecurringEvent,
 } from "./service"
 
@@ -84,6 +86,7 @@ describe("expandOccurrences — single events", () => {
     expect(occ).toEqual([
       {
         event: ev(),
+        seriesEvent: ev(),
         date: "2026-07-15",
         endDate: "2026-07-15",
         time: "12:00",
@@ -306,6 +309,136 @@ describe("expandOccurrences — recurrence", () => {
       "2035-06-15",
     ])
     expect(expandOccurrences(e, "2026-01-01", "2026-02-01", "UTC")).toEqual([])
+  })
+})
+
+// An overlayable event (recurrence shape + the fields exceptions can replace).
+type OverlayEvent = RecurringEvent & {
+  id: string
+  title: string
+  notes: string | null
+  calendarId: string | null
+}
+
+// A weekday (Mon–Fri) series, so exceptions have several occurrences to act on.
+function oev(over: Partial<OverlayEvent> = {}): OverlayEvent {
+  return {
+    id: "evt-1",
+    title: "Standup",
+    notes: null,
+    calendarId: null,
+    startAt: "2026-07-06T09:00:00Z", // Monday
+    endAt: "2026-07-06T09:30:00Z",
+    allDay: false,
+    recurrenceFreq: "weekly",
+    recurrenceInterval: 1,
+    recurrenceWeekdays: WD.MON | WD.TUE | WD.WED | WD.THU | WD.FRI,
+    recurrenceMonthlyMode: "day_of_month",
+    recurrenceEndDate: null,
+    ...over,
+  }
+}
+
+function exc(over: Partial<ExceptionOverlay> = {}): ExceptionOverlay {
+  return {
+    eventId: "evt-1",
+    originalDate: "2026-07-08", // Wednesday
+    canceled: false,
+    startAt: null,
+    endAt: null,
+    allDay: null,
+    title: null,
+    notes: null,
+    calendarId: null,
+    ...over,
+  }
+}
+
+describe("applyExceptions", () => {
+  // Mon–Fri 09:00–09:30 for the week of the 6th: 06, 07, 08, 09, 10.
+  const week = () => expandOccurrences(oev(), "2026-07-06", "2026-07-11", "UTC")
+
+  it("returns the same array when there are no exceptions", () => {
+    const occs = week()
+    expect(applyExceptions(occs, [], "UTC")).toBe(occs)
+  })
+
+  it("drops a canceled occurrence, leaving the rest intact", () => {
+    const result = applyExceptions(week(), [exc({ canceled: true })], "UTC")
+    expect(dates(result)).toEqual([
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-09",
+      "2026-07-10",
+    ])
+  })
+
+  it("reschedules only the overridden day's time", () => {
+    const result = applyExceptions(
+      week(),
+      [
+        exc({
+          startAt: "2026-07-08T14:00:00Z",
+          endAt: "2026-07-08T15:00:00Z",
+        }),
+      ],
+      "UTC",
+    )
+    const day8 = result.find((o) => o.date === "2026-07-08")!
+    expect([day8.time, day8.endTime]).toEqual(["14:00", "15:00"])
+    // Neighbours keep the series time.
+    expect(result.find((o) => o.date === "2026-07-07")!.time).toBe("09:00")
+    expect(result.find((o) => o.date === "2026-07-09")!.time).toBe("09:00")
+  })
+
+  it("overrides fields on the effective event but preserves the series", () => {
+    const result = applyExceptions(
+      week(),
+      [exc({ title: "Team sync", notes: "Q3 review", calendarId: "cal-9" })],
+      "UTC",
+    )
+    const day8 = result.find((o) => o.date === "2026-07-08")!
+    expect(day8.event.title).toBe("Team sync")
+    expect(day8.event.notes).toBe("Q3 review")
+    expect(day8.event.calendarId).toBe("cal-9")
+    // The untouched series row stays on seriesEvent.
+    expect(day8.seriesEvent.title).toBe("Standup")
+    expect(day8.seriesEvent.calendarId).toBeNull()
+    // The span stays on the occurrence's own day even though endAt is inherited from
+    // the series anchor (07-06) — never dragged back to the anchor's date.
+    expect(day8.endDate).toBe("2026-07-08")
+    expect([day8.time, day8.endTime]).toEqual(["09:00", "09:30"])
+    // A neighbour is a pure pass-through (event === seriesEvent).
+    const day7 = result.find((o) => o.date === "2026-07-07")!
+    expect(day7.event).toBe(day7.seriesEvent)
+  })
+
+  it("keeps a title-only override on its own day through bucketing", () => {
+    // Regression: a partial override inherits the series endAt (anchored on 07-06), so
+    // endDate must be re-anchored to occ.date — otherwise the backwards span is dropped
+    // by bucketByDay and the occurrence silently vanishes from the calendar.
+    const overlaid = applyExceptions(week(), [exc({ title: "Renamed" })], "UTC")
+    const buckets = bucketByDay(overlaid)
+    expect(buckets["2026-07-08"]?.map((o) => o.event.title)).toEqual(["Renamed"])
+  })
+
+  it("nulls the time when an override makes the occurrence all-day", () => {
+    const result = applyExceptions(week(), [exc({ allDay: true })], "UTC")
+    const day8 = result.find((o) => o.date === "2026-07-08")!
+    expect(day8.event.allDay).toBe(true)
+    expect([day8.time, day8.endTime]).toEqual([null, null])
+  })
+
+  it("ignores exceptions whose date or event id does not match", () => {
+    const result = applyExceptions(
+      week(),
+      [
+        exc({ originalDate: "2026-07-11", canceled: true }), // Saturday — no such occurrence
+        exc({ eventId: "other-evt", canceled: true }), // different series
+      ],
+      "UTC",
+    )
+    expect(dates(result)).toEqual(dates(week()))
   })
 })
 

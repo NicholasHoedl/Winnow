@@ -6,8 +6,13 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { createEvent, updateEvent } from "@/modules/calendar/actions"
-import type { Calendar, EventRow } from "@/modules/calendar/queries"
+import {
+  createEvent,
+  setEventException,
+  updateEvent,
+  type ActionResult,
+} from "@/modules/calendar/actions"
+import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import {
   localDateTime,
   type RecurrenceFreq,
@@ -36,6 +41,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+// Which slice of a recurring series an edit/delete targets.
+export type EditScope = "this" | "all"
 
 type EventFormValues = {
   title: string
@@ -97,6 +105,18 @@ function monthlyLabels(date: string): { dayOfMonth: string; nthWeekday: string }
   return { dayOfMonth: `day ${d}`, nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}` }
 }
 
+/** "Sat, Jul 25" for a single occurrence's date (parsed as UTC to avoid drift). */
+function formatOccurrenceDate(date: string): string {
+  const [y, m, d] = date.split("-").map(Number)
+  if (!y || !m || !d) return date
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
+}
+
 function emptyValues(defaultDate: string, calendarId = ""): EventFormValues {
   return {
     title: "",
@@ -118,7 +138,7 @@ function emptyValues(defaultDate: string, calendarId = ""): EventFormValues {
 export function EventDialog({
   timeZone,
   defaultDate,
-  event,
+  occurrence,
   calendars,
   open,
   onOpenChange,
@@ -126,13 +146,16 @@ export function EventDialog({
 }: {
   timeZone: string
   defaultDate: string
-  event: EventRow | null
+  occurrence: EventOccurrence | null
   calendars: Calendar[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onDelete: (event: EventRow) => void
+  onDelete: (occurrence: EventOccurrence, scope: EditScope) => void
 }) {
-  const isEdit = !!event
+  const isEdit = !!occurrence
+  const isRecurring =
+    !!occurrence && occurrence.seriesEvent.recurrenceFreq !== "none"
+  const [scope, setScope] = React.useState<EditScope>("all")
   const {
     register,
     handleSubmit,
@@ -146,35 +169,84 @@ export function EventDialog({
     defaultValues: emptyValues(defaultDate, calendars[0]?.id ?? ""),
   })
 
+  // Default the scope whenever the dialog (re)opens for a new occurrence. Done during
+  // render — not in an effect — so the form reset below sees the right scope on the
+  // first commit: a recurring occurrence starts on "This event", anything else on "all".
+  const openKeyRef = React.useRef<string | null>(null)
+  const openKey = open
+    ? `${occurrence?.seriesEvent.id ?? "new"}:${occurrence?.date ?? defaultDate}`
+    : null
+  if (openKey !== openKeyRef.current) {
+    openKeyRef.current = openKey
+    if (openKey !== null) setScope(isRecurring ? "this" : "all")
+  }
+
   React.useEffect(() => {
     if (!open) return
-    if (event) {
-      const start = localDateTime(new Date(event.startAt), timeZone)
-      const end = event.endAt ? localDateTime(new Date(event.endAt), timeZone) : null
-      reset({
-        title: event.title,
-        notes: event.notes ?? "",
-        calendarId: event.calendarId ?? "",
-        allDay: event.allDay,
-        startDate: start.date,
-        startTime: event.allDay ? "09:00" : start.time,
-        endDate: end?.date ?? "",
-        endTime: end && !event.allDay ? end.time : "",
-        recurrenceFreq: event.recurrenceFreq,
-        recurrenceInterval: event.recurrenceInterval,
-        recurrenceWeekdays: event.recurrenceWeekdays,
-        recurrenceMonthlyMode: event.recurrenceMonthlyMode,
-        recurrenceEndDate: event.recurrenceEndDate ?? "",
-      })
-    } else {
+    if (!occurrence) {
       reset(emptyValues(defaultDate, calendars[0]?.id ?? ""))
+      return
     }
-  }, [open, event, defaultDate, timeZone, calendars, reset])
+    if (scope === "this") {
+      // Edit just this occurrence: fields from the effective event, the date pinned
+      // to the occurrence's own day (v1 keeps it there).
+      const e = occurrence.event
+      reset({
+        title: e.title,
+        notes: e.notes ?? "",
+        calendarId: e.calendarId ?? "",
+        allDay: e.allDay,
+        startDate: occurrence.date,
+        startTime: e.allDay ? "09:00" : (occurrence.time ?? "09:00"),
+        endDate: occurrence.date,
+        endTime: e.allDay ? "" : (occurrence.endTime ?? ""),
+        recurrenceFreq: "none",
+        recurrenceInterval: 1,
+        recurrenceWeekdays: 0,
+        recurrenceMonthlyMode: "day_of_month",
+        recurrenceEndDate: "",
+      })
+      return
+    }
+    // Edit the whole series from its anchor (recurrence controls visible).
+    const s = occurrence.seriesEvent
+    const start = localDateTime(new Date(s.startAt), timeZone)
+    const end = s.endAt ? localDateTime(new Date(s.endAt), timeZone) : null
+    reset({
+      title: s.title,
+      notes: s.notes ?? "",
+      calendarId: s.calendarId ?? "",
+      allDay: s.allDay,
+      startDate: start.date,
+      startTime: s.allDay ? "09:00" : start.time,
+      endDate: end?.date ?? "",
+      endTime: end && !s.allDay ? end.time : "",
+      recurrenceFreq: s.recurrenceFreq,
+      recurrenceInterval: s.recurrenceInterval,
+      recurrenceWeekdays: s.recurrenceWeekdays,
+      recurrenceMonthlyMode: s.recurrenceMonthlyMode,
+      recurrenceEndDate: s.recurrenceEndDate ?? "",
+    })
+  }, [open, occurrence, scope, defaultDate, timeZone, calendars, reset])
 
   const onSubmit = handleSubmit(async (data) => {
-    const result = isEdit
-      ? await updateEvent(event.id, data)
-      : await createEvent(data)
+    let result: ActionResult
+    if (!occurrence) {
+      result = await createEvent(data)
+    } else if (scope === "this") {
+      // Single-occurrence override — the date is fixed to occurrence.date.
+      result = await setEventException(occurrence.seriesEvent.id, {
+        originalDate: occurrence.date,
+        title: data.title,
+        notes: data.notes,
+        calendarId: data.calendarId,
+        allDay: data.allDay,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      })
+    } else {
+      result = await updateEvent(occurrence.seriesEvent.id, data)
+    }
 
     if (!result.ok) {
       if (result.fieldErrors) {
@@ -185,28 +257,72 @@ export function EventDialog({
       toast.error(result.error)
       return
     }
-    toast.success(isEdit ? "Event updated" : "Event added")
+    toast.success(
+      !occurrence
+        ? "Event added"
+        : scope === "this"
+          ? "This event updated"
+          : "Event updated",
+    )
     onOpenChange(false)
   })
 
   const allDay = watch("allDay")
   const freq = watch("recurrenceFreq")
   const startDate = watch("startDate")
+  const lockDate = scope === "this" // v1 pins an edited occurrence to its own day
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit event" : "Add event"}</DialogTitle>
+          <DialogTitle>
+            {!occurrence
+              ? "Add event"
+              : scope === "this"
+                ? "Edit this event"
+                : "Edit event"}
+          </DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "Update this event. Changes apply to the whole series."
-              : "Add an event to your calendar."}
+            {!occurrence
+              ? "Add an event to your calendar."
+              : scope === "this"
+                ? `Editing ${formatOccurrenceDate(occurrence.date)} only — other days are unchanged.`
+                : "Changes apply to the whole series."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
           <FieldGroup>
+            {isRecurring && (
+              <Field>
+                <FieldLabel>Apply changes to</FieldLabel>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      ["this", "This event"],
+                      ["all", "All events"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={scope === value}
+                      onClick={() => setScope(value)}
+                      className={cn(
+                        "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                        scope === value
+                          ? "border-primary ring-primary/30 ring-2"
+                          : "border-border hover:bg-accent",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+
             <Field>
               <FieldLabel htmlFor="e-title">Title</FieldLabel>
               <Input id="e-title" {...register("title")} />
@@ -274,7 +390,16 @@ export function EventDialog({
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="e-start-date">Starts</FieldLabel>
-                <Input id="e-start-date" type="date" {...register("startDate")} />
+                <Input
+                  id="e-start-date"
+                  type="date"
+                  readOnly={lockDate}
+                  aria-readonly={lockDate}
+                  className={cn(
+                    lockDate && "bg-muted cursor-not-allowed opacity-70",
+                  )}
+                  {...register("startDate")}
+                />
                 <FieldError errors={[errors.startDate]} />
               </Field>
               {!allDay && (
@@ -289,7 +414,16 @@ export function EventDialog({
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="e-end-date">Ends</FieldLabel>
-                <Input id="e-end-date" type="date" {...register("endDate")} />
+                <Input
+                  id="e-end-date"
+                  type="date"
+                  readOnly={lockDate}
+                  aria-readonly={lockDate}
+                  className={cn(
+                    lockDate && "bg-muted cursor-not-allowed opacity-70",
+                  )}
+                  {...register("endDate")}
+                />
                 <FieldError errors={[errors.endDate]} />
               </Field>
               {!allDay && (
@@ -301,34 +435,36 @@ export function EventDialog({
               )}
             </div>
 
-            <Field>
-              <FieldLabel>Repeat</FieldLabel>
-              <Controller
-                control={control}
-                name="recurrenceFreq"
-                render={({ field }) => (
-                  <Select
-                    value={field.value}
-                    onValueChange={(value) => value && field.onChange(value)}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue>
-                        {(value) => FREQ_LABELS[value as RecurrenceFreq]}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(FREQ_LABELS) as RecurrenceFreq[]).map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {FREQ_LABELS[f]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
+            {scope !== "this" && (
+              <Field>
+                <FieldLabel>Repeat</FieldLabel>
+                <Controller
+                  control={control}
+                  name="recurrenceFreq"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={(value) => value && field.onChange(value)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue>
+                          {(value) => FREQ_LABELS[value as RecurrenceFreq]}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(FREQ_LABELS) as RecurrenceFreq[]).map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {FREQ_LABELS[f]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+            )}
 
-            {freq !== "none" && (
+            {scope !== "this" && freq !== "none" && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <Field>
@@ -436,18 +572,18 @@ export function EventDialog({
           </FieldGroup>
 
           <DialogFooter className="mt-5 sm:justify-between">
-            {isEdit ? (
+            {occurrence ? (
               <Button
                 type="button"
                 variant="ghost"
                 className="text-destructive"
                 onClick={() => {
-                  onDelete(event)
+                  onDelete(occurrence, isRecurring ? scope : "all")
                   onOpenChange(false)
                 }}
               >
                 <Trash2 className="size-4" />
-                Delete
+                {isRecurring && scope === "this" ? "Skip this day" : "Delete"}
               </Button>
             ) : (
               <span />

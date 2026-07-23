@@ -7,7 +7,12 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { accentForSlot } from "@/lib/colors"
-import { deleteEvent, restoreEvent } from "@/modules/calendar/actions"
+import {
+  clearEventException,
+  deleteEvent,
+  restoreEvent,
+  skipOccurrence,
+} from "@/modules/calendar/actions"
 import type {
   Calendar,
   EventOccurrence,
@@ -18,7 +23,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 
 import { AgendaView } from "./agenda-view"
 import { CalendarManager } from "./calendar-manager"
-import { EventDialog } from "./event-dialog"
+import { EventDialog, type EditScope } from "./event-dialog"
 import { GoalsPanel } from "./goals-panel"
 import { MonthGrid } from "./month-grid"
 
@@ -60,7 +65,8 @@ export function CalendarView({
 }) {
   const [view, setView] = React.useState<CalendarView>("month")
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editingEvent, setEditingEvent] = React.useState<EventRow | null>(null)
+  const [editingOccurrence, setEditingOccurrence] =
+    React.useState<EventOccurrence | null>(null)
   const [defaultDate, setDefaultDate] = React.useState(today)
   const [managerOpen, setManagerOpen] = React.useState(false)
   // Per-session calendar visibility (empty = show all; resets on reload).
@@ -88,17 +94,18 @@ export function CalendarView({
   }
 
   function openCreate(date: string = today) {
-    setEditingEvent(null)
+    setEditingOccurrence(null)
     setDefaultDate(date)
     setDialogOpen(true)
   }
 
-  function openEdit(event: EventRow) {
-    setEditingEvent(event)
+  function openEdit(occ: EventOccurrence) {
+    setEditingOccurrence(occ)
     setDialogOpen(true)
   }
 
-  function handleDelete(event: EventRow) {
+  // Delete the whole series (agenda dropdown, or the dialog's "All events" scope).
+  function handleDeleteSeries(event: EventRow) {
     startTransition(async () => {
       const result = await deleteEvent(event.id)
       if (!result.ok) {
@@ -117,6 +124,35 @@ export function CalendarView({
         },
       })
     })
+  }
+
+  // Skip a single occurrence (the dialog's "This event" delete). Undo clears the row.
+  function handleSkipOccurrence(occ: EventOccurrence) {
+    startTransition(async () => {
+      const result = await skipOccurrence(occ.seriesEvent.id, occ.date)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast("Event skipped", {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            startTransition(async () => {
+              const restored = await clearEventException(
+                occ.seriesEvent.id,
+                occ.date,
+              )
+              if (!restored.ok) toast.error(restored.error)
+            }),
+        },
+      })
+    })
+  }
+
+  function handleDialogDelete(occ: EventOccurrence, scope: EditScope) {
+    if (scope === "this") handleSkipOccurrence(occ)
+    else handleDeleteSeries(occ.seriesEvent)
   }
 
   return (
@@ -238,7 +274,7 @@ export function CalendarView({
           today={today}
           calendars={calendars}
           onEditEvent={openEdit}
-          onDelete={handleDelete}
+          onDelete={handleDeleteSeries}
         />
       )}
 
@@ -247,11 +283,11 @@ export function CalendarView({
       <EventDialog
         timeZone={timeZone}
         defaultDate={defaultDate}
-        event={editingEvent}
+        occurrence={editingOccurrence}
         calendars={calendars}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onDelete={handleDelete}
+        onDelete={handleDialogDelete}
       />
       <CalendarManager
         calendars={calendars}

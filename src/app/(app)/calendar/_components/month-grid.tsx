@@ -3,11 +3,7 @@
 import { cn } from "@/lib/utils"
 import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
-import type {
-  Calendar,
-  EventOccurrence,
-  EventRow,
-} from "@/modules/calendar/queries"
+import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -34,7 +30,7 @@ export function MonthGrid({
   today: string
   calendars: Calendar[]
   onSelectDay: (date: string) => void
-  onEditEvent: (event: EventRow) => void
+  onEditEvent: (occ: EventOccurrence) => void
 }) {
   const { weekStartsOn, use24HourTime } = usePreferences()
   const headers = [
@@ -89,7 +85,7 @@ export function MonthGrid({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        onEditEvent(occ.event)
+                        onEditEvent(occ)
                       }}
                       title={chipLabel(occ, use24HourTime)}
                       className={cn(

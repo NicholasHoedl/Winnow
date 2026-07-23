@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core"
 
@@ -112,3 +113,42 @@ export const milestones = pgTable("milestones", {
     .notNull()
     .defaultNow(),
 })
+
+// Per-occurrence overrides for a recurring event ("This event" edits/skips),
+// keyed by the occurrence's natural date (RECURRENCE-ID). Applied as a read-time
+// overlay in service.ts — the series row is never mutated. `canceled` skips the
+// occurrence; the nullable columns replace that one occurrence's fields.
+export const eventExceptions = pgTable(
+  "event_exceptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    // The occurrence's natural (un-overridden) local date — the stable key.
+    originalDate: date("original_date", { mode: "string" }).notNull(),
+    canceled: boolean("canceled").notNull().default(false),
+    // Overrides (null = inherit from the series).
+    startAt: timestamp("start_at", { withTimezone: true }),
+    endAt: timestamp("end_at", { withTimezone: true }),
+    allDay: boolean("all_day"),
+    title: text("title"),
+    notes: text("notes"),
+    calendarId: uuid("calendar_id").references(() => calendars.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    unique("event_exceptions_event_date").on(table.eventId, table.originalDate),
+  ],
+)

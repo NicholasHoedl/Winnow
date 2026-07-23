@@ -67,6 +67,29 @@ export const eventInputSchema = z
 
 export type EventInput = z.infer<typeof eventInputSchema>
 
+// A single-occurrence override ("This event" edit). The date is fixed to the
+// occurrence's original date (v1 locks it there), so there are no date inputs — only
+// a time-of-day and the fields a one-off can change.
+export const eventExceptionSchema = z
+  .object({
+    originalDate: z.string().refine(isValidDateString, "Enter a valid date"),
+    title: z.string().trim().min(1, "Title is required").max(200),
+    notes: z.string().trim().max(2000).or(z.literal("")).optional(),
+    calendarId: z.string().uuid().or(z.literal("")),
+    allDay: z.boolean(),
+    startTime: optionalTime,
+    endTime: optionalTime,
+  })
+  .refine((d) => d.allDay || !!d.startTime, {
+    message: "Start time is required for a timed event",
+    path: ["startTime"],
+  })
+  .refine(
+    (d) => d.allDay || !d.startTime || !d.endTime || d.endTime >= d.startTime,
+    { message: "End time must be on or after the start", path: ["endTime"] },
+  )
+export type EventExceptionInput = z.infer<typeof eventExceptionSchema>
+
 export const goalInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   notes: z.string().trim().max(2000).or(z.literal("")).optional(),
