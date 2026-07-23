@@ -172,7 +172,13 @@ export function LogFoodDialog({
                 <FieldLabel>From library</FieldLabel>
                 <Select defaultValue={NEW_FOOD} onValueChange={onPickFood}>
                   <SelectTrigger className="w-full">
-                    <SelectValue />
+                    <SelectValue>
+                      {(value) =>
+                        value && value !== NEW_FOOD
+                          ? (foods.find((f) => f.id === value)?.name ?? "New food…")
+                          : "New food…"
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NEW_FOOD}>New food…</SelectItem>
@@ -266,7 +272,9 @@ export function LogFoodDialog({
                     }
                   >
                     <SelectTrigger className="w-full">
-                      <SelectValue />
+                      <SelectValue>
+                        {(value) => MEAL_LABELS[value as MealType] ?? "No meal"}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NO_MEAL}>No meal</SelectItem>
