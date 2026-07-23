@@ -30,19 +30,22 @@
   /* single sharp accent — amber; used sparingly for highlights */
   --brand-accent: oklch(0.79 0.15 76);
   --brand-accent-foreground: oklch(0.28 0.06 74);
-  --chart-1: oklch(0.505 0.19 273);
-  --chart-2: oklch(0.62 0.16 300);
-  --chart-3: oklch(0.7 0.13 240);
-  --chart-4: oklch(0.79 0.15 76);
-  --chart-5: oklch(0.65 0.17 150);
-  --sidebar: oklch(0.984 0.005 275);
-  --sidebar-foreground: oklch(0.21 0.02 275);
-  --sidebar-primary: oklch(0.505 0.19 273);
-  --sidebar-primary-foreground: oklch(0.985 0.002 275);
-  --sidebar-accent: oklch(0.95 0.016 275);
-  --sidebar-accent-foreground: oklch(0.36 0.07 273);
-  --sidebar-border: oklch(0.914 0.008 275);
-  --sidebar-ring: oklch(0.505 0.19 273);
+  /* Distinct category-accent palette — used only as accents (dots, bars, tags). */
+  --cat-1: oklch(0.55 0.17 273);
+  --cat-2: oklch(0.6 0.12 195);
+  --cat-3: oklch(0.7 0.15 68);
+  --cat-4: oklch(0.62 0.19 18);
+  --cat-5: oklch(0.6 0.14 155);
+  --cat-6: oklch(0.56 0.19 305);
+  /* Persistent dark sidebar chrome — dark in BOTH themes (the reference's anchor). */
+  --sidebar: oklch(0.205 0.018 275);
+  --sidebar-foreground: oklch(0.92 0.01 275);
+  --sidebar-primary: oklch(0.65 0.17 273);
+  --sidebar-primary-foreground: oklch(0.99 0.003 275);
+  --sidebar-accent: oklch(0.28 0.028 275);
+  --sidebar-accent-foreground: oklch(0.98 0.005 275);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.65 0.17 273);
 }
 
 .dark {
@@ -67,11 +70,12 @@
   --ring: oklch(0.598 0.184 273);
   --brand-accent: oklch(0.82 0.15 78);
   --brand-accent-foreground: oklch(0.22 0.05 76);
-  --chart-1: oklch(0.598 0.184 273);
-  --chart-2: oklch(0.62 0.16 300);
-  --chart-3: oklch(0.7 0.13 240);
-  --chart-4: oklch(0.82 0.15 78);
-  --chart-5: oklch(0.68 0.16 150);
+  --cat-1: oklch(0.67 0.16 273);
+  --cat-2: oklch(0.7 0.11 195);
+  --cat-3: oklch(0.78 0.14 70);
+  --cat-4: oklch(0.7 0.17 18);
+  --cat-5: oklch(0.7 0.13 155);
+  --cat-6: oklch(0.68 0.17 305);
   --sidebar: oklch(0.2 0.015 275);
   --sidebar-foreground: oklch(0.966 0.005 275);
   --sidebar-primary: oklch(0.552 0.196 273);
@@ -104,11 +108,12 @@
   --color-ring: var(--ring);
   --color-brand-accent: var(--brand-accent);
   --color-brand-accent-foreground: var(--brand-accent-foreground);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  --color-cat-6: var(--cat-6);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

@@ -1,12 +1,14 @@
 import { test, expect } from "@playwright/test"
 
-test("dashboard shows all four live cards", async ({ page }) => {
+test("dashboard shows the key sections", async ({ page }) => {
   await page.goto("/")
   await expect(
     page.getByRole("heading", { name: /good to see you/i }),
   ).toBeVisible()
-  for (const card of ["Tasks", "Macros", "Budget", "Today"]) {
-    await expect(page.getByText(card, { exact: true }).first()).toBeVisible()
+  await expect(page.getByText("Up next").first()).toBeVisible()
+  await expect(page.getByText("Today's schedule").first()).toBeVisible()
+  for (const label of ["Tasks", "Macros", "Budget"]) {
+    await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
   }
 })
 

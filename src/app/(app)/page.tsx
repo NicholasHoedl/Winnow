@@ -1,34 +1,27 @@
 import Link from "next/link"
-import { CalendarDays, ListTodo, Utensils, Wallet } from "lucide-react"
+import { CalendarPlus, Plus } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { cn } from "@/lib/utils"
 import { APP_TIME_ZONE } from "@/lib/config"
-import { getBudgetSummary } from "@/modules/budget/queries"
-import { formatCents } from "@/modules/budget/service"
-import { getDayEvents } from "@/modules/calendar/queries"
+import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
+import {
+  getDayEvents,
+  getGoals,
+  getMonthEvents,
+} from "@/modules/calendar/queries"
+import { localDateTime } from "@/modules/calendar/service"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTaskSummary } from "@/modules/todos/queries"
 import { todayInZone } from "@/modules/todos/service"
 import { Reveal } from "@/components/shared/reveal"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { buttonVariants } from "@/components/ui/button"
 
-const MACRO_ROWS = [
-  { key: "calories", label: "Calories", unit: "kcal" },
-  { key: "protein", label: "Protein", unit: "g" },
-  { key: "carbs", label: "Carbs", unit: "g" },
-  { key: "fat", label: "Fat", unit: "g" },
-] as const
-
-const cardLink =
-  "text-muted-foreground hover:text-foreground mt-auto text-sm underline-offset-4 hover:underline"
-const emptyLine = "text-muted-foreground text-sm"
+import { CategoryBars } from "./_components/category-bars"
+import { DashboardCalendar } from "./_components/dashboard-calendar"
+import { GoalsSummary } from "./_components/goals-summary"
+import { StatCards } from "./_components/stat-cards"
+import { TodayTimeline } from "./_components/today-timeline"
+import { UpNext } from "./_components/up-next"
 
 function formatToday(today: string): string {
   const [y, m, d] = today.split("-").map(Number)
@@ -42,227 +35,94 @@ function formatToday(today: string): string {
 
 export default async function DashboardPage() {
   const today = todayInZone(new Date(), APP_TIME_ZONE)
-  const [session, tasks, macros, budget, events] = await Promise.all([
-    auth(),
-    getTaskSummary(APP_TIME_ZONE),
-    getMacroSummary(today),
-    getBudgetSummary(today.slice(0, 7)),
-    getDayEvents(today),
-  ])
-  const name = session?.user?.name ?? "there"
+  const month = today.slice(0, 7)
+  const nowTime = localDateTime(new Date(), APP_TIME_ZONE).time
 
-  const tasksClear = tasks.overdueCount === 0 && tasks.dueTodayCount === 0
-  const nothingLogged = MACRO_ROWS.every(
-    ({ key }) => macros.progress[key].consumed === 0,
-  )
-  const budgetQuiet =
-    budget.expenseCents === 0 &&
-    budget.incomeCents === 0 &&
-    budget.totalBudgetedCents === 0
+  const [session, tasks, macros, budget, categories, dayEvents, monthData, goals] =
+    await Promise.all([
+      auth(),
+      getTaskSummary(APP_TIME_ZONE),
+      getMacroSummary(today),
+      getBudgetSummary(month),
+      getCategories(),
+      getDayEvents(today),
+      getMonthEvents(month),
+      getGoals(),
+    ])
+
+  const name = session?.user?.name ?? "there"
+  const nextEvent =
+    dayEvents.find((o) => o.time === null || o.time >= nowTime) ??
+    monthData.occurrences.find((o) => o.date > today) ??
+    null
 
   return (
-    <div className="relative mx-auto w-full max-w-5xl p-6">
-      {/* atmospheric depth — a soft indigo wash from the top */}
+    <div className="relative mx-auto w-full max-w-7xl p-6 lg:p-8">
       <div
         aria-hidden
-        className="from-primary/[0.07] pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b to-transparent"
+        className="from-primary/[0.06] pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b to-transparent"
       />
 
       <Reveal>
-        <header className="mb-6">
-          <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
-            {formatToday(today)}
-          </p>
-          <h1 className="font-display mt-1 text-4xl font-semibold tracking-tight">
-            Good to see you, {name}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Here&apos;s your day at a glance.
-          </p>
+        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
+              {formatToday(today)}
+            </p>
+            <h1 className="font-display mt-1 text-4xl font-semibold tracking-tight">
+              Good to see you, {name}
+            </h1>
+            <p className="text-muted-foreground text-sm">
+              Here&apos;s your day at a glance.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link
+              href="/calendar"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <CalendarPlus className="size-4" />
+              Add event
+            </Link>
+            <Link href="/todos" className={buttonVariants({ size: "sm" })}>
+              <Plus className="size-4" />
+              New task
+            </Link>
+          </div>
         </header>
       </Reveal>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Tasks */}
-        <Reveal delay={0.06}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ListTodo className="size-4" />
-                Tasks
-              </CardTitle>
-              <CardDescription>Due today &amp; overdue</CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-24 flex-col gap-3">
-              {tasksClear ? (
-                <p className={emptyLine}>Nothing due — you&apos;re all clear.</p>
-              ) : (
-                <>
-                  <div className="flex gap-6">
-                    <div>
-                      <div className="text-2xl font-semibold tabular-nums">
-                        {tasks.overdueCount}
-                      </div>
-                      <div className="text-muted-foreground text-xs">Overdue</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-semibold tabular-nums">
-                        {tasks.dueTodayCount}
-                      </div>
-                      <div className="text-muted-foreground text-xs">Due today</div>
-                    </div>
-                  </div>
-                  {tasks.dueToday.length > 0 && (
-                    <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
-                      {tasks.dueToday.slice(0, 3).map((task) => (
-                        <li key={task.id} className="truncate">
-                          • {task.title}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-              <Link href="/todos" className={cardLink}>
-                View all →
-              </Link>
-            </CardContent>
-          </Card>
-        </Reveal>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        {/* Main column */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <Reveal delay={0.05}>
+            <DashboardCalendar
+              month={month}
+              today={today}
+              grid={monthData.grid}
+              byDay={monthData.byDay}
+            />
+          </Reveal>
+          <Reveal delay={0.1}>
+            <StatCards tasks={tasks} macros={macros} budget={budget} />
+          </Reveal>
+          <Reveal delay={0.15}>
+            <TodayTimeline events={dayEvents} />
+          </Reveal>
+        </div>
 
-        {/* Macros */}
-        <Reveal delay={0.12}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Utensils className="size-4" />
-                Macros
-              </CardTitle>
-              <CardDescription>Today vs. targets</CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-24 flex-col gap-3">
-              {nothingLogged ? (
-                <p className={emptyLine}>Nothing logged today.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                  {MACRO_ROWS.map(({ key, label, unit }) => {
-                    const macro = macros.progress[key]
-                    return (
-                      <div key={key}>
-                        <div className="text-lg font-semibold tabular-nums">
-                          {Math.round(macro.consumed)}
-                          {macro.target != null && (
-                            <span className="text-muted-foreground text-xs font-normal">
-                              {" "}
-                              / {Math.round(macro.target)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-muted-foreground text-xs">
-                          {label} ({unit})
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              <Link href="/meals" className={cardLink}>
-                Open log →
-              </Link>
-            </CardContent>
-          </Card>
-        </Reveal>
-
-        {/* Budget */}
-        <Reveal delay={0.18}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Wallet className="size-4" />
-                Budget
-              </CardTitle>
-              <CardDescription>This month</CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-24 flex-col gap-3">
-              {budgetQuiet ? (
-                <p className={emptyLine}>No activity yet this month.</p>
-              ) : (
-                <>
-                  <div className="flex gap-6">
-                    <div>
-                      <div className="text-2xl font-semibold tabular-nums">
-                        {formatCents(budget.expenseCents)}
-                      </div>
-                      <div className="text-muted-foreground text-xs">Spent</div>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-semibold tabular-nums">
-                        {formatCents(budget.totalBudgetedCents)}
-                      </div>
-                      <div className="text-muted-foreground text-xs">Budgeted</div>
-                    </div>
-                  </div>
-                  <div className="text-sm">
-                    Net{" "}
-                    <span
-                      className={cn(
-                        "font-semibold tabular-nums",
-                        budget.netCents < 0
-                          ? "text-destructive"
-                          : "text-emerald-600 dark:text-emerald-400",
-                      )}
-                    >
-                      {formatCents(budget.netCents)}
-                    </span>
-                  </div>
-                </>
-              )}
-              <Link href="/budget" className={cardLink}>
-                Open budget →
-              </Link>
-            </CardContent>
-          </Card>
-        </Reveal>
-
-        {/* Today (events) */}
-        <Reveal delay={0.24}>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CalendarDays className="size-4" />
-                Today
-              </CardTitle>
-              <CardDescription>Your schedule</CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-24 flex-col gap-3">
-              {events.length === 0 ? (
-                <p className={emptyLine}>Nothing scheduled today.</p>
-              ) : (
-                <>
-                  <div>
-                    <div className="text-2xl font-semibold tabular-nums">
-                      {events.length}
-                    </div>
-                    <div className="text-muted-foreground text-xs">
-                      {events.length === 1 ? "event" : "events"}
-                    </div>
-                  </div>
-                  <ul className="text-muted-foreground flex flex-col gap-1 text-sm">
-                    {events.slice(0, 3).map((occ, i) => (
-                      <li key={`${occ.event.id}-${i}`} className="truncate">
-                        <span className="tabular-nums">{occ.time ?? "All day"}</span>{" "}
-                        · {occ.event.title}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              <Link href="/calendar" className={cardLink}>
-                Open calendar →
-              </Link>
-            </CardContent>
-          </Card>
-        </Reveal>
+        {/* Rail */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <Reveal delay={0.1}>
+            <UpNext nextEvent={nextEvent} tasks={tasks} today={today} />
+          </Reveal>
+          <Reveal delay={0.15}>
+            <CategoryBars budget={budget} categories={categories} />
+          </Reveal>
+          <Reveal delay={0.2}>
+            <GoalsSummary goals={goals} />
+          </Reveal>
+        </div>
       </div>
     </div>
   )

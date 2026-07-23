@@ -6,11 +6,11 @@ import { ChevronLeft, ChevronRight, FolderCog, Plus, Wallet } from "lucide-react
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
+import { categoryAccent } from "@/lib/colors"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
 import type { Budget, Category, Transaction } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
 
 import { BudgetsDialog } from "./budgets-dialog"
 import { CategoryManager } from "./category-manager"
@@ -206,7 +206,8 @@ export function BudgetView({
         <section className="mt-6">
           <h2 className="mb-2 text-sm font-semibold">By category</h2>
           <div className="divide-y rounded-xl border">
-            {rows.map((row) => {
+            {rows.map((row, i) => {
+              const accent = categoryAccent(i)
               const hasBudget = row.budgetedCents > 0
               const percent = hasBudget
                 ? Math.round((row.spentCents / row.budgetedCents) * 100)
@@ -218,10 +219,15 @@ export function BudgetView({
                   className="flex flex-col gap-1.5 p-3"
                 >
                   <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span className="font-medium">
-                      {categoryName(row.categoryId)}
+                    <span className="flex min-w-0 items-center gap-2 font-medium">
+                      <span
+                        className={cn("size-2 shrink-0 rounded-full", accent.bar)}
+                      />
+                      <span className="truncate">
+                        {categoryName(row.categoryId)}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground tabular-nums">
+                    <span className="text-muted-foreground shrink-0 tabular-nums">
                       {formatCents(row.spentCents)}
                       {hasBudget && (
                         <span className="text-muted-foreground/70">
@@ -231,7 +237,17 @@ export function BudgetView({
                       )}
                     </span>
                   </div>
-                  {hasBudget && <Progress value={Math.min(percent, 100)} />}
+                  {hasBudget && (
+                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          over ? "bg-destructive" : accent.bar,
+                        )}
+                        style={{ width: `${Math.min(percent, 100)}%` }}
+                      />
+                    </div>
+                  )}
                   {hasBudget && (
                     <div
                       className={cn(

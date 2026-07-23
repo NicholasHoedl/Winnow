@@ -1,6 +1,7 @@
 "use client"
 
 import { cn } from "@/lib/utils"
+import { accentForKey } from "@/lib/colors"
 import type { EventOccurrence, EventRow } from "@/modules/calendar/queries"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -61,25 +62,27 @@ export function MonthGrid({
                 {Number(date.slice(8))}
               </span>
               <div className="flex flex-col gap-0.5">
-                {dayEvents.slice(0, MAX_CHIPS).map((occ, i) => (
-                  <button
-                    key={`${occ.event.id}-${i}`}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onEditEvent(occ.event)
-                    }}
-                    title={chipLabel(occ)}
-                    className={cn(
-                      "truncate rounded px-1 py-0.5 text-left text-[0.7rem] leading-tight",
-                      occ.time
-                        ? "bg-primary/10 text-foreground hover:bg-primary/20"
-                        : "bg-primary/80 text-primary-foreground hover:bg-primary",
-                    )}
-                  >
-                    {chipLabel(occ)}
-                  </button>
-                ))}
+                {dayEvents.slice(0, MAX_CHIPS).map((occ, i) => {
+                  const accent = accentForKey(occ.event.id)
+                  return (
+                    <button
+                      key={`${occ.event.id}-${i}`}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEditEvent(occ.event)
+                      }}
+                      title={chipLabel(occ)}
+                      className={cn(
+                        "text-foreground truncate rounded border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
+                        accent.tint,
+                        accent.border,
+                      )}
+                    >
+                      {chipLabel(occ)}
+                    </button>
+                  )
+                })}
                 {dayEvents.length > MAX_CHIPS && (
                   <span className="text-muted-foreground px-1 text-[0.65rem]">
                     +{dayEvents.length - MAX_CHIPS} more
