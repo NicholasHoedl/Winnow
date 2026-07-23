@@ -9,12 +9,17 @@ export type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly"
 
 // Minimal shape the engine needs, decoupled from the Drizzle row so it stays
 // DB-free and testable with plain objects. The full event row satisfies it.
+export type RecurrenceMonthlyMode = "day_of_month" | "nth_weekday"
+
 export type RecurringEvent = {
   startAt: Date | string
   endAt: Date | string | null
   allDay: boolean
   recurrenceFreq: RecurrenceFreq
   recurrenceInterval: number
+  // Weekly BYDAY as a 7-bit mask (bit i = weekday i, 0=Sun). 0 = anchor weekday only.
+  recurrenceWeekdays: number
+  recurrenceMonthlyMode: RecurrenceMonthlyMode
   recurrenceEndDate: string | null
 }
 
@@ -171,6 +176,31 @@ export function expandOccurrences<E extends RecurringEvent>(
     if (date >= rangeStart && date < hardEnd) out.push(make(date))
   }
 
+  const dowOf = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() // 0 = Sun
+
+  // Weekly with a selected weekday set (BYDAY): emit each chosen weekday within
+  // every active `interval`-week block, counting blocks from the anchor's week.
+  if (
+    event.recurrenceFreq === "weekly" &&
+    (event.recurrenceWeekdays & 0b1111111) !== 0
+  ) {
+    const mask = event.recurrenceWeekdays & 0b1111111
+    const anchorWeekStart = addDays(anchor, -dowOf(anchor))
+    const rsWeekStart = addDays(rangeStart, -dowOf(rangeStart))
+    const weeksToRs = dayDiff(anchorWeekStart, rsWeekStart) / 7
+    let block = weeksToRs > 0 ? Math.floor(weeksToRs / interval) : 0
+    for (let guard = 0; guard < CAP; guard++, block++) {
+      const blockStart = addDays(anchorWeekStart, block * interval * 7)
+      if (blockStart >= hardEnd) break
+      for (let wd = 0; wd < 7; wd++) {
+        if (!(mask & (1 << wd))) continue
+        const date = addDays(blockStart, wd)
+        if (date >= anchor) emit(date) // never before the series start
+      }
+    }
+    return out
+  }
+
   if (event.recurrenceFreq === "daily" || event.recurrenceFreq === "weekly") {
     const step = interval * (event.recurrenceFreq === "weekly" ? 7 : 1)
     // Jump straight to the first occurrence >= rangeStart.
@@ -193,13 +223,32 @@ export function expandOccurrences<E extends RecurringEvent>(
       anchorIndex < rangeIndex
         ? Math.floor((rangeIndex - anchorIndex) / interval)
         : 0
+
+    // "Nth weekday" mode derives its target from the anchor: the weekday, which
+    // occurrence in the month (1-based), and whether that was the *last* one.
+    const nthWeekday = event.recurrenceMonthlyMode === "nth_weekday"
+    const anchorDow = dowOf(anchor)
+    const ordinal = Math.ceil(anchorDay / 7)
+    const isLast = anchorDay + 7 > daysInMonth(anchorYear, anchorMonth)
+
     for (let guard = 0; guard < CAP; guard++, i++) {
       const idx = anchorIndex + i * interval
       const y = Math.floor(idx / 12)
       const m = (idx % 12) + 1
       if (fmt(y, m, 1) >= hardEnd) break
-      // Skip months without the anchor day (e.g. the 31st in February).
-      if (daysInMonth(y, m) >= anchorDay) emit(fmt(y, m, anchorDay))
+      if (nthWeekday) {
+        const firstDow = dowOf(fmt(y, m, 1))
+        const firstOccDay = 1 + ((anchorDow - firstDow + 7) % 7) // 1..7
+        const dim = daysInMonth(y, m)
+        const day = isLast
+          ? firstOccDay + 7 * Math.floor((dim - firstOccDay) / 7) // last such weekday
+          : firstOccDay + 7 * (ordinal - 1)
+        // Skip a nonexistent occurrence (e.g. a 5th that the month lacks).
+        if (day <= dim) emit(fmt(y, m, day))
+      } else if (daysInMonth(y, m) >= anchorDay) {
+        // Same day-of-month; skip months without it (e.g. the 31st in February).
+        emit(fmt(y, m, anchorDay))
+      }
     }
     return out
   }

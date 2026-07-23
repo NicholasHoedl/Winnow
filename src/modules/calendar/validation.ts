@@ -33,6 +33,9 @@ export const eventInputSchema = z
     endTime: optionalTime,
     recurrenceFreq: z.enum(RECURRENCE_FREQS),
     recurrenceInterval: z.number().int().min(1).max(999),
+    // Weekly BYDAY mask (0–127); 0 = repeat on the start date's weekday only.
+    recurrenceWeekdays: z.number().int().min(0).max(127),
+    recurrenceMonthlyMode: z.enum(["day_of_month", "nth_weekday"]),
     recurrenceEndDate: optionalDate,
   })
   .refine((d) => d.allDay || !!d.startTime, {

@@ -8,8 +8,13 @@ import { toast } from "sonner"
 
 import { createEvent, updateEvent } from "@/modules/calendar/actions"
 import type { EventRow } from "@/modules/calendar/queries"
-import { localDateTime, type RecurrenceFreq } from "@/modules/calendar/service"
+import {
+  localDateTime,
+  type RecurrenceFreq,
+  type RecurrenceMonthlyMode,
+} from "@/modules/calendar/service"
 import { eventInputSchema } from "@/modules/calendar/validation"
+import { cn } from "@/lib/utils"
 import { numberField } from "@/lib/forms"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -41,6 +46,8 @@ type EventFormValues = {
   endTime?: string
   recurrenceFreq: RecurrenceFreq
   recurrenceInterval: number
+  recurrenceWeekdays: number
+  recurrenceMonthlyMode: RecurrenceMonthlyMode
   recurrenceEndDate?: string
 }
 
@@ -59,6 +66,35 @@ const INTERVAL_UNIT: Record<Exclude<RecurrenceFreq, "none">, string> = {
   yearly: "years",
 }
 
+const WEEKDAY_TOGGLES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+]
+const ORDINALS = ["first", "second", "third", "fourth", "fifth"]
+
+/** Weekday (0=Sun..6=Sat) of a YYYY-MM-DD, or -1 if unparseable. */
+function weekdayOf(date: string): number {
+  const [y, m, d] = date.split("-").map(Number)
+  if (!y || !m || !d) return -1
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+}
+
+/** Labels the two monthly modes off the start date, Google-style. */
+function monthlyLabels(date: string): { dayOfMonth: string; nthWeekday: string } {
+  const [y, m, d] = date.split("-").map(Number)
+  if (!y || !m || !d) return { dayOfMonth: "the same day", nthWeekday: "the same weekday" }
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const which = d + 7 > daysInMonth ? "last" : (ORDINALS[Math.ceil(d / 7) - 1] ?? "last")
+  return { dayOfMonth: `day ${d}`, nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}` }
+}
+
 function emptyValues(defaultDate: string): EventFormValues {
   return {
     title: "",
@@ -70,6 +106,8 @@ function emptyValues(defaultDate: string): EventFormValues {
     endTime: "",
     recurrenceFreq: "none",
     recurrenceInterval: 1,
+    recurrenceWeekdays: 0,
+    recurrenceMonthlyMode: "day_of_month",
     recurrenceEndDate: "",
   }
 }
@@ -118,6 +156,8 @@ export function EventDialog({
         endTime: end && !event.allDay ? end.time : "",
         recurrenceFreq: event.recurrenceFreq,
         recurrenceInterval: event.recurrenceInterval,
+        recurrenceWeekdays: event.recurrenceWeekdays,
+        recurrenceMonthlyMode: event.recurrenceMonthlyMode,
         recurrenceEndDate: event.recurrenceEndDate ?? "",
       })
     } else {
@@ -145,6 +185,7 @@ export function EventDialog({
 
   const allDay = watch("allDay")
   const freq = watch("recurrenceFreq")
+  const startDate = watch("startDate")
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -244,25 +285,109 @@ export function EventDialog({
             </Field>
 
             {freq !== "none" && (
-              <div className="grid grid-cols-2 gap-4">
-                <Field>
-                  <FieldLabel htmlFor="e-interval">
-                    Every ({INTERVAL_UNIT[freq]})
-                  </FieldLabel>
-                  <Input
-                    id="e-interval"
-                    type="number"
-                    min="1"
-                    {...register("recurrenceInterval", numberField)}
-                  />
-                  <FieldError errors={[errors.recurrenceInterval]} />
-                </Field>
-                <Field>
-                  <FieldLabel htmlFor="e-until">Until (optional)</FieldLabel>
-                  <Input id="e-until" type="date" {...register("recurrenceEndDate")} />
-                  <FieldError errors={[errors.recurrenceEndDate]} />
-                </Field>
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field>
+                    <FieldLabel htmlFor="e-interval">
+                      Every ({INTERVAL_UNIT[freq]})
+                    </FieldLabel>
+                    <Input
+                      id="e-interval"
+                      type="number"
+                      min="1"
+                      {...register("recurrenceInterval", numberField)}
+                    />
+                    <FieldError errors={[errors.recurrenceInterval]} />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="e-until">Until (optional)</FieldLabel>
+                    <Input
+                      id="e-until"
+                      type="date"
+                      {...register("recurrenceEndDate")}
+                    />
+                    <FieldError errors={[errors.recurrenceEndDate]} />
+                  </Field>
+                </div>
+
+                {freq === "weekly" && (
+                  <Field>
+                    <FieldLabel>Repeat on</FieldLabel>
+                    <Controller
+                      control={control}
+                      name="recurrenceWeekdays"
+                      render={({ field }) => {
+                        const startWd = weekdayOf(startDate)
+                        const mask =
+                          field.value === 0 && startWd >= 0
+                            ? 1 << startWd
+                            : field.value
+                        return (
+                          <div className="flex flex-wrap gap-1">
+                            {WEEKDAY_TOGGLES.map((label, wd) => {
+                              const on = (mask & (1 << wd)) !== 0
+                              return (
+                                <button
+                                  key={wd}
+                                  type="button"
+                                  aria-pressed={on}
+                                  aria-label={WEEKDAY_NAMES[wd]}
+                                  onClick={() => field.onChange(mask ^ (1 << wd))}
+                                  className={cn(
+                                    "size-9 rounded-md text-xs font-medium transition-colors",
+                                    on
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted text-muted-foreground hover:text-foreground",
+                                  )}
+                                >
+                                  {label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )
+                      }}
+                    />
+                  </Field>
+                )}
+
+                {freq === "monthly" && (
+                  <Field>
+                    <FieldLabel>Repeats on</FieldLabel>
+                    <Controller
+                      control={control}
+                      name="recurrenceMonthlyMode"
+                      render={({ field }) => {
+                        const labels = monthlyLabels(startDate)
+                        const options = [
+                          { value: "day_of_month" as const, label: labels.dayOfMonth },
+                          { value: "nth_weekday" as const, label: labels.nthWeekday },
+                        ]
+                        return (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            {options.map((o) => (
+                              <button
+                                key={o.value}
+                                type="button"
+                                aria-pressed={field.value === o.value}
+                                onClick={() => field.onChange(o.value)}
+                                className={cn(
+                                  "flex-1 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-colors",
+                                  field.value === o.value
+                                    ? "border-primary ring-primary/30 ring-2"
+                                    : "border-border hover:bg-accent",
+                                )}
+                              >
+                                On {o.label}
+                              </button>
+                            ))}
+                          </div>
+                        )
+                      }}
+                    />
+                  </Field>
+                )}
+              </>
             )}
           </FieldGroup>
 

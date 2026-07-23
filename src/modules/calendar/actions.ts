@@ -86,6 +86,8 @@ export async function createEvent(input: unknown): Promise<ActionResult> {
     allDay: d.allDay,
     recurrenceFreq: d.recurrenceFreq,
     recurrenceInterval: d.recurrenceInterval,
+    recurrenceWeekdays: d.recurrenceWeekdays,
+    recurrenceMonthlyMode: d.recurrenceMonthlyMode,
     recurrenceEndDate: nullify(d.recurrenceEndDate),
   })
   revalidateCalendar()
@@ -113,6 +115,8 @@ export async function updateEvent(
       allDay: d.allDay,
       recurrenceFreq: d.recurrenceFreq,
       recurrenceInterval: d.recurrenceInterval,
+      recurrenceWeekdays: d.recurrenceWeekdays,
+      recurrenceMonthlyMode: d.recurrenceMonthlyMode,
       recurrenceEndDate: nullify(d.recurrenceEndDate),
     })
     .where(and(eq(events.id, id), eq(events.userId, userId)))
@@ -148,6 +152,8 @@ export async function restoreEvent(ev: EventRow): Promise<ActionResult> {
       allDay: ev.allDay,
       recurrenceFreq: ev.recurrenceFreq,
       recurrenceInterval: ev.recurrenceInterval,
+      recurrenceWeekdays: ev.recurrenceWeekdays,
+      recurrenceMonthlyMode: ev.recurrenceMonthlyMode,
       recurrenceEndDate: ev.recurrenceEndDate,
       createdAt: ev.createdAt,
     })

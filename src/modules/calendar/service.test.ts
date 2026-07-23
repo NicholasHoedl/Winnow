@@ -19,10 +19,15 @@ function ev(over: Partial<RecurringEvent> = {}): RecurringEvent {
     allDay: false,
     recurrenceFreq: "none",
     recurrenceInterval: 1,
+    recurrenceWeekdays: 0,
+    recurrenceMonthlyMode: "day_of_month",
     recurrenceEndDate: null,
     ...over,
   }
 }
+
+// Weekday bit helpers (0=Sun..6=Sat) for BYDAY tests.
+const WD = { SUN: 1, MON: 2, TUE: 4, WED: 8, THU: 16, FRI: 32, SAT: 64 }
 
 const dates = (occs: { date: string }[]) => occs.map((o) => o.date)
 
@@ -151,6 +156,103 @@ describe("expandOccurrences — recurrence", () => {
       "2026-07-29",
       "2026-08-12",
     ])
+  })
+
+  it("weekly on Mondays only (BYDAY)", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-06T09:00:00Z", // a Monday
+        recurrenceFreq: "weekly",
+        recurrenceWeekdays: WD.MON,
+      }),
+      "2026-07-01",
+      "2026-08-01",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual([
+      "2026-07-06",
+      "2026-07-13",
+      "2026-07-20",
+      "2026-07-27",
+    ])
+  })
+
+  it("weekly on weekdays Mon–Fri excludes the weekend", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-06T09:00:00Z",
+        recurrenceFreq: "weekly",
+        recurrenceWeekdays: WD.MON | WD.TUE | WD.WED | WD.THU | WD.FRI,
+      }),
+      "2026-07-06",
+      "2026-07-13", // one week window
+      "UTC",
+    )
+    expect(dates(occ)).toEqual([
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-08",
+      "2026-07-09",
+      "2026-07-10",
+    ])
+  })
+
+  it("every other Tuesday (weekly interval 2 + BYDAY)", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-07T09:00:00Z", // a Tuesday
+        recurrenceFreq: "weekly",
+        recurrenceInterval: 2,
+        recurrenceWeekdays: WD.TUE,
+      }),
+      "2026-07-01",
+      "2026-08-01",
+      "UTC",
+    )
+    // 07-14 and 07-28 fall in off-weeks.
+    expect(dates(occ)).toEqual(["2026-07-07", "2026-07-21"])
+  })
+
+  it("weekly with no weekday set repeats on the anchor weekday only (legacy)", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-15T09:00:00Z", // a Wednesday
+        recurrenceFreq: "weekly",
+        recurrenceWeekdays: 0,
+      }),
+      "2026-07-01",
+      "2026-08-01",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual(["2026-07-15", "2026-07-22", "2026-07-29"])
+  })
+
+  it("monthly on the 3rd Monday (nth_weekday)", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-20T09:00:00Z", // 3rd Monday of July 2026
+        recurrenceFreq: "monthly",
+        recurrenceMonthlyMode: "nth_weekday",
+      }),
+      "2026-07-01",
+      "2026-10-01",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual(["2026-07-20", "2026-08-17", "2026-09-21"])
+  })
+
+  it("monthly on the last Friday (nth_weekday, last)", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-31T09:00:00Z", // last Friday of July 2026
+        recurrenceFreq: "monthly",
+        recurrenceMonthlyMode: "nth_weekday",
+      }),
+      "2026-07-01",
+      "2026-10-01",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual(["2026-07-31", "2026-08-28", "2026-09-25"])
   })
 
   it("monthly anchored on the 31st SKIPS months without a 31st", () => {

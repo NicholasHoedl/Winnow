@@ -20,6 +20,13 @@ export const recurrenceFreqEnum = pgEnum("recurrence_freq", [
   "yearly",
 ])
 
+// How a monthly series lands each month: on the same day-of-month as the start
+// (legacy), or on the same Nth-weekday (e.g. "3rd Monday"), derived from the start.
+export const recurrenceMonthlyModeEnum = pgEnum("recurrence_monthly_mode", [
+  "day_of_month",
+  "nth_weekday",
+])
+
 // Events store instants in `start_at`/`end_at` (timestamptz). Recurring
 // occurrences are expanded on read in service.ts, never materialized as rows.
 export const events = pgTable("events", {
@@ -35,6 +42,13 @@ export const events = pgTable("events", {
   allDay: boolean("all_day").notNull().default(false),
   recurrenceFreq: recurrenceFreqEnum("recurrence_freq").notNull().default("none"),
   recurrenceInterval: integer("recurrence_interval").notNull().default(1),
+  // Weekly BYDAY as a 7-bit mask (bit i = weekday i, getUTCDay 0=Sun). 0 = repeat
+  // on the start date's weekday only (legacy behavior — valid for existing rows).
+  recurrenceWeekdays: integer("recurrence_weekdays").notNull().default(0),
+  // Monthly landing rule (see enum). Ignored unless recurrenceFreq = "monthly".
+  recurrenceMonthlyMode: recurrenceMonthlyModeEnum("recurrence_monthly_mode")
+    .notNull()
+    .default("day_of_month"),
   // First-of-nothing: a date-only bound; the series is open-ended if null.
   recurrenceEndDate: date("recurrence_end_date", { mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true })
