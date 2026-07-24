@@ -1,10 +1,10 @@
 "use client"
 
-import { MoreVertical, Pencil, Trash2 } from "lucide-react"
+import { MoreVertical, Pencil, Repeat, Trash2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { dueStatus } from "@/modules/todos/service"
-import type { Task } from "@/modules/todos/queries"
+import type { TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -24,6 +24,17 @@ function formatDue(dueDate: string): string {
   })
 }
 
+const UNIT = { daily: "day", weekly: "week", monthly: "month" } as const
+
+/** "Daily" / "Weekly" / "Every 2 weeks" for a repeat badge. */
+function repeatLabel(series: TaskSeries): string {
+  const unit = UNIT[series.freq]
+  if (series.recurrenceInterval > 1) {
+    return `Every ${series.recurrenceInterval} ${unit}s`
+  }
+  return { daily: "Daily", weekly: "Weekly", monthly: "Monthly" }[series.freq]
+}
+
 export function TaskItem({
   task,
   timeZone,
@@ -31,14 +42,16 @@ export function TaskItem({
   onEdit,
   onDelete,
 }: {
-  task: Task
+  task: TaskWithSeries
   timeZone: string
   onToggle: (id: string) => void
-  onEdit: (task: Task) => void
-  onDelete: (task: Task) => void
+  onEdit: (task: TaskWithSeries) => void
+  onDelete: (task: TaskWithSeries) => void
 }) {
   const done = task.status === "done"
   const status = dueStatus(task.dueDate, new Date(), timeZone)
+  const series = task.series
+  const flexible = !!series?.flexible
 
   return (
     <div className="bg-card flex items-center gap-3 rounded-lg border p-3">
@@ -61,25 +74,47 @@ export function TaskItem({
         >
           {task.title}
         </span>
-        {(task.dueDate || task.priority !== "medium") && (
+        {(task.dueDate || task.priority !== "medium" || series) && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            {task.dueDate && (
+            {flexible && series ? (
+              // Flexible: show the period, not a specific date or "overdue".
               <Badge
                 variant="outline"
-                className={cn(
-                  "text-xs font-normal",
-                  status === "overdue" &&
-                    "border-transparent bg-destructive/10 text-destructive",
-                  status === "due-today" &&
-                    "border-transparent bg-primary/10 text-primary",
-                )}
+                className="inline-flex items-center gap-1 text-xs font-normal"
               >
-                {status === "overdue"
-                  ? "Overdue"
-                  : status === "due-today"
-                    ? "Due today"
-                    : formatDue(task.dueDate)}
+                <Repeat className="size-3" />
+                {series.freq === "weekly" ? "This week" : "This month"}
               </Badge>
+            ) : (
+              <>
+                {task.dueDate && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-xs font-normal",
+                      status === "overdue" &&
+                        "border-transparent bg-destructive/10 text-destructive",
+                      status === "due-today" &&
+                        "border-transparent bg-primary/10 text-primary",
+                    )}
+                  >
+                    {status === "overdue"
+                      ? "Overdue"
+                      : status === "due-today"
+                        ? "Due today"
+                        : formatDue(task.dueDate)}
+                  </Badge>
+                )}
+                {series && (
+                  <Badge
+                    variant="outline"
+                    className="inline-flex items-center gap-1 text-xs font-normal"
+                  >
+                    <Repeat className="size-3" />
+                    {repeatLabel(series)}
+                  </Badge>
+                )}
+              </>
             )}
             {task.priority !== "medium" && (
               <Badge variant="outline" className="text-xs font-normal capitalize">
@@ -103,7 +138,7 @@ export function TaskItem({
           </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={() => onDelete(task)}>
             <Trash2 className="size-4" />
-            Delete
+            {series ? "Stop repeating" : "Delete"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

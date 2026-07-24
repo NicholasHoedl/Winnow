@@ -6,10 +6,16 @@ import { z } from "zod"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
+import { getUserPreferences } from "@/modules/preferences/queries"
 
-import type { Task } from "./queries"
-import { lists, tasks } from "./schema"
-import { listInputSchema, taskInputSchema } from "./validation"
+import { syncRuleInstances, type Task } from "./queries"
+import { lists, taskRecurrences, tasks } from "./schema"
+import { todayInZone } from "./service"
+import {
+  listInputSchema,
+  taskInputSchema,
+  taskRecurrenceSchema,
+} from "./validation"
 
 export type ActionResult =
   | { ok: true }
@@ -101,6 +107,8 @@ export async function restoreTask(task: Task): Promise<ActionResult> {
     .values({
       id: task.id,
       userId,
+      seriesId: task.seriesId,
+      occurrenceDate: task.occurrenceDate,
       title: task.title,
       notes: task.notes,
       dueDate: task.dueDate,
@@ -131,6 +139,97 @@ export async function toggleTaskStatus(id: string): Promise<ActionResult> {
       completedAt: nextStatus === "done" ? new Date() : null,
     })
     .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+
+  revalidatePath("/todos")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+// --- Recurring tasks ---
+
+// The rule columns shared by create + update, from validated input.
+function ruleColumns(d: z.infer<typeof taskRecurrenceSchema>) {
+  return {
+    title: d.title,
+    notes: nullify(d.notes),
+    priority: d.priority,
+    listId: nullify(d.listId),
+    freq: d.freq,
+    recurrenceInterval: d.recurrenceInterval,
+    weekdays: d.weekdays,
+    monthlyMode: d.monthlyMode,
+    flexible: d.flexible,
+    startDate: d.startDate,
+    endDate: nullify(d.endDate),
+  }
+}
+
+export async function createTaskRecurrence(
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = taskRecurrenceSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const [rule] = await db
+    .insert(taskRecurrences)
+    .values({ userId, ...ruleColumns(parsed.data) })
+    .returning()
+  // Materialize the current instance immediately (revalidation would regenerate it too).
+  const { timeZone, weekStartsOn } = await getUserPreferences()
+  await syncRuleInstances(userId, rule, todayInZone(new Date(), timeZone), weekStartsOn)
+
+  revalidatePath("/todos")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+export async function updateTaskRecurrence(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = taskRecurrenceSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const [rule] = await db
+    .update(taskRecurrences)
+    .set(ruleColumns(parsed.data))
+    .where(and(eq(taskRecurrences.id, id), eq(taskRecurrences.userId, userId)))
+    .returning()
+  if (!rule) return { ok: false, error: "Recurring task not found." }
+
+  // Re-sync: move/retire the current instance and propagate the edited content onto it.
+  const { timeZone, weekStartsOn } = await getUserPreferences()
+  await syncRuleInstances(
+    userId,
+    rule,
+    todayInZone(new Date(), timeZone),
+    weekStartsOn,
+    true,
+  )
+
+  revalidatePath("/todos")
+  revalidatePath("/")
+  return { ok: true }
+}
+
+export async function deleteTaskRecurrence(id: string): Promise<ActionResult> {
+  const userId = await requireUserId()
+  // Delete OPEN instances first (while the FK is set); deleting the rule then detaches
+  // any COMPLETED instances into standalone history (series_id ON DELETE SET NULL).
+  await db
+    .delete(tasks)
+    .where(
+      and(
+        eq(tasks.seriesId, id),
+        eq(tasks.userId, userId),
+        eq(tasks.status, "open"),
+      ),
+    )
+  await db
+    .delete(taskRecurrences)
+    .where(and(eq(taskRecurrences.id, id), eq(taskRecurrences.userId, userId)))
 
   revalidatePath("/todos")
   revalidatePath("/")

@@ -5,12 +5,15 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
+import { todayInZone } from "@/modules/todos/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export function QuickAdd() {
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
+  const { timeZone } = usePreferences()
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -18,7 +21,11 @@ export function QuickAdd() {
     if (!trimmed) return
 
     startTransition(async () => {
-      const result = await createTask({ title: trimmed })
+      // Default the due date to today, matching the full task dialog.
+      const result = await createTask({
+        title: trimmed,
+        dueDate: todayInZone(new Date(), timeZone),
+      })
       if (result.ok) {
         setTitle("")
       } else {

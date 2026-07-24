@@ -4,8 +4,13 @@ import * as React from "react"
 import { Plus, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { deleteTask, restoreTask, toggleTaskStatus } from "@/modules/todos/actions"
-import type { List, Task } from "@/modules/todos/queries"
+import {
+  deleteTask,
+  deleteTaskRecurrence,
+  restoreTask,
+  toggleTaskStatus,
+} from "@/modules/todos/actions"
+import type { List, TaskWithSeries } from "@/modules/todos/queries"
 import { dueStatus } from "@/modules/todos/service"
 import { Button } from "@/components/ui/button"
 
@@ -28,17 +33,21 @@ export function TodosView({
   lists,
   timeZone,
 }: {
-  tasks: Task[]
+  tasks: TaskWithSeries[]
   lists: List[]
   timeZone: string
 }) {
   const [filter, setFilter] = React.useState<Filter>("active")
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editingTask, setEditingTask] = React.useState<Task | null>(null)
+  const [editingTask, setEditingTask] =
+    React.useState<TaskWithSeries | null>(null)
   const [listManagerOpen, setListManagerOpen] = React.useState(false)
   const [, startTransition] = React.useTransition()
 
-  const [optimisticTasks, applyOptimistic] = React.useOptimistic<Task[], string>(
+  const [optimisticTasks, applyOptimistic] = React.useOptimistic<
+    TaskWithSeries[],
+    string
+  >(
     tasks,
     (state, toggledId) =>
       state.map((task) =>
@@ -59,7 +68,17 @@ export function TodosView({
     })
   }
 
-  function handleDelete(task: Task) {
+  function handleDelete(task: TaskWithSeries) {
+    // Deleting a recurring instance stops the whole series (a single instance would
+    // just regenerate on the next load). One-off tasks delete with an Undo.
+    if (task.series) {
+      startTransition(async () => {
+        const result = await deleteTaskRecurrence(task.series!.id)
+        if (!result.ok) toast.error(result.error)
+        else toast("Stopped repeating")
+      })
+      return
+    }
     startTransition(async () => {
       const result = await deleteTask(task.id)
       if (!result.ok) {
@@ -85,7 +104,7 @@ export function TodosView({
     setDialogOpen(true)
   }
 
-  function openEdit(task: Task) {
+  function openEdit(task: TaskWithSeries) {
     setEditingTask(task)
     setDialogOpen(true)
   }
