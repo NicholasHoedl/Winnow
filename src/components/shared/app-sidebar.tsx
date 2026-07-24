@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LogOut, Settings } from "lucide-react"
+import { LogOut, Search, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { CommandPaletteTrigger } from "@/components/create/command-palette"
 import { signOutAction } from "@/app/(app)/actions"
 
 import { isNavActive, navItems } from "./nav-items"
@@ -40,6 +41,20 @@ export function AppSidebar({ userName }: { userName: string }) {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Command palette trigger */}
+      <div className="px-3 pt-3">
+        <CommandPaletteTrigger
+          className="bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
+          aria-label="Search"
+        >
+          <Search className="size-4" />
+          <span>Search…</span>
+          <kbd className="border-sidebar-border text-sidebar-foreground/50 ml-auto rounded border px-1.5 py-0.5 font-mono text-[10px] leading-none">
+            Ctrl K
+          </kbd>
+        </CommandPaletteTrigger>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-4">

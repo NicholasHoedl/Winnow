@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CalendarPlus, Plus } from "lucide-react"
+import { CalendarPlus } from "lucide-react"
 
 import { auth } from "@/lib/auth"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
@@ -23,6 +23,7 @@ import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
 import { UpNext } from "./_components/up-next"
+import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
 
 function formatToday(today: string): string {
   const [y, m, d] = today.split("-").map(Number)
@@ -97,12 +98,15 @@ export default async function DashboardPage() {
               <CalendarPlus className="size-4" />
               Add event
             </Link>
-            <Link href="/todos" className={buttonVariants({ size: "sm" })}>
-              <Plus className="size-4" />
-              New task
-            </Link>
+            <NewTaskButton />
           </div>
         </header>
+      </Reveal>
+
+      <Reveal delay={0.03}>
+        <div className="mb-6">
+          <QuickCapture />
+        </div>
       </Reveal>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2.5fr)_minmax(0,1fr)]">

@@ -25,7 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -109,11 +114,17 @@ export function TaskDialog({
   task,
   open,
   onOpenChange,
+  initialTitle,
+  initialDueDate,
 }: {
   lists: List[]
   task?: TaskWithSeries | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  // Seed values for a NEW task (from quick-capture / the create-intent bus); ignored
+  // when editing an existing task.
+  initialTitle?: string
+  initialDueDate?: string
 }) {
   const isEdit = !!task
   const isRecurring = !!task?.series
@@ -150,7 +161,12 @@ export function TaskDialog({
   React.useEffect(() => {
     if (!open) return
     if (!task) {
-      reset(emptyValues(today, defaultTaskPriority))
+      const base = emptyValues(today, defaultTaskPriority)
+      reset({
+        ...base,
+        title: initialTitle ?? base.title,
+        dueDate: initialDueDate ?? base.dueDate,
+      })
       return
     }
     const series = task.series
@@ -187,13 +203,25 @@ export function TaskDialog({
       startDate: today,
       endDate: "",
     })
-  }, [open, task, scope, today, defaultTaskPriority, reset])
+  }, [
+    open,
+    task,
+    scope,
+    today,
+    defaultTaskPriority,
+    reset,
+    initialTitle,
+    initialDueDate,
+  ])
 
   const onSubmit = handleSubmit(async () => {
     const v = getValues()
     let result: ActionResult
     if (isRecurring && scope === "series") {
-      result = await updateTaskRecurrence(task!.series!.id, toRecurrenceInput(v))
+      result = await updateTaskRecurrence(
+        task!.series!.id,
+        toRecurrenceInput(v),
+      )
     } else if (isEdit) {
       // A one-off task, or "This task" on a recurring instance — both edit the row.
       result = await updateTask(task!.id, toTaskInput(v))

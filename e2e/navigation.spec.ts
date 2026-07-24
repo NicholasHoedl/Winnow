@@ -6,7 +6,7 @@ test("dashboard shows the key sections", async ({ page }) => {
     page.getByRole("heading", { name: /good to see you/i }),
   ).toBeVisible()
   await expect(page.getByText("Up next").first()).toBeVisible()
-  await expect(page.getByText("Today's schedule").first()).toBeVisible()
+  await expect(page.getByLabel("Quick add a task")).toBeVisible()
   for (const label of ["Tasks", "Macros", "Budget"]) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
   }
