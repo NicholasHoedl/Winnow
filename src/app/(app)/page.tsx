@@ -9,7 +9,7 @@ import {
   getGoals,
   getMonthEvents,
 } from "@/modules/calendar/queries"
-import { localDateTime } from "@/modules/calendar/service"
+import { addDays } from "@/modules/calendar/service"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTaskSummary } from "@/modules/todos/queries"
@@ -21,7 +21,6 @@ import { CategoryBars } from "./_components/category-bars"
 import { DashboardCalendar } from "./_components/dashboard-calendar"
 import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
-import { TodayTimeline } from "./_components/today-timeline"
 import { UpNext } from "./_components/up-next"
 
 function formatToday(today: string): string {
@@ -39,7 +38,7 @@ export default async function DashboardPage() {
     await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
-  const nowTime = localDateTime(new Date(), timeZone).time
+  const nextDate = addDays(today, 1)
 
   const [
     session,
@@ -48,6 +47,7 @@ export default async function DashboardPage() {
     budget,
     categories,
     dayEvents,
+    nextDayEvents,
     monthData,
     goals,
     calendars,
@@ -58,16 +58,13 @@ export default async function DashboardPage() {
     getBudgetSummary(month),
     getCategories(),
     getDayEvents(today, timeZone),
+    getDayEvents(nextDate, timeZone),
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(),
     getCalendars(),
   ])
 
   const name = session?.user?.name ?? "there"
-  const nextEvent =
-    dayEvents.find((o) => o.time === null || o.time >= nowTime) ??
-    monthData.occurrences.find((o) => o.date > today) ??
-    null
 
   return (
     <div className="relative mx-auto w-full max-w-7xl p-6 lg:p-8">
@@ -125,22 +122,18 @@ export default async function DashboardPage() {
               currency={currency}
             />
           </Reveal>
-          <Reveal delay={0.15}>
-            <TodayTimeline
-              events={dayEvents}
-              calendars={calendars}
-              use24Hour={use24HourTime}
-            />
-          </Reveal>
         </div>
 
         {/* Rail */}
         <div className="flex min-w-0 flex-col gap-6">
           <Reveal delay={0.1}>
             <UpNext
-              nextEvent={nextEvent}
-              tasks={tasks}
               today={today}
+              nextDate={nextDate}
+              todayEvents={dayEvents}
+              nextDayEvents={nextDayEvents}
+              calendars={calendars}
+              tasks={tasks}
               use24Hour={use24HourTime}
             />
           </Reveal>
