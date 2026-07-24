@@ -4,6 +4,8 @@
 // on 'YYYY-MM-DD' strings (DST-immune), mirroring the calendar recurrence engine but
 // searching backward for the latest occurrence ≤ today instead of forward-emitting a range.
 
+import { addDays, dayDiff, daysInMonth, dowOf, fmt, parse } from "@/lib/date"
+
 export type TaskRecurrenceFreq = "daily" | "weekly" | "monthly"
 export type TaskRecurrenceMonthlyMode = "day_of_month" | "nth_weekday"
 
@@ -24,43 +26,6 @@ export type TaskRecurrenceRule = {
 // `dueDate` is what the task shows (== occurrenceDate for specific days; the period end
 // for flexible weekly/monthly).
 export type Cycle = { occurrenceDate: string; dueDate: string }
-
-// --- date-string helpers (YYYY-MM-DD), kept local so todos doesn't depend on calendar ---
-
-function parse(dateStr: string): [number, number, number] {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  return [y, m, d]
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0")
-}
-
-function fmt(y: number, m: number, d: number): string {
-  return `${y}-${pad2(m)}-${pad2(d)}`
-}
-
-/** Days in month m (1-12) of year y. */
-function daysInMonth(y: number, m: number): number {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate()
-}
-
-function addDays(dateStr: string, n: number): string {
-  const [y, m, d] = parse(dateStr)
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
-}
-
-/** b - a in whole days. */
-function dayDiff(a: string, b: string): number {
-  const [ay, am, ad] = parse(a)
-  const [by, bm, bd] = parse(b)
-  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000)
-}
-
-/** Weekday of a YYYY-MM-DD (0 = Sunday). */
-function dowOf(dateStr: string): number {
-  return new Date(`${dateStr}T00:00:00Z`).getUTCDay()
-}
 
 const GUARD = 480 // ~40 years of monthly steps; a safety bound on backward scans
 

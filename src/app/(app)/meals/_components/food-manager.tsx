@@ -6,7 +6,7 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { createFood, deleteFood } from "@/modules/meals/actions"
+import { createFood, deleteFood, restoreFood } from "@/modules/meals/actions"
 import type { Food } from "@/modules/meals/queries"
 import { foodInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
@@ -75,10 +75,27 @@ export function FoodManager({
     reset(EMPTY)
   })
 
-  function remove(id: string) {
+  // A deleted food is re-insertable, so offer undo rather than a confirm prompt.
+  // (Past meal entries keep their macro snapshot regardless — only the reusable
+  // library row is affected.)
+  function remove(food: Food) {
     startTransition(async () => {
-      const result = await deleteFood(id)
-      if (!result.ok) toast.error(result.error)
+      const result = await deleteFood(food.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      const restorable = result.food ?? food
+      toast("Food deleted", {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            startTransition(async () => {
+              const restored = await restoreFood(restorable)
+              if (!restored.ok) toast.error(restored.error)
+            }),
+        },
+      })
     })
   }
 
@@ -177,7 +194,7 @@ export function FoodManager({
                     size="icon-sm"
                     aria-label={`Delete ${food.name}`}
                     disabled={pending}
-                    onClick={() => remove(food.id)}
+                    onClick={() => remove(food)}
                   >
                     <Trash2 className="size-4" />
                   </Button>

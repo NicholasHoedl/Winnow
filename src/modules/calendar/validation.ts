@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { isValidDateString } from "@/modules/todos/service"
+import { isValidDateString } from "@/lib/date"
 
 export const RECURRENCE_FREQS = [
   "none",
@@ -89,18 +89,6 @@ export const eventExceptionSchema = z
     { message: "End time must be on or after the start", path: ["endTime"] },
   )
 export type EventExceptionInput = z.infer<typeof eventExceptionSchema>
-
-export const goalInputSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(200),
-  notes: z.string().trim().max(2000).or(z.literal("")).optional(),
-  targetDate: optionalDate,
-})
-export type GoalInput = z.infer<typeof goalInputSchema>
-
-export const milestoneInputSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(200),
-})
-export type MilestoneInput = z.infer<typeof milestoneInputSchema>
 
 export const calendarInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(60),

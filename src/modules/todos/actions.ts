@@ -5,39 +5,18 @@ import { and, eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
+import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import { todayInZone } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
 import { syncRuleInstances, type Task } from "./queries"
 import { lists, taskRecurrences, tasks } from "./schema"
-import { todayInZone } from "./service"
 import {
   listInputSchema,
   taskInputSchema,
   taskRecurrenceSchema,
 } from "./validation"
-
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-
-function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "")
-    if (key && !out[key]) out[key] = issue.message
-  }
-  return out
-}
-
-/** Empty strings from form inputs become NULL in the DB. */
-function nullify(value: string | null | undefined): string | null {
-  return value == null || value === "" ? null : value
-}
-
-function invalid(error: z.ZodError): ActionResult {
-  return { ok: false, error: "Please fix the errors below.", fieldErrors: fieldErrorsFrom(error) }
-}
 
 // --- Tasks ---
 

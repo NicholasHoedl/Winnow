@@ -2,44 +2,20 @@
 
 import { revalidatePath } from "next/cache"
 import { and, eq } from "drizzle-orm"
-import { z } from "zod"
 
 import { db } from "@/db"
+import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
+import { getUserPreferences } from "@/modules/preferences/queries"
 
 import type { Transaction } from "./queries"
 import { budgets, categories, transactions } from "./schema"
-import { dollarsToCents, monthKey } from "./service"
+import { amountToMinor, monthKey } from "./service"
 import {
   budgetInputSchema,
   categoryInputSchema,
   transactionInputSchema,
 } from "./validation"
-
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-
-function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "")
-    if (key && !out[key]) out[key] = issue.message
-  }
-  return out
-}
-
-function invalid(error: z.ZodError): ActionResult {
-  return {
-    ok: false,
-    error: "Please fix the errors below.",
-    fieldErrors: fieldErrorsFrom(error),
-  }
-}
-
-function nullify(value: string | null | undefined): string | null {
-  return value == null || value === "" ? null : value
-}
 
 function revalidateBudget() {
   revalidatePath("/budget")
@@ -89,10 +65,11 @@ export async function createTransaction(input: unknown): Promise<ActionResult> {
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
+  const { currency } = await getUserPreferences()
   const { amount, type, date, categoryId, description } = parsed.data
   await db.insert(transactions).values({
     userId,
-    amountCents: dollarsToCents(amount),
+    amountCents: amountToMinor(amount, currency),
     type,
     date,
     categoryId: nullify(categoryId),
@@ -107,11 +84,12 @@ export async function updateTransaction(id: string, input: unknown): Promise<Act
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
+  const { currency } = await getUserPreferences()
   const { amount, type, date, categoryId, description } = parsed.data
   await db
     .update(transactions)
     .set({
-      amountCents: dollarsToCents(amount),
+      amountCents: amountToMinor(amount, currency),
       type,
       date,
       categoryId: nullify(categoryId),
@@ -162,8 +140,9 @@ export async function setBudget(input: unknown): Promise<ActionResult> {
   const parsed = budgetInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
+  const { currency } = await getUserPreferences()
   const { categoryId, month, amount } = parsed.data
-  const amountCents = dollarsToCents(amount)
+  const amountCents = amountToMinor(amount, currency)
   await db
     .insert(budgets)
     .values({ userId, categoryId, periodMonth: monthKey(month), amountCents })

@@ -2,27 +2,20 @@ import "server-only"
 import { and, asc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
+import { addDays } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 
-import { calendars, eventExceptions, events, goals, milestones } from "./schema"
+import { calendars, eventExceptions, events } from "./schema"
 import {
-  addDays,
   applyExceptions,
   bucketByDay,
   expandOccurrences,
-  goalProgress,
   gridRange,
   type Occurrence,
 } from "./service"
 
 export type EventRow = typeof events.$inferSelect
 export type EventOccurrence = Occurrence<EventRow>
-export type GoalRow = typeof goals.$inferSelect
-export type MilestoneRow = typeof milestones.$inferSelect
-export type GoalWithProgress = GoalRow & {
-  milestones: MilestoneRow[]
-  progress: { done: number; total: number; percent: number }
-}
 export type Calendar = typeof calendars.$inferSelect
 
 // Seed the two default calendars the first time a user has none (no seed-script
@@ -136,22 +129,4 @@ export async function getDayEvents(
       tz,
     )
   ).sort(byDateThenTime)
-}
-
-export async function getGoals(): Promise<GoalWithProgress[]> {
-  const userId = await requireUserId()
-  const [goalRows, milestoneRows] = await Promise.all([
-    db.query.goals.findMany({
-      where: eq(goals.userId, userId),
-      orderBy: [asc(goals.createdAt)],
-    }),
-    db.query.milestones.findMany({
-      where: eq(milestones.userId, userId),
-      orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
-    }),
-  ])
-  return goalRows.map((goal) => {
-    const items = milestoneRows.filter((m) => m.goalId === goal.id)
-    return { ...goal, milestones: items, progress: goalProgress(items) }
-  })
 }

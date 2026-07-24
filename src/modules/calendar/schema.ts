@@ -80,40 +80,6 @@ export const events = pgTable("events", {
     .$onUpdate(() => new Date()),
 })
 
-// Undated, long-term goals. Progress is derived from their milestones.
-export const goals = pgTable("goals", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  notes: text("notes"),
-  targetDate: date("target_date", { mode: "string" }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-})
-
-export const milestones = pgTable("milestones", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  goalId: uuid("goal_id")
-    .notNull()
-    .references(() => goals.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  done: boolean("done").notNull().default(false),
-  sortOrder: integer("sort_order").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-})
-
 // Per-occurrence overrides for a recurring event ("This event" edits/skips),
 // keyed by the occurrence's natural date (RECURRENCE-ID). Applied as a read-time
 // overlay in service.ts — the series row is never mutated. `canceled` skips the

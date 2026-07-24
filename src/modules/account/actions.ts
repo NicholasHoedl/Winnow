@@ -3,40 +3,20 @@
 import { revalidatePath } from "next/cache"
 import { eq } from "drizzle-orm"
 import bcrypt from "bcryptjs"
-import { z } from "zod"
 
 import { db } from "@/db"
 import { users } from "@/db/schema"
+import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { unstable_update as updateSession } from "@/lib/auth"
 import { budgets, categories, transactions } from "@/modules/budget/schema"
-import { events, goals, milestones } from "@/modules/calendar/schema"
+import { events } from "@/modules/calendar/schema"
+import { goals, milestones } from "@/modules/goals/schema"
 import { foods, macroTargets, mealEntries } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
 import { lists, tasks } from "@/modules/todos/schema"
 
 import { changePasswordSchema, profileSchema } from "./validation"
-
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-
-function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "")
-    if (key && !out[key]) out[key] = issue.message
-  }
-  return out
-}
-
-function invalid(error: z.ZodError): ActionResult {
-  return {
-    ok: false,
-    error: "Please fix the errors below.",
-    fieldErrors: fieldErrorsFrom(error),
-  }
-}
 
 export async function updateProfile(input: unknown): Promise<ActionResult> {
   const userId = await requireUserId()

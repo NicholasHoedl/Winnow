@@ -5,9 +5,9 @@ import { useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
-import { createGoal, updateGoal } from "@/modules/calendar/actions"
-import type { GoalRow } from "@/modules/calendar/queries"
-import { goalInputSchema } from "@/modules/calendar/validation"
+import { createGoal, updateGoal } from "@/modules/goals/actions"
+import type { GoalRow } from "@/modules/goals/queries"
+import { goalInputSchema } from "@/modules/goals/validation"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,

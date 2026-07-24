@@ -8,6 +8,7 @@ export default defineConfig({
     "./src/modules/meals/schema.ts",
     "./src/modules/budget/schema.ts",
     "./src/modules/calendar/schema.ts",
+    "./src/modules/goals/schema.ts",
     "./src/modules/preferences/schema.ts",
   ],
   out: "./drizzle",

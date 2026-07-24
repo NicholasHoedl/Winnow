@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { createCategory, deleteCategory } from "@/modules/budget/actions"
 import type { Category } from "@/modules/budget/queries"
 import { categoryInputSchema } from "@/modules/budget/validation"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -44,6 +45,7 @@ export function CategoryManager({
   onOpenChange: (open: boolean) => void
 }) {
   const [pending, startTransition] = React.useTransition()
+  const [confirmTarget, setConfirmTarget] = React.useState<Category | null>(null)
   const {
     register,
     handleSubmit,
@@ -156,7 +158,7 @@ export function CategoryManager({
                           size="icon-sm"
                           aria-label={`Delete ${category.name}`}
                           disabled={pending}
-                          onClick={() => remove(category.id)}
+                          onClick={() => setConfirmTarget(category)}
                         >
                           <Trash2 className="size-4" />
                         </Button>
@@ -169,6 +171,21 @@ export function CategoryManager({
           )}
         </div>
       </DialogContent>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => !open && setConfirmTarget(null)}
+        title="Delete this category?"
+        description={
+          confirmTarget
+            ? `"${confirmTarget.name}" and any monthly budgets set for it will be deleted. Its past transactions are kept but become uncategorized.`
+            : undefined
+        }
+        confirmLabel="Delete category"
+        onConfirm={() => {
+          if (confirmTarget) remove(confirmTarget.id)
+        }}
+      />
     </Dialog>
   )
 }

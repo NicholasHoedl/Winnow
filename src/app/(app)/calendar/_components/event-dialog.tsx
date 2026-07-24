@@ -10,9 +10,9 @@ import {
   createEvent,
   setEventException,
   updateEvent,
-  type ActionResult,
 } from "@/modules/calendar/actions"
 import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
+import { type ActionResult } from "@/lib/action-result"
 import {
   localDateTime,
   type RecurrenceFreq,

@@ -5,7 +5,11 @@ import { toast } from "sonner"
 
 import { deleteBudget, setBudget } from "@/modules/budget/actions"
 import type { Budget, Category } from "@/modules/budget/queries"
-import { centsToDollars } from "@/modules/budget/service"
+import {
+  currencyFractionDigits,
+  minorToAmount,
+} from "@/modules/budget/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -32,6 +36,10 @@ export function BudgetsDialog({
 }) {
   const [pending, startTransition] = React.useTransition()
   const [values, setValues] = React.useState<Record<string, string>>({})
+  const { currency } = usePreferences()
+  const digits = currencyFractionDigits(currency)
+  const step = digits === 0 ? "1" : "0.01"
+  const placeholder = digits === 0 ? "0" : "0.00"
 
   React.useEffect(() => {
     if (!open) return
@@ -39,11 +47,11 @@ export function BudgetsDialog({
     for (const category of categories) {
       const existing = budgets.find((b) => b.categoryId === category.id)
       next[category.id] = existing
-        ? String(centsToDollars(existing.amountCents))
+        ? String(minorToAmount(existing.amountCents, currency))
         : ""
     }
     setValues(next)
-  }, [open, categories, budgets])
+  }, [open, categories, budgets, currency])
 
   function save() {
     startTransition(async () => {
@@ -108,10 +116,10 @@ export function BudgetsDialog({
                 <Input
                   id={`b-${category.id}`}
                   type="number"
-                  step="0.01"
+                  step={step}
                   min="0"
                   inputMode="decimal"
-                  placeholder="0.00"
+                  placeholder={placeholder}
                   className="w-32"
                   value={values[category.id] ?? ""}
                   onChange={(e) =>

@@ -7,6 +7,7 @@ import * as todosSchema from "@/modules/todos/schema"
 import * as mealsSchema from "@/modules/meals/schema"
 import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
+import * as goalsSchema from "@/modules/goals/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
 
 // Each domain module contributes its tables; merge them into one schema object
@@ -17,6 +18,7 @@ const schema = {
   ...mealsSchema,
   ...budgetSchema,
   ...calendarSchema,
+  ...goalsSchema,
   ...preferencesSchema,
 }
 

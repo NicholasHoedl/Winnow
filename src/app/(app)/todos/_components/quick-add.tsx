@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
-import { todayInZone } from "@/modules/todos/service"
+import { todayInZone } from "@/lib/date"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

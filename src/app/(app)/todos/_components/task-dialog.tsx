@@ -9,11 +9,11 @@ import {
   createTaskRecurrence,
   updateTask,
   updateTaskRecurrence,
-  type ActionResult,
 } from "@/modules/todos/actions"
 import type { List, TaskWithSeries } from "@/modules/todos/queries"
-import { todayInZone } from "@/modules/todos/service"
 import { type Priority } from "@/modules/todos/validation"
+import { type ActionResult } from "@/lib/action-result"
+import { todayInZone } from "@/lib/date"
 import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"

@@ -17,14 +17,12 @@ import type {
   Calendar,
   EventOccurrence,
   EventRow,
-  GoalWithProgress,
 } from "@/modules/calendar/queries"
 import { Button, buttonVariants } from "@/components/ui/button"
 
 import { AgendaView } from "./agenda-view"
 import { CalendarManager } from "./calendar-manager"
 import { EventDialog, type EditScope } from "./event-dialog"
-import { GoalsPanel } from "./goals-panel"
 import { MonthGrid } from "./month-grid"
 
 function shiftMonth(month: string, delta: number): string {
@@ -51,7 +49,6 @@ export function CalendarView({
   grid,
   byDay,
   occurrences,
-  goals,
   calendars,
 }: {
   month: string
@@ -60,7 +57,6 @@ export function CalendarView({
   grid: string[][]
   byDay: Record<string, EventOccurrence[]>
   occurrences: EventOccurrence[]
-  goals: GoalWithProgress[]
   calendars: Calendar[]
 }) {
   const [view, setView] = React.useState<CalendarView>("month")
@@ -163,7 +159,7 @@ export function CalendarView({
             Calendar
           </h1>
           <p className="text-muted-foreground text-sm">
-            Your events and long-term goals.
+            Your events.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -277,8 +273,6 @@ export function CalendarView({
           onDelete={handleDeleteSeries}
         />
       )}
-
-      <GoalsPanel goals={goals} />
 
       <EventDialog
         timeZone={timeZone}

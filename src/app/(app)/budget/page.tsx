@@ -5,7 +5,7 @@ import {
 } from "@/modules/budget/queries"
 import { summarizeMonth } from "@/modules/budget/service"
 import { getUserPreferences } from "@/modules/preferences/queries"
-import { todayInZone } from "@/modules/todos/service"
+import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
 

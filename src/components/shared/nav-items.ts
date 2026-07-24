@@ -2,6 +2,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   ListTodo,
+  Target,
   Utensils,
   Wallet,
   type LucideIcon,
@@ -19,6 +20,7 @@ export const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/todos", label: "To-dos", icon: ListTodo },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/goals", label: "Goals", icon: Target },
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/meals", label: "Meals", icon: Utensils },
 ]

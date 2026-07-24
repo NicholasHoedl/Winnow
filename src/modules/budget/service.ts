@@ -1,17 +1,55 @@
-// Pure budget logic. Money is integer cents everywhere; dollars appear only at
-// the input/display boundary via these helpers. No DB — unit-testable directly.
+// Pure budget logic. Money is stored as integer minor units (cents for USD, whole
+// yen for JPY, …); the major amount appears only at the input/display boundary via
+// these helpers. No DB — unit-testable directly.
 
-export function dollarsToCents(dollars: number): number {
-  return Math.round(dollars * 100)
+// Minor-unit exponent for a currency: 2 for USD/EUR (cents), 0 for JPY/KRW, 3 for
+// BHD/KWD. Read from Intl so we don't maintain a table; defaults to 2 if the code
+// is somehow unknown (Intl throws on invalid ISO codes).
+export function currencyFractionDigits(currency: string): number {
+  try {
+    return (
+      new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+      }).resolvedOptions().maximumFractionDigits ?? 2
+    )
+  } catch {
+    return 2
+  }
 }
 
-export function centsToDollars(cents: number): number {
-  return cents / 100
+/** User-entered major amount → integer minor units for storage, rounded at the
+ * currency's precision. USD 12.34 → 1234; JPY 1000 → 1000. */
+export function amountToMinor(amount: number, currency: string): number {
+  return Math.round(amount * 10 ** currencyFractionDigits(currency))
 }
 
-export function formatCents(cents: number, currency = "USD"): string {
+/** Inverse of {@link amountToMinor}: integer minor units → major amount for
+ * editing/display. USD 1234 → 12.34; JPY 1000 → 1000. */
+export function minorToAmount(minor: number, currency: string): number {
+  return minor / 10 ** currencyFractionDigits(currency)
+}
+
+/** The currency's symbol (e.g. "$", "¥", "€") for labelling amount inputs, or the
+ * ISO code itself as a fallback. */
+export function currencySymbol(currency: string): string {
+  try {
+    const parts = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).formatToParts(0)
+    return parts.find((part) => part.type === "currency")?.value ?? currency
+  } catch {
+    return currency
+  }
+}
+
+/** Format integer minor units as a localized currency string (symbol + the
+ * currency's decimal places). The divisor tracks the currency's precision, so
+ * JPY renders whole yen and USD renders cents. */
+export function formatCents(minor: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(
-    cents / 100,
+    minor / 10 ** currencyFractionDigits(currency),
   )
 }
 

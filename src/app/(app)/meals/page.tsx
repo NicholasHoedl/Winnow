@@ -4,7 +4,7 @@ import {
   getMealEntries,
 } from "@/modules/meals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
-import { todayInZone } from "@/modules/todos/service"
+import { todayInZone } from "@/lib/date"
 
 import { MealsView } from "./_components/meals-view"
 

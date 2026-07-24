@@ -2,39 +2,18 @@
 
 import { revalidatePath } from "next/cache"
 import { and, eq } from "drizzle-orm"
-import { z } from "zod"
 
 import { db } from "@/db"
+import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 
-import type { MealEntry } from "./queries"
+import type { Food, MealEntry } from "./queries"
 import { foods, macroTargets, mealEntries } from "./schema"
 import {
   foodInputSchema,
   macroTargetsSchema,
   mealEntryInputSchema,
 } from "./validation"
-
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
-
-function fieldErrorsFrom(error: z.ZodError): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const issue of error.issues) {
-    const key = String(issue.path[0] ?? "")
-    if (key && !out[key]) out[key] = issue.message
-  }
-  return out
-}
-
-function invalid(error: z.ZodError): ActionResult {
-  return {
-    ok: false,
-    error: "Please fix the errors below.",
-    fieldErrors: fieldErrorsFrom(error),
-  }
-}
 
 function revalidateMeals() {
   revalidatePath("/meals")
@@ -66,10 +45,40 @@ export async function updateFood(id: string, input: unknown): Promise<ActionResu
   return { ok: true }
 }
 
-export async function deleteFood(id: string): Promise<ActionResult> {
+export type DeleteFoodResult =
+  | { ok: true; food: Food | null }
+  | { ok: false; error: string }
+
+export async function deleteFood(id: string): Promise<DeleteFoodResult> {
   const userId = await requireUserId()
   // Meal entries keep their snapshot (food_id is set to NULL by the FK).
-  await db.delete(foods).where(and(eq(foods.id, id), eq(foods.userId, userId)))
+  const [deleted] = await db
+    .delete(foods)
+    .where(and(eq(foods.id, id), eq(foods.userId, userId)))
+    .returning()
+  revalidatePath("/meals")
+  return { ok: true, food: deleted ?? null }
+}
+
+/** Re-inserts a food removed via {@link deleteFood} (the "undo" path). The user
+ * id always comes from the session — any client-supplied one is ignored. The FK
+ * nulled `food_id` on past entries is not re-linked; only the food row returns. */
+export async function restoreFood(food: Food): Promise<ActionResult> {
+  const userId = await requireUserId()
+  await db
+    .insert(foods)
+    .values({
+      id: food.id,
+      userId,
+      name: food.name,
+      servingLabel: food.servingLabel,
+      calories: food.calories,
+      proteinG: food.proteinG,
+      carbsG: food.carbsG,
+      fatG: food.fatG,
+      createdAt: food.createdAt,
+    })
+    .onConflictDoNothing()
   revalidatePath("/meals")
   return { ok: true }
 }

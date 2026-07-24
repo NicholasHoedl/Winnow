@@ -293,6 +293,7 @@ export function BudgetView({
 
       <TransactionDialog
         defaultDate={defaultDate}
+        month={month}
         categories={categories}
         transaction={editingTx}
         open={txOpen}

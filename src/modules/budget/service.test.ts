@@ -1,28 +1,43 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  centsToDollars,
-  dollarsToCents,
+  amountToMinor,
+  currencyFractionDigits,
+  currencySymbol,
   formatCents,
+  minorToAmount,
   monthKey,
   monthRange,
   summarizeMonth,
 } from "./service"
 
 describe("money helpers", () => {
-  it("dollarsToCents rounds float-safely", () => {
-    expect(dollarsToCents(12.1)).toBe(1210)
-    expect(dollarsToCents(0.1 + 0.2)).toBe(30) // 0.30000000000000004 → 30
-    expect(dollarsToCents(1234.56)).toBe(123456)
+  it("currencyFractionDigits: 2 for USD, 0 for zero-decimal JPY", () => {
+    expect(currencyFractionDigits("USD")).toBe(2)
+    expect(currencyFractionDigits("JPY")).toBe(0)
   })
 
-  it("centsToDollars", () => {
-    expect(centsToDollars(1210)).toBe(12.1)
+  it("amountToMinor rounds float-safely at the currency's precision", () => {
+    expect(amountToMinor(12.1, "USD")).toBe(1210)
+    expect(amountToMinor(0.1 + 0.2, "USD")).toBe(30) // 0.30000000000000004 → 30
+    expect(amountToMinor(1234.56, "USD")).toBe(123456)
+    expect(amountToMinor(1000, "JPY")).toBe(1000) // zero-decimal: no ×100
   })
 
-  it("formatCents (USD)", () => {
-    expect(formatCents(123456)).toBe("$1,234.56")
-    expect(formatCents(0)).toBe("$0.00")
+  it("minorToAmount inverts amountToMinor per currency", () => {
+    expect(minorToAmount(1210, "USD")).toBe(12.1)
+    expect(minorToAmount(1000, "JPY")).toBe(1000)
+  })
+
+  it("formatCents renders the currency's symbol + decimals", () => {
+    expect(formatCents(123456, "USD")).toBe("$1,234.56")
+    expect(formatCents(0, "USD")).toBe("$0.00")
+    expect(formatCents(1000, "JPY")).toBe("¥1,000") // whole yen, no cents
+  })
+
+  it("currencySymbol picks the symbol", () => {
+    expect(currencySymbol("USD")).toBe("$")
+    expect(currencySymbol("JPY")).toBe("¥")
   })
 })
 

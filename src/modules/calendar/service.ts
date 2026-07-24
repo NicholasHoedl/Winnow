@@ -3,7 +3,15 @@
 // so recurrence stepping is plain calendar-date arithmetic with no timezone/DST
 // reconstruction. Recurring instances are computed here on read, never materialized.
 
-import { todayInZone } from "@/modules/todos/service"
+import {
+  addDays,
+  dayDiff,
+  daysInMonth,
+  dowOf,
+  fmt,
+  parse,
+  todayInZone,
+} from "@/lib/date"
 
 export type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly"
 
@@ -30,40 +38,6 @@ export type Occurrence<E extends RecurringEvent = RecurringEvent> = {
   endDate: string // YYYY-MM-DD local end date (== date unless multi-day)
   time: string | null // HH:MM local start, null when all-day
   endTime: string | null
-}
-
-// --- date-string helpers (YYYY-MM-DD) ---
-
-function parse(dateStr: string): [number, number, number] {
-  const [y, m, d] = dateStr.split("-").map(Number)
-  return [y, m, d]
-}
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0")
-}
-
-function fmt(y: number, m: number, d: number): string {
-  return `${y}-${pad2(m)}-${pad2(d)}`
-}
-
-/** Days in month m (1-12) of year y. */
-function daysInMonth(y: number, m: number): number {
-  return new Date(Date.UTC(y, m, 0)).getUTCDate()
-}
-
-export function addDays(dateStr: string, n: number): string {
-  const [y, m, d] = parse(dateStr)
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
-}
-
-/** b - a in whole days. */
-function dayDiff(a: string, b: string): number {
-  const [ay, am, ad] = parse(a)
-  const [by, bm, bd] = parse(b)
-  return Math.round(
-    (Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000,
-  )
 }
 
 function minStr(a: string, b: string): string {
@@ -177,8 +151,6 @@ export function expandOccurrences<E extends RecurringEvent>(
   const emit = (date: string) => {
     if (date >= rangeStart && date < hardEnd) out.push(make(date))
   }
-
-  const dowOf = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() // 0 = Sun
 
   // Weekly with a selected weekday set (BYDAY): emit each chosen weekday within
   // every active `interval`-week block, counting blocks from the anchor's week.
@@ -409,15 +381,4 @@ export function bucketByDay<E extends RecurringEvent>(
     }
   }
   return out
-}
-
-// --- goals ---
-
-export function goalProgress(
-  milestones: { done: boolean }[],
-): { done: number; total: number; percent: number } {
-  const total = milestones.length
-  const done = milestones.filter((mile) => mile.done).length
-  const percent = total === 0 ? 0 : Math.round((done / total) * 100)
-  return { done, total, percent }
 }

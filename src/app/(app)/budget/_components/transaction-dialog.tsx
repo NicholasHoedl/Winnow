@@ -7,9 +7,15 @@ import { toast } from "sonner"
 
 import { createTransaction, updateTransaction } from "@/modules/budget/actions"
 import type { Category, Transaction } from "@/modules/budget/queries"
-import { centsToDollars } from "@/modules/budget/service"
+import {
+  currencyFractionDigits,
+  currencySymbol,
+  minorToAmount,
+} from "@/modules/budget/service"
 import { transactionInputSchema } from "@/modules/budget/validation"
+import { daysInMonth, fmt } from "@/lib/date"
 import { numberField } from "@/lib/forms"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -41,18 +47,30 @@ type TransactionFormValues = {
 
 export function TransactionDialog({
   defaultDate,
+  month,
   categories,
   transaction,
   open,
   onOpenChange,
 }: {
   defaultDate: string
+  month: string
   categories: Category[]
   transaction: Transaction | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!transaction
+  const { currency } = usePreferences()
+  const symbol = currencySymbol(currency)
+  const step = currencyFractionDigits(currency) === 0 ? "1" : "0.01"
+
+  // Constrain the date picker to the month being viewed so an entry can't silently
+  // land in another month (which decides where it shows up).
+  const [my, mm] = month.split("-").map(Number)
+  const monthStart = `${month}-01`
+  const monthEnd = fmt(my, mm, daysInMonth(my, mm))
+
   const empty: TransactionFormValues = {
     amount: 0,
     type: "expense",
@@ -66,17 +84,34 @@ export function TransactionDialog({
     control,
     reset,
     setError,
+    watch,
+    getValues,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: standardSchemaResolver(transactionInputSchema),
     defaultValues: empty,
   })
 
+  // A category belongs to either income or expense; show only the matching kind,
+  // and drop a selected category that no longer fits when the type flips.
+  const txType = watch("type")
+  const availableCategories = categories.filter((c) => c.kind === txType)
+  React.useEffect(() => {
+    const selected = getValues("categoryId")
+    if (
+      selected &&
+      !categories.some((c) => c.id === selected && c.kind === txType)
+    ) {
+      setValue("categoryId", "")
+    }
+  }, [txType, categories, getValues, setValue])
+
   React.useEffect(() => {
     if (!open) return
     if (transaction) {
       reset({
-        amount: centsToDollars(transaction.amountCents),
+        amount: minorToAmount(transaction.amountCents, currency),
         type: transaction.type,
         date: transaction.date,
         categoryId: transaction.categoryId ?? "",
@@ -91,7 +126,7 @@ export function TransactionDialog({
         description: "",
       })
     }
-  }, [open, transaction, defaultDate, reset])
+  }, [open, transaction, defaultDate, currency, reset])
 
   const onSubmit = handleSubmit(async (data) => {
     const result = isEdit
@@ -127,11 +162,11 @@ export function TransactionDialog({
           <FieldGroup>
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel htmlFor="t-amount">Amount ($)</FieldLabel>
+                <FieldLabel htmlFor="t-amount">Amount ({symbol})</FieldLabel>
                 <Input
                   id="t-amount"
                   type="number"
-                  step="0.01"
+                  step={step}
                   min="0"
                   {...register("amount", numberField)}
                 />
@@ -165,7 +200,13 @@ export function TransactionDialog({
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="t-date">Date</FieldLabel>
-                <Input id="t-date" type="date" {...register("date")} />
+                <Input
+                  id="t-date"
+                  type="date"
+                  min={monthStart}
+                  max={monthEnd}
+                  {...register("date")}
+                />
                 <FieldError errors={[errors.date]} />
               </Field>
               <Field>
@@ -192,7 +233,7 @@ export function TransactionDialog({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NO_CATEGORY}>No category</SelectItem>
-                        {categories.map((category) => (
+                        {availableCategories.map((category) => (
                           <SelectItem key={category.id} value={category.id}>
                             {category.name}
                           </SelectItem>

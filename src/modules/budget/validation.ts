@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { isValidDateString } from "@/modules/todos/service"
+import { isValidDateString } from "@/lib/date"
 
 import { monthKey } from "./service"
 

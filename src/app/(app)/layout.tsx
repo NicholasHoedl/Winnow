@@ -28,6 +28,13 @@ export default async function AppLayout({
 
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
+      {/* Keyboard/screen-reader users can jump past the nav straight to the page. */}
+      <a
+        href="#content"
+        className="bg-background text-foreground focus-visible:ring-ring sr-only rounded-md px-4 py-2 text-sm font-medium shadow focus-visible:not-sr-only focus-visible:absolute focus-visible:top-4 focus-visible:left-4 focus-visible:z-50 focus-visible:ring-2"
+      >
+        Skip to content
+      </a>
       <AppSidebar userName={userName} />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -48,7 +55,7 @@ export default async function AppLayout({
           </div>
         </header>
 
-        <main className="flex-1 pb-20 md:pb-0">
+        <main id="content" tabIndex={-1} className="flex-1 pb-20 outline-none md:pb-0">
           <PreferencesProvider value={preferences}>
             {children}
           </PreferencesProvider>

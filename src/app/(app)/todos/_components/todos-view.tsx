@@ -12,6 +12,7 @@ import {
 } from "@/modules/todos/actions"
 import type { List, TaskWithSeries } from "@/modules/todos/queries"
 import { dueStatus } from "@/modules/todos/service"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
 import { ListManager } from "./list-manager"
@@ -42,6 +43,8 @@ export function TodosView({
   const [editingTask, setEditingTask] =
     React.useState<TaskWithSeries | null>(null)
   const [listManagerOpen, setListManagerOpen] = React.useState(false)
+  const [confirmSeries, setConfirmSeries] =
+    React.useState<TaskWithSeries | null>(null)
   const [, startTransition] = React.useTransition()
 
   const [optimisticTasks, applyOptimistic] = React.useOptimistic<
@@ -70,13 +73,10 @@ export function TodosView({
 
   function handleDelete(task: TaskWithSeries) {
     // Deleting a recurring instance stops the whole series (a single instance would
-    // just regenerate on the next load). One-off tasks delete with an Undo.
+    // just regenerate on the next load) and drops its upcoming occurrences — not
+    // cleanly undoable, so confirm first. One-off tasks delete with an Undo.
     if (task.series) {
-      startTransition(async () => {
-        const result = await deleteTaskRecurrence(task.series!.id)
-        if (!result.ok) toast.error(result.error)
-        else toast("Stopped repeating")
-      })
+      setConfirmSeries(task)
       return
     }
     startTransition(async () => {
@@ -96,6 +96,15 @@ export function TodosView({
             }),
         },
       })
+    })
+  }
+
+  function stopRepeating(task: TaskWithSeries) {
+    if (!task.series) return
+    startTransition(async () => {
+      const result = await deleteTaskRecurrence(task.series!.id)
+      if (!result.ok) toast.error(result.error)
+      else toast("Stopped repeating")
     })
   }
 
@@ -190,6 +199,21 @@ export function TodosView({
         lists={lists}
         open={listManagerOpen}
         onOpenChange={setListManagerOpen}
+      />
+
+      <ConfirmDialog
+        open={confirmSeries !== null}
+        onOpenChange={(open) => !open && setConfirmSeries(null)}
+        title="Stop repeating this task?"
+        description={
+          confirmSeries
+            ? `"${confirmSeries.title}" will stop repeating and its upcoming occurrences will be removed. Occurrences you've already completed are kept.`
+            : undefined
+        }
+        confirmLabel="Stop repeating"
+        onConfirm={() => {
+          if (confirmSeries) stopRepeating(confirmSeries)
+        }}
       />
     </div>
   )

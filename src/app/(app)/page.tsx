@@ -6,14 +6,14 @@ import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getCalendars,
   getDayEvents,
-  getGoals,
   getMonthEvents,
 } from "@/modules/calendar/queries"
-import { addDays } from "@/modules/calendar/service"
+import { getGoals } from "@/modules/goals/queries"
+import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
-import { summarizeTasks, todayInZone } from "@/modules/todos/service"
+import { summarizeTasks } from "@/modules/todos/service"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 

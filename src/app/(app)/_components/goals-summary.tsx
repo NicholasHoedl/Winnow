@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import type { GoalWithProgress } from "@/modules/calendar/queries"
+import type { GoalWithProgress } from "@/modules/goals/queries"
 import {
   Card,
   CardContent,
@@ -18,7 +18,7 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
         <CardTitle className="flex items-center justify-between text-base">
           <span>Goals</span>
           <Link
-            href="/calendar"
+            href="/goals"
             className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
           >
             All →

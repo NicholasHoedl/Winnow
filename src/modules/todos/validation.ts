@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { isValidDateString } from "./service"
+import { isValidDateString } from "@/lib/date"
 
 // Shared by the React Hook Form resolver (client) and the Server Actions
 // (server re-validation). Kept free of DB/Drizzle imports so it's client-safe.
