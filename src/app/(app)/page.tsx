@@ -12,13 +12,14 @@ import {
 import { addDays } from "@/modules/calendar/service"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
-import { getTaskSummary } from "@/modules/todos/queries"
-import { todayInZone } from "@/modules/todos/service"
+import { getTasks } from "@/modules/todos/queries"
+import { summarizeTasks, todayInZone } from "@/modules/todos/service"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 
 import { CategoryBars } from "./_components/category-bars"
 import { DashboardCalendar } from "./_components/dashboard-calendar"
+import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
 import { UpNext } from "./_components/up-next"
@@ -53,7 +54,7 @@ export default async function DashboardPage() {
     calendars,
   ] = await Promise.all([
     auth(),
-    getTaskSummary(timeZone),
+    getTasks(),
     getMacroSummary(today),
     getBudgetSummary(month),
     getCategories(),
@@ -65,6 +66,8 @@ export default async function DashboardPage() {
   ])
 
   const name = session?.user?.name ?? "there"
+  const openTasks = tasks.filter((task) => task.status === "open")
+  const taskSummary = summarizeTasks(tasks, new Date(), timeZone)
 
   return (
     <div className="relative mx-auto w-full max-w-7xl p-6 lg:p-8">
@@ -102,10 +105,17 @@ export default async function DashboardPage() {
         </header>
       </Reveal>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        {/* Main column */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
+        {/* Tasks column */}
         <div className="flex min-w-0 flex-col gap-6">
           <Reveal delay={0.05}>
+            <DashboardTaskList tasks={openTasks} timeZone={timeZone} />
+          </Reveal>
+        </div>
+
+        {/* Center column — calendar + stats */}
+        <div className="flex min-w-0 flex-col gap-6">
+          <Reveal delay={0.1}>
             <DashboardCalendar
               month={month}
               today={today}
@@ -114,37 +124,32 @@ export default async function DashboardPage() {
               calendars={calendars}
             />
           </Reveal>
-          <Reveal delay={0.1}>
-            <StatCards
-              tasks={tasks}
-              macros={macros}
-              budget={budget}
-              currency={currency}
-            />
+          <Reveal delay={0.15}>
+            <StatCards macros={macros} budget={budget} currency={currency} />
           </Reveal>
         </div>
 
         {/* Rail */}
         <div className="flex min-w-0 flex-col gap-6">
-          <Reveal delay={0.1}>
+          <Reveal delay={0.15}>
             <UpNext
               today={today}
               nextDate={nextDate}
               todayEvents={dayEvents}
               nextDayEvents={nextDayEvents}
               calendars={calendars}
-              tasks={tasks}
+              tasks={taskSummary}
               use24Hour={use24HourTime}
             />
           </Reveal>
-          <Reveal delay={0.15}>
+          <Reveal delay={0.2}>
             <CategoryBars
               budget={budget}
               categories={categories}
               currency={currency}
             />
           </Reveal>
-          <Reveal delay={0.2}>
+          <Reveal delay={0.25}>
             <GoalsSummary goals={goals} />
           </Reveal>
         </div>

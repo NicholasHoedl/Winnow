@@ -1,14 +1,9 @@
 import Link from "next/link"
-import { ArrowUpRight, ListTodo, Utensils, Wallet } from "lucide-react"
+import { ArrowUpRight, Utensils, Wallet } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
 import type { MacroProgressSet } from "@/modules/meals/service"
-
-type TasksLite = {
-  overdueCount: number
-  dueTodayCount: number
-}
 
 const MACROS = [
   { key: "calories", label: "Cal", accent: "bg-cat-3" },
@@ -57,12 +52,10 @@ function Bar({ percent, accent }: { percent: number; accent: string }) {
 }
 
 export function StatCards({
-  tasks,
   macros,
   budget,
   currency,
 }: {
-  tasks: TasksLite
   macros: { progress: MacroProgressSet }
   budget: MonthSummary
   currency: string
@@ -77,35 +70,7 @@ export function StatCards({
   const overBudget = budget.totalBudgetedCents > 0 && budget.expenseCents > budget.totalBudgetedCents
 
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {/* Tasks */}
-      <StatShell href="/todos" icon={<ListTodo className="size-4" />} label="Tasks">
-        <div className="flex items-end gap-5">
-          <div>
-            <div
-              className={cn(
-                "text-3xl font-semibold tabular-nums",
-                tasks.overdueCount > 0 && "text-destructive",
-              )}
-            >
-              {tasks.overdueCount}
-            </div>
-            <div className="text-muted-foreground text-xs">Overdue</div>
-          </div>
-          <div>
-            <div className="text-3xl font-semibold tabular-nums">
-              {tasks.dueTodayCount}
-            </div>
-            <div className="text-muted-foreground text-xs">Due today</div>
-          </div>
-        </div>
-        <p className="text-muted-foreground mt-auto text-xs">
-          {tasks.overdueCount + tasks.dueTodayCount === 0
-            ? "All clear."
-            : "Tap to review."}
-        </p>
-      </StatShell>
-
+    <div className="grid gap-4 sm:grid-cols-2">
       {/* Macros */}
       <StatShell href="/meals" icon={<Utensils className="size-4" />} label="Macros">
         {nothingLogged ? (
