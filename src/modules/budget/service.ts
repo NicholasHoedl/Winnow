@@ -59,7 +59,10 @@ export function monthKey(date: string): string {
 }
 
 /** Half-open [start, nextStart) bounds for a month, for date filtering. */
-export function monthRange(month: string): { start: string; nextStart: string } {
+export function monthRange(month: string): {
+  start: string
+  nextStart: string
+} {
   const start = monthKey(month)
   const [year, monthNum] = start.split("-").map(Number)
   const nextYear = monthNum === 12 ? year + 1 : year
@@ -151,13 +154,34 @@ export function summarizeMonth(
   }
 }
 
+// --- Transaction list filters ---
+// Declared here rather than in queries.ts so the client filter bar can import the
+// sentinel (queries.ts is `server-only`).
+
+/** Sentinel for "transactions with no category" — a filter value, not an id. */
+export const UNCATEGORIZED = "none"
+
+export type TransactionFilters = {
+  /** Matched against payee and description. */
+  q?: string
+  /** A category id, or UNCATEGORIZED. */
+  categoryId?: string
+  type?: "income" | "expense"
+  sort?: "date" | "amount"
+  dir?: "asc" | "desc"
+}
+
 // --- Natural-language quick-add (transactions) ---
 // Pure: turn a typed line into a createTransaction-ready payload (minus the caller-
 // supplied date). Amounts are DOLLARS/major units — the action rounds to minor units via
 // `amountToMinor`; direction lives in `type`, never a negative amount. Sibling of the date
 // parser in `src/lib/nl-date.ts`, whose matcher-ordering + span-removal style this mirrors.
 
-export type CategoryOption = { id: string; name: string; kind: "income" | "expense" }
+export type CategoryOption = {
+  id: string
+  name: string
+  kind: "income" | "expense"
+}
 
 export type ParsedTransaction = {
   amount: number
@@ -170,7 +194,9 @@ export type ParsedTransaction = {
 const NUM = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`
 // A "marked" amount carries a `$` and/or a leading +/- sign (two alternatives so the sign
 // attaches to either form). Tried before a bare number so "buy 2 coffees for $8" → 8.
-const AMOUNT_MARKED = new RegExp(String.raw`([+-])?\$\s?(${NUM})|([+-])\s?(${NUM})`)
+const AMOUNT_MARKED = new RegExp(
+  String.raw`([+-])?\$\s?(${NUM})|([+-])\s?(${NUM})`,
+)
 const AMOUNT_BARE = new RegExp(String.raw`\b(${NUM})\b`)
 const CATEGORY_TAG = /#([\p{L}\p{N}_-]+)/u
 
@@ -208,7 +234,9 @@ export function parseTransactionQuickAdd(
   const type: "income" | "expense" = sign === "+" ? "income" : "expense"
   const amount = parseFloat(magnitude.replace(/,/g, ""))
 
-  const spans: Array<[number, number]> = [[hit.index, hit.index + hit[0].length]]
+  const spans: Array<[number, number]> = [
+    [hit.index, hit.index + hit[0].length],
+  ]
 
   let categoryId = ""
   const tag = CATEGORY_TAG.exec(text)

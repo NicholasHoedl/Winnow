@@ -16,7 +16,11 @@ import { categoryAccent } from "@/lib/colors"
 import { shiftMonth } from "@/lib/date"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
 import type { Category, Transaction } from "@/modules/budget/queries"
-import { formatCents, type MonthSummary } from "@/modules/budget/service"
+import {
+  formatCents,
+  type MonthSummary,
+  type TransactionFilters as Filters,
+} from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
@@ -25,6 +29,7 @@ import { BudgetQuickAdd } from "./budget-quick-add"
 import { BudgetsDialog } from "./budgets-dialog"
 import { CategoryManager } from "./category-manager"
 import { TransactionDialog } from "./transaction-dialog"
+import { TransactionFilters } from "./transaction-filters"
 import { TransactionItem } from "./transaction-item"
 
 function formatMonth(month: string): string {
@@ -61,12 +66,14 @@ export function BudgetView({
   categories,
   transactions,
   summary,
+  filters,
 }: {
   month: string
   today: string
   categories: Category[]
   transactions: Transaction[]
   summary: MonthSummary
+  filters: Filters
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] = React.useState<Transaction | null>(null)
@@ -93,6 +100,11 @@ export function BudgetView({
   )
 
   const expenseCategories = categories.filter((c) => c.kind === "expense")
+
+  // The stats and the per-category rollup always describe the whole month; only the
+  // transaction list narrows. Say so when a filter is on, or the numbers read wrong.
+  const isFiltered =
+    !!filters.q || !!filters.categoryId || !!filters.type || !!filters.sort
 
   // The budgets dialog only needs "what is budgeted per category this month", which
   // the summary already carries — no separate budgets fetch. Memoized so the dialog's
@@ -228,7 +240,14 @@ export function BudgetView({
 
       {rows.length > 0 && (
         <section className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold">By category</h2>
+          <h2 className="mb-2 text-sm font-semibold">
+            By category
+            {isFiltered && (
+              <span className="text-muted-foreground ml-2 text-xs font-normal">
+                whole month
+              </span>
+            )}
+          </h2>
           <div className="divide-y rounded-xl border">
             {rows.map((row, i) => {
               const accent = categoryAccent(i)
@@ -295,10 +314,20 @@ export function BudgetView({
       )}
 
       <section className="mt-6">
-        <h2 className="mb-2 text-sm font-semibold">Transactions</h2>
+        <div className="mb-2 flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold">Transactions</h2>
+          {isFiltered && (
+            <span className="text-muted-foreground text-xs">
+              Filtered — {transactions.length} shown
+            </span>
+          )}
+        </div>
+        <TransactionFilters categories={categories} filters={filters} />
         {transactions.length === 0 ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            Nothing recorded this month.
+            {isFiltered
+              ? "No transactions match these filters."
+              : "Nothing recorded this month."}
           </p>
         ) : (
           <div className="flex flex-col gap-2">
