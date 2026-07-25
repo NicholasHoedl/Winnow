@@ -11,15 +11,63 @@ export type CategoryAccent = {
   text: string
   /** accent border */
   border: string
+  /** SVG shape fill — chart bars/areas */
+  fill: string
+  /** SVG stroke — chart lines */
+  stroke: string
 }
 
+// Written out per accent for the same reason as the rest: Tailwind's JIT only sees
+// literal class names, so `fill-cat-${n}` would compile to nothing.
 const ACCENTS: CategoryAccent[] = [
-  { bar: "bg-cat-1", tint: "bg-cat-1/12", text: "text-cat-1", border: "border-cat-1/30" },
-  { bar: "bg-cat-2", tint: "bg-cat-2/12", text: "text-cat-2", border: "border-cat-2/30" },
-  { bar: "bg-cat-3", tint: "bg-cat-3/12", text: "text-cat-3", border: "border-cat-3/30" },
-  { bar: "bg-cat-4", tint: "bg-cat-4/12", text: "text-cat-4", border: "border-cat-4/30" },
-  { bar: "bg-cat-5", tint: "bg-cat-5/12", text: "text-cat-5", border: "border-cat-5/30" },
-  { bar: "bg-cat-6", tint: "bg-cat-6/12", text: "text-cat-6", border: "border-cat-6/30" },
+  {
+    bar: "bg-cat-1",
+    tint: "bg-cat-1/12",
+    text: "text-cat-1",
+    border: "border-cat-1/30",
+    fill: "fill-cat-1",
+    stroke: "stroke-cat-1",
+  },
+  {
+    bar: "bg-cat-2",
+    tint: "bg-cat-2/12",
+    text: "text-cat-2",
+    border: "border-cat-2/30",
+    fill: "fill-cat-2",
+    stroke: "stroke-cat-2",
+  },
+  {
+    bar: "bg-cat-3",
+    tint: "bg-cat-3/12",
+    text: "text-cat-3",
+    border: "border-cat-3/30",
+    fill: "fill-cat-3",
+    stroke: "stroke-cat-3",
+  },
+  {
+    bar: "bg-cat-4",
+    tint: "bg-cat-4/12",
+    text: "text-cat-4",
+    border: "border-cat-4/30",
+    fill: "fill-cat-4",
+    stroke: "stroke-cat-4",
+  },
+  {
+    bar: "bg-cat-5",
+    tint: "bg-cat-5/12",
+    text: "text-cat-5",
+    border: "border-cat-5/30",
+    fill: "fill-cat-5",
+    stroke: "stroke-cat-5",
+  },
+  {
+    bar: "bg-cat-6",
+    tint: "bg-cat-6/12",
+    text: "text-cat-6",
+    border: "border-cat-6/30",
+    fill: "fill-cat-6",
+    stroke: "stroke-cat-6",
+  },
 ]
 
 export const CATEGORY_ACCENT_COUNT = ACCENTS.length
@@ -53,6 +101,7 @@ export function accentForCalendar(
  *  same color regardless of ordering. */
 export function accentForKey(key: string): CategoryAccent {
   let hash = 0
-  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0
+  for (let i = 0; i < key.length; i++)
+    hash = (hash * 31 + key.charCodeAt(i)) | 0
   return categoryAccent(Math.abs(hash))
 }

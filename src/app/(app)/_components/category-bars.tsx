@@ -1,15 +1,10 @@
 import Link from "next/link"
 
 import { cn } from "@/lib/utils"
-import { categoryAccent } from "@/lib/colors"
+import { accentForKey } from "@/lib/colors"
 import type { Category } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function CategoryBars({
   budget,
@@ -50,8 +45,10 @@ export function CategoryBars({
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            {rows.map((row, i) => {
-              const accent = categoryAccent(i)
+            {rows.map((row) => {
+              // Keyed by id, not list position — otherwise a category changes
+              // colour as its spend rank moves, and disagrees with /budget.
+              const accent = accentForKey(row.categoryId ?? "__uncat__")
               const pct =
                 row.budgetedCents > 0
                   ? Math.round((row.spentCents / row.budgetedCents) * 100)
@@ -62,7 +59,10 @@ export function CategoryBars({
                   <div className="flex items-baseline justify-between gap-2 text-xs">
                     <span className="flex min-w-0 items-center gap-2">
                       <span
-                        className={cn("size-2 shrink-0 rounded-full", accent.bar)}
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          accent.bar,
+                        )}
                       />
                       <span className="truncate font-medium">
                         {nameOf(row.categoryId)}
