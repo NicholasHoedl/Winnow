@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Plus } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
@@ -20,6 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -30,7 +39,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-const NEW_FOOD = "__new__"
 const NO_MEAL = "__none__"
 
 // Date is supplied by the current day, not the form.
@@ -97,6 +105,16 @@ export function LogFoodDialog({
     defaultValues: EMPTY,
   })
 
+  const [foodQuery, setFoodQuery] = React.useState("")
+
+  // Reset the food search when the dialog opens/closes — during render, not in an effect
+  // (which would be a setState-in-effect), mirroring the tasks dialog's scope reset.
+  const wasOpenRef = React.useRef(open)
+  if (open !== wasOpenRef.current) {
+    wasOpenRef.current = open
+    if (foodQuery !== "") setFoodQuery("")
+  }
+
   React.useEffect(() => {
     if (!open) return
     if (entry) {
@@ -117,11 +135,7 @@ export function LogFoodDialog({
     }
   }, [open, entry, reset])
 
-  function onPickFood(value: string | null) {
-    if (!value || value === NEW_FOOD) {
-      setValue("foodId", "")
-      return
-    }
+  function onPickFood(value: string) {
     const food = foods.find((f) => f.id === value)
     if (!food) return
     setValue("foodId", food.id)
@@ -154,6 +168,10 @@ export function LogFoodDialog({
   })
 
   const foodId = watch("foodId")
+  const q = foodQuery.trim().toLowerCase()
+  const foodMatches = (
+    q ? foods.filter((food) => food.name.toLowerCase().includes(q)) : foods
+  ).slice(0, 8)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,26 +187,49 @@ export function LogFoodDialog({
           <FieldGroup>
             {!isEdit && foods.length > 0 && (
               <Field>
-                <FieldLabel>From library</FieldLabel>
-                <Select defaultValue={NEW_FOOD} onValueChange={onPickFood}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {(value) =>
-                        value && value !== NEW_FOOD
-                          ? (foods.find((f) => f.id === value)?.name ?? "New food…")
-                          : "New food…"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NEW_FOOD}>New food…</SelectItem>
-                    {foods.map((food) => (
-                      <SelectItem key={food.id} value={food.id}>
-                        {food.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FieldLabel>Add from library</FieldLabel>
+                <Command shouldFilter={false} className="rounded-lg border">
+                  <CommandInput
+                    value={foodQuery}
+                    onValueChange={setFoodQuery}
+                    placeholder="Search your foods…"
+                  />
+                  <CommandList className="max-h-44">
+                    <CommandEmpty>
+                      No match — fill in the fields below.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {foodMatches.map((food) => (
+                        <CommandItem
+                          key={food.id}
+                          value={food.id}
+                          onSelect={() => {
+                            onPickFood(food.id)
+                            setFoodQuery("")
+                          }}
+                        >
+                          <span className="truncate">{food.name}</span>
+                          <span className="text-muted-foreground ml-auto text-xs">
+                            {Math.round(food.calories)} kcal · {food.servingLabel}
+                          </span>
+                        </CommandItem>
+                      ))}
+                      {q && (
+                        <CommandItem
+                          value="__create__"
+                          onSelect={() => {
+                            setValue("name", foodQuery.trim())
+                            setValue("foodId", "")
+                            setFoodQuery("")
+                          }}
+                        >
+                          <Plus className="size-4" />
+                          Create “{foodQuery.trim()}”
+                        </CommandItem>
+                      )}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
               </Field>
             )}
 

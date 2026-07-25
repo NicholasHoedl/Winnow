@@ -6,6 +6,8 @@ import {
   groupByMealType,
   macroProgress,
   parseMealQuickAdd,
+  type RecentEntry,
+  recentFrequentFoods,
   sumMacros,
   type MealType,
 } from "./service"
@@ -219,5 +221,57 @@ describe("parseMealQuickAdd — library food match", () => {
     expect(parseMealQuickAdd("pizza", FOODS)).toBeNull()
     expect(parseMealQuickAdd("snack", FOODS)).toBeNull()
     expect(parseMealQuickAdd("   ", FOODS)).toBeNull()
+  })
+})
+
+const re = (
+  over: Partial<RecentEntry> & Pick<RecentEntry, "name">,
+): RecentEntry => ({
+  foodId: null,
+  servingLabel: "1 serving",
+  calories: 100,
+  proteinG: 0,
+  carbsG: 0,
+  fatG: 0,
+  ...over,
+})
+
+// Newest-first, as getRecentEntries returns. Banana logged 3x (i0/i2/i4), Chicken 1x,
+// and "Oatmeal"/"oatmeal" twice (a case-insensitive merge with no foodId).
+const RECENT: RecentEntry[] = [
+  re({ name: "Banana", foodId: "f-ban", calories: 110 }),
+  re({ name: "Chicken", foodId: "f-chx" }),
+  re({ name: "Banana", foodId: "f-ban", calories: 105 }),
+  re({ name: "Oatmeal", foodId: null }),
+  re({ name: "Banana", foodId: "f-ban", calories: 105 }),
+  re({ name: "oatmeal", foodId: null }),
+]
+
+describe("recentFrequentFoods", () => {
+  it("ranks by combined frequency + recency", () => {
+    const picks = recentFrequentFoods(RECENT)
+    expect(picks.map((p) => p.name)).toEqual(["Banana", "Chicken", "Oatmeal"])
+    expect(picks.map((p) => p.foodId)).toEqual(["f-ban", "f-chx", null])
+  })
+
+  it("carries the most-recent snapshot", () => {
+    expect(recentFrequentFoods(RECENT)[0].calories).toBe(110)
+  })
+
+  it("dedupes by name (case-insensitive) when there is no foodId", () => {
+    const picks = recentFrequentFoods(RECENT)
+    expect(picks).toHaveLength(3)
+    expect(picks.find((p) => p.foodId === null)?.name).toBe("Oatmeal")
+  })
+
+  it("caps the result", () => {
+    expect(recentFrequentFoods(RECENT, 2).map((p) => p.name)).toEqual([
+      "Banana",
+      "Chicken",
+    ])
+  })
+
+  it("returns empty for empty input", () => {
+    expect(recentFrequentFoods([])).toEqual([])
   })
 })

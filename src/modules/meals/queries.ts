@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, desc, eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
@@ -24,6 +24,16 @@ export async function getMealEntries(date: string): Promise<MealEntry[]> {
   return db.query.mealEntries.findMany({
     where: and(eq(mealEntries.userId, userId), eq(mealEntries.date, date)),
     orderBy: [asc(mealEntries.createdAt)],
+  })
+}
+
+/** A user's most-recent logged entries, newest-first — feeds recentFrequentFoods. */
+export async function getRecentEntries(limit = 100): Promise<MealEntry[]> {
+  const userId = await requireUserId()
+  return db.query.mealEntries.findMany({
+    where: eq(mealEntries.userId, userId),
+    orderBy: [desc(mealEntries.createdAt)],
+    limit,
   })
 }
 

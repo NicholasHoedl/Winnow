@@ -1,0 +1,75 @@
+import { test, expect } from "@playwright/test"
+
+// Browser coverage for T1-S6 meals capture: the NL quick-add bar, one-tap re-log, and the
+// in-dialog food-search (Enter selects a food, does not submit the form).
+
+const rows = (name: string) =>
+  `div.bg-card:has-text("${name}")`
+
+test("NL bar logs an explicit-macro entry, and re-log duplicates it", async ({
+  page,
+}) => {
+  const name = `e2emeal${Date.now()}`
+  await page.goto("/meals")
+
+  const bar = page.getByLabel("Quick add meal")
+  await bar.fill(`${name} 600cal 40p 30c 10f`)
+  await bar.press("Enter")
+
+  const row = page.locator(rows(name))
+  await expect(row.first()).toBeVisible()
+  await page.screenshot({ path: "test-results/meals-capture.png" })
+
+  // Re-log → a second identical copy.
+  await row.first().getByRole("button", { name: "Log again" }).click()
+  await expect(page.locator(rows(name))).toHaveCount(2)
+
+  // Cleanup both.
+  for (let remaining = 2; remaining > 0; remaining--) {
+    const r = page.locator(rows(name)).first()
+    await r.getByRole("button", { name: "Entry actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+    await expect(page.locator(rows(name))).toHaveCount(remaining - 1)
+  }
+})
+
+test("NL bar rejects unparseable input and keeps the text", async ({ page }) => {
+  await page.goto("/meals")
+  const bar = page.getByLabel("Quick add meal")
+  await bar.fill("xyzzy not a food")
+  await bar.press("Enter")
+
+  await expect(page.getByText(/parse that/i)).toBeVisible()
+  await expect(bar).toHaveValue("xyzzy not a food")
+})
+
+test("food-search fills the form from a library food (Enter selects, no submit)", async ({
+  page,
+}) => {
+  const food = `e2efood${Date.now()}`
+  await page.goto("/meals")
+
+  // Create a library food via the dialog (a typed new food defaults to save-to-library).
+  await page.getByRole("button", { name: "Log food" }).click()
+  await page.getByLabel("Food", { exact: true }).fill(food)
+  await page.getByLabel("Serving", { exact: true }).fill("1 cup")
+  await page.getByLabel("Calories", { exact: true }).fill("250")
+  await page.getByRole("button", { name: "Log", exact: true }).click()
+  await expect(page.locator(rows(food)).first()).toBeVisible()
+
+  // Reopen → search → Enter selects the food and fills the form WITHOUT submitting.
+  await page.getByRole("button", { name: "Log food" }).click()
+  const search = page.getByPlaceholder(/search your foods/i)
+  await search.fill(food)
+  await search.press("Enter")
+  await expect(page.getByLabel("Food", { exact: true })).toHaveValue(food)
+  await expect(page.getByLabel("Calories", { exact: true })).toHaveValue("250")
+  await expect(page.getByRole("heading", { name: "Log food" })).toBeVisible()
+  await page.getByRole("button", { name: "Cancel" }).click()
+
+  // Cleanup the logged entry.
+  const r = page.locator(rows(food)).first()
+  await r.getByRole("button", { name: "Entry actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(page.locator(rows(food))).toHaveCount(0)
+})

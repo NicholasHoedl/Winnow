@@ -2,7 +2,9 @@ import {
   getFoods,
   getMacroTargets,
   getMealEntries,
+  getRecentEntries,
 } from "@/modules/meals/queries"
+import { recentFrequentFoods } from "@/modules/meals/service"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/lib/date"
 
@@ -19,11 +21,13 @@ export default async function MealsPage({
   const date =
     params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today
 
-  const [entries, foods, targets] = await Promise.all([
+  const [entries, foods, targets, recent] = await Promise.all([
     getMealEntries(date),
     getFoods(),
     getMacroTargets(),
+    getRecentEntries(),
   ])
+  const quickPicks = recentFrequentFoods(recent)
 
   return (
     <MealsView
@@ -32,6 +36,7 @@ export default async function MealsPage({
       entries={entries}
       foods={foods}
       targets={targets}
+      quickPicks={quickPicks}
     />
   )
 }

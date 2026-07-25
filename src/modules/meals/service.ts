@@ -279,3 +279,76 @@ export function parseMealQuickAdd(
     saveToLibrary: false,
   }
 }
+
+// --- Recent / frequent quick-picks ---
+// Pure ranking of a user's logged history into a short quick-pick list for one-tap logging.
+// No DB — unit-testable. Fed by `getRecentEntries` (newest-first).
+
+// The per-serving snapshot the ranker needs (a MealEntry[] is structurally assignable).
+export type RecentEntry = {
+  foodId: string | null
+  name: string
+  servingLabel: string
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+}
+
+// A pickable food carrying its latest per-serving snapshot + a stable list key.
+export type QuickPickFood = {
+  key: string
+  foodId: string | null
+  name: string
+  servingLabel: string
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+}
+
+function pickKey(entry: RecentEntry): string {
+  return entry.foodId ?? entry.name.trim().toLowerCase()
+}
+
+/**
+ * Rank recent entries into a capped quick-pick list. `entries` MUST be newest-first (the
+ * `getRecentEntries` contract). Each occurrence contributes weight `(n - index)`, so newer
+ * logs weigh more and repeats accumulate — folding frequency + recency into one score.
+ * Entries dedupe by `foodId ?? name.toLowerCase()`, carrying the most-recent snapshot.
+ */
+export function recentFrequentFoods(
+  entries: RecentEntry[],
+  limit = 8,
+): QuickPickFood[] {
+  const n = entries.length
+  const ranked = new Map<
+    string,
+    { score: number; firstIndex: number; snap: RecentEntry }
+  >()
+  entries.forEach((entry, index) => {
+    const key = pickKey(entry)
+    if (!key) return
+    const weight = n - index
+    const seen = ranked.get(key)
+    if (seen) {
+      seen.score += weight
+    } else {
+      // First-seen is the newest (smallest index) — the snapshot to carry.
+      ranked.set(key, { score: weight, firstIndex: index, snap: entry })
+    }
+  })
+  return [...ranked.values()]
+    .sort((a, b) => b.score - a.score || a.firstIndex - b.firstIndex)
+    .slice(0, limit)
+    .map(({ snap }) => ({
+      key: pickKey(snap),
+      foodId: snap.foodId,
+      name: snap.name,
+      servingLabel: snap.servingLabel,
+      calories: snap.calories,
+      proteinG: snap.proteinG,
+      carbsG: snap.carbsG,
+      fatG: snap.fatG,
+    }))
+}

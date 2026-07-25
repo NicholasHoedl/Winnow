@@ -6,15 +6,26 @@ import { ChevronLeft, ChevronRight, Library, Plus, Target } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { deleteMealEntry, restoreMealEntry } from "@/modules/meals/actions"
+import {
+  deleteMealEntry,
+  logMeal,
+  restoreMealEntry,
+} from "@/modules/meals/actions"
 import type { Food, MacroTargets, MealEntry } from "@/modules/meals/queries"
-import { groupByMealType, macroProgress, sumMacros } from "@/modules/meals/service"
+import {
+  groupByMealType,
+  macroProgress,
+  type QuickPickFood,
+  sumMacros,
+} from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
 
 import { FoodManager } from "./food-manager"
 import { LogFoodDialog } from "./log-food-dialog"
 import { MacroSummary } from "./macro-summary"
 import { MealEntryItem } from "./meal-entry-item"
+import { MealQuickAdd } from "./meal-quick-add"
+import { QuickPickStrip } from "./quick-pick-strip"
 import { TargetsDialog } from "./targets-dialog"
 
 function shiftDate(date: string, delta: number): string {
@@ -39,12 +50,14 @@ export function MealsView({
   entries,
   foods,
   targets,
+  quickPicks,
 }: {
   date: string
   today: string
   entries: MealEntry[]
   foods: Food[]
   targets: MacroTargets | null
+  quickPicks: QuickPickFood[]
 }) {
   const [logOpen, setLogOpen] = React.useState(false)
   const [editingEntry, setEditingEntry] = React.useState<MealEntry | null>(null)
@@ -74,6 +87,29 @@ export function MealsView({
             }),
         },
       })
+    })
+  }
+
+  function handleRelog(entry: MealEntry) {
+    startTransition(async () => {
+      const result = await logMeal({
+        name: entry.name,
+        servingLabel: entry.servingLabel,
+        calories: entry.calories,
+        proteinG: entry.proteinG,
+        carbsG: entry.carbsG,
+        fatG: entry.fatG,
+        servings: entry.servings,
+        mealType: entry.mealType ?? "",
+        date,
+        foodId: entry.foodId ?? "",
+        saveToLibrary: false,
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(`Logged ${entry.name}`)
     })
   }
 
@@ -152,6 +188,11 @@ export function MealsView({
 
       <MacroSummary progress={progress} />
 
+      <div className="mt-4 flex flex-col gap-3">
+        <MealQuickAdd date={date} foods={foods} />
+        <QuickPickStrip date={date} picks={quickPicks} />
+      </div>
+
       <div className="mt-6 flex flex-col gap-5">
         {groups.length === 0 ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
@@ -173,6 +214,7 @@ export function MealsView({
                     entry={entry}
                     onEdit={openEdit}
                     onDelete={handleDelete}
+                    onRelog={handleRelog}
                   />
                 ))}
               </div>

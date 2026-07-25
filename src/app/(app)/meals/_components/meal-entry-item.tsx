@@ -1,6 +1,6 @@
 "use client"
 
-import { MoreVertical, Pencil, Trash2 } from "lucide-react"
+import { CopyPlus, MoreVertical, Pencil, Trash2 } from "lucide-react"
 
 import type { MealEntry } from "@/modules/meals/queries"
 import { entryTotals } from "@/modules/meals/service"
@@ -22,10 +22,12 @@ export function MealEntryItem({
   entry,
   onEdit,
   onDelete,
+  onRelog,
 }: {
   entry: MealEntry
   onEdit: (entry: MealEntry) => void
   onDelete: (entry: MealEntry) => void
+  onRelog: (entry: MealEntry) => void
 }) {
   const totals = entryTotals(entry)
 
@@ -49,6 +51,15 @@ export function MealEntryItem({
           C {Math.round(totals.carbs)}g · F {Math.round(totals.fat)}g
         </div>
       </div>
+
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Log again"
+        onClick={() => onRelog(entry)}
+      >
+        <CopyPlus className="size-4" />
+      </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger
