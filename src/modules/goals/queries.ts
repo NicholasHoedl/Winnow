@@ -31,3 +31,14 @@ export async function getGoals(): Promise<GoalWithProgress[]> {
     return { ...goal, milestones: items, progress: goalProgress(items) }
   })
 }
+
+/** Lightweight goal list (id + title) for pickers — used in the always-mounted task
+ * dialog, so it skips getGoals()'s milestone/progress computation (T2). */
+export async function getGoalOptions(): Promise<{ id: string; title: string }[]> {
+  const userId = await requireUserId()
+  return db.query.goals.findMany({
+    where: eq(goals.userId, userId),
+    columns: { id: true, title: true },
+    orderBy: [asc(goals.createdAt)],
+  })
+}

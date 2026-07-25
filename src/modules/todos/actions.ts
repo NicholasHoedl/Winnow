@@ -25,7 +25,8 @@ export async function createTask(input: unknown): Promise<ActionResult> {
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, dueDate, priority, listId } = parsed.data
+  const { title, notes, dueDate, priority, listId, goalId, eventId } =
+    parsed.data
   await db.insert(tasks).values({
     userId,
     title,
@@ -33,6 +34,8 @@ export async function createTask(input: unknown): Promise<ActionResult> {
     dueDate: nullify(dueDate),
     priority,
     listId: nullify(listId),
+    goalId: nullify(goalId),
+    eventId: nullify(eventId),
   })
 
   revalidatePath("/todos")
@@ -45,7 +48,8 @@ export async function updateTask(id: string, input: unknown): Promise<ActionResu
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, dueDate, priority, listId } = parsed.data
+  const { title, notes, dueDate, priority, listId, goalId, eventId } =
+    parsed.data
   await db
     .update(tasks)
     .set({
@@ -54,6 +58,8 @@ export async function updateTask(id: string, input: unknown): Promise<ActionResu
       dueDate: nullify(dueDate),
       priority,
       listId: nullify(listId),
+      goalId: nullify(goalId),
+      eventId: nullify(eventId),
     })
     .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
 
@@ -86,8 +92,13 @@ export async function restoreTask(task: Task): Promise<ActionResult> {
     .values({
       id: task.id,
       userId,
+      // Restore every column so undo is faithful — including listId (previously
+      // dropped) and the T2 goal/event links.
+      listId: task.listId,
       seriesId: task.seriesId,
       occurrenceDate: task.occurrenceDate,
+      goalId: task.goalId,
+      eventId: task.eventId,
       title: task.title,
       notes: task.notes,
       dueDate: task.dueDate,

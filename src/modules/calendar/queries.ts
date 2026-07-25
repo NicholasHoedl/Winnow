@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays } from "@/lib/date"
@@ -129,4 +129,17 @@ export async function getDayEvents(
       tz,
     )
   ).sort(byDateThenTime)
+}
+
+/** Flat list of event *series* (unexpanded), newest first, for pickers — e.g. linking
+ * a task to an event (T2). Series-level: one row per event, not per occurrence. */
+export async function getEventOptions(): Promise<
+  { id: string; title: string; startAt: Date }[]
+> {
+  const userId = await requireUserId()
+  return db.query.events.findMany({
+    where: eq(events.userId, userId),
+    columns: { id: true, title: true, startAt: true },
+    orderBy: [desc(events.startAt)],
+  })
 }

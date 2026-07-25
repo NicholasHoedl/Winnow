@@ -10,9 +10,12 @@ import {
   uuid,
 } from "drizzle-orm/pg-core"
 
-// Relative import (not "@/db/schema") so drizzle-kit resolves it without needing
-// tsconfig path aliases.
+// Relative imports (not "@/db/schema") so drizzle-kit resolves them without needing
+// tsconfig path aliases. The goals/events imports (T2) let tasks link across modules;
+// the dependency stays acyclic — goals + calendar schemas import only `users`.
 import { users } from "../../db/schema"
+import { events } from "../calendar/schema"
+import { goals } from "../goals/schema"
 
 export const priorityEnum = pgEnum("priority", ["low", "medium", "high"])
 export const statusEnum = pgEnum("status", ["open", "done"])
@@ -92,6 +95,13 @@ export const tasks = pgTable(
     // Cycle key of a generated instance (occurrence date, or period-start for flexible);
     // null for one-off tasks.
     occurrenceDate: date("occurrence_date", { mode: "string" }),
+    // Optional cross-module links (T2): a task can count toward a goal and/or be
+    // associated with a calendar event (series-level). Deleting either detaches the
+    // task (set null) rather than removing it.
+    goalId: uuid("goal_id").references(() => goals.id, { onDelete: "set null" }),
+    eventId: uuid("event_id").references(() => events.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     notes: text("notes"),
     // Date-only (no time-of-day). `mode: "string"` returns 'YYYY-MM-DD' and avoids

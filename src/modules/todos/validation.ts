@@ -21,6 +21,9 @@ export const taskInputSchema = z.object({
     .optional(),
   priority: z.enum(PRIORITIES).default("medium"),
   listId: z.string().uuid("Invalid list").or(z.literal("")).optional(),
+  // Optional cross-module links (T2); empty string = no link (nullified server-side).
+  goalId: z.string().uuid("Invalid goal").or(z.literal("")).optional(),
+  eventId: z.string().uuid("Invalid event").or(z.literal("")).optional(),
 })
 
 // The form binds to the schema's INPUT type (priority is optional pre-default).
