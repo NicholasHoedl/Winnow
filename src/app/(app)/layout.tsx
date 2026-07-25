@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Search, Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
@@ -16,6 +17,7 @@ import {
 } from "@/components/create/command-palette"
 import { CreateIntentProvider } from "@/components/create/create-intent"
 import { GlobalCreateDialogs } from "@/components/create/global-create-dialogs"
+import { DigestBanner } from "@/components/shared/digest-banner"
 import { PreferencesProvider } from "@/components/preferences/preferences-provider"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -82,6 +84,14 @@ export default async function AppLayout({
               tabIndex={-1}
               className="flex-1 pb-20 outline-none md:pb-0"
             >
+              {/* Renders itself (and its own spacing) only on the first visit of
+                  a new local day; otherwise nothing at all. */}
+              <DigestBanner
+                userId={session.user.id}
+                today={todayInZone(new Date(), preferences.timeZone)}
+                enabled={preferences.digestEnabled}
+                use24Hour={preferences.use24HourTime}
+              />
               {children}
             </main>
           </div>

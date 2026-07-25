@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
 import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
+import { Panel } from "@/components/shared/panel"
 
 type TasksLite = { overdueCount: number; dueTodayCount: number }
 
@@ -15,15 +16,6 @@ function shortDate(date: string): string {
     day: "numeric",
     timeZone: "UTC",
   })
-}
-
-// A branded panel wrapper — the rail's visual anchor, kept from the old hero.
-function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="from-primary/10 relative overflow-hidden rounded-xl bg-gradient-to-br to-transparent p-5 shadow-sm ring-1 ring-foreground/10">
-      {children}
-    </div>
-  )
 }
 
 function Hero({
@@ -96,7 +88,9 @@ function DayGroup({
         </span>
       </div>
       {events.length === 0 ? (
-        <p className="text-muted-foreground/70 py-1 text-sm">Nothing scheduled</p>
+        <p className="text-muted-foreground/70 py-1 text-sm">
+          Nothing scheduled
+        </p>
       ) : (
         <ol className="flex flex-col gap-1">
           {events.map((occ, i) => {
