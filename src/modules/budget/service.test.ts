@@ -10,7 +10,9 @@ import {
   monthKey,
   monthRange,
   parseTransactionQuickAdd,
+  savingsRate,
   summarizeMonth,
+  summarizeMonths,
 } from "./service"
 
 describe("money helpers", () => {
@@ -162,8 +164,12 @@ describe("parseTransactionQuickAdd", () => {
   })
 
   it("prefers the category whose kind matches the parsed type", () => {
-    expect(parseTransactionQuickAdd("+500 #bonus", CATS)?.categoryId).toBe("c-bon-i")
-    expect(parseTransactionQuickAdd("-500 #bonus", CATS)?.categoryId).toBe("c-bon-e")
+    expect(parseTransactionQuickAdd("+500 #bonus", CATS)?.categoryId).toBe(
+      "c-bon-i",
+    )
+    expect(parseTransactionQuickAdd("-500 #bonus", CATS)?.categoryId).toBe(
+      "c-bon-e",
+    )
   })
 
   it("leaves categoryId empty for an unmatched #tag but still strips it", () => {
@@ -194,7 +200,9 @@ describe("parseTransactionQuickAdd", () => {
   })
 
   it("prefers a $-marked amount over a bare number", () => {
-    expect(parseTransactionQuickAdd("buy 2 coffees for $8", CATS)?.amount).toBe(8)
+    expect(parseTransactionQuickAdd("buy 2 coffees for $8", CATS)?.amount).toBe(
+      8,
+    )
   })
 
   it("parses a zero amount", () => {
@@ -210,5 +218,138 @@ describe("parseTransactionQuickAdd", () => {
     expect(parseTransactionQuickAdd("buy milk", CATS)).toBeNull()
     expect(parseTransactionQuickAdd("#housing", CATS)).toBeNull()
     expect(parseTransactionQuickAdd("   ", CATS)).toBeNull()
+  })
+})
+
+describe("summarizeMonth income rollup", () => {
+  const summary = summarizeMonth(
+    [
+      { categoryId: "salary", amountCents: 500000, type: "income" },
+      { categoryId: "salary", amountCents: 100000, type: "income" },
+      { categoryId: "side", amountCents: 25000, type: "income" },
+      { categoryId: null, amountCents: 4000, type: "income" }, // uncategorized
+      { categoryId: "food", amountCents: 2000, type: "expense" },
+    ],
+    [],
+  )
+
+  it("rolls income up per source category", () => {
+    expect(summary.incomeByCategory).toEqual(
+      expect.arrayContaining([
+        { categoryId: "salary", earnedCents: 600000 },
+        { categoryId: "side", earnedCents: 25000 },
+        { categoryId: null, earnedCents: 4000 },
+      ]),
+    )
+    expect(summary.incomeByCategory).toHaveLength(3)
+  })
+
+  it("keeps income OUT of byCategory, which is expense-only", () => {
+    // Letting income in here would corrupt every spent-vs-budget bar that reads it.
+    expect(summary.byCategory.map((c) => c.categoryId)).toEqual(["food"])
+  })
+})
+
+describe("savingsRate", () => {
+  function withTotals(incomeCents: number, expenseCents: number) {
+    const income =
+      incomeCents > 0
+        ? [
+            {
+              categoryId: null,
+              amountCents: incomeCents,
+              type: "income" as const,
+            },
+          ]
+        : []
+    const expense =
+      expenseCents > 0
+        ? [
+            {
+              categoryId: null,
+              amountCents: expenseCents,
+              type: "expense" as const,
+            },
+          ]
+        : []
+    return summarizeMonth([...income, ...expense], [])
+  }
+
+  it("is the share of income kept", () => {
+    expect(savingsRate(withTotals(100000, 25000))).toBeCloseTo(0.75)
+    expect(savingsRate(withTotals(100000, 0))).toBe(1)
+  })
+
+  it("goes negative when spending exceeds income", () => {
+    expect(savingsRate(withTotals(100000, 150000))).toBeCloseTo(-0.5)
+  })
+
+  it("is null with no income — not zero", () => {
+    expect(savingsRate(withTotals(0, 5000))).toBeNull()
+    expect(savingsRate(withTotals(0, 0))).toBeNull()
+  })
+})
+
+describe("summarizeMonths", () => {
+  const txns = [
+    {
+      categoryId: "food",
+      amountCents: 1000,
+      type: "expense" as const,
+      date: "2026-05-04",
+    },
+    {
+      categoryId: "food",
+      amountCents: 2000,
+      type: "expense" as const,
+      date: "2026-05-31",
+    },
+    {
+      categoryId: "pay",
+      amountCents: 90000,
+      type: "income" as const,
+      date: "2026-07-01",
+    },
+  ]
+  const budgets = [
+    { categoryId: "food", amountCents: 5000, periodMonth: "2026-05-01" },
+  ]
+
+  it("buckets by month and returns one row per requested month, oldest first", () => {
+    const rows = summarizeMonths(txns, budgets, [
+      "2026-05",
+      "2026-06",
+      "2026-07",
+    ])
+    expect(rows.map((r) => r.month)).toEqual(["2026-05", "2026-06", "2026-07"])
+    expect(rows[0].summary.expenseCents).toBe(3000)
+    expect(rows[0].summary.totalBudgetedCents).toBe(5000)
+    expect(rows[2].summary.incomeCents).toBe(90000)
+  })
+
+  it("zero-fills a month with no activity rather than omitting it", () => {
+    const rows = summarizeMonths(txns, budgets, [
+      "2026-05",
+      "2026-06",
+      "2026-07",
+    ])
+    expect(rows[1].summary).toMatchObject({
+      incomeCents: 0,
+      expenseCents: 0,
+      netCents: 0,
+      totalBudgetedCents: 0,
+    })
+    expect(rows[1].summary.byCategory).toEqual([])
+  })
+
+  it("ignores data outside the requested window", () => {
+    const rows = summarizeMonths(txns, budgets, ["2026-07"])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].summary.expenseCents).toBe(0)
+    expect(rows[0].summary.incomeCents).toBe(90000)
+  })
+
+  it("returns nothing for an empty month list", () => {
+    expect(summarizeMonths(txns, budgets, [])).toEqual([])
   })
 })

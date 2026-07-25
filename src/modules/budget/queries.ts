@@ -2,6 +2,7 @@ import "server-only"
 import { and, asc, desc, eq, gte, ilike, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
+import { monthSeries } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 import { escapeLike } from "@/modules/search/service"
 
@@ -9,7 +10,9 @@ import { budgets, categories, transactions } from "./schema"
 import {
   monthRange,
   summarizeMonth,
+  summarizeMonths,
   UNCATEGORIZED,
+  type MonthlySummary,
   type TransactionFilters,
 } from "./service"
 
@@ -77,6 +80,41 @@ export async function getMonthBudgets(month: string): Promise<Budget[]> {
   return db.query.budgets.findMany({
     where: and(eq(budgets.userId, userId), eq(budgets.periodMonth, start)),
   })
+}
+
+/** Rollups for the `monthCount` months ending at (and including) `endMonth`, oldest
+ * first — the series behind the trend charts. One range read per table rather than
+ * N month queries; months with no activity still come back as zero rows. */
+export async function getBudgetTrends(
+  endMonth: string,
+  monthCount: number,
+): Promise<MonthlySummary[]> {
+  const userId = await requireUserId()
+  // Bound the scan: this is the only query in the app that spans months.
+  const count = Math.min(24, Math.max(1, Math.floor(monthCount)))
+  const months = monthSeries(endMonth, count)
+  const { start } = monthRange(months[0])
+  const { nextStart } = monthRange(months[months.length - 1])
+
+  const [txns, budgetRows] = await Promise.all([
+    db.query.transactions.findMany({
+      where: and(
+        eq(transactions.userId, userId),
+        gte(transactions.date, start),
+        lt(transactions.date, nextStart),
+      ),
+      columns: { categoryId: true, amountCents: true, type: true, date: true },
+    }),
+    db.query.budgets.findMany({
+      where: and(
+        eq(budgets.userId, userId),
+        gte(budgets.periodMonth, start),
+        lt(budgets.periodMonth, nextStart),
+      ),
+      columns: { categoryId: true, amountCents: true, periodMonth: true },
+    }),
+  ])
+  return summarizeMonths(txns, budgetRows, months)
 }
 
 export async function getBudgetSummary(month: string) {

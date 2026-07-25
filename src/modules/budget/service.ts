@@ -89,12 +89,22 @@ export type CategoryRollup = {
   remainingCents: number
 }
 
+/** Income per source category. Deliberately a SEPARATE type and list from
+ * CategoryRollup: letting income rows into `byCategory` would put them into every
+ * spent-vs-budget bar that reads it (the dashboard's category bars included). */
+export type IncomeRollup = {
+  categoryId: string | null
+  earnedCents: number
+}
+
 export type MonthSummary = {
   incomeCents: number
   expenseCents: number
   netCents: number
   totalBudgetedCents: number
+  /** Expense spend vs budget. Income never appears here. */
   byCategory: CategoryRollup[]
+  incomeByCategory: IncomeRollup[]
 }
 
 /** Roll a month's transactions + budgets into income/expense/net totals and
@@ -106,10 +116,15 @@ export function summarizeMonth(
   let incomeCents = 0
   let expenseCents = 0
   const spentByCategory = new Map<string | null, number>()
+  const earnedByCategory = new Map<string | null, number>()
 
   for (const tx of transactions) {
     if (tx.type === "income") {
       incomeCents += tx.amountCents
+      earnedByCategory.set(
+        tx.categoryId,
+        (earnedByCategory.get(tx.categoryId) ?? 0) + tx.amountCents,
+      )
     } else {
       expenseCents += tx.amountCents
       spentByCategory.set(
@@ -145,13 +160,68 @@ export function summarizeMonth(
     })
   }
 
+  const incomeByCategory: IncomeRollup[] = [...earnedByCategory].map(
+    ([categoryId, earnedCents]) => ({ categoryId, earnedCents }),
+  )
+
   return {
     incomeCents,
     expenseCents,
     netCents: incomeCents - expenseCents,
     totalBudgetedCents,
     byCategory,
+    incomeByCategory,
   }
+}
+
+/** Share of the period's income that wasn't spent, as a fraction (0.25 = 25%).
+ * Null when there was no income — a savings rate on nothing is meaningless, not 0.
+ * Goes negative when spending exceeded income.
+ *
+ * This is a FLOW, not a balance: the app has no accounts table, so "savings" here
+ * means "what this period kept", never "what you have". */
+export function savingsRate(summary: MonthSummary): number | null {
+  if (summary.incomeCents <= 0) return null
+  return summary.netCents / summary.incomeCents
+}
+
+// --- multi-month rollup (trends) ---
+
+export type DatedTransaction = MoneyTransaction & { date: string }
+export type DatedBudget = MoneyBudget & { periodMonth: string }
+export type MonthlySummary = { month: string; summary: MonthSummary }
+
+/** Bucket transactions + budgets by month and roll each one up. `months` drives the
+ * output, so a month with no activity still yields a zero row — a trend chart needs
+ * the gap, not a missing point. */
+export function summarizeMonths(
+  transactions: DatedTransaction[],
+  budgets: DatedBudget[],
+  months: string[],
+): MonthlySummary[] {
+  const txByMonth = new Map<string, DatedTransaction[]>()
+  for (const tx of transactions) {
+    const key = tx.date.slice(0, 7)
+    const bucket = txByMonth.get(key)
+    if (bucket) bucket.push(tx)
+    else txByMonth.set(key, [tx])
+  }
+
+  const budgetsByMonth = new Map<string, DatedBudget[]>()
+  for (const budget of budgets) {
+    const key = budget.periodMonth.slice(0, 7)
+    const bucket = budgetsByMonth.get(key)
+    if (bucket) bucket.push(budget)
+    else budgetsByMonth.set(key, [budget])
+  }
+
+  return months.map((month) => ({
+    month,
+    summary: summarizeMonth(
+      txByMonth.get(month) ?? [],
+      budgetsByMonth.get(month) ?? [],
+    ),
+  }))
 }
 
 // --- Transaction list filters ---
