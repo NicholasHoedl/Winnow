@@ -1,5 +1,6 @@
 import {
   getBudgetSummary,
+  getBudgetTrends,
   getCategories,
   getMonthTransactions,
 } from "@/modules/budget/queries"
@@ -11,6 +12,10 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
+import { IncomeSavingsSection } from "./_components/income-savings-section"
+import { TrendsSection } from "./_components/trends-section"
+
+const TREND_MONTHS = 6
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -37,7 +42,7 @@ export default async function BudgetPage({
   }>
 }) {
   const params = await searchParams
-  const { timeZone } = await getUserPreferences()
+  const { timeZone, currency } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone) // YYYY-MM-DD
   const currentMonth = today.slice(0, 7) // YYYY-MM
   const month =
@@ -61,10 +66,11 @@ export default async function BudgetPage({
   // The summary comes from its own unfiltered read rather than being derived from the
   // rendered `transactions` array — otherwise filtering the list would silently
   // report the header stats for only the filtered subset.
-  const [categories, transactions, summary] = await Promise.all([
+  const [categories, transactions, summary, trends] = await Promise.all([
     getCategories(),
     getMonthTransactions(month, filters),
     getBudgetSummary(month),
+    getBudgetTrends(month, TREND_MONTHS),
   ])
 
   return (
@@ -75,6 +81,21 @@ export default async function BudgetPage({
       transactions={transactions}
       summary={summary}
       filters={filters}
+      // Rendered here, on the server, so their SVG charts stay server components.
+      incomeSavings={
+        <IncomeSavingsSection
+          summary={summary}
+          categories={categories}
+          currency={currency}
+        />
+      }
+      trends={
+        <TrendsSection
+          trends={trends}
+          categories={categories}
+          currency={currency}
+        />
+      }
     />
   )
 }

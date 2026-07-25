@@ -12,7 +12,10 @@ import type { ChartSeries } from "./types"
 
 const VIEW_W = 400
 const AXIS_W = 46 // room for a money tick label
-const AXIS_H = 16 // room for the x labels
+const AXIS_H = 18 // room for the x labels
+// The top tick's label is centred on the plot's top edge, so without this its
+// ascender would be clipped by the viewBox.
+const PAD_T = 6
 
 export function BarChart({
   labels,
@@ -31,14 +34,15 @@ export function BarChart({
   className?: string
 }) {
   const plotW = VIEW_W - AXIS_W
-  const plotH = height - AXIS_H
+  const plotH = height - AXIS_H - PAD_T
 
   const values = series.flatMap((s) => s.points.map((p) => p.value))
   const scale = niceScale(
     values.length ? Math.min(...values) : 0,
     values.length ? Math.max(...values) : 0,
   )
-  const zeroY = scaleY(0, scale, plotH)
+  const yOf = (value: number) => PAD_T + scaleY(value, scale, plotH)
+  const zeroY = yOf(0)
   const slots = barLayout(labels.length, plotW)
 
   return (
@@ -50,7 +54,7 @@ export function BarChart({
     >
       {/* gridlines + y labels */}
       {scale.ticks.map((tick) => {
-        const y = scaleY(tick, scale, plotH)
+        const y = yOf(tick)
         return (
           <g key={tick}>
             <line
@@ -80,7 +84,7 @@ export function BarChart({
             {series.map((s, seriesIndex) => {
               const point = s.points[index]
               if (!point) return null
-              const y = scaleY(point.value, scale, plotH)
+              const y = yOf(point.value)
               const top = Math.min(y, zeroY)
               // Keep a sliver visible for small non-zero values.
               const barHeight =

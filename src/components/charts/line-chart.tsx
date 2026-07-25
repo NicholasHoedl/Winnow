@@ -8,7 +8,9 @@ import type { ChartSeries } from "./types"
 
 const VIEW_W = 400
 const AXIS_W = 46
-const AXIS_H = 16
+const AXIS_H = 18
+// Keeps the top tick's label inside the viewBox instead of clipping its ascender.
+const PAD_T = 6
 
 export function LineChart({
   labels,
@@ -26,13 +28,14 @@ export function LineChart({
   className?: string
 }) {
   const plotW = VIEW_W - AXIS_W
-  const plotH = height - AXIS_H
+  const plotH = height - AXIS_H - PAD_T
 
   const values = series.flatMap((s) => s.points.map((p) => p.value))
   const scale = niceScale(
     values.length ? Math.min(...values) : 0,
     values.length ? Math.max(...values) : 0,
   )
+  const yOf = (value: number) => PAD_T + scaleY(value, scale, plotH)
 
   return (
     <svg
@@ -42,7 +45,7 @@ export function LineChart({
       className={cn("w-full", className)}
     >
       {scale.ticks.map((tick) => {
-        const y = scaleY(tick, scale, plotH)
+        const y = yOf(tick)
         return (
           <g key={tick}>
             <line
@@ -68,7 +71,7 @@ export function LineChart({
       {series.map((s) => {
         const points = s.points.map((point, index) => ({
           x: AXIS_W + slotCenter(index, labels.length, plotW),
-          y: scaleY(point.value, scale, plotH),
+          y: yOf(point.value),
         }))
         return (
           <g key={s.name}>

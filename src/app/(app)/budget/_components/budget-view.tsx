@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { categoryAccent } from "@/lib/colors"
+import { accentForKey } from "@/lib/colors"
 import { shiftMonth } from "@/lib/date"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
 import type { Category, Transaction } from "@/modules/budget/queries"
@@ -67,6 +67,8 @@ export function BudgetView({
   transactions,
   summary,
   filters,
+  incomeSavings,
+  trends,
 }: {
   month: string
   today: string
@@ -74,6 +76,10 @@ export function BudgetView({
   transactions: Transaction[]
   summary: MonthSummary
   filters: Filters
+  // Server-rendered analysis sections. Passed in rather than imported so the SVG
+  // charts inside them stay server components — this view is a client component.
+  incomeSavings?: React.ReactNode
+  trends?: React.ReactNode
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] = React.useState<Transaction | null>(null)
@@ -249,8 +255,10 @@ export function BudgetView({
             )}
           </h2>
           <div className="divide-y rounded-xl border">
-            {rows.map((row, i) => {
-              const accent = categoryAccent(i)
+            {rows.map((row) => {
+              // Keyed by id so a category keeps its colour across months, sorts,
+              // and both pages that render it.
+              const accent = accentForKey(row.categoryId ?? "__uncat__")
               const hasBudget = row.budgetedCents > 0
               const percent = hasBudget
                 ? Math.round((row.spentCents / row.budgetedCents) * 100)
@@ -343,6 +351,9 @@ export function BudgetView({
           </div>
         )}
       </section>
+
+      {incomeSavings}
+      {trends}
 
       <TransactionDialog
         defaultDate={defaultDate}
