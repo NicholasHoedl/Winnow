@@ -9,12 +9,17 @@ import { users } from "@/db/schema"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { unstable_update as updateSession } from "@/lib/auth"
-import { budgets, categories, transactions } from "@/modules/budget/schema"
+import {
+  budgets,
+  categories,
+  transactionRecurrences,
+  transactions,
+} from "@/modules/budget/schema"
 import { events } from "@/modules/calendar/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import { foods, macroTargets, mealEntries } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
-import { lists, tasks } from "@/modules/todos/schema"
+import { lists, taskRecurrences, tasks } from "@/modules/todos/schema"
 
 import { changePasswordSchema, profileSchema } from "./validation"
 
@@ -73,9 +78,16 @@ export async function clearAllData(): Promise<ActionResult> {
     await tx.delete(macroTargets).where(eq(macroTargets.userId, userId))
     await tx.delete(foods).where(eq(foods.userId, userId))
     await tx.delete(transactions).where(eq(transactions.userId, userId))
+    await tx
+      .delete(transactionRecurrences)
+      .where(eq(transactionRecurrences.userId, userId))
     await tx.delete(budgets).where(eq(budgets.userId, userId))
     await tx.delete(categories).where(eq(categories.userId, userId))
     await tx.delete(tasks).where(eq(tasks.userId, userId))
+    // Recurrence rules were missing here: clearing all data left them behind, and
+    // they immediately regenerated tasks (and would now post bills) into the empty
+    // account on the next page load.
+    await tx.delete(taskRecurrences).where(eq(taskRecurrences.userId, userId))
     await tx.delete(lists).where(eq(lists.userId, userId))
     await tx.delete(events).where(eq(events.userId, userId))
     await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))

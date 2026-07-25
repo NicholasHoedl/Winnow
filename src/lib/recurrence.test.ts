@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest"
 
-import { currentCycle, type TaskRecurrenceRule } from "./recurrence"
+import {
+  currentCycle,
+  cyclesInRange,
+  MAX_CATCHUP_DAYS,
+  periodEnd,
+  type RecurrenceRule,
+} from "./recurrence"
 
 // Minimal rule builder. Dates in July 2026 (2026-07-06 is a Monday) so weekday reasoning
 // is easy to follow. weekStartsOn is passed explicitly per call.
-function rule(over: Partial<TaskRecurrenceRule> = {}): TaskRecurrenceRule {
+function rule(over: Partial<RecurrenceRule> = {}): RecurrenceRule {
   return {
     freq: "daily",
     recurrenceInterval: 1,
@@ -19,7 +25,7 @@ function rule(over: Partial<TaskRecurrenceRule> = {}): TaskRecurrenceRule {
 
 // Weekday bits (0=Sun..6=Sat), same convention as the calendar engine.
 const WD = { SUN: 1, MON: 2, TUE: 4, WED: 8, THU: 16, FRI: 32, SAT: 64 }
-const same = (d: string) => ({ occurrenceDate: d, dueDate: d })
+const same = (d: string) => ({ occurrenceDate: d, date: d })
 
 describe("currentCycle — boundaries", () => {
   it("is null before the start date", () => {
@@ -158,13 +164,13 @@ describe("currentCycle — flexible weekly (soft due at week end)", () => {
   it("Sunday-start week", () => {
     expect(
       currentCycle(rule({ freq: "weekly", flexible: true }), "2026-07-23", 0),
-    ).toEqual({ occurrenceDate: "2026-07-19", dueDate: "2026-07-25" })
+    ).toEqual({ occurrenceDate: "2026-07-19", date: "2026-07-25" })
   })
 
   it("Monday-start week shifts both the key and the due date", () => {
     expect(
       currentCycle(rule({ freq: "weekly", flexible: true }), "2026-07-23", 1),
-    ).toEqual({ occurrenceDate: "2026-07-20", dueDate: "2026-07-26" })
+    ).toEqual({ occurrenceDate: "2026-07-20", date: "2026-07-26" })
   })
 
   it("interval 2 is null in off weeks, present in active weeks", () => {
@@ -172,7 +178,7 @@ describe("currentCycle — flexible weekly (soft due at week end)", () => {
     expect(currentCycle(r, "2026-07-14", 0)).toBeNull() // week after the anchor week
     expect(currentCycle(r, "2026-07-21", 0)).toEqual({
       occurrenceDate: "2026-07-19",
-      dueDate: "2026-07-25",
+      date: "2026-07-25",
     })
   })
 })
@@ -181,16 +187,16 @@ describe("currentCycle — flexible monthly (soft due at month end)", () => {
   it("due date is the last day of the month", () => {
     expect(
       currentCycle(rule({ freq: "monthly", flexible: true, startDate: "2026-03-10" }), "2026-07-23", 0),
-    ).toEqual({ occurrenceDate: "2026-07-01", dueDate: "2026-07-31" })
+    ).toEqual({ occurrenceDate: "2026-07-01", date: "2026-07-31" })
   })
 
   it("handles February in leap and non-leap years", () => {
     expect(
       currentCycle(rule({ freq: "monthly", flexible: true, startDate: "2024-01-01" }), "2024-02-15", 0),
-    ).toEqual({ occurrenceDate: "2024-02-01", dueDate: "2024-02-29" })
+    ).toEqual({ occurrenceDate: "2024-02-01", date: "2024-02-29" })
     expect(
       currentCycle(rule({ freq: "monthly", flexible: true, startDate: "2025-01-01" }), "2025-02-15", 0),
-    ).toEqual({ occurrenceDate: "2025-02-01", dueDate: "2025-02-28" })
+    ).toEqual({ occurrenceDate: "2025-02-01", date: "2025-02-28" })
   })
 
   it("interval 2 is null in an off month", () => {
@@ -201,5 +207,109 @@ describe("currentCycle — flexible monthly (soft due at month end)", () => {
         0,
       ),
     ).toBeNull()
+  })
+})
+
+describe("cyclesInRange", () => {
+  const monthlyFirst: RecurrenceRule = {
+    freq: "monthly",
+    recurrenceInterval: 1,
+    weekdays: 0,
+    monthlyMode: "day_of_month",
+    flexible: false,
+    startDate: "2026-01-01",
+    endDate: null,
+  }
+
+  it("returns every missed occurrence, not just the current one", () => {
+    // Three unopened months of rent are three bills, not one.
+    const cycles = cyclesInRange(monthlyFirst, "2026-03-01", "2026-06-15", 0)
+    expect(cycles.map((c) => c.occurrenceDate)).toEqual([
+      "2026-04-01",
+      "2026-05-01",
+      "2026-06-01",
+    ])
+  })
+
+  it("is exclusive at the start — an already-posted occurrence isn't repeated", () => {
+    const cycles = cyclesInRange(monthlyFirst, "2026-04-01", "2026-04-30", 0)
+    expect(cycles.map((c) => c.occurrenceDate)).toEqual([])
+  })
+
+  it("is inclusive at the end", () => {
+    const cycles = cyclesInRange(monthlyFirst, "2026-03-15", "2026-04-01", 0)
+    expect(cycles.map((c) => c.occurrenceDate)).toEqual(["2026-04-01"])
+  })
+
+  it("returns nothing when the window is empty or inverted", () => {
+    expect(cyclesInRange(monthlyFirst, "2026-04-10", "2026-04-10", 0)).toEqual([])
+    expect(cyclesInRange(monthlyFirst, "2026-05-01", "2026-04-01", 0)).toEqual([])
+  })
+
+  it("never emits the same occurrence twice", () => {
+    const cycles = cyclesInRange(monthlyFirst, "2026-01-01", "2026-12-31", 0)
+    const keys = cycles.map((c) => c.occurrenceDate)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("respects the rule's end date", () => {
+    const ending: RecurrenceRule = { ...monthlyFirst, endDate: "2026-05-10" }
+    const cycles = cyclesInRange(ending, "2026-03-01", "2026-08-01", 0)
+    expect(cycles.map((c) => c.occurrenceDate)).toEqual([
+      "2026-04-01",
+      "2026-05-01",
+    ])
+  })
+
+  it("skips months a day-of-month rule can't land in", () => {
+    const thirtyFirst: RecurrenceRule = {
+      ...monthlyFirst,
+      startDate: "2026-01-31",
+    }
+    const cycles = cyclesInRange(thirtyFirst, "2026-01-31", "2026-04-30", 0)
+    // February has no 31st.
+    // Neither February nor April has a 31st.
+    expect(cycles.map((c) => c.occurrenceDate)).toEqual(["2026-03-31"])
+  })
+
+  it("clamps a very stale catch-up instead of posting years of rows", () => {
+    const daily: RecurrenceRule = {
+      ...monthlyFirst,
+      freq: "daily",
+      startDate: "2019-01-01",
+    }
+    const cycles = cyclesInRange(daily, "2019-01-01", "2026-01-01", 0)
+    expect(cycles.length).toBeLessThanOrEqual(MAX_CATCHUP_DAYS)
+    // ...and what it does return is the most RECENT window, not the oldest.
+    expect(cycles[cycles.length - 1].occurrenceDate).toBe("2026-01-01")
+  })
+})
+
+describe("periodEnd", () => {
+  const base: RecurrenceRule = {
+    freq: "monthly",
+    recurrenceInterval: 1,
+    weekdays: 0,
+    monthlyMode: "day_of_month",
+    flexible: false,
+    startDate: "2026-01-01",
+    endDate: null,
+  }
+
+  it("monthly → the last day of the month, including a leap February", () => {
+    expect(periodEnd(base, "2026-07-10", 0)).toBe("2026-07-31")
+    expect(periodEnd(base, "2028-02-05", 0)).toBe("2028-02-29")
+  })
+
+  it("weekly → the end of the user's week", () => {
+    const weekly: RecurrenceRule = { ...base, freq: "weekly" }
+    // 2026-07-15 is a Wednesday.
+    expect(periodEnd(weekly, "2026-07-15", 0)).toBe("2026-07-18") // Sun-start → Sat
+    expect(periodEnd(weekly, "2026-07-15", 1)).toBe("2026-07-19") // Mon-start → Sun
+  })
+
+  it("daily → the day itself", () => {
+    const daily: RecurrenceRule = { ...base, freq: "daily" }
+    expect(periodEnd(daily, "2026-07-15", 0)).toBe("2026-07-15")
   })
 })

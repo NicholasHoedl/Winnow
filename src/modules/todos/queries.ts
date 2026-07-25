@@ -2,12 +2,12 @@ import "server-only"
 import { and, asc, desc, eq, ne } from "drizzle-orm"
 
 import { db } from "@/db"
+import { todayInZone } from "@/lib/date"
+import { currentCycle } from "@/lib/recurrence"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
 import { lists, taskRecurrences, tasks } from "./schema"
-import { currentCycle } from "./recurrence"
-import { todayInZone } from "@/lib/date"
 import { summarizeTasks } from "./service"
 
 export type Task = typeof tasks.$inferSelect
@@ -44,7 +44,7 @@ export async function syncRuleInstances(
     notes: rule.notes,
     priority: rule.priority,
     listId: rule.listId,
-    dueDate: cycle.dueDate,
+    dueDate: cycle.date,
   }
   const insert = db.insert(tasks).values({
     userId,

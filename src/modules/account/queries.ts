@@ -3,12 +3,17 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
-import { budgets, categories, transactions } from "@/modules/budget/schema"
+import {
+  budgets,
+  categories,
+  transactionRecurrences,
+  transactions,
+} from "@/modules/budget/schema"
 import { events } from "@/modules/calendar/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import { foods, macroTargets, mealEntries } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
-import { lists, tasks } from "@/modules/todos/schema"
+import { lists, taskRecurrences, tasks } from "@/modules/todos/schema"
 
 /** Everything the current user owns, for a JSON export/backup. */
 export async function exportUserData() {
@@ -26,6 +31,8 @@ export async function exportUserData() {
     goalRows,
     milestoneRows,
     preferenceRows,
+    taskRecurrenceRows,
+    transactionRecurrenceRows,
   ] = await Promise.all([
     db.query.lists.findMany({ where: eq(lists.userId, userId) }),
     db.query.tasks.findMany({ where: eq(tasks.userId, userId) }),
@@ -39,6 +46,14 @@ export async function exportUserData() {
     db.query.goals.findMany({ where: eq(goals.userId, userId) }),
     db.query.milestones.findMany({ where: eq(milestones.userId, userId) }),
     db.query.userPreferences.findMany({ where: eq(userPreferences.userId, userId) }),
+    // Recurrence rules were missing from the export: without them a restored backup
+    // would silently stop generating recurring tasks and bills.
+    db.query.taskRecurrences.findMany({
+      where: eq(taskRecurrences.userId, userId),
+    }),
+    db.query.transactionRecurrences.findMany({
+      where: eq(transactionRecurrences.userId, userId),
+    }),
   ])
 
   return {
@@ -54,6 +69,8 @@ export async function exportUserData() {
     events: eventRows,
     goals: goalRows,
     milestones: milestoneRows,
+    taskRecurrences: taskRecurrenceRows,
+    transactionRecurrences: transactionRecurrenceRows,
     preferences: preferenceRows[0] ?? null,
   }
 }
