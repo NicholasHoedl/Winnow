@@ -1,12 +1,20 @@
 import "server-only"
+import { cache } from "react"
 import { and, asc, desc, eq, gte, ilike, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
-import { monthSeries } from "@/lib/date"
+import { monthSeries, todayInZone } from "@/lib/date"
+import { cyclesInRange, type RecurrenceRule } from "@/lib/recurrence"
 import { requireUserId } from "@/lib/session"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { escapeLike } from "@/modules/search/service"
 
-import { budgets, categories, transactions } from "./schema"
+import {
+  budgets,
+  categories,
+  transactionRecurrences,
+  transactions,
+} from "./schema"
 import {
   monthRange,
   summarizeMonth,
@@ -19,6 +27,120 @@ import {
 export type Category = typeof categories.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Budget = typeof budgets.$inferSelect
+export type TransactionRecurrence = typeof transactionRecurrences.$inferSelect
+
+/** A rule row as the shared engine wants it. Transactions have no flexible mode. */
+export function toRule(row: {
+  freq: RecurrenceRule["freq"]
+  recurrenceInterval: number
+  weekdays: number
+  monthlyMode: RecurrenceRule["monthlyMode"]
+  startDate: string
+  endDate: string | null
+}): RecurrenceRule {
+  return { ...row, flexible: false }
+}
+
+/**
+ * Post everything that has come due for one rule, then advance its high-water mark.
+ *
+ * The whole thing is one transaction with the rule row locked, so two concurrent
+ * renders can't both post the same cycles. Within it the ORDER MATTERS: insert
+ * first, advance `postedThrough` second. That's at-least-once, and the unique
+ * (series_id, occurrence_date) index makes the retry a no-op. The reverse order
+ * would be at-most-once — a crash between the two would skip a payment silently,
+ * which is the failure that actually loses money.
+ *
+ * There is deliberately no delete step. The recurring-task generator retires
+ * off-cycle instances; a posted transaction is a fact about money and is never
+ * removed or rewritten by the generator.
+ */
+async function postDueOccurrences(
+  userId: string,
+  ruleId: string,
+  today: string,
+  weekStartsOn: number,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [rule] = await tx
+      .select()
+      .from(transactionRecurrences)
+      .where(
+        and(
+          eq(transactionRecurrences.id, ruleId),
+          eq(transactionRecurrences.userId, userId),
+        ),
+      )
+      .for("update")
+    // Another render may have caught this rule up while we waited for the lock.
+    if (!rule || rule.postedThrough >= today) return
+
+    const cycles = cyclesInRange(
+      toRule(rule),
+      rule.postedThrough,
+      today,
+      weekStartsOn,
+    )
+
+    if (cycles.length > 0) {
+      await tx
+        .insert(transactions)
+        .values(
+          cycles.map((cycle) => ({
+            userId,
+            categoryId: rule.categoryId,
+            amountCents: rule.amountCents,
+            type: rule.type,
+            date: cycle.date,
+            payee: rule.payee,
+            description: rule.description,
+            seriesId: rule.id,
+            occurrenceDate: cycle.occurrenceDate,
+          })),
+        )
+        .onConflictDoNothing({
+          target: [transactions.seriesId, transactions.occurrenceDate],
+        })
+    }
+
+    await tx
+      .update(transactionRecurrences)
+      .set({ postedThrough: today, updatedAt: new Date() })
+      .where(eq(transactionRecurrences.id, rule.id))
+  })
+}
+
+/**
+ * Bring every recurring rule up to date. Lazy-on-read (no cron), like the recurring
+ * tasks generator — awaited by the budget reads below.
+ *
+ * `cache()` makes it run once per request even though several queries call it.
+ * Failures are swallowed on purpose: a bad rule must degrade to "no new rows",
+ * not take down the money pages through budget/error.tsx. It also must never call
+ * revalidatePath — that throws during render.
+ */
+export const ensureRecurringTransactions = cache(
+  async (userId: string): Promise<void> => {
+    try {
+      const { timeZone, weekStartsOn } = await getUserPreferences()
+      const today = todayInZone(new Date(), timeZone)
+      const due = await db.query.transactionRecurrences.findMany({
+        where: and(
+          eq(transactionRecurrences.userId, userId),
+          lt(transactionRecurrences.postedThrough, today),
+        ),
+        columns: { id: true },
+      })
+      // One transaction per rule — never one around all of them, which would hold a
+      // pool connection for the whole loop.
+      for (const rule of due) {
+        await postDueOccurrences(userId, rule.id, today, weekStartsOn)
+      }
+    } catch {
+      /* next read will retry */
+    }
+  },
+)
 
 export async function getCategories(): Promise<Category[]> {
   const userId = await requireUserId()
@@ -36,6 +158,7 @@ export async function getMonthTransactions(
   filters: TransactionFilters = {},
 ): Promise<Transaction[]> {
   const userId = await requireUserId()
+  await ensureRecurringTransactions(userId)
   const { start, nextStart } = monthRange(month)
 
   const conditions = [
@@ -90,6 +213,7 @@ export async function getBudgetTrends(
   monthCount: number,
 ): Promise<MonthlySummary[]> {
   const userId = await requireUserId()
+  await ensureRecurringTransactions(userId)
   // Bound the scan: this is the only query in the app that spans months.
   const count = Math.min(24, Math.max(1, Math.floor(monthCount)))
   const months = monthSeries(endMonth, count)
@@ -119,6 +243,7 @@ export async function getBudgetTrends(
 
 export async function getBudgetSummary(month: string) {
   const userId = await requireUserId()
+  await ensureRecurringTransactions(userId)
   const { start, nextStart } = monthRange(month)
   const [txns, budgetRows] = await Promise.all([
     db.query.transactions.findMany({

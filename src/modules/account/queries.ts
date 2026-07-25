@@ -45,7 +45,9 @@ export async function exportUserData() {
     db.query.events.findMany({ where: eq(events.userId, userId) }),
     db.query.goals.findMany({ where: eq(goals.userId, userId) }),
     db.query.milestones.findMany({ where: eq(milestones.userId, userId) }),
-    db.query.userPreferences.findMany({ where: eq(userPreferences.userId, userId) }),
+    db.query.userPreferences.findMany({
+      where: eq(userPreferences.userId, userId),
+    }),
     // Recurrence rules were missing from the export: without them a restored backup
     // would silently stop generating recurring tasks and bills.
     db.query.taskRecurrences.findMany({

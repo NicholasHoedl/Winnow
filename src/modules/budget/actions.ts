@@ -5,11 +5,18 @@ import { and, eq, inArray, sql } from "drizzle-orm"
 
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import { addDays, todayInZone } from "@/lib/date"
+import { cyclesInRange, periodEnd } from "@/lib/recurrence"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
-import type { Transaction } from "./queries"
-import { budgets, categories, transactions } from "./schema"
+import { toRule, type Transaction } from "./queries"
+import {
+  budgets,
+  categories,
+  transactionRecurrences,
+  transactions,
+} from "./schema"
 import { amountToMinor, monthKey } from "./service"
 import {
   categoryInputSchema,
@@ -17,6 +24,7 @@ import {
   restoreTransactionSchema,
   setBudgetsSchema,
   transactionInputSchema,
+  transactionRecurrenceSchema,
 } from "./validation"
 
 function revalidateBudget() {
@@ -236,6 +244,178 @@ export async function setBudgets(input: unknown): Promise<ActionResult> {
     }
   })
 
+  revalidateBudget()
+  return { ok: true }
+}
+
+// --- Recurring transactions ---
+
+/** A back-dated rule posts its whole history at once. Past this, ask the user to
+ * pick a later start date rather than dumping a wall of rows into their ledger. */
+const MAX_INITIAL_POSTS = 60
+
+/** Later of two 'YYYY-MM-DD' dates (they compare lexicographically). */
+function laterOf(a: string, b: string): string {
+  return a > b ? a : b
+}
+
+/** null when the category is usable, else the error to return. */
+async function checkCategory(
+  userId: string,
+  categoryId: string | null,
+  type: "income" | "expense",
+): Promise<string | null> {
+  if (!categoryId) return null
+  const owned = await db.query.categories.findFirst({
+    where: and(eq(categories.id, categoryId), eq(categories.userId, userId)),
+    columns: { kind: true },
+  })
+  if (!owned) return "Unknown category."
+  if (owned.kind !== type) return "That category doesn't match the type."
+  return null
+}
+
+export async function createTransactionRecurrence(
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = transactionRecurrenceSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const d = parsed.data
+
+  const categoryId = nullify(d.categoryId)
+  const categoryError = await checkCategory(userId, categoryId, d.type)
+  if (categoryError) return { ok: false, error: categoryError }
+
+  const { currency, timeZone, weekStartsOn } = await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone)
+  const endDate = nullify(d.endDate)
+  // Nothing before the start date has been posted, so the mark sits one day earlier.
+  const postedThrough = addDays(d.startDate, -1)
+
+  // Tell the user before their ledger fills up, rather than after.
+  const pending = cyclesInRange(
+    toRule({ ...d, endDate }),
+    postedThrough,
+    today,
+    weekStartsOn,
+  )
+  if (pending.length > MAX_INITIAL_POSTS) {
+    return {
+      ok: false,
+      error: `That start date would add ${pending.length} transactions at once. Pick a later start date.`,
+    }
+  }
+
+  await db.insert(transactionRecurrences).values({
+    userId,
+    categoryId,
+    amountCents: amountToMinor(d.amount, currency),
+    type: d.type,
+    payee: nullify(d.payee),
+    description: nullify(d.description),
+    freq: d.freq,
+    recurrenceInterval: d.recurrenceInterval,
+    weekdays: d.weekdays,
+    monthlyMode: d.monthlyMode,
+    startDate: d.startDate,
+    endDate,
+    postedThrough,
+  })
+
+  revalidateBudget()
+  return { ok: true }
+}
+
+/**
+ * Edits apply FORWARD ONLY — already-posted transactions are facts and are never
+ * rewritten. A rent increase changes future payments and leaves past ones alone.
+ *
+ * Changing the SCHEDULE also skips the rest of the current period. Without that,
+ * moving a monthly bill from the 1st to the 15th on the 10th would post it a second
+ * time this month: the 1st is already posted, and the 15th is still ahead.
+ */
+export async function updateTransactionRecurrence(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = transactionRecurrenceSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const d = parsed.data
+
+  const categoryId = nullify(d.categoryId)
+  const categoryError = await checkCategory(userId, categoryId, d.type)
+  if (categoryError) return { ok: false, error: categoryError }
+
+  const existing = await db.query.transactionRecurrences.findFirst({
+    where: and(
+      eq(transactionRecurrences.id, id),
+      eq(transactionRecurrences.userId, userId),
+    ),
+  })
+  if (!existing) return { ok: false, error: "Recurring transaction not found." }
+
+  const { currency, timeZone, weekStartsOn } = await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone)
+  const endDate = nullify(d.endDate)
+
+  const scheduleChanged =
+    existing.freq !== d.freq ||
+    existing.recurrenceInterval !== d.recurrenceInterval ||
+    existing.weekdays !== d.weekdays ||
+    existing.monthlyMode !== d.monthlyMode ||
+    existing.startDate !== d.startDate
+
+  const postedThrough = scheduleChanged
+    ? laterOf(
+        existing.postedThrough,
+        periodEnd(toRule({ ...d, endDate }), today, weekStartsOn),
+      )
+    : existing.postedThrough
+
+  await db
+    .update(transactionRecurrences)
+    .set({
+      categoryId,
+      amountCents: amountToMinor(d.amount, currency),
+      type: d.type,
+      payee: nullify(d.payee),
+      description: nullify(d.description),
+      freq: d.freq,
+      recurrenceInterval: d.recurrenceInterval,
+      weekdays: d.weekdays,
+      monthlyMode: d.monthlyMode,
+      startDate: d.startDate,
+      endDate,
+      postedThrough,
+    })
+    .where(
+      and(
+        eq(transactionRecurrences.id, id),
+        eq(transactionRecurrences.userId, userId),
+      ),
+    )
+
+  revalidateBudget()
+  return { ok: true }
+}
+
+/** Stops future posting. Every transaction already posted is kept — the FK is
+ * ON DELETE SET NULL, so they simply detach into ordinary history. Note the
+ * contrast with deleteTaskRecurrence, which deletes its open instances. */
+export async function deleteTransactionRecurrence(
+  id: string,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  await db
+    .delete(transactionRecurrences)
+    .where(
+      and(
+        eq(transactionRecurrences.id, id),
+        eq(transactionRecurrences.userId, userId),
+      ),
+    )
   revalidateBudget()
   return { ok: true }
 }

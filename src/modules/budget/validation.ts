@@ -64,3 +64,44 @@ export const copyBudgetsSchema = z.object({
   fromMonth: monthField,
   toMonth: monthField,
 })
+
+export const TRANSACTION_RECURRENCE_FREQS = [
+  "daily",
+  "weekly",
+  "monthly",
+] as const
+
+// A recurring bill or income: the transaction template plus its schedule. Mirrors
+// taskRecurrenceSchema's recurrence half, minus `flexible` — "sometime this week"
+// is meaningful for a chore, not for a payment.
+export const transactionRecurrenceSchema = z
+  .object({
+    amount: dollars,
+    type: z.enum(INCOME_EXPENSE),
+    categoryId: z.string().uuid().or(z.literal("")).optional(),
+    payee: z.string().trim().max(120).or(z.literal("")).optional(),
+    description: z.string().trim().max(300).or(z.literal("")).optional(),
+    freq: z.enum(TRANSACTION_RECURRENCE_FREQS),
+    recurrenceInterval: z.number().int().min(1).max(999),
+    // Weekly BYDAY mask (0–127); 0 = the start date's weekday.
+    weekdays: z.number().int().min(0).max(127),
+    monthlyMode: z.enum(["day_of_month", "nth_weekday"]),
+    startDate: z
+      .string()
+      .refine((value) => isValidDateString(value), "Enter a valid date"),
+    endDate: z
+      .string()
+      .refine(
+        (value) => value === "" || isValidDateString(value),
+        "Enter a valid date",
+      )
+      .optional(),
+  })
+  .refine((d) => !d.endDate || d.endDate >= d.startDate, {
+    message: "End must be on or after the start",
+    path: ["endDate"],
+  })
+
+export type TransactionRecurrenceInput = z.input<
+  typeof transactionRecurrenceSchema
+>
