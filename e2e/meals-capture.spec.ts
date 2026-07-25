@@ -72,4 +72,12 @@ test("food-search fills the form from a library food (Enter selects, no submit)"
   await r.getByRole("button", { name: "Entry actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(page.locator(rows(food))).toHaveCount(0)
+
+  // Cleanup the library food too — it outlives the entry, so leaving it behind
+  // grows the library by one row on every run and eventually pushes this
+  // dialog's submit button past the bottom of the viewport.
+  await page.getByRole("button", { name: "Food library" }).click()
+  const removeFood = page.getByRole("button", { name: `Delete ${food}` })
+  await removeFood.click()
+  await expect(removeFood).toHaveCount(0)
 })
