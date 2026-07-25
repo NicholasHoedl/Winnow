@@ -1,6 +1,6 @@
 "use client"
 
-import { MoreVertical, Pencil, Trash2 } from "lucide-react"
+import { CalendarOff, MoreVertical, Pencil, Repeat, Trash2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { Transaction } from "@/modules/budget/queries"
@@ -28,14 +28,19 @@ export function TransactionItem({
   categoryName,
   onEdit,
   onDelete,
+  onStopRepeating,
 }: {
   transaction: Transaction
   categoryName: string
   onEdit: (tx: Transaction) => void
   onDelete: (tx: Transaction) => void
+  /** Only offered while the rule still exists — deleting it detaches posted rows,
+   *  which clears seriesId and takes this menu item away with it. */
+  onStopRepeating: (tx: Transaction) => void
 }) {
   const { currency } = usePreferences()
   const isIncome = transaction.type === "income"
+  const isRepeating = transaction.seriesId !== null
   const payee = transaction.payee?.trim()
   const description = transaction.description?.trim()
   // Payee is the headline when there is one; whatever it displaced moves below.
@@ -53,7 +58,16 @@ export function TransactionItem({
         onClick={() => onEdit(transaction)}
         className="min-w-0 flex-1 text-left"
       >
-        <span className="block truncate text-sm font-medium">{title}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          {isRepeating && (
+            <Repeat
+              role="img"
+              aria-label="Repeating"
+              className="text-muted-foreground size-3.5 shrink-0"
+            />
+          )}
+          <span className="truncate">{title}</span>
+        </span>
         <span className="text-muted-foreground block truncate text-xs">
           {subtitle}
         </span>
@@ -88,6 +102,12 @@ export function TransactionItem({
             <Pencil className="size-4" />
             Edit
           </DropdownMenuItem>
+          {isRepeating && (
+            <DropdownMenuItem onClick={() => onStopRepeating(transaction)}>
+              <CalendarOff className="size-4" />
+              Stop repeating
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             variant="destructive"
             onClick={() => onDelete(transaction)}

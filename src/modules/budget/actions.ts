@@ -21,6 +21,7 @@ import { amountToMinor, monthKey } from "./service"
 import {
   categoryInputSchema,
   copyBudgetsSchema,
+  MAX_INITIAL_POSTS,
   restoreTransactionSchema,
   setBudgetsSchema,
   transactionInputSchema,
@@ -249,10 +250,6 @@ export async function setBudgets(input: unknown): Promise<ActionResult> {
 }
 
 // --- Recurring transactions ---
-
-/** A back-dated rule posts its whole history at once. Past this, ask the user to
- * pick a later start date rather than dumping a wall of rows into their ledger. */
-const MAX_INITIAL_POSTS = 60
 
 /** Later of two 'YYYY-MM-DD' dates (they compare lexicographically). */
 function laterOf(a: string, b: string): string {

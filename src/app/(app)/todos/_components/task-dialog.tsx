@@ -42,8 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-
-import { TaskRecurrenceFields } from "./task-recurrence-fields"
+import { RecurrenceFields } from "@/components/shared/recurrence-fields"
 
 const NO_LIST = "none"
 // Sentinel for the optional goal/event links (a Select item can't carry an empty value).
@@ -502,9 +501,7 @@ export function TaskDialog({
                           <SelectTrigger id="task-event" className="w-full">
                             <SelectValue>
                               {(value) => {
-                                const match = events.find(
-                                  (e) => e.id === value,
-                                )
+                                const match = events.find((e) => e.id === value)
                                 return match
                                   ? eventLabel(match, timeZone, use24HourTime)
                                   : "No event"
@@ -529,11 +526,12 @@ export function TaskDialog({
             )}
 
             {showRecurrence && (
-              <TaskRecurrenceFields
+              <RecurrenceFields
                 control={control}
                 register={register}
                 watch={watch}
                 errors={errors}
+                idPrefix="tr"
               />
             )}
           </FieldGroup>

@@ -65,6 +65,12 @@ export const copyBudgetsSchema = z.object({
   toMonth: monthField,
 })
 
+/** Catch-up ceiling for a brand-new rule. A back-dated start date is a foot-gun:
+ * the action refuses to fill the ledger, and the dialog previews the count first.
+ * Lives here rather than in actions.ts so the client can show the same number
+ * ("use server" modules may only export async functions). */
+export const MAX_INITIAL_POSTS = 60
+
 export const TRANSACTION_RECURRENCE_FREQS = [
   "daily",
   "weekly",

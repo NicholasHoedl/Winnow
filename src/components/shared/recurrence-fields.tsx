@@ -4,6 +4,7 @@ import {
   Controller,
   type Control,
   type FieldErrors,
+  type FieldValues,
   type UseFormRegister,
   type UseFormWatch,
 } from "react-hook-form"
@@ -21,7 +22,24 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import type { TaskFormValues } from "./task-dialog"
+/**
+ * The slice of a form these fields bind to. Any form that renders
+ * {@link RecurrenceFields} must carry exactly these names and types — that is what
+ * the `T` constraint below enforces, and what makes the casts inside sound.
+ *
+ * `flexible` is optional: "any day within the week" is meaningful for a chore but
+ * not for an auto-posted payment, so the money form omits it entirely rather than
+ * carrying a field it never sends.
+ */
+export type RecurrenceFormValues = {
+  repeat: "none" | "daily" | "weekly" | "monthly"
+  recurrenceInterval: number
+  weekdays: number
+  monthlyMode: "day_of_month" | "nth_weekday"
+  startDate: string
+  endDate?: string
+  flexible?: boolean
+}
 
 const REPEAT_LABELS = {
   none: "Off",
@@ -30,7 +48,11 @@ const REPEAT_LABELS = {
   monthly: "Monthly",
 } as const
 
-const INTERVAL_UNIT = { daily: "days", weekly: "weeks", monthly: "months" } as const
+const INTERVAL_UNIT = {
+  daily: "days",
+  weekly: "weeks",
+  monthly: "months",
+} as const
 
 const WEEKDAY_TOGGLES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"]
 const WEEKDAY_NAMES = [
@@ -52,57 +74,91 @@ function weekdayOf(date: string): number {
 }
 
 /** Google-style labels for the two monthly modes, derived from the start date. */
-function monthlyLabels(date: string): { dayOfMonth: string; nthWeekday: string } {
+function monthlyLabels(date: string): {
+  dayOfMonth: string
+  nthWeekday: string
+} {
   const [y, m, d] = date.split("-").map(Number)
-  if (!y || !m || !d) return { dayOfMonth: "the same day", nthWeekday: "the same weekday" }
+  if (!y || !m || !d)
+    return { dayOfMonth: "the same day", nthWeekday: "the same weekday" }
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const which = d + 7 > daysInMonth ? "last" : (ORDINALS[Math.ceil(d / 7) - 1] ?? "last")
-  return { dayOfMonth: `day ${d}`, nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}` }
+  const which =
+    d + 7 > daysInMonth ? "last" : (ORDINALS[Math.ceil(d / 7) - 1] ?? "last")
+  return {
+    dayOfMonth: `day ${d}`,
+    nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}`,
+  }
 }
 
-/** The "Repeat" section of the task dialog. Renders only the Repeat select until a
- *  frequency is chosen. Reused for both creating a rule and editing a series. */
-export function TaskRecurrenceFields({
+/**
+ * The "Repeat" section shared by the task dialog and the transaction dialog. Renders
+ * only the Repeat select until a frequency is chosen.
+ */
+export function RecurrenceFields<
+  T extends FieldValues & RecurrenceFormValues,
+  // Control also carries the form's context and post-resolver output types. These
+  // fields touch neither, so both stay free rather than forcing each caller to line
+  // them up — a form with a resolver has an output type that isn't its value type.
+  TContext,
+  TTransformed extends FieldValues | undefined,
+>({
   control,
   register,
   watch,
   errors,
+  idPrefix,
+  showFlexible = true,
 }: {
-  control: Control<TaskFormValues>
-  register: UseFormRegister<TaskFormValues>
-  watch: UseFormWatch<TaskFormValues>
-  errors: FieldErrors<TaskFormValues>
+  control: Control<T, TContext, TTransformed>
+  register: UseFormRegister<T>
+  watch: UseFormWatch<T>
+  errors: FieldErrors<T>
+  /** Namespaces the DOM ids, so two dialogs carrying these fields can both mount. */
+  idPrefix: string
+  /** Off for money: an auto-posted bill has no "sometime this week" mode. */
+  showFlexible?: boolean
 }) {
-  const repeat = watch("repeat")
-  const flexible = watch("flexible")
-  const startDate = watch("startDate")
+  // RHF's Control/UseFormRegister/UseFormWatch are invariant in the form type, so a
+  // generic wrapper can't index them by a literal field name. Narrowing them once,
+  // here, keeps the body plainly typed instead of scattering `as Path<T>` through it —
+  // and the `T extends RecurrenceFormValues` constraint above is what makes it sound.
+  const c = control as unknown as Control<RecurrenceFormValues>
+  const reg = register as unknown as UseFormRegister<RecurrenceFormValues>
+  const w = watch as unknown as UseFormWatch<RecurrenceFormValues>
+  const err = errors as FieldErrors<RecurrenceFormValues>
+
+  const repeat = w("repeat")
+  const startDate = w("startDate")
+  const flexible = showFlexible ? w("flexible") : false
 
   return (
     <>
       <Field>
-        <FieldLabel>Repeat</FieldLabel>
+        <FieldLabel htmlFor={`${idPrefix}-repeat`}>Repeat</FieldLabel>
         <Controller
-          control={control}
+          control={c}
           name="repeat"
           render={({ field }) => (
             <Select
               value={field.value}
               onValueChange={(value) => value && field.onChange(value)}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id={`${idPrefix}-repeat`} className="w-full">
                 <SelectValue>
-                  {(value) => REPEAT_LABELS[value as keyof typeof REPEAT_LABELS]}
+                  {(value) =>
+                    REPEAT_LABELS[value as keyof typeof REPEAT_LABELS]
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(REPEAT_LABELS) as (keyof typeof REPEAT_LABELS)[]).map(
-                  (key) => (
-                    <SelectItem key={key} value={key}>
-                      {REPEAT_LABELS[key]}
-                    </SelectItem>
-                  ),
-                )}
+                {(
+                  Object.keys(REPEAT_LABELS) as (keyof typeof REPEAT_LABELS)[]
+                ).map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {REPEAT_LABELS[key]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
@@ -113,36 +169,42 @@ export function TaskRecurrenceFields({
         <>
           <div className="grid grid-cols-2 gap-4">
             <Field>
-              <FieldLabel htmlFor="tr-interval">
+              <FieldLabel htmlFor={`${idPrefix}-interval`}>
                 Every ({INTERVAL_UNIT[repeat]})
               </FieldLabel>
               <Input
-                id="tr-interval"
+                id={`${idPrefix}-interval`}
                 type="number"
                 min="1"
-                {...register("recurrenceInterval", numberField)}
+                {...reg("recurrenceInterval", numberField)}
               />
-              <FieldError errors={[errors.recurrenceInterval]} />
+              <FieldError errors={[err.recurrenceInterval]} />
             </Field>
             <Field>
-              <FieldLabel htmlFor="tr-start">Starts</FieldLabel>
-              <Input id="tr-start" type="date" {...register("startDate")} />
-              <FieldError errors={[errors.startDate]} />
+              <FieldLabel htmlFor={`${idPrefix}-start`}>Starts</FieldLabel>
+              <Input
+                id={`${idPrefix}-start`}
+                type="date"
+                {...reg("startDate")}
+              />
+              <FieldError errors={[err.startDate]} />
             </Field>
           </div>
 
-          {repeat !== "daily" && (
+          {showFlexible && repeat !== "daily" && (
             <Controller
-              control={control}
+              control={c}
               name="flexible"
               render={({ field }) => (
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox
-                    checked={field.value}
-                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                    checked={field.value ?? false}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
                   />
-                  Any day within the {repeat === "weekly" ? "week" : "month"} (once per{" "}
-                  {repeat === "weekly" ? "week" : "month"})
+                  Any day within the {repeat === "weekly" ? "week" : "month"}{" "}
+                  (once per {repeat === "weekly" ? "week" : "month"})
                 </label>
               )}
             />
@@ -152,12 +214,14 @@ export function TaskRecurrenceFields({
             <Field>
               <FieldLabel>On days</FieldLabel>
               <Controller
-                control={control}
+                control={c}
                 name="weekdays"
                 render={({ field }) => {
                   const startWd = weekdayOf(startDate)
                   const mask =
-                    field.value === 0 && startWd >= 0 ? 1 << startWd : field.value
+                    field.value === 0 && startWd >= 0
+                      ? 1 << startWd
+                      : field.value
                   return (
                     <div className="flex flex-wrap gap-1">
                       {WEEKDAY_TOGGLES.map((label, wd) => {
@@ -191,12 +255,15 @@ export function TaskRecurrenceFields({
             <Field>
               <FieldLabel>On</FieldLabel>
               <Controller
-                control={control}
+                control={c}
                 name="monthlyMode"
                 render={({ field }) => {
                   const labels = monthlyLabels(startDate)
                   const options = [
-                    { value: "day_of_month" as const, label: labels.dayOfMonth },
+                    {
+                      value: "day_of_month" as const,
+                      label: labels.dayOfMonth,
+                    },
                     { value: "nth_weekday" as const, label: labels.nthWeekday },
                   ]
                   return (
@@ -225,9 +292,11 @@ export function TaskRecurrenceFields({
           )}
 
           <Field>
-            <FieldLabel htmlFor="tr-until">Until (optional)</FieldLabel>
-            <Input id="tr-until" type="date" {...register("endDate")} />
-            <FieldError errors={[errors.endDate]} />
+            <FieldLabel htmlFor={`${idPrefix}-until`}>
+              Until (optional)
+            </FieldLabel>
+            <Input id={`${idPrefix}-until`} type="date" {...reg("endDate")} />
+            <FieldError errors={[err.endDate]} />
           </Field>
         </>
       )}

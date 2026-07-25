@@ -14,7 +14,11 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { accentForKey } from "@/lib/colors"
 import { shiftMonth } from "@/lib/date"
-import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
+import {
+  deleteTransaction,
+  deleteTransactionRecurrence,
+  restoreTransaction,
+} from "@/modules/budget/actions"
 import type { Category, Transaction } from "@/modules/budget/queries"
 import {
   formatCents,
@@ -22,6 +26,7 @@ import {
   type TransactionFilters as Filters,
 } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
 
@@ -85,6 +90,7 @@ export function BudgetView({
   const [editingTx, setEditingTx] = React.useState<Transaction | null>(null)
   const [categoriesOpen, setCategoriesOpen] = React.useState(false)
   const [budgetsOpen, setBudgetsOpen] = React.useState(false)
+  const [stoppingTx, setStoppingTx] = React.useState<Transaction | null>(null)
   const [, startTransition] = React.useTransition()
   const { currency } = usePreferences()
   const money = (cents: number) => formatCents(cents, currency)
@@ -141,6 +147,22 @@ export function BudgetView({
             }),
         },
       })
+    })
+  }
+
+  // Deleting the rule only stops future posts — the FK is ON DELETE SET NULL, so
+  // everything it already posted stays put as ordinary history. No undo offered: the
+  // transactions survive, and re-creating the schedule is the reverse.
+  function stopRepeating(tx: Transaction) {
+    const seriesId = tx.seriesId
+    if (!seriesId) return
+    startTransition(async () => {
+      const result = await deleteTransactionRecurrence(seriesId)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success("Stopped repeating")
     })
   }
 
@@ -346,6 +368,7 @@ export function BudgetView({
                 categoryName={categoryName(tx.categoryId)}
                 onEdit={openEdit}
                 onDelete={handleDelete}
+                onStopRepeating={setStoppingTx}
               />
             ))}
           </div>
@@ -358,10 +381,22 @@ export function BudgetView({
       <TransactionDialog
         defaultDate={defaultDate}
         month={month}
+        today={today}
         categories={categories}
         transaction={editingTx}
         open={txOpen}
         onOpenChange={setTxOpen}
+      />
+      <ConfirmDialog
+        open={stoppingTx !== null}
+        onOpenChange={(next) => !next && setStoppingTx(null)}
+        title="Stop repeating?"
+        description="No more transactions will be added on this schedule. The ones already recorded are kept."
+        confirmLabel="Stop repeating"
+        onConfirm={() => {
+          if (stoppingTx) stopRepeating(stoppingTx)
+          setStoppingTx(null)
+        }}
       />
       <CategoryManager
         categories={categories}

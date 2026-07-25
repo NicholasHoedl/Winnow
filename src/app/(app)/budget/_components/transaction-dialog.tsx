@@ -1,21 +1,32 @@
 "use client"
 
 import * as React from "react"
-import { Controller, useForm } from "react-hook-form"
+import { Controller, useForm, type Resolver } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
-import { createTransaction, updateTransaction } from "@/modules/budget/actions"
+import {
+  createTransaction,
+  createTransactionRecurrence,
+  updateTransaction,
+} from "@/modules/budget/actions"
 import type { Category, Transaction } from "@/modules/budget/queries"
 import {
   currencyFractionDigits,
   currencySymbol,
   minorToAmount,
 } from "@/modules/budget/service"
-import { transactionInputSchema } from "@/modules/budget/validation"
-import { daysInMonth, fmt } from "@/lib/date"
+import {
+  MAX_INITIAL_POSTS,
+  transactionInputSchema,
+  type TransactionInput,
+} from "@/modules/budget/validation"
+import { addDays, daysInMonth, fmt, isValidDateString } from "@/lib/date"
 import { numberField } from "@/lib/forms"
+import { cyclesInRange } from "@/lib/recurrence"
+import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
+import { RecurrenceFields } from "@/components/shared/recurrence-fields"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -42,6 +53,9 @@ import {
 
 const NO_CATEGORY = "__none__"
 
+// The superset the dialog binds to: a one-off transaction plus, when creating, the
+// schedule that would turn it into a recurring rule. `flexible` is deliberately
+// absent — an auto-posted bill has no "sometime this week" mode.
 type TransactionFormValues = {
   amount: number
   type: "income" | "expense"
@@ -49,11 +63,61 @@ type TransactionFormValues = {
   categoryId?: string
   payee?: string
   description?: string
+  repeat: "none" | "daily" | "weekly" | "monthly"
+  recurrenceInterval: number
+  weekdays: number
+  monthlyMode: "day_of_month" | "nth_weekday"
+  startDate: string
+  endDate?: string
+}
+
+/** `date` follows the month being viewed; `startDate` never does — a back-dated
+ *  schedule would catch up across every month since, which is rarely the intent. */
+function emptyValues(
+  defaultDate: string,
+  today: string,
+): TransactionFormValues {
+  return {
+    amount: 0,
+    type: "expense",
+    date: defaultDate,
+    categoryId: "",
+    payee: "",
+    description: "",
+    repeat: "none",
+    recurrenceInterval: 1,
+    weekdays: 0,
+    monthlyMode: "day_of_month",
+    startDate: today,
+    endDate: "",
+  }
+}
+
+/** The rule payload (createTransactionRecurrence validates it server-side). `freq` is
+ *  passed separately because only the caller knows `repeat` isn't "none" there. */
+function toRecurrenceInput(
+  v: TransactionFormValues,
+  freq: "daily" | "weekly" | "monthly",
+) {
+  return {
+    amount: v.amount,
+    type: v.type,
+    categoryId: v.categoryId,
+    payee: v.payee,
+    description: v.description,
+    freq,
+    recurrenceInterval: v.recurrenceInterval,
+    weekdays: v.weekdays,
+    monthlyMode: v.monthlyMode,
+    startDate: v.startDate,
+    endDate: v.endDate,
+  }
 }
 
 export function TransactionDialog({
   defaultDate,
   month,
+  today,
   categories,
   transaction,
   open,
@@ -61,30 +125,25 @@ export function TransactionDialog({
 }: {
   defaultDate: string
   month: string
+  /** The user's local today — the horizon the catch-up preview counts up to. */
+  today: string
   categories: Category[]
   transaction: Transaction | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!transaction
-  const { currency } = usePreferences()
+  const { currency, weekStartsOn } = usePreferences()
   const symbol = currencySymbol(currency)
   const step = currencyFractionDigits(currency) === 0 ? "1" : "0.01"
 
   // Constrain the date picker to the month being viewed so an entry can't silently
-  // land in another month (which decides where it shows up).
+  // land in another month (which decides where it shows up). The recurrence start/end
+  // fields are deliberately NOT clamped — a schedule outlives the month you set it in.
   const [my, mm] = month.split("-").map(Number)
   const monthStart = `${month}-01`
   const monthEnd = fmt(my, mm, daysInMonth(my, mm))
 
-  const empty: TransactionFormValues = {
-    amount: 0,
-    type: "expense",
-    date: defaultDate,
-    categoryId: "",
-    payee: "",
-    description: "",
-  }
   const {
     register,
     handleSubmit,
@@ -95,9 +154,17 @@ export function TransactionDialog({
     getValues,
     setValue,
     formState: { errors, isSubmitting },
-  } = useForm<TransactionFormValues>({
-    resolver: standardSchemaResolver(transactionInputSchema),
-    defaultValues: empty,
+  } = useForm<TransactionFormValues, unknown, TransactionInput>({
+    // The form is a superset of this schema — it also carries the schedule — and RHF's
+    // Resolver is invariant in the form type, hence the cast. The third type argument
+    // is the honest consequence: the resolver strips the schedule fields, so what
+    // handleSubmit receives is a TransactionInput, not the whole form. The rule path
+    // reads getValues() for exactly that reason. Schedule fields are validated
+    // server-side by transactionRecurrenceSchema and come back as fieldErrors.
+    resolver: standardSchemaResolver(
+      transactionInputSchema,
+    ) as unknown as Resolver<TransactionFormValues, unknown, TransactionInput>,
+    defaultValues: emptyValues(defaultDate, today),
   })
 
   // A category belongs to either income or expense; show only the matching kind,
@@ -118,6 +185,7 @@ export function TransactionDialog({
     if (!open) return
     if (transaction) {
       reset({
+        ...emptyValues(defaultDate, today),
         amount: minorToAmount(transaction.amountCents, currency),
         type: transaction.type,
         date: transaction.date,
@@ -126,21 +194,19 @@ export function TransactionDialog({
         description: transaction.description ?? "",
       })
     } else {
-      reset({
-        amount: 0,
-        type: "expense",
-        date: defaultDate,
-        categoryId: "",
-        payee: "",
-        description: "",
-      })
+      reset(emptyValues(defaultDate, today))
     }
-  }, [open, transaction, defaultDate, currency, reset])
+  }, [open, transaction, defaultDate, today, currency, reset])
 
   const onSubmit = handleSubmit(async (data) => {
+    // The resolver strips the schedule fields from `data`, so the rule path reads the
+    // raw form values instead.
+    const v = getValues()
     const result = isEdit
       ? await updateTransaction(transaction.id, data)
-      : await createTransaction(data)
+      : v.repeat === "none"
+        ? await createTransaction(data)
+        : await createTransactionRecurrence(toRecurrenceInput(v, v.repeat))
 
     if (!result.ok) {
       if (result.fieldErrors) {
@@ -151,21 +217,74 @@ export function TransactionDialog({
       toast.error(result.error)
       return
     }
-    toast.success(isEdit ? "Transaction updated" : "Transaction added")
+    toast.success(
+      isEdit
+        ? "Transaction updated"
+        : v.repeat === "none"
+          ? "Transaction added"
+          : "Repeating transaction added",
+    )
     onOpenChange(false)
   })
+
+  // A schedule only makes sense while creating. Editing a posted row edits that row —
+  // the ledger is a record of what happened, not a template.
+  const repeat = watch("repeat")
+  const interval = watch("recurrenceInterval")
+  const weekdays = watch("weekdays")
+  const monthlyMode = watch("monthlyMode")
+  const startDate = watch("startDate")
+  const endDate = watch("endDate")
+
+  // How many rows saving right now would post. A back-dated start is the foot-gun this
+  // defuses — the same pure engine the server materializer runs, so the count matches.
+  const pending = React.useMemo(() => {
+    if (isEdit || repeat === "none" || !isValidDateString(startDate))
+      return null
+    if (endDate && !isValidDateString(endDate)) return null
+    return cyclesInRange(
+      {
+        freq: repeat,
+        recurrenceInterval: Math.max(1, Math.floor(interval) || 1),
+        weekdays,
+        monthlyMode,
+        startDate,
+        endDate: endDate || null,
+        flexible: false,
+      },
+      addDays(startDate, -1),
+      today,
+      weekStartsOn,
+    ).length
+  }, [
+    isEdit,
+    repeat,
+    interval,
+    weekdays,
+    monthlyMode,
+    startDate,
+    endDate,
+    today,
+    weekStartsOn,
+  ])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit transaction" : "Add transaction"}
+            {isEdit
+              ? "Edit transaction"
+              : repeat === "none"
+                ? "Add transaction"
+                : "Add repeating transaction"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
               ? "Update this transaction."
-              : "Record income or an expense."}
+              : repeat === "none"
+                ? "Record income or an expense."
+                : "Posts automatically each time it comes due."}
           </DialogDescription>
         </DialogHeader>
 
@@ -210,18 +329,27 @@ export function TransactionDialog({
               </Field>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <Field>
-                <FieldLabel htmlFor="t-date">Date</FieldLabel>
-                <Input
-                  id="t-date"
-                  type="date"
-                  min={monthStart}
-                  max={monthEnd}
-                  {...register("date")}
-                />
-                <FieldError errors={[errors.date]} />
-              </Field>
+            <div
+              className={cn(
+                "grid gap-4",
+                repeat === "none" ? "grid-cols-2" : "grid-cols-1",
+              )}
+            >
+              {/* A schedule supplies its own dates, so the one-off date field would
+                  only be a second, contradictory answer. */}
+              {repeat === "none" && (
+                <Field>
+                  <FieldLabel htmlFor="t-date">Date</FieldLabel>
+                  <Input
+                    id="t-date"
+                    type="date"
+                    min={monthStart}
+                    max={monthEnd}
+                    {...register("date")}
+                  />
+                  <FieldError errors={[errors.date]} />
+                </Field>
+              )}
               <Field>
                 <FieldLabel>Category</FieldLabel>
                 <Controller
@@ -279,6 +407,37 @@ export function TransactionDialog({
               />
               <FieldError errors={[errors.description]} />
             </Field>
+
+            {!isEdit && (
+              <>
+                <RecurrenceFields
+                  control={control}
+                  register={register}
+                  watch={watch}
+                  errors={errors}
+                  idPrefix="t-rec"
+                  showFlexible={false}
+                />
+                {pending !== null && (
+                  <p
+                    // The count changes as the schedule is edited, so announce it.
+                    aria-live="polite"
+                    className={cn(
+                      "text-xs",
+                      pending > MAX_INITIAL_POSTS
+                        ? "text-destructive"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {pending > MAX_INITIAL_POSTS
+                      ? `That start date would add ${pending} transactions at once. Pick a later start date.`
+                      : pending === 0
+                        ? "Nothing is added yet — the first one posts on its start date."
+                        : `Adds ${pending} ${pending === 1 ? "transaction" : "transactions"} now to catch up.`}
+                  </p>
+                )}
+              </>
+            )}
           </FieldGroup>
 
           <DialogFooter className="mt-5">
@@ -289,7 +448,11 @@ export function TransactionDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button
+              type="submit"
+              // The action rejects this too; blocking here just saves the round-trip.
+              disabled={isSubmitting || (pending ?? 0) > MAX_INITIAL_POSTS}
+            >
               {isSubmitting ? "Saving…" : isEdit ? "Save" : "Add"}
             </Button>
           </DialogFooter>
