@@ -20,19 +20,31 @@ export type CategoryInput = z.infer<typeof categoryInputSchema>
 export const transactionInputSchema = z.object({
   amount: dollars,
   type: z.enum(INCOME_EXPENSE),
-  date: z.string().refine((value) => isValidDateString(value), "Enter a valid date"),
+  date: z
+    .string()
+    .refine((value) => isValidDateString(value), "Enter a valid date"),
   categoryId: z.string().uuid().or(z.literal("")).optional(),
   description: z.string().trim().max(300).or(z.literal("")).optional(),
 })
 export type TransactionInput = z.infer<typeof transactionInputSchema>
 
-export const budgetInputSchema = z.object({
-  categoryId: z.string().uuid(),
-  // Accepts a month key ('YYYY-MM') or a full date; setBudget normalizes via
-  // monthKey, so validate the normalized first-of-month value.
-  month: z
-    .string()
-    .refine((value) => isValidDateString(monthKey(value)), "Invalid month"),
-  amount: dollars,
+// Accepts a month key ('YYYY-MM') or a full date; the actions normalize via
+// monthKey, so validate the normalized first-of-month value.
+const monthField = z
+  .string()
+  .refine((value) => isValidDateString(monthKey(value)), "Invalid month")
+
+// The dialog submits every expense category at once so the whole month is written
+// in a single transaction. An amount of 0 (or a cleared field) clears that budget.
+export const setBudgetsSchema = z.object({
+  month: monthField,
+  entries: z
+    .array(z.object({ categoryId: z.string().uuid(), amount: dollars }))
+    .max(200, "Too many categories"),
 })
-export type BudgetInput = z.infer<typeof budgetInputSchema>
+export type SetBudgetsInput = z.infer<typeof setBudgetsSchema>
+
+export const copyBudgetsSchema = z.object({
+  fromMonth: monthField,
+  toMonth: monthField,
+})

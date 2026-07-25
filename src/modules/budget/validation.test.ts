@@ -1,43 +1,54 @@
 import { describe, expect, it } from "vitest"
 
-import { budgetInputSchema, transactionInputSchema } from "./validation"
+import { setBudgetsSchema, transactionInputSchema } from "./validation"
 
 const UUID = "00000000-0000-4000-8000-000000000000"
 
-describe("budgetInputSchema.month", () => {
+function budgets(month: string, amount = 200) {
+  return { month, entries: [{ categoryId: UUID, amount }] }
+}
+
+describe("setBudgetsSchema.month", () => {
   it("accepts a 'YYYY-MM' month key (what the budgets dialog sends)", () => {
-    const result = budgetInputSchema.safeParse({
-      categoryId: UUID,
-      month: "2026-07",
-      amount: 200,
-    })
-    expect(result.success).toBe(true)
+    expect(setBudgetsSchema.safeParse(budgets("2026-07")).success).toBe(true)
   })
 
   it("accepts a full 'YYYY-MM-DD' date", () => {
-    expect(
-      budgetInputSchema.safeParse({
-        categoryId: UUID,
-        month: "2026-07-01",
-        amount: 200,
-      }).success,
-    ).toBe(true)
+    expect(setBudgetsSchema.safeParse(budgets("2026-07-01")).success).toBe(true)
   })
 
   it("rejects an impossible month", () => {
-    expect(
-      budgetInputSchema.safeParse({
-        categoryId: UUID,
-        month: "2026-13",
-        amount: 200,
-      }).success,
-    ).toBe(false)
+    expect(setBudgetsSchema.safeParse(budgets("2026-13")).success).toBe(false)
   })
 
   it("rejects a non-month string", () => {
+    expect(setBudgetsSchema.safeParse(budgets("nope")).success).toBe(false)
+  })
+})
+
+describe("setBudgetsSchema.entries", () => {
+  it("accepts an empty list (every category cleared)", () => {
     expect(
-      budgetInputSchema.safeParse({ categoryId: UUID, month: "nope", amount: 200 })
-        .success,
+      setBudgetsSchema.safeParse({ month: "2026-07", entries: [] }).success,
+    ).toBe(true)
+  })
+
+  it("accepts 0 — that's how the dialog clears a budget", () => {
+    expect(setBudgetsSchema.safeParse(budgets("2026-07", 0)).success).toBe(true)
+  })
+
+  it("rejects a negative amount", () => {
+    expect(setBudgetsSchema.safeParse(budgets("2026-07", -5)).success).toBe(
+      false,
+    )
+  })
+
+  it("rejects a non-uuid category id", () => {
+    expect(
+      setBudgetsSchema.safeParse({
+        month: "2026-07",
+        entries: [{ categoryId: "nope", amount: 10 }],
+      }).success,
     ).toBe(false)
   })
 })

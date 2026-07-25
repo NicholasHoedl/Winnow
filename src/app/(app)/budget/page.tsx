@@ -1,7 +1,6 @@
 import {
   getBudgetSummary,
   getCategories,
-  getMonthBudgets,
   getMonthTransactions,
 } from "@/modules/budget/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
@@ -26,10 +25,9 @@ export default async function BudgetPage({
   // The summary comes from its own unfiltered read rather than being derived from the
   // rendered `transactions` array — once that list can be filtered (T3-S4), deriving
   // the header stats from it would silently report only the filtered subset.
-  const [categories, transactions, budgets, summary] = await Promise.all([
+  const [categories, transactions, summary] = await Promise.all([
     getCategories(),
     getMonthTransactions(month),
-    getMonthBudgets(month),
     getBudgetSummary(month),
   ])
 
@@ -39,7 +37,6 @@ export default async function BudgetPage({
       today={today}
       categories={categories}
       transactions={transactions}
-      budgets={budgets}
       summary={summary}
     />
   )

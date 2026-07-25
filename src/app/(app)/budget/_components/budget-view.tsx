@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import { categoryAccent } from "@/lib/colors"
 import { shiftMonth } from "@/lib/date"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
-import type { Budget, Category, Transaction } from "@/modules/budget/queries"
+import type { Category, Transaction } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -60,14 +60,12 @@ export function BudgetView({
   today,
   categories,
   transactions,
-  budgets,
   summary,
 }: {
   month: string
   today: string
   categories: Category[]
   transactions: Transaction[]
-  budgets: Budget[]
   summary: MonthSummary
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
@@ -95,6 +93,17 @@ export function BudgetView({
   )
 
   const expenseCategories = categories.filter((c) => c.kind === "expense")
+
+  // The budgets dialog only needs "what is budgeted per category this month", which
+  // the summary already carries — no separate budgets fetch. Memoized so the dialog's
+  // seeding effect doesn't see a new object on every render.
+  const budgetedByCategory = React.useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const row of summary.byCategory) {
+      if (row.categoryId) map[row.categoryId] = row.budgetedCents
+    }
+    return map
+  }, [summary])
 
   function handleDelete(tx: Transaction) {
     startTransition(async () => {
@@ -322,7 +331,7 @@ export function BudgetView({
       <BudgetsDialog
         month={month}
         categories={expenseCategories}
-        budgets={budgets}
+        budgetedByCategory={budgetedByCategory}
         open={budgetsOpen}
         onOpenChange={setBudgetsOpen}
       />
