@@ -19,6 +19,7 @@ import {
   sumMacros,
 } from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { DateJumpButton } from "@/components/shared/date-jump-button"
 
 import { FoodManager } from "./food-manager"
 import { LogFoodDialog } from "./log-food-dialog"
@@ -176,6 +177,11 @@ export function MealsView({
         >
           <ChevronRight className="size-4" />
         </Link>
+        <DateJumpButton
+          selected={date}
+          hrefFor={(d) => `/meals?date=${d}`}
+          ariaLabel="Jump to a day"
+        />
         {date !== today && (
           <Link
             href="/meals"

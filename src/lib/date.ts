@@ -70,3 +70,19 @@ export function isValidDateString(value: string): boolean {
     date.getUTCDate() === day
   )
 }
+
+// --- local wall-clock Date <-> string (for date pickers) ---
+// react-day-picker hands `onSelect` a LOCAL-midnight Date and expects local Dates for
+// `selected`/`defaultMonth`. Convert with the local getters/constructor — NEVER
+// `toISOString()` or `Date.UTC` on a wall-clock Date (that shifts the day by the tz offset).
+
+/** A local Date → its 'YYYY-MM-DD' wall-date. */
+export function localDateToString(date: Date): string {
+  return fmt(date.getFullYear(), date.getMonth() + 1, date.getDate())
+}
+
+/** A 'YYYY-MM-DD' string → a local-midnight Date (for a picker's selected/defaultMonth). */
+export function localStringToDate(dateStr: string): Date {
+  const [year, month, day] = parse(dateStr)
+  return new Date(year, month - 1, day)
+}

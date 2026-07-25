@@ -7,6 +7,8 @@ import {
   dowOf,
   fmt,
   isValidDateString,
+  localDateToString,
+  localStringToDate,
   todayInZone,
 } from "./date"
 
@@ -75,5 +77,25 @@ describe("date-string primitives", () => {
   it("fmt zero-pads month + day", () => {
     expect(fmt(2026, 7, 5)).toBe("2026-07-05")
     expect(fmt(2026, 12, 25)).toBe("2026-12-25")
+  })
+})
+
+describe("local Date <-> string (date pickers)", () => {
+  it("localDateToString uses local wall-date fields, not UTC", () => {
+    // A local-midnight Date must map to its own day regardless of the runner's timezone
+    // (toISOString would shift it east of UTC).
+    expect(localDateToString(new Date(2026, 6, 5))).toBe("2026-07-05") // month is 0-indexed
+    expect(localDateToString(new Date(2026, 11, 25))).toBe("2026-12-25")
+  })
+
+  it("localStringToDate builds a local-midnight Date", () => {
+    const d = localStringToDate("2026-07-05")
+    expect(d.getFullYear()).toBe(2026)
+    expect(d.getMonth()).toBe(6) // July, 0-indexed
+    expect(d.getDate()).toBe(5)
+  })
+
+  it("round-trips a date string", () => {
+    expect(localDateToString(localStringToDate("2026-02-28"))).toBe("2026-02-28")
   })
 })

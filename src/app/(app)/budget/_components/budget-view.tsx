@@ -12,7 +12,9 @@ import type { Budget, Category, Transaction } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { DateJumpButton } from "@/components/shared/date-jump-button"
 
+import { BudgetQuickAdd } from "./budget-quick-add"
 import { BudgetsDialog } from "./budgets-dialog"
 import { CategoryManager } from "./category-manager"
 import { TransactionDialog } from "./transaction-dialog"
@@ -177,6 +179,11 @@ export function BudgetView({
         >
           <ChevronRight className="size-4" />
         </Link>
+        <DateJumpButton
+          selected={`${month}-01`}
+          hrefFor={(d) => `/budget?month=${d.slice(0, 7)}`}
+          ariaLabel="Jump to a month"
+        />
         {month !== currentMonth && (
           <Link
             href="/budget"
@@ -203,6 +210,10 @@ export function BudgetView({
               : "text-emerald-600 dark:text-emerald-400"
           }
         />
+      </div>
+
+      <div className="mt-4">
+        <BudgetQuickAdd date={defaultDate} categories={categories} />
       </div>
 
       {rows.length > 0 && (
