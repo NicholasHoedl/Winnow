@@ -244,6 +244,7 @@ export function CommandPalette() {
       <CommandInput
         value={query}
         onValueChange={handleQueryChange}
+        aria-label="Search"
         placeholder="Search tasks, events, foods… or jump to a page"
       />
       <CommandList>

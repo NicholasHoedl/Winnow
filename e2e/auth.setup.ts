@@ -15,8 +15,10 @@ setup("authenticate", async ({ page }) => {
   await page.getByLabel("Password").fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
 
+  // Generous timeout: on a cold `next dev` the /login + dashboard compiles can overrun the
+  // default expect timeout, flaking this once-per-run setup.
   await expect(
     page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: 30_000 })
   await page.context().storageState({ path: authFile })
 })
