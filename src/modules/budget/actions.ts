@@ -33,6 +33,28 @@ function revalidateBudget() {
   revalidatePath("/")
 }
 
+/**
+ * null when the category is usable, else the error to return. Every write that accepts
+ * a categoryId goes through this: the id arrives from the client, and without the check
+ * a transaction could be filed against a category this user doesn't own (it would render
+ * as "Uncategorized" while still counting toward their totals) or against one of the
+ * wrong kind, which puts income spend into the expense rollups.
+ */
+async function checkCategory(
+  userId: string,
+  categoryId: string | null,
+  type: "income" | "expense",
+): Promise<string | null> {
+  if (!categoryId) return null
+  const owned = await db.query.categories.findFirst({
+    where: and(eq(categories.id, categoryId), eq(categories.userId, userId)),
+    columns: { kind: true },
+  })
+  if (!owned) return "Unknown category."
+  if (owned.kind !== type) return "That category doesn't match the type."
+  return null
+}
+
 // --- Categories ---
 
 export async function createCategory(input: unknown): Promise<ActionResult> {
@@ -79,14 +101,18 @@ export async function createTransaction(input: unknown): Promise<ActionResult> {
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { currency } = await getUserPreferences()
   const { amount, type, date, categoryId, payee, description } = parsed.data
+  const category = nullify(categoryId)
+  const categoryError = await checkCategory(userId, category, type)
+  if (categoryError) return { ok: false, error: categoryError }
+
+  const { currency } = await getUserPreferences()
   await db.insert(transactions).values({
     userId,
     amountCents: amountToMinor(amount, currency),
     type,
     date,
-    categoryId: nullify(categoryId),
+    categoryId: category,
     payee: nullify(payee),
     description: nullify(description),
   })
@@ -102,15 +128,19 @@ export async function updateTransaction(
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { currency } = await getUserPreferences()
   const { amount, type, date, categoryId, payee, description } = parsed.data
+  const category = nullify(categoryId)
+  const categoryError = await checkCategory(userId, category, type)
+  if (categoryError) return { ok: false, error: categoryError }
+
+  const { currency } = await getUserPreferences()
   await db
     .update(transactions)
     .set({
       amountCents: amountToMinor(amount, currency),
       type,
       date,
-      categoryId: nullify(categoryId),
+      categoryId: category,
       payee: nullify(payee),
       description: nullify(description),
     })
@@ -154,6 +184,20 @@ export async function restoreTransaction(tx: unknown): Promise<ActionResult> {
     if (!owned) categoryId = null
   }
 
+  // Same treatment for the series link — a restored bill should go back to the rule it
+  // came from, but only if that rule is still this user's and still exists.
+  let seriesId = row.seriesId
+  if (seriesId) {
+    const owned = await db.query.transactionRecurrences.findFirst({
+      where: and(
+        eq(transactionRecurrences.id, seriesId),
+        eq(transactionRecurrences.userId, userId),
+      ),
+      columns: { id: true },
+    })
+    if (!owned) seriesId = null
+  }
+
   await db
     .insert(transactions)
     .values({
@@ -165,8 +209,14 @@ export async function restoreTransaction(tx: unknown): Promise<ActionResult> {
       date: row.date,
       payee: row.payee,
       description: row.description,
+      seriesId,
+      // Dropped along with the series link: (series_id, occurrence_date) is unique, so
+      // keeping one without the other is meaningless.
+      occurrenceDate: seriesId ? row.occurrenceDate : null,
       createdAt: row.createdAt,
     })
+    // Untargeted, so it absorbs a conflict on the id OR on (series_id, occurrence_date)
+    // — undo can't double-post a cycle the materializer has since re-created.
     .onConflictDoNothing()
   revalidateBudget()
   return { ok: true }
@@ -254,22 +304,6 @@ export async function setBudgets(input: unknown): Promise<ActionResult> {
 /** Later of two 'YYYY-MM-DD' dates (they compare lexicographically). */
 function laterOf(a: string, b: string): string {
   return a > b ? a : b
-}
-
-/** null when the category is usable, else the error to return. */
-async function checkCategory(
-  userId: string,
-  categoryId: string | null,
-  type: "income" | "expense",
-): Promise<string | null> {
-  if (!categoryId) return null
-  const owned = await db.query.categories.findFirst({
-    where: and(eq(categories.id, categoryId), eq(categories.userId, userId)),
-    columns: { kind: true },
-  })
-  if (!owned) return "Unknown category."
-  if (owned.kind !== type) return "That category doesn't match the type."
-  return null
 }
 
 export async function createTransactionRecurrence(

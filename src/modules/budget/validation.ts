@@ -41,6 +41,13 @@ export const restoreTransactionSchema = z.object({
   date: z.string().refine((value) => isValidDateString(value), "Invalid date"),
   payee: z.string().max(120).nullable(),
   description: z.string().max(300).nullable(),
+  // Added with the recurring-transaction schema. Undo has to carry them or restoring a
+  // deleted bill silently detaches it from its series into an ordinary one-off.
+  seriesId: z.string().uuid().nullable(),
+  occurrenceDate: z
+    .string()
+    .refine((value) => isValidDateString(value), "Invalid date")
+    .nullable(),
   createdAt: z.coerce.date(),
 })
 

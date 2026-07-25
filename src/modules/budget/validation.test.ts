@@ -91,6 +91,8 @@ describe("restoreTransactionSchema (the undo payload)", () => {
     date: "2026-07-25",
     payee: "Landlord",
     description: "rent",
+    seriesId: null,
+    occurrenceDate: null,
     createdAt: new Date("2026-07-25T12:00:00Z"),
     updatedAt: new Date("2026-07-25T12:00:00Z"),
   }
@@ -120,6 +122,26 @@ describe("restoreTransactionSchema (the undo payload)", () => {
   it("rejects a row whose id isn't a uuid", () => {
     expect(
       restoreTransactionSchema.safeParse({ ...row, id: "nope" }).success,
+    ).toBe(false)
+  })
+
+  // Undoing the delete of an auto-posted bill has to put it back in its series.
+  // Dropping these is how "skip this month's rent" would quietly turn into
+  // "detach this month's rent", losing the badge and the cycle's identity.
+  it("carries the series link", () => {
+    const posted = {
+      ...row,
+      seriesId: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+      occurrenceDate: "2026-07-01",
+    }
+    const result = restoreTransactionSchema.parse(posted)
+    expect(result.seriesId).toBe(posted.seriesId)
+    expect(result.occurrenceDate).toBe("2026-07-01")
+  })
+
+  it("rejects a series link that isn't a uuid", () => {
+    expect(
+      restoreTransactionSchema.safeParse({ ...row, seriesId: "nope" }).success,
     ).toBe(false)
   })
 })

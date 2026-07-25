@@ -173,6 +173,13 @@ not `numeric` used carelessly) — this is a correctness requirement for the
 budgeting module, called out explicitly because float-based money math is
 a classic, easy-to-introduce bug.
 
+> **The tables below are the v1 plan, not a current reference.** Later work
+> added `calendars`, `event_exceptions`, `goals`, `milestones`,
+> `task_recurrences`, `transaction_recurrences` and `user_preferences`, and
+> never built the planned `accounts` table. `drizzle/` and each module's
+> `schema.ts` are the source of truth; the ADRs in `docs/adr/` record why the
+> shape changed. What is still worth reading here is the *reasoning*.
+
 ### 3.1 Core
 
 **users**
@@ -230,11 +237,21 @@ hand-designed here, they follow Auth.js's documented schema.
 | recurrence_end_date | date, nullable | open-ended if null |
 | created_at / updated_at | timestamptz | |
 
-Recurring occurrences are **computed on the fly** for whatever date range
-is being viewed (e.g., the visible month), not pre-materialized as
+Recurring **calendar** occurrences are **computed on the fly** for whatever
+date range is being viewed (e.g., the visible month), not pre-materialized as
 individual rows. This avoids the classic recurrence bug class of stale
-materialized instances after an edit. The tradeoff — no "edit just this
-one occurrence" — is accepted and explicitly listed as Later in SPEC.md.
+materialized instances after an edit. The tradeoff originally accepted here —
+no "edit just this one occurrence" — was later bought back with an
+`event_exceptions` overlay rather than by materializing.
+
+**This rule turned out to be specific to the calendar.** Recurring to-dos and
+recurring transactions both materialize real rows, lazily on read, because a
+to-do you can tick off and a payment that hits your ledger have to *exist*.
+Their tradeoffs are opposite and deliberate: the task generator keeps exactly
+one open instance and retires the rest, while the transaction generator is
+insert-only and never rewrites a posted row. See ADR-0004 for the money case
+and the constraint it carries (enabling `cacheComponents` would make writing
+during a render illegal).
 
 ### 3.4 Budgeting
 
@@ -618,7 +635,9 @@ starting Phase 0.)
 - Lists (not many-to-many tags) for to-do organization in v1.
 - Binary task status (open/done), no "in progress" state.
 - Recurrence expanded on read, not materialized — no per-occurrence edits
-  in v1.
+  in v1. *(Since revised: calendar events kept read-time expansion and gained
+  per-occurrence edits via an exceptions overlay; to-dos and transactions
+  materialize instead. See §3.3 and ADR-0004.)*
 - Transaction direction stored explicitly (`type`), not inferred from
   category.
 - Monthly rollups and daily macro totals are computed queries, not

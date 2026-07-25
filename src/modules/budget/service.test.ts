@@ -172,6 +172,13 @@ describe("parseTransactionQuickAdd", () => {
     )
   })
 
+  // A tag naming only the other kind's category is as good as no match: picking it
+  // would file the amount in the wrong rollup, and createTransaction rejects it.
+  it("leaves categoryId empty when the only same-named category is the wrong kind", () => {
+    expect(parseTransactionQuickAdd("-500 #salary", CATS)?.categoryId).toBe("")
+    expect(parseTransactionQuickAdd("+500 #housing", CATS)?.categoryId).toBe("")
+  })
+
   it("leaves categoryId empty for an unmatched #tag but still strips it", () => {
     expect(parseTransactionQuickAdd("groceries $85.20 #food", CATS)).toEqual({
       amount: 85.2,

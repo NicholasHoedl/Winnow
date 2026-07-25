@@ -285,8 +285,9 @@ function stripSpans(text: string, spans: Array<[number, number]>): string {
 
 /**
  * Parse a quick-add line into a transaction payload, or null when there's no amount.
- * `#tag` resolves against `categories` by name (case-insensitive), preferring one whose
- * `kind` matches the parsed type. The caller supplies the date.
+ * `#tag` resolves against `categories` by name (case-insensitive) and by matching `kind`;
+ * a tag that only names a category of the other kind resolves to nothing, exactly like a
+ * tag that names no category at all. The caller supplies the date.
  */
 export function parseTransactionQuickAdd(
   text: string,
@@ -313,8 +314,12 @@ export function parseTransactionQuickAdd(
   if (tag) {
     spans.push([tag.index, tag.index + tag[0].length])
     const name = tag[1].toLowerCase()
-    const matches = categories.filter((c) => c.name.toLowerCase() === name)
-    const picked = matches.find((c) => c.kind === type) ?? matches[0]
+    // No fallback to a same-named category of the other kind: filing an expense
+    // against an income category is what the server rejects, and it would put the
+    // spend in the wrong rollup. Uncategorized is the honest answer.
+    const picked = categories.find(
+      (c) => c.name.toLowerCase() === name && c.kind === type,
+    )
     if (picked) categoryId = picked.id
   }
 

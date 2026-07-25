@@ -57,6 +57,17 @@ test("a repeating transaction posts, is badged, and can be stopped", async ({
   await expect(row).toBeVisible()
   await expect(row.getByRole("img", { name: "Repeating" })).toBeVisible()
 
+  // "Skip this month's bill" is deliberately just the existing delete: catch-up is
+  // bounded below by posted_through, so a deleted occurrence never comes back on its
+  // own. Undo must therefore restore it INTO its series — a restore that dropped
+  // series_id would quietly turn a skipped bill into a detached one-off.
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(row).toHaveCount(0)
+  await page.getByRole("button", { name: "Undo" }).click()
+  await expect(row).toBeVisible()
+  await expect(row.getByRole("img", { name: "Repeating" })).toBeVisible()
+
   // Stop repeating: the schedule goes, the money stays.
   await row.getByRole("button", { name: "Transaction actions" }).click()
   await page.getByRole("menuitem", { name: "Stop repeating" }).click()

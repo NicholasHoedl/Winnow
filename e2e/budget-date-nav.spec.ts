@@ -10,7 +10,15 @@ test("budget quick-add logs a transaction", async ({ page }) => {
   await bar.fill(`${desc} $4`)
   await bar.press("Enter")
 
-  await expect(page.getByText(desc).first()).toBeVisible()
+  const row = page.locator("div.bg-card").filter({ hasText: desc })
+  await expect(row).toBeVisible()
+
+  // The suite runs serially against the persistent dev database, so a row left here
+  // accumulates on every run — inflating the month's totals that other budget specs
+  // read, and eventually pushing the transaction list past a screenful.
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(row).toHaveCount(0)
 })
 
 test("budget quick-add rejects unparseable input and keeps the text", async ({
