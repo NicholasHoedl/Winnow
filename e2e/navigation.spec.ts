@@ -15,6 +15,7 @@ test("dashboard shows the key sections", async ({ page }) => {
 test("primary nav reaches every module", async ({ page }) => {
   await page.goto("/")
   const routes = [
+    { label: "Today", path: "/today" },
     { label: "To-dos", path: "/todos" },
     { label: "Calendar", path: "/calendar" },
     { label: "Budget", path: "/budget" },

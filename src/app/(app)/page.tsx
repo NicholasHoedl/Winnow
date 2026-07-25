@@ -14,6 +14,7 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { summarizeTasks } from "@/modules/todos/service"
+import { formatLongDate } from "@/lib/format"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -24,16 +25,6 @@ import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
 import { UpNext } from "./_components/up-next"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
-
-function formatToday(today: string): string {
-  const [y, m, d] = today.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  })
-}
 
 export default async function DashboardPage() {
   const { timeZone, weekStartsOn, currency, use24HourTime } =
@@ -81,7 +72,7 @@ export default async function DashboardPage() {
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
-              {formatToday(today)}
+              {formatLongDate(today)}
             </p>
             <h1 className="font-display mt-1 text-4xl font-semibold tracking-tight">
               Good to see you, {name}
