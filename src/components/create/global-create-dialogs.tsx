@@ -6,12 +6,22 @@
 
 import * as React from "react"
 
+import type { EventOption } from "@/modules/calendar/queries"
+import type { GoalOption } from "@/modules/goals/queries"
 import type { List } from "@/modules/todos/queries"
 import { TaskDialog } from "@/app/(app)/todos/_components/task-dialog"
 
 import { useCreateIntentListener } from "./create-intent"
 
-export function GlobalCreateDialogs({ lists }: { lists: List[] }) {
+export function GlobalCreateDialogs({
+  lists,
+  goals,
+  events,
+}: {
+  lists: List[]
+  goals: GoalOption[]
+  events: EventOption[]
+}) {
   const [taskOpen, setTaskOpen] = React.useState(false)
   const [taskSeed, setTaskSeed] = React.useState<{
     title?: string
@@ -27,6 +37,8 @@ export function GlobalCreateDialogs({ lists }: { lists: List[] }) {
   return (
     <TaskDialog
       lists={lists}
+      goals={goals}
+      events={events}
       open={taskOpen}
       onOpenChange={setTaskOpen}
       initialTitle={taskSeed.title}

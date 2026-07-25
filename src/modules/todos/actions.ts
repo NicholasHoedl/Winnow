@@ -18,6 +18,14 @@ import {
   taskRecurrenceSchema,
 } from "./validation"
 
+// Every surface that renders task data: the todos page, the dashboard, and — since a
+// task can be linked to a goal (T2) — the goals page, which lists a goal's tasks.
+function revalidateTaskViews(): void {
+  revalidatePath("/todos")
+  revalidatePath("/")
+  revalidatePath("/goals")
+}
+
 // --- Tasks ---
 
 export async function createTask(input: unknown): Promise<ActionResult> {
@@ -38,8 +46,7 @@ export async function createTask(input: unknown): Promise<ActionResult> {
     eventId: nullify(eventId),
   })
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -63,8 +70,7 @@ export async function updateTask(id: string, input: unknown): Promise<ActionResu
     })
     .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -78,8 +84,7 @@ export async function deleteTask(id: string): Promise<DeleteTaskResult> {
     .delete(tasks)
     .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
     .returning()
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true, task: deleted ?? null }
 }
 
@@ -108,8 +113,7 @@ export async function restoreTask(task: Task): Promise<ActionResult> {
       createdAt: task.createdAt,
     })
     .onConflictDoNothing()
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -130,8 +134,7 @@ export async function toggleTaskStatus(id: string): Promise<ActionResult> {
     })
     .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -169,8 +172,7 @@ export async function createTaskRecurrence(
   const { timeZone, weekStartsOn } = await getUserPreferences()
   await syncRuleInstances(userId, rule, todayInZone(new Date(), timeZone), weekStartsOn)
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -199,8 +201,7 @@ export async function updateTaskRecurrence(
     true,
   )
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 
@@ -221,8 +222,7 @@ export async function deleteTaskRecurrence(id: string): Promise<ActionResult> {
     .delete(taskRecurrences)
     .where(and(eq(taskRecurrences.id, id), eq(taskRecurrences.userId, userId)))
 
-  revalidatePath("/todos")
-  revalidatePath("/")
+  revalidateTaskViews()
   return { ok: true }
 }
 

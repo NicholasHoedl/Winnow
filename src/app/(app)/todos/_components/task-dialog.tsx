@@ -10,6 +10,8 @@ import {
   updateTask,
   updateTaskRecurrence,
 } from "@/modules/todos/actions"
+import type { EventOption } from "@/modules/calendar/queries"
+import type { GoalOption } from "@/modules/goals/queries"
 import type { List, TaskWithSeries } from "@/modules/todos/queries"
 import { type Priority } from "@/modules/todos/validation"
 import { type ActionResult } from "@/lib/action-result"
@@ -44,6 +46,33 @@ import { Textarea } from "@/components/ui/textarea"
 import { TaskRecurrenceFields } from "./task-recurrence-fields"
 
 const NO_LIST = "none"
+// Sentinel for the optional goal/event links (a Select item can't carry an empty value).
+const NO_LINK = "none"
+
+// Same-titled series are told apart by when they start — recurring classes often share a
+// title AND an anchor date, so the time is what actually distinguishes them.
+function eventLabel(
+  event: EventOption,
+  timeZone: string,
+  use24Hour: boolean,
+): string {
+  const start = new Date(event.startAt)
+  // No year: the popup is only as wide as the trigger and clips overflow, so every
+  // character has to earn its place — the time is what tells same-day series apart.
+  const date = start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone,
+  })
+  if (event.allDay) return `${event.title} · ${date}`
+  const time = start.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: !use24Hour,
+    timeZone,
+  })
+  return `${event.title} · ${date}, ${time}`
+}
 
 // Which slice of a recurring task an edit targets.
 export type EditScope = "this" | "series"
@@ -55,6 +84,8 @@ export type TaskFormValues = {
   dueDate?: string
   priority: Priority
   listId?: string
+  goalId?: string
+  eventId?: string
   repeat: "none" | "daily" | "weekly" | "monthly"
   recurrenceInterval: number
   weekdays: number
@@ -71,6 +102,8 @@ function emptyValues(today: string, priority: Priority): TaskFormValues {
     dueDate: today, // new tasks default to today; the field is still clearable
     priority,
     listId: "",
+    goalId: "",
+    eventId: "",
     repeat: "none",
     recurrenceInterval: 1,
     weekdays: 0,
@@ -89,6 +122,8 @@ function toTaskInput(v: TaskFormValues) {
     dueDate: v.dueDate,
     priority: v.priority,
     listId: v.listId,
+    goalId: v.goalId,
+    eventId: v.eventId,
   }
 }
 
@@ -111,6 +146,8 @@ function toRecurrenceInput(v: TaskFormValues) {
 
 export function TaskDialog({
   lists,
+  goals,
+  events,
   task,
   open,
   onOpenChange,
@@ -118,6 +155,9 @@ export function TaskDialog({
   initialDueDate,
 }: {
   lists: List[]
+  // Optional cross-module link targets (T2).
+  goals: GoalOption[]
+  events: EventOption[]
   task?: TaskWithSeries | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -128,7 +168,7 @@ export function TaskDialog({
 }) {
   const isEdit = !!task
   const isRecurring = !!task?.series
-  const { defaultTaskPriority, timeZone } = usePreferences()
+  const { defaultTaskPriority, timeZone, use24HourTime } = usePreferences()
   // Stable per open session so the reset effect below doesn't loop.
   const today = React.useMemo(
     () => todayInZone(new Date(), timeZone),
@@ -178,6 +218,9 @@ export function TaskDialog({
         dueDate: "",
         priority: series.priority,
         listId: series.listId ?? "",
+        // Links live on concrete task rows, not the rule (the pickers are hidden here).
+        goalId: "",
+        eventId: "",
         repeat: series.freq,
         recurrenceInterval: series.recurrenceInterval,
         weekdays: series.weekdays,
@@ -195,6 +238,8 @@ export function TaskDialog({
       dueDate: task.dueDate ?? "",
       priority: task.priority,
       listId: task.listId ?? "",
+      goalId: task.goalId ?? "",
+      eventId: task.eventId ?? "",
       repeat: "none",
       recurrenceInterval: 1,
       weekdays: 0,
@@ -365,7 +410,7 @@ export function TaskDialog({
             </div>
 
             <Field>
-              <FieldLabel>List</FieldLabel>
+              <FieldLabel htmlFor="task-list">List</FieldLabel>
               <Controller
                 control={control}
                 name="listId"
@@ -376,8 +421,14 @@ export function TaskDialog({
                       field.onChange(value === NO_LIST ? "" : value)
                     }
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
+                    <SelectTrigger id="task-list" className="w-full">
+                      {/* Needs a function child — a bare SelectValue renders the raw
+                          value (the "none" sentinel) instead of the item's label. */}
+                      <SelectValue>
+                        {(value) =>
+                          lists.find((l) => l.id === value)?.name ?? "No list"
+                        }
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NO_LIST}>No list</SelectItem>
@@ -392,6 +443,90 @@ export function TaskDialog({
               />
               <FieldError errors={[errors.listId]} />
             </Field>
+
+            {/* Cross-module links (T2). Only for a concrete task — a repeating rule
+                has no single row to hang a link on, so these follow `showDue`. */}
+            {showDue && (goals.length > 0 || events.length > 0) && (
+              // Full-width rows, not a 2-up grid: a narrow trigger clips its own
+              // options (the popup inherits the trigger's width).
+              <>
+                {goals.length > 0 && (
+                  <Field>
+                    <FieldLabel htmlFor="task-goal">Goal</FieldLabel>
+                    <Controller
+                      control={control}
+                      name="goalId"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value ? field.value : NO_LINK}
+                          onValueChange={(value) =>
+                            field.onChange(value === NO_LINK ? "" : value)
+                          }
+                        >
+                          <SelectTrigger id="task-goal" className="w-full">
+                            <SelectValue>
+                              {(value) =>
+                                goals.find((g) => g.id === value)?.title ??
+                                "No goal"
+                              }
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_LINK}>No goal</SelectItem>
+                            {goals.map((goal) => (
+                              <SelectItem key={goal.id} value={goal.id}>
+                                {goal.title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FieldError errors={[errors.goalId]} />
+                  </Field>
+                )}
+
+                {events.length > 0 && (
+                  <Field>
+                    <FieldLabel htmlFor="task-event">Event</FieldLabel>
+                    <Controller
+                      control={control}
+                      name="eventId"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value ? field.value : NO_LINK}
+                          onValueChange={(value) =>
+                            field.onChange(value === NO_LINK ? "" : value)
+                          }
+                        >
+                          <SelectTrigger id="task-event" className="w-full">
+                            <SelectValue>
+                              {(value) => {
+                                const match = events.find(
+                                  (e) => e.id === value,
+                                )
+                                return match
+                                  ? eventLabel(match, timeZone, use24HourTime)
+                                  : "No event"
+                              }}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_LINK}>No event</SelectItem>
+                            {events.map((event) => (
+                              <SelectItem key={event.id} value={event.id}>
+                                {eventLabel(event, timeZone, use24HourTime)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    <FieldError errors={[errors.eventId]} />
+                  </Field>
+                )}
+              </>
+            )}
 
             {showRecurrence && (
               <TaskRecurrenceFields

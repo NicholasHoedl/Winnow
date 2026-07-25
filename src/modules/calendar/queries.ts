@@ -131,15 +131,21 @@ export async function getDayEvents(
   ).sort(byDateThenTime)
 }
 
+/** Minimal shape the task-dialog event picker binds to (series-level). */
+export type EventOption = {
+  id: string
+  title: string
+  startAt: Date
+  allDay: boolean
+}
+
 /** Flat list of event *series* (unexpanded), newest first, for pickers — e.g. linking
  * a task to an event (T2). Series-level: one row per event, not per occurrence. */
-export async function getEventOptions(): Promise<
-  { id: string; title: string; startAt: Date }[]
-> {
+export async function getEventOptions(): Promise<EventOption[]> {
   const userId = await requireUserId()
   return db.query.events.findMany({
     where: eq(events.userId, userId),
-    columns: { id: true, title: true, startAt: true },
+    columns: { id: true, title: true, startAt: true, allDay: true },
     orderBy: [desc(events.startAt)],
   })
 }

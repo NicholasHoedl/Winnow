@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { Search, Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { getEventOptions } from "@/modules/calendar/queries"
+import { getGoalOptions } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
@@ -31,9 +33,11 @@ export default async function AppLayout({
   }
 
   const userName = session.user.name ?? "Account"
-  const [preferences, lists] = await Promise.all([
+  const [preferences, lists, goals, events] = await Promise.all([
     getUserPreferences(),
     getLists(),
+    getGoalOptions(),
+    getEventOptions(),
   ])
 
   return (
@@ -84,7 +88,7 @@ export default async function AppLayout({
 
           <BottomNav />
           <CommandPalette />
-          <GlobalCreateDialogs lists={lists} />
+          <GlobalCreateDialogs lists={lists} goals={goals} events={events} />
         </div>
       </PreferencesProvider>
     </CreateIntentProvider>

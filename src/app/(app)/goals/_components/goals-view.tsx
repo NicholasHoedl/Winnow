@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MoreVertical, Pencil, Plus, Trash2 } from "lucide-react"
+import { ListTodo, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -167,6 +167,30 @@ function GoalCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Tasks linked to this goal (T2). Read-only here — /todos is where you act on them. */}
+      {goal.linkedTasks.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground text-xs font-medium">
+            Linked tasks
+          </p>
+          <ul className="flex flex-col gap-1">
+            {goal.linkedTasks.map((task) => (
+              <li
+                key={task.id}
+                className={cn(
+                  "flex items-center gap-2 text-sm",
+                  task.status === "done" &&
+                    "text-muted-foreground line-through",
+                )}
+              >
+                <ListTodo className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{task.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="flex gap-2">

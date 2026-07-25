@@ -4,6 +4,8 @@ import * as React from "react"
 import { Plus, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
+import type { EventOption } from "@/modules/calendar/queries"
+import type { GoalOption } from "@/modules/goals/queries"
 import {
   deleteTask,
   deleteTaskRecurrence,
@@ -32,10 +34,14 @@ const FILTERS: { key: Filter; label: string }[] = [
 export function TodosView({
   tasks,
   lists,
+  goals,
+  events,
   timeZone,
 }: {
   tasks: TaskWithSeries[]
   lists: List[]
+  goals: GoalOption[]
+  events: EventOption[]
   timeZone: string
 }) {
   const [filter, setFilter] = React.useState<Filter>("active")
@@ -191,6 +197,8 @@ export function TodosView({
 
       <TaskDialog
         lists={lists}
+        goals={goals}
+        events={events}
         task={editingTask}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
