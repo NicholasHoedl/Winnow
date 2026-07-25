@@ -12,6 +12,7 @@ export type UserPreferences = {
   currency: string
   use24HourTime: boolean
   defaultTaskPriority: Priority
+  digestEnabled: boolean
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -22,6 +23,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   currency: "USD",
   use24HourTime: false,
   defaultTaskPriority: "medium",
+  digestEnabled: true,
 }
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).

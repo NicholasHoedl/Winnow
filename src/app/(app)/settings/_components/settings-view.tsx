@@ -5,6 +5,7 @@ import type { UserPreferences } from "@/lib/preferences"
 import { AccountSection } from "./account-section"
 import { AppearanceSection } from "./appearance-section"
 import { DataSection } from "./data-section"
+import { NotificationsSection } from "./notifications-section"
 import { PreferencesSection } from "./preferences-section"
 
 export function SettingsView({
@@ -29,6 +30,7 @@ export function SettingsView({
         <AccountSection defaultName={user.name} email={user.email} />
         <AppearanceSection />
         <PreferencesSection preferences={preferences} />
+        <NotificationsSection preferences={preferences} />
         <DataSection />
       </div>
     </div>

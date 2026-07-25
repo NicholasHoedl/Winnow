@@ -13,6 +13,10 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
+// Regional/formatting preferences — the Preferences settings section owns exactly
+// these. Deliberately excludes the notification fields below: each section submits
+// its whole form, so sharing one schema would let either section overwrite the
+// other's just-saved values (Zod strips what isn't declared here).
 export const userPreferencesSchema = z.object({
   timeZone: z.string().refine(isValidTimeZone, "Unknown time zone"),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]),
@@ -21,3 +25,11 @@ export const userPreferencesSchema = z.object({
   defaultTaskPriority: z.enum(["low", "medium", "high"]),
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
+
+/** Notification preferences — owned by the Notifications section alone. */
+export const notificationPreferencesSchema = z.object({
+  digestEnabled: z.boolean(),
+})
+export type NotificationPreferencesInput = z.infer<
+  typeof notificationPreferencesSchema
+>

@@ -23,5 +23,6 @@ export async function getUserPreferences(): Promise<UserPreferences> {
     currency: row.currency,
     use24HourTime: row.use24HourTime,
     defaultTaskPriority: row.defaultTaskPriority,
+    digestEnabled: row.digestEnabled,
   }
 }

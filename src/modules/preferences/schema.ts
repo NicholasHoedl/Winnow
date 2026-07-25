@@ -33,6 +33,8 @@ export const userPreferences = pgTable("user_preferences", {
   defaultTaskPriority: priorityEnum("default_task_priority")
     .notNull()
     .default("medium"),
+  // Show the once-a-day digest banner on the first load of a new local day (T2).
+  digestEnabled: boolean("digest_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

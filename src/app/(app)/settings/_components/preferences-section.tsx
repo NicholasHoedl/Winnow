@@ -5,7 +5,6 @@ import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
-import { cn } from "@/lib/utils"
 import {
   CURRENCIES,
   PRIORITY_OPTIONS,
@@ -28,38 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+import { Segmented } from "./segmented"
 import { SettingsSection } from "./settings-section"
-
-function Segmented<T extends string | number | boolean>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T
-  onChange: (v: T) => void
-  options: readonly { value: T; label: string }[]
-}) {
-  return (
-    <div className="bg-muted inline-flex rounded-lg p-0.5">
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          type="button"
-          onClick={() => onChange(o.value)}
-          aria-pressed={value === o.value}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            value === o.value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 const TIME_FORMAT_OPTIONS: readonly { value: boolean; label: string }[] = [
   { value: false, label: "12-hour" },
