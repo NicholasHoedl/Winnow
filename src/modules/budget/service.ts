@@ -150,3 +150,80 @@ export function summarizeMonth(
     byCategory,
   }
 }
+
+// --- Natural-language quick-add (transactions) ---
+// Pure: turn a typed line into a createTransaction-ready payload (minus the caller-
+// supplied date). Amounts are DOLLARS/major units — the action rounds to minor units via
+// `amountToMinor`; direction lives in `type`, never a negative amount. Sibling of the date
+// parser in `src/lib/nl-date.ts`, whose matcher-ordering + span-removal style this mirrors.
+
+export type CategoryOption = { id: string; name: string; kind: "income" | "expense" }
+
+export type ParsedTransaction = {
+  amount: number
+  type: "income" | "expense"
+  categoryId: string
+  description: string
+}
+
+// Grouped-thousands or plain digits, with an optional decimal.
+const NUM = String.raw`(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?`
+// A "marked" amount carries a `$` and/or a leading +/- sign (two alternatives so the sign
+// attaches to either form). Tried before a bare number so "buy 2 coffees for $8" → 8.
+const AMOUNT_MARKED = new RegExp(String.raw`([+-])?\$\s?(${NUM})|([+-])\s?(${NUM})`)
+const AMOUNT_BARE = new RegExp(String.raw`\b(${NUM})\b`)
+const CATEGORY_TAG = /#([\p{L}\p{N}_-]+)/u
+
+// Remove non-overlapping [start, end) ranges from `text`, joining the gaps.
+function stripSpans(text: string, spans: Array<[number, number]>): string {
+  const sorted = [...spans].sort((a, b) => a[0] - b[0])
+  let out = ""
+  let cursor = 0
+  for (const [start, end] of sorted) {
+    if (start < cursor) continue
+    out += text.slice(cursor, start)
+    cursor = end
+  }
+  return out + text.slice(cursor)
+}
+
+/**
+ * Parse a quick-add line into a transaction payload, or null when there's no amount.
+ * `#tag` resolves against `categories` by name (case-insensitive), preferring one whose
+ * `kind` matches the parsed type. The caller supplies the date.
+ */
+export function parseTransactionQuickAdd(
+  text: string,
+  categories: CategoryOption[],
+): ParsedTransaction | null {
+  if (!text.trim()) return null
+
+  const marked = AMOUNT_MARKED.exec(text)
+  const bare = marked ? null : AMOUNT_BARE.exec(text)
+  const hit = marked ?? bare
+  if (!hit) return null
+
+  const sign = marked ? (marked[1] ?? marked[3]) : undefined
+  const magnitude = marked ? (marked[2] ?? marked[4]) : hit[1]
+  const type: "income" | "expense" = sign === "+" ? "income" : "expense"
+  const amount = parseFloat(magnitude.replace(/,/g, ""))
+
+  const spans: Array<[number, number]> = [[hit.index, hit.index + hit[0].length]]
+
+  let categoryId = ""
+  const tag = CATEGORY_TAG.exec(text)
+  if (tag) {
+    spans.push([tag.index, tag.index + tag[0].length])
+    const name = tag[1].toLowerCase()
+    const matches = categories.filter((c) => c.name.toLowerCase() === name)
+    const picked = matches.find((c) => c.kind === type) ?? matches[0]
+    if (picked) categoryId = picked.id
+  }
+
+  const description = stripSpans(text, spans)
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 300)
+
+  return { amount, type, categoryId, description }
+}

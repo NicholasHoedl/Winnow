@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest"
 
 import {
   amountToMinor,
+  type CategoryOption,
   currencyFractionDigits,
   currencySymbol,
   formatCents,
   minorToAmount,
   monthKey,
   monthRange,
+  parseTransactionQuickAdd,
   summarizeMonth,
 } from "./service"
 
@@ -103,5 +105,110 @@ describe("summarizeMonth", () => {
       budgetedCents: 0,
       remainingCents: -300,
     })
+  })
+})
+
+const CATS: CategoryOption[] = [
+  { id: "c-house", name: "Housing", kind: "expense" },
+  { id: "c-sal", name: "Salary", kind: "income" },
+  { id: "c-bon-i", name: "Bonus", kind: "income" },
+  { id: "c-bon-e", name: "Bonus", kind: "expense" },
+]
+
+describe("parseTransactionQuickAdd", () => {
+  it("parses a $-marked expense", () => {
+    expect(parseTransactionQuickAdd("coffee $4", CATS)).toEqual({
+      amount: 4,
+      type: "expense",
+      categoryId: "",
+      description: "coffee",
+    })
+  })
+
+  it("reads a leading minus as expense and resolves the #tag", () => {
+    expect(parseTransactionQuickAdd("rent -1200 #housing", CATS)).toEqual({
+      amount: 1200,
+      type: "expense",
+      categoryId: "c-house",
+      description: "rent",
+    })
+  })
+
+  it("reads a leading plus as income", () => {
+    expect(parseTransactionQuickAdd("+2000 paycheck", CATS)).toEqual({
+      amount: 2000,
+      type: "income",
+      categoryId: "",
+      description: "paycheck",
+    })
+  })
+
+  it("parses a decimal amount", () => {
+    expect(parseTransactionQuickAdd("$4.50 latte", CATS)).toEqual({
+      amount: 4.5,
+      type: "expense",
+      categoryId: "",
+      description: "latte",
+    })
+  })
+
+  it("defaults to expense without a sign — keywords never flip the type", () => {
+    expect(parseTransactionQuickAdd("paycheck 2000", CATS)).toEqual({
+      amount: 2000,
+      type: "expense",
+      categoryId: "",
+      description: "paycheck",
+    })
+  })
+
+  it("prefers the category whose kind matches the parsed type", () => {
+    expect(parseTransactionQuickAdd("+500 #bonus", CATS)?.categoryId).toBe("c-bon-i")
+    expect(parseTransactionQuickAdd("-500 #bonus", CATS)?.categoryId).toBe("c-bon-e")
+  })
+
+  it("leaves categoryId empty for an unmatched #tag but still strips it", () => {
+    expect(parseTransactionQuickAdd("groceries $85.20 #food", CATS)).toEqual({
+      amount: 85.2,
+      type: "expense",
+      categoryId: "",
+      description: "groceries",
+    })
+  })
+
+  it("handles a comma, $ and sign together", () => {
+    expect(parseTransactionQuickAdd("-$1,200 rent #housing", CATS)).toEqual({
+      amount: 1200,
+      type: "expense",
+      categoryId: "c-house",
+      description: "rent",
+    })
+  })
+
+  it("falls back to a bare number when there's no $ or sign", () => {
+    expect(parseTransactionQuickAdd("dinner 25 #housing", CATS)).toEqual({
+      amount: 25,
+      type: "expense",
+      categoryId: "c-house",
+      description: "dinner",
+    })
+  })
+
+  it("prefers a $-marked amount over a bare number", () => {
+    expect(parseTransactionQuickAdd("buy 2 coffees for $8", CATS)?.amount).toBe(8)
+  })
+
+  it("parses a zero amount", () => {
+    expect(parseTransactionQuickAdd("$0 refund", CATS)).toEqual({
+      amount: 0,
+      type: "expense",
+      categoryId: "",
+      description: "refund",
+    })
+  })
+
+  it("returns null when there is no amount", () => {
+    expect(parseTransactionQuickAdd("buy milk", CATS)).toBeNull()
+    expect(parseTransactionQuickAdd("#housing", CATS)).toBeNull()
+    expect(parseTransactionQuickAdd("   ", CATS)).toBeNull()
   })
 })
