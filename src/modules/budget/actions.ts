@@ -14,6 +14,7 @@ import { amountToMinor, monthKey } from "./service"
 import {
   categoryInputSchema,
   copyBudgetsSchema,
+  restoreTransactionSchema,
   setBudgetsSchema,
   transactionInputSchema,
 } from "./validation"
@@ -70,13 +71,14 @@ export async function createTransaction(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return invalid(parsed.error)
 
   const { currency } = await getUserPreferences()
-  const { amount, type, date, categoryId, description } = parsed.data
+  const { amount, type, date, categoryId, payee, description } = parsed.data
   await db.insert(transactions).values({
     userId,
     amountCents: amountToMinor(amount, currency),
     type,
     date,
     categoryId: nullify(categoryId),
+    payee: nullify(payee),
     description: nullify(description),
   })
   revalidateBudget()
@@ -92,7 +94,7 @@ export async function updateTransaction(
   if (!parsed.success) return invalid(parsed.error)
 
   const { currency } = await getUserPreferences()
-  const { amount, type, date, categoryId, description } = parsed.data
+  const { amount, type, date, categoryId, payee, description } = parsed.data
   await db
     .update(transactions)
     .set({
@@ -100,6 +102,7 @@ export async function updateTransaction(
       type,
       date,
       categoryId: nullify(categoryId),
+      payee: nullify(payee),
       description: nullify(description),
     })
     .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
@@ -122,21 +125,38 @@ export async function deleteTransaction(
   return { ok: true, transaction: deleted ?? null }
 }
 
-export async function restoreTransaction(
-  tx: Transaction,
-): Promise<ActionResult> {
+/** Re-inserts a transaction removed via {@link deleteTransaction} (the undo path).
+ * The row comes back from the client, so it is validated like any other input and
+ * the user id always comes from the session. */
+export async function restoreTransaction(tx: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = restoreTransactionSchema.safeParse(tx)
+  if (!parsed.success) return invalid(parsed.error)
+  const row = parsed.data
+
+  // Only re-attach a category this user actually owns; otherwise the transaction
+  // comes back uncategorized rather than pointing at someone else's category.
+  let categoryId = row.categoryId
+  if (categoryId) {
+    const owned = await db.query.categories.findFirst({
+      where: and(eq(categories.id, categoryId), eq(categories.userId, userId)),
+      columns: { id: true },
+    })
+    if (!owned) categoryId = null
+  }
+
   await db
     .insert(transactions)
     .values({
-      id: tx.id,
+      id: row.id,
       userId,
-      categoryId: tx.categoryId,
-      amountCents: tx.amountCents,
-      type: tx.type,
-      date: tx.date,
-      description: tx.description,
-      createdAt: tx.createdAt,
+      categoryId,
+      amountCents: row.amountCents,
+      type: row.type,
+      date: row.date,
+      payee: row.payee,
+      description: row.description,
+      createdAt: row.createdAt,
     })
     .onConflictDoNothing()
   revalidateBudget()

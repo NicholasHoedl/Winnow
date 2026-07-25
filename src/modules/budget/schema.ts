@@ -46,6 +46,9 @@ export const transactions = pgTable(
     amountCents: integer("amount_cents").notNull(),
     type: transactionTypeEnum("type").notNull(),
     date: date("date", { mode: "string" }).notNull(),
+    // Who the money went to / came from. Separate from `description` so it can be
+    // the row's headline and a search target in its own right.
+    payee: text("payee"),
     description: text("description"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

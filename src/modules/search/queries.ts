@@ -27,7 +27,9 @@ import type { SearchResult } from "./types"
  * ranked matches. Each module contributes at most PER_MODULE_LIMIT rows (most-recent
  * first) before the pure ranker merges + caps them. Read-only: search owns no tables.
  */
-export async function searchEverything(rawQuery: string): Promise<SearchResult[]> {
+export async function searchEverything(
+  rawQuery: string,
+): Promise<SearchResult[]> {
   const q = normalizeQuery(rawQuery)
   if (!q) return []
 
@@ -38,7 +40,7 @@ export async function searchEverything(rawQuery: string): Promise<SearchResult[]
     db.query.tasks.findMany({
       where: and(
         eq(tasks.userId, userId),
-        or(ilike(tasks.title, pattern), ilike(tasks.notes, pattern))
+        or(ilike(tasks.title, pattern), ilike(tasks.notes, pattern)),
       ),
       columns: { id: true, title: true, notes: true, dueDate: true },
       orderBy: [desc(tasks.updatedAt)],
@@ -47,7 +49,7 @@ export async function searchEverything(rawQuery: string): Promise<SearchResult[]
     db.query.events.findMany({
       where: and(
         eq(events.userId, userId),
-        or(ilike(events.title, pattern), ilike(events.notes, pattern))
+        or(ilike(events.title, pattern), ilike(events.notes, pattern)),
       ),
       columns: { id: true, title: true, notes: true, startAt: true },
       orderBy: [desc(events.updatedAt)],
@@ -62,16 +64,19 @@ export async function searchEverything(rawQuery: string): Promise<SearchResult[]
     db.query.transactions.findMany({
       where: and(
         eq(transactions.userId, userId),
-        ilike(transactions.description, pattern)
+        or(
+          ilike(transactions.payee, pattern),
+          ilike(transactions.description, pattern),
+        ),
       ),
-      columns: { id: true, description: true, date: true },
+      columns: { id: true, payee: true, description: true, date: true },
       orderBy: [desc(transactions.date)],
       limit: PER_MODULE_LIMIT,
     }),
     db.query.goals.findMany({
       where: and(
         eq(goals.userId, userId),
-        or(ilike(goals.title, pattern), ilike(goals.notes, pattern))
+        or(ilike(goals.title, pattern), ilike(goals.notes, pattern)),
       ),
       columns: { id: true, title: true, notes: true, targetDate: true },
       orderBy: [desc(goals.updatedAt)],
@@ -80,17 +85,15 @@ export async function searchEverything(rawQuery: string): Promise<SearchResult[]
   ])
 
   const results: SearchResult[] = [
-    ...taskRows.map(
-      (r): SearchResult => ({
-        type: "task",
-        id: r.id,
-        title: r.title,
-        date: r.dueDate,
-        href: "/todos",
-        score: scoreResult(q, r.title, r.notes),
-        ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
-      })
-    ),
+    ...taskRows.map((r): SearchResult => ({
+      type: "task",
+      id: r.id,
+      title: r.title,
+      date: r.dueDate,
+      href: "/todos",
+      score: scoreResult(q, r.title, r.notes),
+      ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
+    })),
     ...eventRows.map((r): SearchResult => {
       const day = todayInZone(r.startAt, APP_TIME_ZONE)
       return {
@@ -103,37 +106,32 @@ export async function searchEverything(rawQuery: string): Promise<SearchResult[]
         ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
       }
     }),
-    ...foodRows.map(
-      (r): SearchResult => ({
-        type: "food",
-        id: r.id,
-        title: r.name,
-        subtitle: r.servingLabel,
-        href: "/meals",
-        score: scoreResult(q, r.name),
-      })
-    ),
-    ...txnRows.map(
-      (r): SearchResult => ({
-        type: "transaction",
-        id: r.id,
-        title: r.description ?? "",
-        date: r.date,
-        href: `/budget?month=${r.date.slice(0, 7)}`,
-        score: scoreResult(q, r.description ?? ""),
-      })
-    ),
-    ...goalRows.map(
-      (r): SearchResult => ({
-        type: "goal",
-        id: r.id,
-        title: r.title,
-        date: r.targetDate,
-        href: "/goals",
-        score: scoreResult(q, r.title, r.notes),
-        ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
-      })
-    ),
+    ...foodRows.map((r): SearchResult => ({
+      type: "food",
+      id: r.id,
+      title: r.name,
+      subtitle: r.servingLabel,
+      href: "/meals",
+      score: scoreResult(q, r.name),
+    })),
+    ...txnRows.map((r): SearchResult => ({
+      type: "transaction",
+      id: r.id,
+      // Same headline the budget list shows.
+      title: r.payee ?? r.description ?? "",
+      date: r.date,
+      href: `/budget?month=${r.date.slice(0, 7)}`,
+      score: scoreResult(q, `${r.payee ?? ""} ${r.description ?? ""}`.trim()),
+    })),
+    ...goalRows.map((r): SearchResult => ({
+      type: "goal",
+      id: r.id,
+      title: r.title,
+      date: r.targetDate,
+      href: "/goals",
+      score: scoreResult(q, r.title, r.notes),
+      ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
+    })),
   ]
 
   return rankAndCap(results)

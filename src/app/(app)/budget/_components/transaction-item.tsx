@@ -36,11 +36,15 @@ export function TransactionItem({
 }) {
   const { currency } = usePreferences()
   const isIncome = transaction.type === "income"
+  const payee = transaction.payee?.trim()
   const description = transaction.description?.trim()
-  const title = description || categoryName
-  const subtitle = description
-    ? `${categoryName} · ${formatDate(transaction.date)}`
-    : formatDate(transaction.date)
+  // Payee is the headline when there is one; whatever it displaced moves below.
+  const title = payee || description || categoryName
+  const details: string[] = []
+  if (payee && description) details.push(description)
+  if (title !== categoryName) details.push(categoryName)
+  details.push(formatDate(transaction.date))
+  const subtitle = details.join(" · ")
 
   return (
     <div className="bg-card flex items-center gap-3 rounded-lg border p-3">

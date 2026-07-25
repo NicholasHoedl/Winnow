@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { setBudgetsSchema, transactionInputSchema } from "./validation"
+import {
+  restoreTransactionSchema,
+  setBudgetsSchema,
+  transactionInputSchema,
+} from "./validation"
 
 const UUID = "00000000-0000-4000-8000-000000000000"
 
@@ -73,5 +77,49 @@ describe("amount bound (fits the integer-cents column)", () => {
         date: "2026-07-22",
       }).success,
     ).toBe(true)
+  })
+})
+
+describe("restoreTransactionSchema (the undo payload)", () => {
+  // Shaped exactly like the row deleteTransaction().returning() hands back.
+  const row = {
+    id: "6f1c2b3a-4d5e-4f60-8a9b-0c1d2e3f4a5b",
+    userId: "11111111-1111-4111-8111-111111111111",
+    categoryId: null,
+    amountCents: 7700,
+    type: "expense" as const,
+    date: "2026-07-25",
+    payee: "Landlord",
+    description: "rent",
+    createdAt: new Date("2026-07-25T12:00:00Z"),
+    updatedAt: new Date("2026-07-25T12:00:00Z"),
+  }
+
+  it("accepts the row as returned, ignoring columns it doesn't restore", () => {
+    const result = restoreTransactionSchema.safeParse(row)
+    expect(result.success ? null : result.error.issues).toBeNull()
+  })
+
+  it("accepts a createdAt that crossed the wire as a string", () => {
+    expect(
+      restoreTransactionSchema.safeParse({
+        ...row,
+        createdAt: row.createdAt.toISOString(),
+      }).success,
+    ).toBe(true)
+  })
+
+  it("keeps every restorable field", () => {
+    const result = restoreTransactionSchema.parse(row)
+    expect(result.payee).toBe("Landlord")
+    expect(result.description).toBe("rent")
+    expect(result.amountCents).toBe(7700)
+    expect(result.date).toBe("2026-07-25")
+  })
+
+  it("rejects a row whose id isn't a uuid", () => {
+    expect(
+      restoreTransactionSchema.safeParse({ ...row, id: "nope" }).success,
+    ).toBe(false)
   })
 })

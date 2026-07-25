@@ -25,7 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -42,6 +47,7 @@ type TransactionFormValues = {
   type: "income" | "expense"
   date: string
   categoryId?: string
+  payee?: string
   description?: string
 }
 
@@ -76,6 +82,7 @@ export function TransactionDialog({
     type: "expense",
     date: defaultDate,
     categoryId: "",
+    payee: "",
     description: "",
   }
   const {
@@ -115,6 +122,7 @@ export function TransactionDialog({
         type: transaction.type,
         date: transaction.date,
         categoryId: transaction.categoryId ?? "",
+        payee: transaction.payee ?? "",
         description: transaction.description ?? "",
       })
     } else {
@@ -123,6 +131,7 @@ export function TransactionDialog({
         type: "expense",
         date: defaultDate,
         categoryId: "",
+        payee: "",
         description: "",
       })
     }
@@ -154,7 +163,9 @@ export function TransactionDialog({
             {isEdit ? "Edit transaction" : "Add transaction"}
           </DialogTitle>
           <DialogDescription>
-            {isEdit ? "Update this transaction." : "Record income or an expense."}
+            {isEdit
+              ? "Update this transaction."
+              : "Record income or an expense."}
           </DialogDescription>
         </DialogHeader>
 
@@ -184,7 +195,9 @@ export function TransactionDialog({
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue>
-                          {(value) => (value === "income" ? "Income" : "Expense")}
+                          {(value) =>
+                            value === "income" ? "Income" : "Expense"
+                          }
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -218,7 +231,9 @@ export function TransactionDialog({
                     <Select
                       value={field.value ? field.value : NO_CATEGORY}
                       onValueChange={(value) =>
-                        field.onChange(value && value !== NO_CATEGORY ? value : "")
+                        field.onChange(
+                          value && value !== NO_CATEGORY ? value : "",
+                        )
                       }
                     >
                       <SelectTrigger className="w-full">
@@ -246,14 +261,32 @@ export function TransactionDialog({
             </div>
 
             <Field>
+              <FieldLabel htmlFor="t-payee">Payee</FieldLabel>
+              <Input
+                id="t-payee"
+                placeholder="Who it went to"
+                {...register("payee")}
+              />
+              <FieldError errors={[errors.payee]} />
+            </Field>
+
+            <Field>
               <FieldLabel htmlFor="t-desc">Description</FieldLabel>
-              <Input id="t-desc" placeholder="Optional" {...register("description")} />
+              <Input
+                id="t-desc"
+                placeholder="Optional"
+                {...register("description")}
+              />
               <FieldError errors={[errors.description]} />
             </Field>
           </FieldGroup>
 
           <DialogFooter className="mt-5">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>

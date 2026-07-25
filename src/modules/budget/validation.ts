@@ -24,9 +24,25 @@ export const transactionInputSchema = z.object({
     .string()
     .refine((value) => isValidDateString(value), "Enter a valid date"),
   categoryId: z.string().uuid().or(z.literal("")).optional(),
+  payee: z.string().trim().max(120).or(z.literal("")).optional(),
   description: z.string().trim().max(300).or(z.literal("")).optional(),
 })
 export type TransactionInput = z.infer<typeof transactionInputSchema>
+
+// Undo hands back a row the client was holding, so it gets validated like any other
+// input. Listing every restorable column here (rather than in the action) means a
+// new column can't be silently dropped on restore.
+export const restoreTransactionSchema = z.object({
+  id: z.string().uuid(),
+  categoryId: z.string().uuid().nullable(),
+  // Already minor units — bounded by the same int4 ceiling as `dollars`.
+  amountCents: z.number().int().min(0).max(2_000_000_000),
+  type: z.enum(INCOME_EXPENSE),
+  date: z.string().refine((value) => isValidDateString(value), "Invalid date"),
+  payee: z.string().max(120).nullable(),
+  description: z.string().max(300).nullable(),
+  createdAt: z.coerce.date(),
+})
 
 // Accepts a month key ('YYYY-MM') or a full date; the actions normalize via
 // monthKey, so validate the normalized first-of-month value.
