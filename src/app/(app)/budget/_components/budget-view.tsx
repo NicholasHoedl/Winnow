@@ -2,11 +2,18 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, FolderCog, Plus, Wallet } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  FolderCog,
+  Plus,
+  Wallet,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { categoryAccent } from "@/lib/colors"
+import { shiftMonth } from "@/lib/date"
 import { deleteTransaction, restoreTransaction } from "@/modules/budget/actions"
 import type { Budget, Category, Transaction } from "@/modules/budget/queries"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
@@ -19,12 +26,6 @@ import { BudgetsDialog } from "./budgets-dialog"
 import { CategoryManager } from "./category-manager"
 import { TransactionDialog } from "./transaction-dialog"
 import { TransactionItem } from "./transaction-item"
-
-function shiftMonth(month: string, delta: number): string {
-  const [year, m] = month.split("-").map(Number)
-  const d = new Date(Date.UTC(year, m - 1 + delta, 1))
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
-}
 
 function formatMonth(month: string): string {
   const [year, m] = month.split("-").map(Number)
@@ -235,7 +236,10 @@ export function BudgetView({
                   <div className="flex items-baseline justify-between gap-2 text-sm">
                     <span className="flex min-w-0 items-center gap-2 font-medium">
                       <span
-                        className={cn("size-2 shrink-0 rounded-full", accent.bar)}
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          accent.bar,
+                        )}
                       />
                       <span className="truncate">
                         {categoryName(row.categoryId)}

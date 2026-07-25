@@ -1,9 +1,9 @@
 import {
+  getBudgetSummary,
   getCategories,
   getMonthBudgets,
   getMonthTransactions,
 } from "@/modules/budget/queries"
-import { summarizeMonth } from "@/modules/budget/service"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/lib/date"
 
@@ -23,12 +23,15 @@ export default async function BudgetPage({
       ? params.month
       : currentMonth
 
-  const [categories, transactions, budgets] = await Promise.all([
+  // The summary comes from its own unfiltered read rather than being derived from the
+  // rendered `transactions` array — once that list can be filtered (T3-S4), deriving
+  // the header stats from it would silently report only the filtered subset.
+  const [categories, transactions, budgets, summary] = await Promise.all([
     getCategories(),
     getMonthTransactions(month),
     getMonthBudgets(month),
+    getBudgetSummary(month),
   ])
-  const summary = summarizeMonth(transactions, budgets)
 
   return (
     <BudgetView

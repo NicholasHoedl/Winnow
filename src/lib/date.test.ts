@@ -9,6 +9,8 @@ import {
   isValidDateString,
   localDateToString,
   localStringToDate,
+  monthSeries,
+  shiftMonth,
   todayInZone,
 } from "./date"
 
@@ -96,6 +98,42 @@ describe("local Date <-> string (date pickers)", () => {
   })
 
   it("round-trips a date string", () => {
-    expect(localDateToString(localStringToDate("2026-02-28"))).toBe("2026-02-28")
+    expect(localDateToString(localStringToDate("2026-02-28"))).toBe(
+      "2026-02-28",
+    )
+  })
+})
+
+describe("shiftMonth", () => {
+  it("moves forward and back within a year", () => {
+    expect(shiftMonth("2026-07", 1)).toBe("2026-08")
+    expect(shiftMonth("2026-07", -1)).toBe("2026-06")
+    expect(shiftMonth("2026-07", 0)).toBe("2026-07")
+  })
+
+  it("rolls the year over in both directions", () => {
+    expect(shiftMonth("2026-12", 1)).toBe("2027-01")
+    expect(shiftMonth("2026-01", -1)).toBe("2025-12")
+    expect(shiftMonth("2026-03", -14)).toBe("2025-01")
+  })
+})
+
+describe("monthSeries", () => {
+  it("ends at the given month and runs oldest first", () => {
+    expect(monthSeries("2026-07", 3)).toEqual(["2026-05", "2026-06", "2026-07"])
+  })
+
+  it("crosses the year boundary", () => {
+    expect(monthSeries("2026-02", 4)).toEqual([
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+    ])
+  })
+
+  it("handles the degenerate lengths", () => {
+    expect(monthSeries("2026-07", 1)).toEqual(["2026-07"])
+    expect(monthSeries("2026-07", 0)).toEqual([])
   })
 })

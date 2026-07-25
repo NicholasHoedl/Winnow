@@ -42,6 +42,23 @@ export function dowOf(dateStr: string): number {
   return new Date(`${dateStr}T00:00:00Z`).getUTCDay()
 }
 
+// --- month strings (YYYY-MM) ---
+
+/** Shift a 'YYYY-MM' by whole months; negative goes back. Rolls the year over. */
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1 + delta, 1))
+  return `${shifted.getUTCFullYear()}-${pad2(shifted.getUTCMonth() + 1)}`
+}
+
+/** The `count` consecutive months ending at (and including) `endMonth`, oldest first
+ *  — the x-axis of a trend chart. */
+export function monthSeries(endMonth: string, count: number): string[] {
+  const months: string[] = []
+  for (let i = count - 1; i >= 0; i--) months.push(shiftMonth(endMonth, -i))
+  return months
+}
+
 // --- timezone wall-date ---
 
 /** Wall-date (YYYY-MM-DD) for an instant in a given IANA timezone. */

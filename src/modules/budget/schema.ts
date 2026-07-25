@@ -1,5 +1,6 @@
 import {
   date,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -32,26 +33,32 @@ export const categories = pgTable("categories", {
 
 // All money is stored as integer cents. `type` is stored explicitly so a
 // transaction's direction never depends on how its category is configured.
-export const transactions = pgTable("transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  categoryId: uuid("category_id").references(() => categories.id, {
-    onDelete: "set null",
-  }),
-  amountCents: integer("amount_cents").notNull(),
-  type: transactionTypeEnum("type").notNull(),
-  date: date("date", { mode: "string" }).notNull(),
-  description: text("description"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-})
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    amountCents: integer("amount_cents").notNull(),
+    type: transactionTypeEnum("type").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  // Every read is "this user, this date range" — month views today, multi-month
+  // trends and filtered lists from T3 on.
+  (table) => [index("transactions_user_date").on(table.userId, table.date)],
+)
 
 // One budget per category per month (period_month = first-of-month date).
 export const budgets = pgTable(
@@ -80,5 +87,6 @@ export const budgets = pgTable(
       table.categoryId,
       table.periodMonth,
     ),
+    index("budgets_user_period").on(table.userId, table.periodMonth),
   ],
 )
