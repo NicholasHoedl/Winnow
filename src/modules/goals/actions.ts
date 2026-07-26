@@ -5,16 +5,17 @@ import { and, eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 
 import type { MilestoneRow } from "./queries"
 import { goals, milestones } from "./schema"
 import { goalInputSchema, milestoneInputSchema } from "./validation"
 
-// Goals live on their own page, and the dashboard shows a summary — refresh both.
+// Goals live on their own page, and the hubs show a summary — refresh both.
 function revalidateGoals() {
   revalidatePath("/goals")
-  revalidatePath("/")
+  revalidateHubs()
 }
 
 // --- Goals ---
@@ -69,7 +70,9 @@ export async function addMilestone(
   const parsed = milestoneInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db.insert(milestones).values({ userId, goalId, title: parsed.data.title })
+  await db
+    .insert(milestones)
+    .values({ userId, goalId, title: parsed.data.title })
   revalidateGoals()
   return { ok: true }
 }
@@ -88,8 +91,7 @@ export async function toggleMilestone(
 }
 
 export type DeleteMilestoneResult =
-  | { ok: true; milestone: MilestoneRow | null }
-  | { ok: false; error: string }
+  { ok: true; milestone: MilestoneRow | null } | { ok: false; error: string }
 
 export async function deleteMilestone(
   id: string,

@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm"
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { isValidDateString } from "@/lib/date"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
@@ -22,7 +23,7 @@ import {
 
 function revalidateCalendar() {
   revalidatePath("/calendar")
-  revalidatePath("/")
+  revalidateHubs()
 }
 
 // Assemble the timestamptz instants from the form's local date/time fields.
@@ -104,8 +105,7 @@ export async function updateEvent(
 }
 
 export type DeleteEventResult =
-  | { ok: true; event: EventRow | null }
-  | { ok: false; error: string }
+  { ok: true; event: EventRow | null } | { ok: false; error: string }
 
 export async function deleteEvent(id: string): Promise<DeleteEventResult> {
   const userId = await requireUserId()

@@ -1,5 +1,7 @@
 // Pure meal-macros logic. No DB — unit-testable directly.
 
+import { addDays, dayDiff } from "@/lib/date"
+
 export type Macros = {
   calories: number
   protein: number
@@ -71,7 +73,9 @@ export function groupByMealType<
   const groups: MealGroup<T>[] = []
   for (const mealType of order) {
     const key = mealType === "other" ? null : mealType
-    const groupEntries = entries.filter((entry) => (entry.mealType ?? null) === key)
+    const groupEntries = entries.filter(
+      (entry) => (entry.mealType ?? null) === key,
+    )
     if (groupEntries.length === 0) continue
     groups.push({
       mealType,
@@ -105,7 +109,10 @@ export type MacroTargetValues = {
   fatG: number
 }
 
-function progress(consumed: number, target: number | null | undefined): MacroProgress {
+function progress(
+  consumed: number,
+  target: number | null | undefined,
+): MacroProgress {
   if (target == null || target <= 0) {
     return { consumed, target: null, remaining: null, percent: null }
   }
@@ -236,7 +243,8 @@ export function parseMealQuickAdd(
       mealType = lead[1].toLowerCase() as MealType
       leftover = leftover.slice(lead[0].length).trim()
     }
-    const name = leftover || (mealType ? capitalizeWord(mealType) : "Quick entry")
+    const name =
+      leftover || (mealType ? capitalizeWord(mealType) : "Quick entry")
     return {
       name: name.slice(0, 200),
       servingLabel: "1 serving",
@@ -285,6 +293,8 @@ export function parseMealQuickAdd(
 // No DB — unit-testable. Fed by `getRecentEntries` (newest-first).
 
 // The per-serving snapshot the ranker needs (a MealEntry[] is structurally assignable).
+// Micros are carried so a one-tap re-log reproduces the entry rather than quietly
+// logging a version of it with its fiber and sodium stripped out.
 export type RecentEntry = {
   foodId: string | null
   name: string
@@ -293,6 +303,10 @@ export type RecentEntry = {
   proteinG: number
   carbsG: number
   fatG: number
+  fiberG: number | null
+  sugarG: number | null
+  satFatG: number | null
+  sodiumMg: number | null
 }
 
 // A pickable food carrying its latest per-serving snapshot + a stable list key.
@@ -305,6 +319,10 @@ export type QuickPickFood = {
   proteinG: number
   carbsG: number
   fatG: number
+  fiberG: number | null
+  sugarG: number | null
+  satFatG: number | null
+  sodiumMg: number | null
 }
 
 function pickKey(entry: RecentEntry): string {
@@ -350,5 +368,144 @@ export function recentFrequentFoods(
       proteinG: snap.proteinG,
       carbsG: snap.carbsG,
       fatG: snap.fatG,
+      fiberG: snap.fiberG,
+      sugarG: snap.sugarG,
+      satFatG: snap.satFatG,
+      sodiumMg: snap.sodiumMg,
     }))
+}
+
+// --- Micronutrients ---
+
+export type Micros = {
+  fiber: number | null
+  sugar: number | null
+  sodium: number | null
+  satFat: number | null
+}
+
+/** The micro half of a logged entry. Per-serving, like the macros. */
+export type MicroEntry = {
+  servings: number
+  fiberG: number | null
+  sugarG: number | null
+  satFatG: number | null
+  sodiumMg: number | null
+}
+
+export type MicroTotals = {
+  /** null for a micro no entry carried — NOT 0, which would claim a measurement. */
+  totals: Micros
+  /** How many entries carried each micro, so the UI can qualify the number. */
+  known: Record<keyof Micros, number>
+  /** Entries considered, so "5 of 8 items" can be said honestly. */
+  total: number
+}
+
+const MICRO_FIELDS = [
+  ["fiber", "fiberG"],
+  ["sugar", "sugarG"],
+  ["sodium", "sodiumMg"],
+  ["satFat", "satFatG"],
+] as const
+
+/**
+ * Sum micronutrients across a day. Deliberately NOT folded into {@link sumMacros}:
+ * macros are always present so their total is always a number, whereas a micro total
+ * is meaningless unless you also know how many entries contributed to it. Summing
+ * three of eight entries' sodium and printing it as "the day's sodium" is a lie.
+ */
+export function sumMicros(entries: MicroEntry[]): MicroTotals {
+  const totals: Micros = {
+    fiber: null,
+    sugar: null,
+    sodium: null,
+    satFat: null,
+  }
+  const known: Record<keyof Micros, number> = {
+    fiber: 0,
+    sugar: 0,
+    sodium: 0,
+    satFat: 0,
+  }
+
+  for (const entry of entries) {
+    for (const [key, column] of MICRO_FIELDS) {
+      const perServing = entry[column]
+      if (perServing == null) continue
+      known[key] += 1
+      totals[key] = (totals[key] ?? 0) + perServing * entry.servings
+    }
+  }
+
+  for (const [key] of MICRO_FIELDS) {
+    const value = totals[key]
+    // Float noise: 0.7 * 3 is 2.0999999999999996 before this.
+    if (value !== null) totals[key] = Math.round(value * 10) / 10
+  }
+
+  return { totals, known, total: entries.length }
+}
+
+// --- Body weight trend ---
+
+export type WeightPoint = { date: string; weightLb: number }
+export type WeeklyWeight = {
+  /** First day of the 7-day window (inclusive). */
+  weekStart: string
+  /** The measurement carried forward — the latest one taken in that window. */
+  weightLb: number
+}
+
+/**
+ * Bucket weigh-ins into 7-day windows counting back from `endDate`, keeping the most
+ * recent measurement in each. Windows rather than calendar weeks: the newest bucket
+ * then always ends today, and no week-start preference has to be threaded through.
+ *
+ * **Weeks with no measurement are OMITTED, not zero-filled.** A zero would draw the
+ * line down to the axis and read as "weighed nothing" — the opposite of "didn't weigh".
+ * Trends elsewhere in the app zero-fill deliberately (a month with no spending really
+ * did have zero spending); this is the case where that would be a lie.
+ *
+ * Also why the chart buckets at all: BarChart/LineChart key their points by label text,
+ * so a daily axis with repeated or blank labels mis-reconciles.
+ */
+export function weeklyWeightSeries(
+  rows: WeightPoint[],
+  endDate: string,
+  weeks = 13,
+): WeeklyWeight[] {
+  const span = Math.max(1, Math.floor(weeks))
+  const earliest = addDays(endDate, -(span * 7 - 1))
+
+  const latestPerWeek = new Map<string, WeightPoint>()
+  for (const row of rows) {
+    if (row.date < earliest || row.date > endDate) continue
+    const bucket = Math.floor(dayDiff(row.date, endDate) / 7)
+    const weekStart = addDays(endDate, -(bucket * 7 + 6))
+    const seen = latestPerWeek.get(weekStart)
+    if (!seen || row.date > seen.date) latestPerWeek.set(weekStart, row)
+  }
+
+  return [...latestPerWeek.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([weekStart, point]) => ({ weekStart, weightLb: point.weightLb }))
+}
+
+// --- Barcodes ---
+
+/**
+ * Whether a string is plausibly a retail barcode: 8–14 digits, nothing else.
+ * Covers EAN-8, UPC-A (12), EAN-13, and ITF-14.
+ *
+ * This is a **security gate, not a nicety** — the value is interpolated into a URL
+ * path segment when looking a product up, so it has to be digits before it goes
+ * anywhere near a URL. Shared with the scanner's manual-entry field.
+ *
+ * Deliberately no check-digit validation: a well-formed but wrong barcode already
+ * degrades to "no product found", which is a fine answer, whereas a checksum bug
+ * would reject real products for no benefit.
+ */
+export function isLikelyBarcode(value: string): boolean {
+  return /^\d{8,14}$/.test(value.trim())
 }

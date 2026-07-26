@@ -3,8 +3,7 @@ import { test, expect } from "@playwright/test"
 // Browser coverage for T1-S6 meals capture: the NL quick-add bar, one-tap re-log, and the
 // in-dialog food-search (Enter selects a food, does not submit the form).
 
-const rows = (name: string) =>
-  `div.bg-card:has-text("${name}")`
+const rows = (name: string) => `div.bg-card:has-text("${name}")`
 
 test("NL bar logs an explicit-macro entry, and re-log duplicates it", async ({
   page,
@@ -33,7 +32,9 @@ test("NL bar logs an explicit-macro entry, and re-log duplicates it", async ({
   }
 })
 
-test("NL bar rejects unparseable input and keeps the text", async ({ page }) => {
+test("NL bar rejects unparseable input and keeps the text", async ({
+  page,
+}) => {
   await page.goto("/meals")
   const bar = page.getByLabel("Quick add meal")
   await bar.fill("xyzzy not a food")
@@ -76,6 +77,55 @@ test("food-search fills the form from a library food (Enter selects, no submit)"
   // Cleanup the library food too — it outlives the entry, so leaving it behind
   // grows the library by one row on every run and eventually pushes this
   // dialog's submit button past the bottom of the viewport.
+  await page.getByRole("button", { name: "Food library" }).click()
+  const removeFood = page.getByRole("button", { name: `Delete ${food}` })
+  await removeFood.click()
+  await expect(removeFood).toHaveCount(0)
+})
+
+// T4-S1: `updateFood` shipped in Phase 2 with no caller at all, so the library was
+// really create-read-delete. Editing must change the library row and leave already
+// logged entries on their snapshot.
+test("a library food can be edited, and past entries keep their snapshot", async ({
+  page,
+}) => {
+  const food = `e2eedit${Date.now()}`
+  await page.goto("/meals")
+
+  await page.getByRole("button", { name: "Log food" }).click()
+  await page.getByLabel("Food", { exact: true }).fill(food)
+  await page.getByLabel("Serving", { exact: true }).fill("1 cup")
+  await page.getByLabel("Calories", { exact: true }).fill("250")
+  await page.getByRole("button", { name: "Log", exact: true }).click()
+  const entry = page.locator(rows(food)).first()
+  await expect(entry).toBeVisible()
+  await expect(entry).toContainText("250 kcal")
+
+  await page.getByRole("button", { name: "Food library" }).click()
+  await page.getByRole("button", { name: `Edit ${food}` }).click()
+  await expect(page.getByLabel("Calories", { exact: true })).toHaveValue("250")
+  await page.getByLabel("Calories", { exact: true }).fill("400")
+  await page.getByRole("button", { name: `Save “${food}”` }).click()
+
+  // Assert on the rendered library row rather than re-opening the form: saving
+  // revalidates /meals, which re-mounts the list, and a second click would race it.
+  await expect(page.locator("li").filter({ hasText: food })).toContainText(
+    "400 kcal",
+  )
+
+  await page.keyboard.press("Escape")
+
+  // The entry logged before the edit kept its own snapshot.
+  await expect(entry).toContainText("250 kcal")
+
+  // Order matters for cleanup: delete the ENTRY first, then the library food. Each
+  // delete raises an undo toast in the bottom-right, and the entry rows are down
+  // there too — doing it the other way round left the food's toast sitting over the
+  // entry's actions button, which cost one intermittent failure before it was spotted.
+  await entry.getByRole("button", { name: "Entry actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(page.locator(rows(food))).toHaveCount(0)
+
   await page.getByRole("button", { name: "Food library" }).click()
   const removeFood = page.getByRole("button", { name: `Delete ${food}` })
   await removeFood.click()

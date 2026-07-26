@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ChevronLeft, ChevronRight, Library, Plus, Target } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  CopyPlus,
+  Library,
+  Plus,
+  Target,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -11,16 +18,25 @@ import {
   logMeal,
   restoreMealEntry,
 } from "@/modules/meals/actions"
-import type { Food, MacroTargets, MealEntry } from "@/modules/meals/queries"
+import type {
+  BodyWeight,
+  Food,
+  MacroTargets,
+  MealEntry,
+  WaterLog,
+} from "@/modules/meals/queries"
 import {
   groupByMealType,
   macroProgress,
   type QuickPickFood,
   sumMacros,
+  sumMicros,
 } from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
 
+import { CopyDayDialog } from "./copy-day-dialog"
+import { DayExtras } from "./day-extras"
 import { FoodManager } from "./food-manager"
 import { LogFoodDialog } from "./log-food-dialog"
 import { MacroSummary } from "./macro-summary"
@@ -31,7 +47,9 @@ import { TargetsDialog } from "./targets-dialog"
 
 function shiftDate(date: string, delta: number): string {
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day + delta)).toISOString().slice(0, 10)
+  return new Date(Date.UTC(year, month - 1, day + delta))
+    .toISOString()
+    .slice(0, 10)
 }
 
 function formatDay(date: string, today: string): string {
@@ -51,23 +69,38 @@ export function MealsView({
   entries,
   foods,
   targets,
+  targetHistory,
   quickPicks,
+  waterLogs,
+  weight,
+  weightTrend,
+  offEnabled,
 }: {
   date: string
   today: string
   entries: MealEntry[]
   foods: Food[]
+  /** The targets in effect on `date` — not necessarily the most recent ones. */
   targets: MacroTargets | null
+  targetHistory: MacroTargets[]
   quickPicks: QuickPickFood[]
+  waterLogs: WaterLog[]
+  weight: BodyWeight | null
+  /** Server-rendered on the page and passed in, so its chart isn't pulled client-side. */
+  weightTrend: React.ReactNode
+  /** Server-read: whether the Open Food Facts integration is on for this install. */
+  offEnabled: boolean
 }) {
   const [logOpen, setLogOpen] = React.useState(false)
   const [editingEntry, setEditingEntry] = React.useState<MealEntry | null>(null)
   const [foodsOpen, setFoodsOpen] = React.useState(false)
   const [targetsOpen, setTargetsOpen] = React.useState(false)
+  const [copyOpen, setCopyOpen] = React.useState(false)
   const [, startTransition] = React.useTransition()
 
   const totals = sumMacros(entries)
   const progress = macroProgress(totals, targets)
+  const micros = sumMicros(entries)
   const groups = groupByMealType(entries)
 
   function handleDelete(entry: MealEntry) {
@@ -100,6 +133,12 @@ export function MealsView({
         proteinG: entry.proteinG,
         carbsG: entry.carbsG,
         fatG: entry.fatG,
+        // Micros included: "Log again" means log THIS entry again, and omitting them
+        // would quietly produce a copy with its fiber and sodium stripped out.
+        fiberG: entry.fiberG,
+        sugarG: entry.sugarG,
+        satFatG: entry.satFatG,
+        sodiumMg: entry.sodiumMg,
         servings: entry.servings,
         mealType: entry.mealType ?? "",
         date,
@@ -136,6 +175,14 @@ export function MealsView({
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Copy a day"
+            onClick={() => setCopyOpen(true)}
+          >
+            <CopyPlus className="size-4" />
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -192,7 +239,9 @@ export function MealsView({
         )}
       </div>
 
-      <MacroSummary progress={progress} />
+      <MacroSummary progress={progress} micros={micros} />
+
+      <DayExtras date={date} waterLogs={waterLogs} weight={weight} />
 
       <div className="mt-4 flex flex-col gap-3">
         <MealQuickAdd date={date} foods={foods} />
@@ -201,9 +250,18 @@ export function MealsView({
 
       <div className="mt-6 flex flex-col gap-5">
         {groups.length === 0 ? (
-          <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            Nothing logged for this day.
-          </p>
+          <div className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+            <p>Nothing logged for this day.</p>
+            {/* An empty day is exactly when copying one is worth knowing about, and the
+                toolbar icon alone doesn't say so. */}
+            <button
+              type="button"
+              onClick={() => setCopyOpen(true)}
+              className="text-foreground mt-1 underline underline-offset-4"
+            >
+              Copy from another day
+            </button>
+          </div>
         ) : (
           groups.map((group) => (
             <section key={group.mealType}>
@@ -229,16 +287,32 @@ export function MealsView({
         )}
       </div>
 
+      {weightTrend}
+
       <LogFoodDialog
         date={date}
         foods={foods}
         entry={editingEntry}
+        offEnabled={offEnabled}
         open={logOpen}
         onOpenChange={setLogOpen}
       />
-      <FoodManager foods={foods} open={foodsOpen} onOpenChange={setFoodsOpen} />
+      <CopyDayDialog
+        date={date}
+        existingCount={entries.length}
+        open={copyOpen}
+        onOpenChange={setCopyOpen}
+      />
+      <FoodManager
+        foods={foods}
+        offEnabled={offEnabled}
+        open={foodsOpen}
+        onOpenChange={setFoodsOpen}
+      />
       <TargetsDialog
         targets={targets}
+        history={targetHistory}
+        date={date}
         open={targetsOpen}
         onOpenChange={setTargetsOpen}
       />

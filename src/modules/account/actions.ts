@@ -15,9 +15,15 @@ import {
   transactionRecurrences,
   transactions,
 } from "@/modules/budget/schema"
-import { events } from "@/modules/calendar/schema"
+import { calendars, eventExceptions, events } from "@/modules/calendar/schema"
 import { goals, milestones } from "@/modules/goals/schema"
-import { foods, macroTargets, mealEntries } from "@/modules/meals/schema"
+import {
+  bodyWeights,
+  foods,
+  macroTargets,
+  mealEntries,
+  waterLogs,
+} from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
 import { lists, taskRecurrences, tasks } from "@/modules/todos/schema"
 
@@ -75,6 +81,8 @@ export async function clearAllData(): Promise<ActionResult> {
     await tx.delete(milestones).where(eq(milestones.userId, userId))
     await tx.delete(goals).where(eq(goals.userId, userId))
     await tx.delete(mealEntries).where(eq(mealEntries.userId, userId))
+    await tx.delete(waterLogs).where(eq(waterLogs.userId, userId))
+    await tx.delete(bodyWeights).where(eq(bodyWeights.userId, userId))
     await tx.delete(macroTargets).where(eq(macroTargets.userId, userId))
     await tx.delete(foods).where(eq(foods.userId, userId))
     await tx.delete(transactions).where(eq(transactions.userId, userId))
@@ -89,7 +97,13 @@ export async function clearAllData(): Promise<ActionResult> {
     // account on the next page load.
     await tx.delete(taskRecurrences).where(eq(taskRecurrences.userId, userId))
     await tx.delete(lists).where(eq(lists.userId, userId))
+    // Exceptions cascade from events, but delete them explicitly: relying on the
+    // cascade means the day someone adds a standalone exception this silently
+    // leaks. Calendars were genuinely leaking — nothing deleted them, so "clear
+    // all data" wiped every event and left the calendar list fully populated.
+    await tx.delete(eventExceptions).where(eq(eventExceptions.userId, userId))
     await tx.delete(events).where(eq(events.userId, userId))
+    await tx.delete(calendars).where(eq(calendars.userId, userId))
     await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))
   })
   revalidatePath("/", "layout")

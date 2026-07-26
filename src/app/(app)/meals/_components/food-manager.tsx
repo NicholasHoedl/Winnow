@@ -3,10 +3,16 @@
 import * as React from "react"
 import { useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
-import { Trash2 } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { createFood, deleteFood, restoreFood } from "@/modules/meals/actions"
+import {
+  createFood,
+  deleteFood,
+  restoreFood,
+  updateFood,
+} from "@/modules/meals/actions"
+import type { ImportedFood } from "@/modules/meals/off-mapping"
 import type { Food } from "@/modules/meals/queries"
 import { foodInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
@@ -18,8 +24,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+
+import { FoodDatabaseSearch } from "./food-database-search"
+import { NutritionExtraFields } from "./nutrition-extra-fields"
 
 type FoodFormValues = {
   name: string
@@ -28,8 +42,16 @@ type FoodFormValues = {
   proteinG: number
   carbsG: number
   fatG: number
+  fiberG?: number | null
+  sugarG?: number | null
+  satFatG?: number | null
+  sodiumMg?: number | null
+  // Carried so an imported product keeps its barcode; there is no visible field for it.
+  barcode?: string | null
 }
 
+// Macros default to 0 (a hand-entered food has all four on screen); micros default to
+// null, because "not filled in" and "measured as zero" are different facts.
 const EMPTY: FoodFormValues = {
   name: "",
   servingLabel: "",
@@ -37,18 +59,28 @@ const EMPTY: FoodFormValues = {
   proteinG: 0,
   carbsG: 0,
   fatG: 0,
+  fiberG: null,
+  sugarG: null,
+  satFatG: null,
+  sodiumMg: null,
+  barcode: null,
 }
 
 export function FoodManager({
   foods,
+  offEnabled,
   open,
   onOpenChange,
 }: {
   foods: Food[]
+  /** Whether the Open Food Facts integration is switched on for this install. */
+  offEnabled: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const [pending, startTransition] = React.useTransition()
+  // The one form does double duty: null = "add a new food", a row = "edit that food".
+  const [editing, setEditing] = React.useState<Food | null>(null)
   const {
     register,
     handleSubmit,
@@ -60,8 +92,54 @@ export function FoodManager({
     defaultValues: EMPTY,
   })
 
+  // Load the row being edited into the form, or empty it. (The edit target is cleared
+  // in the dialog's onOpenChange below — an event handler, which is where a reset like
+  // this belongs; doing it in this effect would cascade an extra render.)
+  React.useEffect(() => {
+    if (!open) return
+    reset(
+      editing
+        ? {
+            name: editing.name,
+            servingLabel: editing.servingLabel,
+            calories: editing.calories,
+            proteinG: editing.proteinG,
+            carbsG: editing.carbsG,
+            fatG: editing.fatG,
+            fiberG: editing.fiberG,
+            sugarG: editing.sugarG,
+            satFatG: editing.satFatG,
+            sodiumMg: editing.sodiumMg,
+            // Loaded and resubmitted even though nothing shows it: updateFood does
+            // `.set(parsed.data)`, so omitting it would unlink an imported food from
+            // its product the first time someone edited a typo in the name.
+            barcode: editing.barcode,
+          }
+        : EMPTY,
+    )
+  }, [open, editing, reset])
+
+  /** Prefill from a food-database result. Writes nothing — the form's submit does. */
+  function onPickImported(food: ImportedFood) {
+    reset({
+      name: food.name,
+      servingLabel: food.servingLabel,
+      calories: food.calories,
+      proteinG: food.proteinG,
+      carbsG: food.carbsG,
+      fatG: food.fatG,
+      fiberG: food.fiberG,
+      sugarG: food.sugarG,
+      satFatG: food.satFatG,
+      sodiumMg: food.sodiumMg,
+      barcode: food.barcode,
+    })
+  }
+
   const onSubmit = handleSubmit(async (data) => {
-    const result = await createFood(data)
+    const result = editing
+      ? await updateFood(editing.id, data)
+      : await createFood(data)
     if (!result.ok) {
       if (result.fieldErrors) {
         for (const [name, message] of Object.entries(result.fieldErrors)) {
@@ -71,7 +149,10 @@ export function FoodManager({
       toast.error(result.error)
       return
     }
-    toast.success("Food added")
+    // Editing only rewrites the library row. Meal entries snapshot their macros at
+    // log time, so past days keep the numbers they were actually logged with.
+    toast.success(editing ? "Food updated" : "Food added")
+    setEditing(null)
     reset(EMPTY)
   })
 
@@ -100,17 +181,35 @@ export function FoodManager({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Closing mid-edit shouldn't leave the form pre-filled for the next open —
+        // the row may not even exist by then.
+        if (!next) setEditing(null)
+        onOpenChange(next)
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Food library</DialogTitle>
           <DialogDescription>
-            Reusable foods with their per-serving macros.
+            {editing
+              ? "Editing a library food. Meals you've already logged keep the macros they were logged with."
+              : "Reusable foods with their per-serving macros."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
           <FieldGroup>
+            {/* Import fills the form; "Add food" below is still what writes the row, so
+                the values can be corrected first — the database is often wrong. */}
+            {!editing && (
+              <FoodDatabaseSearch
+                enabled={offEnabled}
+                onPick={onPickImported}
+              />
+            )}
             <div className="grid grid-cols-2 gap-3">
               <Field className="col-span-2">
                 <FieldLabel htmlFor="f-name">Name</FieldLabel>
@@ -167,16 +266,40 @@ export function FoodManager({
                 <FieldError errors={[errors.fatG]} />
               </Field>
             </div>
-            <Button type="submit" disabled={isSubmitting} className="w-full">
-              Add food
-            </Button>
+            <NutritionExtraFields
+              register={register}
+              errors={errors}
+              idPrefix="f"
+            />
+            <div className="flex gap-2">
+              {editing && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button type="submit" disabled={isSubmitting} className="flex-1">
+                {editing ? `Save “${editing.name}”` : "Add food"}
+              </Button>
+            </div>
           </FieldGroup>
         </form>
 
         <div className="mt-2 max-h-56 overflow-y-auto">
           <ul className="flex flex-col gap-1">
             {foods.length === 0 ? (
-              <li className="text-muted-foreground text-sm">No foods yet.</li>
+              // "No foods yet." on its own restated the wall this tranche exists to
+              // remove — it told you the library was empty and left you to type. Point
+              // at the two ways to fill it that now sit directly above.
+              <li className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
+                Your library is empty.{" "}
+                {offEnabled
+                  ? "Search the food database above, scan a barcode, or add one by hand."
+                  : "Add one by hand above."}
+              </li>
             ) : (
               foods.map((food) => (
                 <li
@@ -184,20 +307,32 @@ export function FoodManager({
                   className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
                 >
                   <div className="min-w-0">
-                    <span className="block truncate font-medium">{food.name}</span>
+                    <span className="block truncate font-medium">
+                      {food.name}
+                    </span>
                     <span className="text-muted-foreground text-xs">
                       {food.servingLabel} · {Math.round(food.calories)} kcal
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Delete ${food.name}`}
-                    disabled={pending}
-                    onClick={() => remove(food)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex shrink-0 items-center">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Edit ${food.name}`}
+                      onClick={() => setEditing(food)}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Delete ${food.name}`}
+                      disabled={pending}
+                      onClick={() => remove(food)}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </li>
               ))
             )}

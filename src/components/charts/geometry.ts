@@ -31,19 +31,39 @@ function niceNum(range: number, round: boolean): number {
   return nice * 10 ** exponent
 }
 
+/** Where the axis starts. See {@link niceScale}. */
+export type Baseline = "zero" | "data"
+
 /**
  * A rounded axis domain plus its tick values.
  *
- * The domain always includes zero — these are money charts, where bars grow from a
- * zero baseline and a net line legitimately crosses below it. An all-zero series
- * yields a 0..1 placeholder domain so the axis still renders instead of dividing by
- * a zero span.
+ * `baseline: "zero"` (the default) forces zero into the domain, which is what money
+ * charts want: bars grow from a real baseline and a net line legitimately crosses
+ * below it. An all-zero series yields a 0..1 placeholder domain so the axis still
+ * renders instead of dividing by a zero span.
+ *
+ * `baseline: "data"` fits the domain to the values instead. Some quantities never go
+ * near zero and are read as *changes*: a body weight moving 181 → 184 lb is invisible
+ * on a 0–200 axis, where every point lands inside the top 2% of the plot. Forcing zero
+ * there doesn't make the chart honest, it makes it unreadable.
  */
-export function niceScale(min: number, max: number, targetTicks = 4): Scale {
-  const lo = Math.min(0, min)
-  const hi = Math.max(0, max)
+export function niceScale(
+  min: number,
+  max: number,
+  targetTicks = 4,
+  baseline: Baseline = "zero",
+): Scale {
+  const zeroed = baseline === "zero"
+  const lo = zeroed ? Math.min(0, min) : min
+  const hi = zeroed ? Math.max(0, max) : max
 
-  if (lo === hi) return { min: 0, max: 1, step: 1, ticks: [0, 1] }
+  if (lo === hi) {
+    if (zeroed) return { min: 0, max: 1, step: 1, ticks: [0, 1] }
+    // A single measurement still deserves a readable axis, so give it a band to sit
+    // in the middle of rather than collapsing the domain to a point.
+    const pad = Math.max(1, Math.abs(lo) * 0.01)
+    return niceScale(lo - pad, hi + pad, targetTicks, "data")
+  }
 
   const step = niceNum(
     niceNum(hi - lo, false) / Math.max(1, targetTicks - 1),

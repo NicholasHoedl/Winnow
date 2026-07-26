@@ -4,11 +4,14 @@ import {
   entryTotals,
   type FoodOption,
   groupByMealType,
+  isLikelyBarcode,
   macroProgress,
   parseMealQuickAdd,
   type RecentEntry,
   recentFrequentFoods,
   sumMacros,
+  sumMicros,
+  weeklyWeightSeries,
   type MealType,
 } from "./service"
 
@@ -64,7 +67,11 @@ describe("groupByMealType", () => {
       entry({ mealType: null, calories: 40 }),
       entry({ mealType: "breakfast", calories: 200 }),
     ])
-    expect(groups.map((g) => g.mealType)).toEqual(["breakfast", "dinner", "other"])
+    expect(groups.map((g) => g.mealType)).toEqual([
+      "breakfast",
+      "dinner",
+      "other",
+    ])
     expect(groups[0].entries).toHaveLength(2)
     expect(groups[0].totals.calories).toBe(300) // 100 + 200
     expect(groups[2].mealType).toBe("other")
@@ -102,9 +109,33 @@ describe("macroProgress", () => {
 })
 
 const FOODS: FoodOption[] = [
-  { id: "f-ban", name: "Banana", servingLabel: "1 medium", calories: 105, proteinG: 1.3, carbsG: 27, fatG: 0.4 },
-  { id: "f-roll", name: "Dinner Roll", servingLabel: "1 roll", calories: 120, proteinG: 4, carbsG: 20, fatG: 2 },
-  { id: "f-chx", name: "Chicken Breast", servingLabel: "100 g", calories: 165, proteinG: 31, carbsG: 0, fatG: 3.6 },
+  {
+    id: "f-ban",
+    name: "Banana",
+    servingLabel: "1 medium",
+    calories: 105,
+    proteinG: 1.3,
+    carbsG: 27,
+    fatG: 0.4,
+  },
+  {
+    id: "f-roll",
+    name: "Dinner Roll",
+    servingLabel: "1 roll",
+    calories: 120,
+    proteinG: 4,
+    carbsG: 20,
+    fatG: 2,
+  },
+  {
+    id: "f-chx",
+    name: "Chicken Breast",
+    servingLabel: "100 g",
+    calories: 165,
+    proteinG: 31,
+    carbsG: 0,
+    fatG: 3.6,
+  },
 ]
 
 describe("parseMealQuickAdd — explicit macros", () => {
@@ -124,7 +155,9 @@ describe("parseMealQuickAdd — explicit macros", () => {
   })
 
   it("keeps a real name and strips the leading meal type", () => {
-    expect(parseMealQuickAdd("breakfast oatmeal 300cal 12p 40c 6f", FOODS)).toEqual({
+    expect(
+      parseMealQuickAdd("breakfast oatmeal 300cal 12p 40c 6f", FOODS),
+    ).toEqual({
       name: "oatmeal",
       servingLabel: "1 serving",
       calories: 300,
@@ -212,7 +245,15 @@ describe("parseMealQuickAdd — library food match", () => {
   it("does not match an ambiguous prefix", () => {
     const ambiguous: FoodOption[] = [
       ...FOODS,
-      { id: "f-thigh", name: "Chicken Thigh", servingLabel: "100 g", calories: 209, proteinG: 26, carbsG: 0, fatG: 11 },
+      {
+        id: "f-thigh",
+        name: "Chicken Thigh",
+        servingLabel: "100 g",
+        calories: 209,
+        proteinG: 26,
+        carbsG: 0,
+        fatG: 11,
+      },
     ]
     expect(parseMealQuickAdd("chicken", ambiguous)).toBeNull()
   })
@@ -233,6 +274,10 @@ const re = (
   proteinG: 0,
   carbsG: 0,
   fatG: 0,
+  fiberG: null,
+  sugarG: null,
+  satFatG: null,
+  sodiumMg: null,
   ...over,
 })
 
@@ -273,5 +318,161 @@ describe("recentFrequentFoods", () => {
 
   it("returns empty for empty input", () => {
     expect(recentFrequentFoods([])).toEqual([])
+  })
+})
+
+describe("sumMicros", () => {
+  const me = (
+    over: Partial<{
+      servings: number
+      fiberG: number | null
+      sugarG: number | null
+      satFatG: number | null
+      sodiumMg: number | null
+    }> = {},
+  ) => ({
+    servings: 1,
+    fiberG: null as number | null,
+    sugarG: null as number | null,
+    satFatG: null as number | null,
+    sodiumMg: null as number | null,
+    ...over,
+  })
+
+  it("scales by servings and sums only what's present", () => {
+    const { totals, known } = sumMicros([
+      me({ servings: 2, fiberG: 3, sodiumMg: 100 }),
+      me({ fiberG: 1.5, sugarG: 8 }),
+    ])
+    expect(totals.fiber).toBe(7.5) // 3×2 + 1.5
+    expect(totals.sodium).toBe(200)
+    expect(totals.sugar).toBe(8)
+    expect(known.fiber).toBe(2)
+    expect(known.sodium).toBe(1)
+  })
+
+  // The whole reason this isn't folded into sumMacros: a micro nobody measured has no
+  // total, and reporting 0 would claim a measurement that was never taken.
+  it("leaves a micro null when NO entry carried it", () => {
+    const { totals, known } = sumMicros([me({ fiberG: 3 }), me({ fiberG: 1 })])
+    expect(totals.fiber).toBe(4)
+    expect(totals.satFat).toBeNull()
+    expect(known.satFat).toBe(0)
+  })
+
+  it("distinguishes a measured zero from unknown", () => {
+    const { totals, known } = sumMicros([me({ sodiumMg: 0 })])
+    expect(totals.sodium).toBe(0)
+    expect(known.sodium).toBe(1)
+  })
+
+  it("reports how many of how many, so the UI can qualify the number", () => {
+    const result = sumMicros([
+      me({ sodiumMg: 50 }),
+      me(),
+      me({ sodiumMg: 25 }),
+      me(),
+    ])
+    expect(result.known.sodium).toBe(2)
+    expect(result.total).toBe(4)
+  })
+
+  it("rounds away float noise", () => {
+    // 0.7 × 3 is 2.0999999999999996 in IEEE754.
+    expect(sumMicros([me({ servings: 3, fiberG: 0.7 })]).totals.fiber).toBe(2.1)
+  })
+
+  it("empty input → all null, nothing known", () => {
+    const { totals, known, total } = sumMicros([])
+    expect(totals).toEqual({
+      fiber: null,
+      sugar: null,
+      sodium: null,
+      satFat: null,
+    })
+    expect(known.fiber).toBe(0)
+    expect(total).toBe(0)
+  })
+})
+
+describe("isLikelyBarcode", () => {
+  it("accepts the retail symbologies", () => {
+    expect(isLikelyBarcode("12345678")).toBe(true) // EAN-8
+    expect(isLikelyBarcode("038000138416")).toBe(true) // UPC-A
+    expect(isLikelyBarcode("3017620422003")).toBe(true) // EAN-13
+    expect(isLikelyBarcode("12345678901234")).toBe(true) // ITF-14
+  })
+
+  it("tolerates surrounding whitespace from a paste", () => {
+    expect(isLikelyBarcode("  3017620422003 ")).toBe(true)
+  })
+
+  it("rejects lengths outside the retail range", () => {
+    expect(isLikelyBarcode("1234567")).toBe(false)
+    expect(isLikelyBarcode("123456789012345")).toBe(false)
+    expect(isLikelyBarcode("")).toBe(false)
+  })
+
+  // This is the security-relevant half: the value reaches a URL path segment.
+  it("rejects anything that isn't purely digits", () => {
+    expect(isLikelyBarcode("../../etc/passwd")).toBe(false)
+    expect(isLikelyBarcode("3017620422003/../x")).toBe(false)
+    expect(isLikelyBarcode("301762042200x")).toBe(false)
+    expect(isLikelyBarcode("3017-6204-2200")).toBe(false)
+    expect(isLikelyBarcode("30176204220 3")).toBe(false)
+  })
+})
+
+describe("weeklyWeightSeries", () => {
+  const END = "2026-07-26"
+  const w = (date: string, weightLb: number) => ({ date, weightLb })
+
+  it("keeps the latest measurement in each 7-day window", () => {
+    const series = weeklyWeightSeries(
+      [w("2026-07-20", 183), w("2026-07-24", 181.5), w("2026-07-26", 181)],
+      END,
+      4,
+    )
+    // All three fall in the newest window (2026-07-20..26) — the last one wins.
+    expect(series).toEqual([{ weekStart: "2026-07-20", weightLb: 181 }])
+  })
+
+  it("orders oldest-first across windows", () => {
+    const series = weeklyWeightSeries(
+      [w("2026-07-26", 181), w("2026-07-12", 185), w("2026-07-19", 183)],
+      END,
+      4,
+    )
+    expect(series.map((p) => p.weekStart)).toEqual([
+      "2026-07-06",
+      "2026-07-13",
+      "2026-07-20",
+    ])
+    expect(series.map((p) => p.weightLb)).toEqual([185, 183, 181])
+  })
+
+  // The failure this guards: a zero-filled gap draws the line to the axis, which reads
+  // as "weighed nothing" rather than "didn't weigh".
+  it("OMITS weeks with no measurement rather than zeroing them", () => {
+    const series = weeklyWeightSeries(
+      [w("2026-07-26", 181), w("2026-06-28", 190)],
+      END,
+      6,
+    )
+    expect(series).toHaveLength(2)
+    expect(series.every((p) => p.weightLb > 0)).toBe(true)
+  })
+
+  it("ignores measurements outside the window", () => {
+    const series = weeklyWeightSeries(
+      [w("2020-01-01", 200), w("2026-07-26", 181), w("2026-12-25", 999)],
+      END,
+      4,
+    )
+    expect(series).toEqual([{ weekStart: "2026-07-20", weightLb: 181 }])
+  })
+
+  it("returns empty for no measurements", () => {
+    expect(weeklyWeightSeries([], END)).toEqual([])
   })
 })

@@ -4,6 +4,7 @@
 import { cn } from "@/lib/utils"
 
 import { linePath, niceScale, scaleY, slotCenter } from "./geometry"
+import type { Baseline } from "./geometry"
 import type { ChartSeries } from "./types"
 
 const VIEW_W = 400
@@ -19,6 +20,7 @@ export function LineChart({
   ariaLabel,
   height = 130,
   className,
+  baseline = "zero",
 }: {
   labels: string[]
   series: ChartSeries[]
@@ -26,6 +28,11 @@ export function LineChart({
   ariaLabel: string
   height?: number
   className?: string
+  /**
+   * `"data"` fits the y-axis to the values instead of anchoring it at zero — for
+   * quantities read as changes rather than amounts. See {@link niceScale}.
+   */
+  baseline?: Baseline
 }) {
   const plotW = VIEW_W - AXIS_W
   const plotH = height - AXIS_H - PAD_T
@@ -34,6 +41,8 @@ export function LineChart({
   const scale = niceScale(
     values.length ? Math.min(...values) : 0,
     values.length ? Math.max(...values) : 0,
+    4,
+    baseline,
   )
   const yOf = (value: number) => PAD_T + scaleY(value, scale, plotH)
 

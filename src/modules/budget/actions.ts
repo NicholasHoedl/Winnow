@@ -7,6 +7,7 @@ import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { addDays, todayInZone } from "@/lib/date"
 import { cyclesInRange, periodEnd } from "@/lib/recurrence"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
@@ -30,7 +31,7 @@ import {
 
 function revalidateBudget() {
   revalidatePath("/budget")
-  revalidatePath("/")
+  revalidateHubs()
 }
 
 /**

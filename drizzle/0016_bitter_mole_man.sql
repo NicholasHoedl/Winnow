@@ -1,0 +1,10 @@
+ALTER TABLE "foods" ADD COLUMN "fiber_g" real;--> statement-breakpoint
+ALTER TABLE "foods" ADD COLUMN "sugar_g" real;--> statement-breakpoint
+ALTER TABLE "foods" ADD COLUMN "sat_fat_g" real;--> statement-breakpoint
+ALTER TABLE "foods" ADD COLUMN "sodium_mg" real;--> statement-breakpoint
+ALTER TABLE "foods" ADD COLUMN "barcode" text;--> statement-breakpoint
+ALTER TABLE "meal_entries" ADD COLUMN "fiber_g" real;--> statement-breakpoint
+ALTER TABLE "meal_entries" ADD COLUMN "sugar_g" real;--> statement-breakpoint
+ALTER TABLE "meal_entries" ADD COLUMN "sat_fat_g" real;--> statement-breakpoint
+ALTER TABLE "meal_entries" ADD COLUMN "sodium_mg" real;--> statement-breakpoint
+CREATE INDEX "foods_user_barcode" ON "foods" USING btree ("user_id","barcode");

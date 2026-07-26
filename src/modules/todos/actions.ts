@@ -7,6 +7,7 @@ import { z } from "zod"
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
@@ -18,12 +19,12 @@ import {
   taskRecurrenceSchema,
 } from "./validation"
 
-// Every surface that renders task data: the todos page, the dashboard, and — since a
+// Every surface that renders task data: the todos page, the two hubs, and — since a
 // task can be linked to a goal (T2) — the goals page, which lists a goal's tasks.
 function revalidateTaskViews(): void {
   revalidatePath("/todos")
-  revalidatePath("/")
   revalidatePath("/goals")
+  revalidateHubs()
 }
 
 // --- Tasks ---
@@ -50,7 +51,10 @@ export async function createTask(input: unknown): Promise<ActionResult> {
   return { ok: true }
 }
 
-export async function updateTask(id: string, input: unknown): Promise<ActionResult> {
+export async function updateTask(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
   const userId = await requireUserId()
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
@@ -75,8 +79,7 @@ export async function updateTask(id: string, input: unknown): Promise<ActionResu
 }
 
 export type DeleteTaskResult =
-  | { ok: true; task: Task | null }
-  | { ok: false; error: string }
+  { ok: true; task: Task | null } | { ok: false; error: string }
 
 export async function deleteTask(id: string): Promise<DeleteTaskResult> {
   const userId = await requireUserId()
@@ -170,7 +173,12 @@ export async function createTaskRecurrence(
     .returning()
   // Materialize the current instance immediately (revalidation would regenerate it too).
   const { timeZone, weekStartsOn } = await getUserPreferences()
-  await syncRuleInstances(userId, rule, todayInZone(new Date(), timeZone), weekStartsOn)
+  await syncRuleInstances(
+    userId,
+    rule,
+    todayInZone(new Date(), timeZone),
+    weekStartsOn,
+  )
 
   revalidateTaskViews()
   return { ok: true }
@@ -238,7 +246,10 @@ export async function createList(input: unknown): Promise<ActionResult> {
   return { ok: true }
 }
 
-export async function renameList(id: string, input: unknown): Promise<ActionResult> {
+export async function renameList(
+  id: string,
+  input: unknown,
+): Promise<ActionResult> {
   const userId = await requireUserId()
   const parsed = listInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)

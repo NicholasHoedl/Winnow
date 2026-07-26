@@ -26,6 +26,39 @@ describe("niceScale", () => {
     expect(niceScale(500, 900).min).toBe(0)
   })
 
+  it("fits the domain to the data when asked, leaving zero out", () => {
+    // A body weight series. On a zero-based axis these three points land inside the
+    // top 2% of the plot and read as a flat line, which is the whole reason for the
+    // option — so the assertion is that the domain actually hugs the data.
+    const scale = niceScale(180.2, 182.4, 4, "data")
+    expect(scale.min).toBeGreaterThan(170)
+    expect(scale.min).toBeLessThanOrEqual(180.2)
+    expect(scale.max).toBeGreaterThanOrEqual(182.4)
+    expect(scale.ticks).not.toContain(0)
+    for (const tick of scale.ticks) {
+      expect(Math.abs(tick % scale.step)).toBeLessThan(1e-6)
+    }
+  })
+
+  it("gives a single data-baseline measurement a band to sit in", () => {
+    // Not a zero-span domain: one weigh-in must still draw an axis and a point.
+    const scale = niceScale(182.4, 182.4, 4, "data")
+    expect(scale.min).toBeLessThan(182.4)
+    expect(scale.max).toBeGreaterThan(182.4)
+    expect(scale.ticks.length).toBeGreaterThan(1)
+  })
+
+  it("keeps zero-baseline behaviour untouched by the new argument", () => {
+    // The money charts must not shift: same call, same numbers as before.
+    expect(niceScale(500, 900, 4, "zero")).toEqual(niceScale(500, 900))
+    expect(niceScale(0, 0, 4, "zero")).toEqual({
+      min: 0,
+      max: 1,
+      step: 1,
+      ticks: [0, 1],
+    })
+  })
+
   it("spans a negative domain — net income goes below zero", () => {
     const scale = niceScale(-620, 400)
     expect(scale.min).toBeLessThanOrEqual(-620)
