@@ -19,6 +19,15 @@ import {
   taskRecurrenceSchema,
 } from "./validation"
 
+/**
+ * The row id every single-item delete takes. A Server Action is a public RPC endpoint, so
+ * `id: string` is a compile-time annotation and nothing more — anything can be posted. A
+ * non-uuid reaches Postgres as a comparison against a `uuid` column and throws
+ * `invalid input syntax for type uuid`, which surfaces as an error boundary instead of a
+ * clean rejection. Ownership is enforced separately, by the userId in every where clause.
+ */
+const idSchema = z.string().uuid()
+
 // Every surface that renders task data: the todos page, the two hubs, and — since a
 // task can be linked to a goal (T2) — the goals page, which lists a goal's tasks.
 function revalidateTaskViews(): void {
@@ -52,10 +61,12 @@ export async function createTask(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateTask(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -72,7 +83,7 @@ export async function updateTask(
       goalId: nullify(goalId),
       eventId: nullify(eventId),
     })
-    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+    .where(and(eq(tasks.id, parsedId.data), eq(tasks.userId, userId)))
 
   revalidateTaskViews()
   return { ok: true }
@@ -81,11 +92,14 @@ export async function updateTask(
 export type DeleteTaskResult =
   { ok: true; task: Task | null } | { ok: false; error: string }
 
-export async function deleteTask(id: string): Promise<DeleteTaskResult> {
+export async function deleteTask(id: unknown): Promise<DeleteTaskResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(tasks)
-    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+    .where(and(eq(tasks.id, parsed.data), eq(tasks.userId, userId)))
     .returning()
   revalidateTaskViews()
   return { ok: true, task: deleted ?? null }
@@ -120,10 +134,13 @@ export async function restoreTask(task: Task): Promise<ActionResult> {
   return { ok: true }
 }
 
-export async function toggleTaskStatus(id: string): Promise<ActionResult> {
+export async function toggleTaskStatus(id: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const task = await db.query.tasks.findFirst({
-    where: and(eq(tasks.id, id), eq(tasks.userId, userId)),
+    where: and(eq(tasks.id, parsed.data), eq(tasks.userId, userId)),
     columns: { status: true },
   })
   if (!task) return { ok: false, error: "Task not found." }
@@ -135,7 +152,7 @@ export async function toggleTaskStatus(id: string): Promise<ActionResult> {
       status: nextStatus,
       completedAt: nextStatus === "done" ? new Date() : null,
     })
-    .where(and(eq(tasks.id, id), eq(tasks.userId, userId)))
+    .where(and(eq(tasks.id, parsed.data), eq(tasks.userId, userId)))
 
   revalidateTaskViews()
   return { ok: true }
@@ -185,17 +202,24 @@ export async function createTaskRecurrence(
 }
 
 export async function updateTaskRecurrence(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = taskRecurrenceSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   const [rule] = await db
     .update(taskRecurrences)
     .set(ruleColumns(parsed.data))
-    .where(and(eq(taskRecurrences.id, id), eq(taskRecurrences.userId, userId)))
+    .where(
+      and(
+        eq(taskRecurrences.id, parsedId.data),
+        eq(taskRecurrences.userId, userId),
+      ),
+    )
     .returning()
   if (!rule) return { ok: false, error: "Recurring task not found." }
 
@@ -213,22 +237,30 @@ export async function updateTaskRecurrence(
   return { ok: true }
 }
 
-export async function deleteTaskRecurrence(id: string): Promise<ActionResult> {
+export async function deleteTaskRecurrence(id: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   // Delete OPEN instances first (while the FK is set); deleting the rule then detaches
   // any COMPLETED instances into standalone history (series_id ON DELETE SET NULL).
   await db
     .delete(tasks)
     .where(
       and(
-        eq(tasks.seriesId, id),
+        eq(tasks.seriesId, parsed.data),
         eq(tasks.userId, userId),
         eq(tasks.status, "open"),
       ),
     )
   await db
     .delete(taskRecurrences)
-    .where(and(eq(taskRecurrences.id, id), eq(taskRecurrences.userId, userId)))
+    .where(
+      and(
+        eq(taskRecurrences.id, parsed.data),
+        eq(taskRecurrences.userId, userId),
+      ),
+    )
 
   revalidateTaskViews()
   return { ok: true }
@@ -247,25 +279,32 @@ export async function createList(input: unknown): Promise<ActionResult> {
 }
 
 export async function renameList(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = listInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   await db
     .update(lists)
     .set({ name: parsed.data.name })
-    .where(and(eq(lists.id, id), eq(lists.userId, userId)))
+    .where(and(eq(lists.id, parsedId.data), eq(lists.userId, userId)))
   revalidatePath("/todos")
   return { ok: true }
 }
 
-export async function deleteList(id: string): Promise<ActionResult> {
+export async function deleteList(id: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   // Tasks in this list have list_id set to NULL (FK onDelete: set null).
-  await db.delete(lists).where(and(eq(lists.id, id), eq(lists.userId, userId)))
+  await db
+    .delete(lists)
+    .where(and(eq(lists.id, parsed.data), eq(lists.userId, userId)))
   revalidatePath("/todos")
   return { ok: true }
 }

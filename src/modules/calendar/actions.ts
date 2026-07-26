@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { and, eq } from "drizzle-orm"
+import { z } from "zod"
 
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
@@ -20,6 +21,15 @@ import {
   type EventExceptionInput,
   type EventInput,
 } from "./validation"
+
+/**
+ * The row id every single-item delete takes. A Server Action is a public RPC endpoint, so
+ * `id: string` is a compile-time annotation and nothing more — anything can be posted. A
+ * non-uuid reaches Postgres as a comparison against a `uuid` column and throws
+ * `invalid input syntax for type uuid`, which surfaces as an error boundary instead of a
+ * clean rejection. Ownership is enforced separately, by the userId in every where clause.
+ */
+const idSchema = z.string().uuid()
 
 function revalidateCalendar() {
   revalidatePath("/calendar")
@@ -74,10 +84,12 @@ export async function createEvent(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateEvent(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = eventInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -99,7 +111,7 @@ export async function updateEvent(
       recurrenceMonthlyMode: d.recurrenceMonthlyMode,
       recurrenceEndDate: nullify(d.recurrenceEndDate),
     })
-    .where(and(eq(events.id, id), eq(events.userId, userId)))
+    .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
   revalidateCalendar()
   return { ok: true }
 }
@@ -107,11 +119,14 @@ export async function updateEvent(
 export type DeleteEventResult =
   { ok: true; event: EventRow | null } | { ok: false; error: string }
 
-export async function deleteEvent(id: string): Promise<DeleteEventResult> {
+export async function deleteEvent(id: unknown): Promise<DeleteEventResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(events)
-    .where(and(eq(events.id, id), eq(events.userId, userId)))
+    .where(and(eq(events.id, parsed.data), eq(events.userId, userId)))
     .returning()
   revalidateCalendar()
   return { ok: true, event: deleted ?? null }
@@ -174,13 +189,16 @@ async function ownsEvent(userId: string, eventId: string): Promise<boolean> {
 // Upsert a single-occurrence override (the "This event" save). Keyed on
 // (eventId, originalDate); re-saving the same day replaces the prior override.
 export async function setEventException(
-  eventId: string,
+  eventId: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  // Before ownsEvent, which would otherwise compare a non-uuid against events.id.
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = eventExceptionSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
-  if (!(await ownsEvent(userId, eventId))) {
+  if (!(await ownsEvent(userId, parsedId.data))) {
     return { ok: false, error: "Event not found." }
   }
 
@@ -198,7 +216,12 @@ export async function setEventException(
   }
   await db
     .insert(eventExceptions)
-    .values({ userId, eventId, originalDate: d.originalDate, ...fields })
+    .values({
+      userId,
+      eventId: parsedId.data,
+      originalDate: d.originalDate,
+      ...fields,
+    })
     .onConflictDoUpdate({
       target: [eventExceptions.eventId, eventExceptions.originalDate],
       set: { ...fields, updatedAt: new Date() },
@@ -210,19 +233,28 @@ export async function setEventException(
 // Skip a single occurrence ("This event" delete). Upserts a canceled marker; any
 // prior override on that day is left in place but ignored while canceled.
 export async function skipOccurrence(
-  eventId: string,
-  originalDate: string,
+  eventId: unknown,
+  originalDate: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
-  if (!isValidDateString(originalDate)) {
+  // Guarded before ownsEvent, which compares against events.id. The date check was
+  // already here; the id half was not. Mirrors clearEventException, its undo partner.
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
+  if (typeof originalDate !== "string" || !isValidDateString(originalDate)) {
     return { ok: false, error: "Invalid date." }
   }
-  if (!(await ownsEvent(userId, eventId))) {
+  if (!(await ownsEvent(userId, parsedId.data))) {
     return { ok: false, error: "Event not found." }
   }
   await db
     .insert(eventExceptions)
-    .values({ userId, eventId, originalDate, canceled: true })
+    .values({
+      userId,
+      eventId: parsedId.data,
+      originalDate,
+      canceled: true,
+    })
     .onConflictDoUpdate({
       target: [eventExceptions.eventId, eventExceptions.originalDate],
       set: { canceled: true, updatedAt: new Date() },
@@ -234,16 +266,26 @@ export async function skipOccurrence(
 // Remove a single occurrence's exception row — un-skip or reset it to the series
 // default. This is the undo target for skipOccurrence.
 export async function clearEventException(
-  eventId: string,
-  originalDate: string,
+  eventId: unknown,
+  originalDate: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  // Both halves of the key are guarded: this is the module's other single-item delete,
+  // and it compares against a `uuid` column AND a `date` one, so either an unchecked id
+  // or an unchecked date is a crash rather than a rejection. skipOccurrence above already
+  // screens the date for the same reason.
+  const parsed = idSchema.safeParse(eventId)
+  if (!parsed.success) return invalid(parsed.error)
+  if (typeof originalDate !== "string" || !isValidDateString(originalDate)) {
+    return { ok: false, error: "Invalid date." }
+  }
+
   await db
     .delete(eventExceptions)
     .where(
       and(
         eq(eventExceptions.userId, userId),
-        eq(eventExceptions.eventId, eventId),
+        eq(eventExceptions.eventId, parsed.data),
         eq(eventExceptions.originalDate, originalDate),
       ),
     )
@@ -263,22 +305,27 @@ export async function createCalendar(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateCalendar(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = calendarInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   await db
     .update(calendars)
     .set(parsed.data)
-    .where(and(eq(calendars.id, id), eq(calendars.userId, userId)))
+    .where(and(eq(calendars.id, parsedId.data), eq(calendars.userId, userId)))
   revalidateCalendar()
   return { ok: true }
 }
 
-export async function deleteCalendar(id: string): Promise<ActionResult> {
+export async function deleteCalendar(id: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const owned = await db.query.calendars.findMany({
     where: eq(calendars.userId, userId),
     columns: { id: true },
@@ -289,7 +336,7 @@ export async function deleteCalendar(id: string): Promise<ActionResult> {
   // The FK cascade removes this calendar's events along with it.
   await db
     .delete(calendars)
-    .where(and(eq(calendars.id, id), eq(calendars.userId, userId)))
+    .where(and(eq(calendars.id, parsed.data), eq(calendars.userId, userId)))
   revalidateCalendar()
   return { ok: true }
 }

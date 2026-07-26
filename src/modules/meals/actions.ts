@@ -43,6 +43,16 @@ import {
   waterLogSchema,
 } from "./validation"
 
+/**
+ * The row id every single-item delete takes. A Server Action is a public RPC endpoint, so
+ * `id: string` is a compile-time annotation and nothing more — anything can be posted. A
+ * non-uuid reaches Postgres as a comparison against a `uuid` column and throws
+ * `invalid input syntax for type uuid`, which surfaces as an error boundary instead of a
+ * clean rejection. Same reason deleteBodyWeight parses with daySchema rather than
+ * z.string(). Ownership is enforced separately, by the userId in every where clause.
+ */
+const idSchema = z.string().uuid()
+
 // Entries and targets move the macro numbers the hubs render. The food-library
 // actions below deliberately revalidate only /meals: entries snapshot their macros,
 // so editing or deleting a food changes no total anywhere.
@@ -64,17 +74,19 @@ export async function createFood(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateFood(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = foodInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   await db
     .update(foods)
     .set(parsed.data)
-    .where(and(eq(foods.id, id), eq(foods.userId, userId)))
+    .where(and(eq(foods.id, parsedId.data), eq(foods.userId, userId)))
   revalidatePath("/meals")
   return { ok: true }
 }
@@ -82,12 +94,15 @@ export async function updateFood(
 export type DeleteFoodResult =
   { ok: true; food: Food | null } | { ok: false; error: string }
 
-export async function deleteFood(id: string): Promise<DeleteFoodResult> {
+export async function deleteFood(id: unknown): Promise<DeleteFoodResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   // Meal entries keep their snapshot (food_id is set to NULL by the FK).
   const [deleted] = await db
     .delete(foods)
-    .where(and(eq(foods.id, id), eq(foods.userId, userId)))
+    .where(and(eq(foods.id, parsed.data), eq(foods.userId, userId)))
     .returning()
   revalidatePath("/meals")
   return { ok: true, food: deleted ?? null }
@@ -155,10 +170,12 @@ export async function logMeal(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateMealEntry(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = mealEntryInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -182,7 +199,9 @@ export async function updateMealEntry(
   await db
     .update(mealEntries)
     .set({ ...snapshot, servings, mealType: mealType || null, date })
-    .where(and(eq(mealEntries.id, id), eq(mealEntries.userId, userId)))
+    .where(
+      and(eq(mealEntries.id, parsedId.data), eq(mealEntries.userId, userId)),
+    )
   revalidateMeals()
   return { ok: true }
 }
@@ -191,12 +210,15 @@ export type DeleteMealEntryResult =
   { ok: true; entry: MealEntry | null } | { ok: false; error: string }
 
 export async function deleteMealEntry(
-  id: string,
+  id: unknown,
 ): Promise<DeleteMealEntryResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(mealEntries)
-    .where(and(eq(mealEntries.id, id), eq(mealEntries.userId, userId)))
+    .where(and(eq(mealEntries.id, parsed.data), eq(mealEntries.userId, userId)))
     .returning()
   revalidateMeals()
   return { ok: true, entry: deleted ?? null }
@@ -231,11 +253,14 @@ export async function logWater(input: unknown): Promise<ActionResult> {
   return { ok: true }
 }
 
-export async function deleteWaterLog(id: string): Promise<DeleteWaterResult> {
+export async function deleteWaterLog(id: unknown): Promise<DeleteWaterResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(waterLogs)
-    .where(and(eq(waterLogs.id, id), eq(waterLogs.userId, userId)))
+    .where(and(eq(waterLogs.id, parsed.data), eq(waterLogs.userId, userId)))
     .returning()
   revalidateMeals()
   return { ok: true, log: deleted ?? null }
@@ -360,7 +385,7 @@ export async function copyDay(input: unknown): Promise<CopyDayResult> {
 /** Undo partner for {@link copyDay}: removes exactly the rows it created. */
 export async function deleteMealEntries(ids: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
-  const parsed = z.array(z.string().uuid()).max(500).safeParse(ids)
+  const parsed = z.array(idSchema).max(500).safeParse(ids)
   if (!parsed.success) return invalid(parsed.error)
   if (parsed.data.length === 0) return { ok: true }
 
@@ -456,12 +481,17 @@ export type DeleteMacroTargetResult =
  * opening a period on the wrong date is now possible, and easily reversed.
  */
 export async function deleteMacroTargetPeriod(
-  id: string,
+  id: unknown,
 ): Promise<DeleteMacroTargetResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(macroTargets)
-    .where(and(eq(macroTargets.id, id), eq(macroTargets.userId, userId)))
+    .where(
+      and(eq(macroTargets.id, parsed.data), eq(macroTargets.userId, userId)),
+    )
     .returning()
   revalidateMeals()
   return { ok: true, period: deleted ?? null }

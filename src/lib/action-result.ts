@@ -2,9 +2,18 @@ import { type ZodError } from "zod"
 
 // Shared Server Action result shape + the helpers every module's actions file uses.
 
-export type ActionResult =
-  | { ok: true }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> }
+/**
+ * The failure half, named on its own. Several actions return a wider success branch that
+ * carries an undo payload (`DeleteFoodResult` and friends), and every one of those unions
+ * shares this failure shape — so a helper typed to it can be returned from any of them.
+ */
+export type ActionFailure = {
+  ok: false
+  error: string
+  fieldErrors?: Record<string, string>
+}
+
+export type ActionResult = { ok: true } | ActionFailure
 
 /** First error message per top-level field path — for surfacing Zod issues on fields. */
 export function fieldErrorsFrom(error: ZodError): Record<string, string> {
@@ -16,7 +25,7 @@ export function fieldErrorsFrom(error: ZodError): Record<string, string> {
   return out
 }
 
-export function invalid(error: ZodError): ActionResult {
+export function invalid(error: ZodError): ActionFailure {
   return {
     ok: false,
     error: "Please fix the errors below.",

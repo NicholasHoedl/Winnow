@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { and, eq, inArray, sql } from "drizzle-orm"
+import { z } from "zod"
 
 import { db } from "@/db"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
@@ -28,6 +29,15 @@ import {
   transactionInputSchema,
   transactionRecurrenceSchema,
 } from "./validation"
+
+/**
+ * The row id every single-item delete takes. A Server Action is a public RPC endpoint, so
+ * `id: string` is a compile-time annotation and nothing more — anything can be posted. A
+ * non-uuid reaches Postgres as a comparison against a `uuid` column and throws
+ * `invalid input syntax for type uuid`, which surfaces as an error boundary instead of a
+ * clean rejection. Ownership is enforced separately, by the userId in every where clause.
+ */
+const idSchema = z.string().uuid()
 
 function revalidateBudget() {
   revalidatePath("/budget")
@@ -69,28 +79,33 @@ export async function createCategory(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateCategory(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = categoryInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   await db
     .update(categories)
     .set(parsed.data)
-    .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+    .where(and(eq(categories.id, parsedId.data), eq(categories.userId, userId)))
   revalidateBudget()
   return { ok: true }
 }
 
-export async function deleteCategory(id: string): Promise<ActionResult> {
+export async function deleteCategory(id: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   // Transactions keep their history (category_id set to NULL); budgets for the
   // category cascade away.
   await db
     .delete(categories)
-    .where(and(eq(categories.id, id), eq(categories.userId, userId)))
+    .where(and(eq(categories.id, parsed.data), eq(categories.userId, userId)))
   revalidateBudget()
   return { ok: true }
 }
@@ -122,10 +137,12 @@ export async function createTransaction(input: unknown): Promise<ActionResult> {
 }
 
 export async function updateTransaction(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
@@ -145,7 +162,9 @@ export async function updateTransaction(
       payee: nullify(payee),
       description: nullify(description),
     })
-    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+    .where(
+      and(eq(transactions.id, parsedId.data), eq(transactions.userId, userId)),
+    )
   revalidateBudget()
   return { ok: true }
 }
@@ -154,12 +173,17 @@ export type DeleteTransactionResult =
   { ok: true; transaction: Transaction | null } | { ok: false; error: string }
 
 export async function deleteTransaction(
-  id: string,
+  id: unknown,
 ): Promise<DeleteTransactionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   const [deleted] = await db
     .delete(transactions)
-    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+    .where(
+      and(eq(transactions.id, parsed.data), eq(transactions.userId, userId)),
+    )
     .returning()
   revalidateBudget()
   return { ok: true, transaction: deleted ?? null }
@@ -368,10 +392,12 @@ export async function createTransactionRecurrence(
  * time this month: the 1st is already posted, and the 15th is still ahead.
  */
 export async function updateTransactionRecurrence(
-  id: string,
+  id: unknown,
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(id)
+  if (!parsedId.success) return invalid(parsedId.error)
   const parsed = transactionRecurrenceSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
   const d = parsed.data
@@ -382,7 +408,7 @@ export async function updateTransactionRecurrence(
 
   const existing = await db.query.transactionRecurrences.findFirst({
     where: and(
-      eq(transactionRecurrences.id, id),
+      eq(transactionRecurrences.id, parsedId.data),
       eq(transactionRecurrences.userId, userId),
     ),
   })
@@ -424,7 +450,7 @@ export async function updateTransactionRecurrence(
     })
     .where(
       and(
-        eq(transactionRecurrences.id, id),
+        eq(transactionRecurrences.id, parsedId.data),
         eq(transactionRecurrences.userId, userId),
       ),
     )
@@ -437,14 +463,17 @@ export async function updateTransactionRecurrence(
  * ON DELETE SET NULL, so they simply detach into ordinary history. Note the
  * contrast with deleteTaskRecurrence, which deletes its open instances. */
 export async function deleteTransactionRecurrence(
-  id: string,
+  id: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
   await db
     .delete(transactionRecurrences)
     .where(
       and(
-        eq(transactionRecurrences.id, id),
+        eq(transactionRecurrences.id, parsed.data),
         eq(transactionRecurrences.userId, userId),
       ),
     )
