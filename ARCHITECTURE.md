@@ -1,7 +1,7 @@
 # Winnow — Architecture
 
-Status: Draft v1 (pre-implementation)
-Last updated: 2026-07-21
+Status: Implemented through improvement-plan tranche T4
+Last updated: 2026-07-26
 
 This document assumes SPEC.md. It covers the tech stack and rationale, the
 system layout, the data model, the deployment architecture (including the
@@ -17,18 +17,18 @@ that's deliberate, not an oversight.
 
 ## 1. Tech Stack and Rationale
 
-| Layer | Choice | Why |
-|---|---|---|
-| Framework | **Next.js (App Router)**, full-stack | One codebase, one deployable container, TypeScript end to end, matches the user's existing skill set. See ADR-0001. |
-| Language | **TypeScript** | Shared types between UI, server actions, and DB schema; catches a large class of bugs at build time with zero runtime cost. |
-| Database | **PostgreSQL**, self-hosted in Docker | Real transactions, foreign keys, and constraints — the budgeting module in particular needs correctness guarantees a document store won't give for free. See ADR-0003. |
-| ORM / migrations | **Drizzle ORM** | SQL-transparent (thin query builder, not a heavy runtime), migrations are plain readable SQL, types inferred directly from schema. Prisma considered and rejected as the default — see ADR-0003. |
-| UI | **Tailwind CSS + shadcn/ui** | Utility CSS with owned, copy-in components (not an opaque dependency) — fast to build with, easy for one person to keep consistent. Detailed visual design (fonts, color, motion) is intentionally **not** specified here; that's a design-phase concern for later in the roadmap. |
-| Validation & forms | **Zod + React Hook Form** with shadcn Form primitives | One schema (Zod) shared by both the client form and the server action/route handler — validation logic is never duplicated. |
-| Data fetching / server state | **React Server Components for reads, Server Actions for mutations, TanStack Query only where optimistic UI genuinely matters** | See §1.1 below — this is a deliberate, justified mix, not an arbitrary grab-bag. |
-| Auth | **Auth.js (NextAuth) Credentials provider, single account** | Light by design — the tailnet is the real perimeter. See §5. |
-| Testing | **Vitest + React Testing Library** (unit/component), **Playwright** (a handful of E2E happy paths) | Enough to catch regressions in the business logic that actually has bugs (money math, recurrence, totals) without building a heavy test pyramid for a single-user app. |
-| Tooling | **TypeScript, pnpm, Node LTS, ESLint + Prettier (or Biome), Docker Compose** | Boring, standard, well-documented — optimizing for "still obvious how this works in a year" over novelty. |
+| Layer                        | Choice                                                                                                                         | Why                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework                    | **Next.js (App Router)**, full-stack                                                                                           | One codebase, one deployable container, TypeScript end to end, matches the user's existing skill set. See ADR-0001.                                                                                                                                                                |
+| Language                     | **TypeScript**                                                                                                                 | Shared types between UI, server actions, and DB schema; catches a large class of bugs at build time with zero runtime cost.                                                                                                                                                        |
+| Database                     | **PostgreSQL**, self-hosted in Docker                                                                                          | Real transactions, foreign keys, and constraints — the budgeting module in particular needs correctness guarantees a document store won't give for free. See ADR-0003.                                                                                                             |
+| ORM / migrations             | **Drizzle ORM**                                                                                                                | SQL-transparent (thin query builder, not a heavy runtime), migrations are plain readable SQL, types inferred directly from schema. Prisma considered and rejected as the default — see ADR-0003.                                                                                   |
+| UI                           | **Tailwind CSS + shadcn/ui**                                                                                                   | Utility CSS with owned, copy-in components (not an opaque dependency) — fast to build with, easy for one person to keep consistent. Detailed visual design (fonts, color, motion) is intentionally **not** specified here; that's a design-phase concern for later in the roadmap. |
+| Validation & forms           | **Zod + React Hook Form** with shadcn Form primitives                                                                          | One schema (Zod) shared by both the client form and the server action/route handler — validation logic is never duplicated.                                                                                                                                                        |
+| Data fetching / server state | **React Server Components for reads, Server Actions for mutations, TanStack Query only where optimistic UI genuinely matters** | See §1.1 below — this is a deliberate, justified mix, not an arbitrary grab-bag.                                                                                                                                                                                                   |
+| Auth                         | **Auth.js (NextAuth) Credentials provider, single account**                                                                    | Light by design — the tailnet is the real perimeter. See §5.                                                                                                                                                                                                                       |
+| Testing                      | **Vitest + React Testing Library** (unit/component), **Playwright** (a handful of E2E happy paths)                             | Enough to catch regressions in the business logic that actually has bugs (money math, recurrence, totals) without building a heavy test pyramid for a single-user app.                                                                                                             |
+| Tooling                      | **TypeScript, pnpm, Node LTS, ESLint + Prettier (or Biome), Docker Compose**                                                   | Boring, standard, well-documented — optimizing for "still obvious how this works in a year" over novelty.                                                                                                                                                                          |
 
 ### 1.1 Data fetching: the actual rule
 
@@ -42,7 +42,7 @@ To avoid two competing data-fetching mental models growing across the app:
   data after a write. This covers the large majority of create/edit/delete
   interactions across all four modules.
 - **TanStack Query is opt-in, per-component**, used only where a mutation
-  needs to *feel* instant before the server confirms — e.g., toggling a
+  needs to _feel_ instant before the server confirms — e.g., toggling a
   task's done state, or a meal-entry quick-add. These are the few spots
   where optimistic UI meaningfully improves daily-use feel; everywhere
   else, a Server Action + revalidation round-trip is simple, correct, and
@@ -50,6 +50,36 @@ To avoid two competing data-fetching mental models growing across the app:
 - Rule of thumb when adding a new interaction: start with a Server Action.
   Only reach for TanStack Query if the Server Action's revalidation delay
   is actually noticeable and annoying in practice.
+
+### 1.1a Outbound HTTP (added in T4)
+
+Until T4 the app made **no outbound network calls at all** — every byte it
+served came from its own Postgres. The Open Food Facts food-database lookup
+broke that, so the rule is written down rather than left to whoever adds the
+next integration. See **ADR-0005** for the full reasoning.
+
+- **Third-party calls happen in a Server Action, on the server.** Not from the
+  browser (no CORS, no third-party host in the CSP, no API surface exposed to a
+  page), and not in a route handler (which would be a second mutation mental
+  model for something Server Actions already do).
+- **The client owning the fetch never throws.** `off-client.ts` is
+  `server-only`, owns every `fetch`, and returns failure _as a value_ — an
+  outage or a timeout must render an inline message while hand-entry stays
+  fully usable, not trip an error boundary.
+- **Timeouts are mandatory** (`AbortSignal.timeout`, 6 s search / 4 s barcode).
+  A third-party outage otherwise manifests as a Server Action that blocks a
+  React transition indefinitely.
+- **Anything interpolated into a URL is validated first.** A barcode goes into
+  a path segment, so it is regex-checked (`/^\d{8,14}$/`) at the action and
+  again before the URL is built; queries go through `URLSearchParams`.
+- **Reading writes nothing.** Searching the food database touches no table;
+  only an explicit import does.
+- **The integration is switchable** (`OFF_ENABLED`). Off means zero network
+  calls, and the flag is read on the server and passed down as a prop — a
+  client component must never touch `process.env`.
+
+The deployment consequence is in §4.2: the app container now needs outbound
+HTTPS, where before it needed none.
 
 ### 1.2 What was deliberately not chosen
 
@@ -178,18 +208,19 @@ a classic, easy-to-introduce bug.
 > `task_recurrences`, `transaction_recurrences` and `user_preferences`, and
 > never built the planned `accounts` table. `drizzle/` and each module's
 > `schema.ts` are the source of truth; the ADRs in `docs/adr/` record why the
-> shape changed. What is still worth reading here is the *reasoning*.
+> shape changed. What is still worth reading here is the _reasoning_.
 
 ### 3.1 Core
 
 **users**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| email | text, unique | login identifier |
-| password_hash | text | via Auth.js Credentials provider |
-| display_name | text | |
-| created_at | timestamptz | |
+
+| field         | type         | notes                            |
+| ------------- | ------------ | -------------------------------- |
+| id            | uuid (pk)    |                                  |
+| email         | text, unique | login identifier                 |
+| password_hash | text         | via Auth.js Credentials provider |
+| display_name  | text         |                                  |
+| created_at    | timestamptz  |                                  |
 
 Plus the standard Auth.js/Drizzle-adapter tables (`sessions`, `accounts`,
 `verification_tokens`) if using database-backed sessions — not
@@ -198,44 +229,47 @@ hand-designed here, they follow Auth.js's documented schema.
 ### 3.2 To-dos
 
 **lists**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| name | text | e.g. "Work", "Home" |
-| sort_order | int | for manual ordering |
-| created_at | timestamptz | |
+
+| field      | type              | notes               |
+| ---------- | ----------------- | ------------------- |
+| id         | uuid (pk)         |                     |
+| user_id    | uuid (fk → users) |                     |
+| name       | text              | e.g. "Work", "Home" |
+| sort_order | int               | for manual ordering |
+| created_at | timestamptz       |                     |
 
 **tasks**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| list_id | uuid (fk → lists, nullable) | a task may belong to no list |
-| title | text, required | |
-| notes | text, nullable | |
-| due_date | date, nullable | date-only, no time-of-day in v1 |
-| priority | enum(low, medium, high) | default medium |
-| status | enum(open, done) | binary for v1, see SPEC open question #4 |
-| completed_at | timestamptz, nullable | set when status → done |
-| created_at / updated_at | timestamptz | |
+
+| field                   | type                        | notes                                    |
+| ----------------------- | --------------------------- | ---------------------------------------- |
+| id                      | uuid (pk)                   |                                          |
+| user_id                 | uuid (fk → users)           |                                          |
+| list_id                 | uuid (fk → lists, nullable) | a task may belong to no list             |
+| title                   | text, required              |                                          |
+| notes                   | text, nullable              |                                          |
+| due_date                | date, nullable              | date-only, no time-of-day in v1          |
+| priority                | enum(low, medium, high)     | default medium                           |
+| status                  | enum(open, done)            | binary for v1, see SPEC open question #4 |
+| completed_at            | timestamptz, nullable       | set when status → done                   |
+| created_at / updated_at | timestamptz                 |                                          |
 
 ### 3.3 Calendar / Events
 
 **events**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| title | text, required | |
-| notes | text, nullable | |
-| start_at | timestamptz | |
-| end_at | timestamptz, nullable | nullable to allow open-ended/point events |
-| all_day | boolean | |
-| recurrence_freq | enum(none, daily, weekly, monthly, yearly), nullable | |
-| recurrence_interval | int, default 1 | e.g. every 2 weeks |
-| recurrence_end_date | date, nullable | open-ended if null |
-| created_at / updated_at | timestamptz | |
+
+| field                   | type                                                 | notes                                     |
+| ----------------------- | ---------------------------------------------------- | ----------------------------------------- |
+| id                      | uuid (pk)                                            |                                           |
+| user_id                 | uuid (fk → users)                                    |                                           |
+| title                   | text, required                                       |                                           |
+| notes                   | text, nullable                                       |                                           |
+| start_at                | timestamptz                                          |                                           |
+| end_at                  | timestamptz, nullable                                | nullable to allow open-ended/point events |
+| all_day                 | boolean                                              |                                           |
+| recurrence_freq         | enum(none, daily, weekly, monthly, yearly), nullable |                                           |
+| recurrence_interval     | int, default 1                                       | e.g. every 2 weeks                        |
+| recurrence_end_date     | date, nullable                                       | open-ended if null                        |
+| created_at / updated_at | timestamptz                                          |                                           |
 
 Recurring **calendar** occurrences are **computed on the fly** for whatever
 date range is being viewed (e.g., the visible month), not pre-materialized as
@@ -246,7 +280,7 @@ no "edit just this one occurrence" — was later bought back with an
 
 **This rule turned out to be specific to the calendar.** Recurring to-dos and
 recurring transactions both materialize real rows, lazily on read, because a
-to-do you can tick off and a payment that hits your ledger have to *exist*.
+to-do you can tick off and a payment that hits your ledger have to _exist_.
 Their tradeoffs are opposite and deliberate: the task generator keeps exactly
 one open instance and retires the rest, while the transaction generator is
 insert-only and never rewrites a posted row. See ADR-0004 for the money case
@@ -256,46 +290,50 @@ during a render illegal).
 ### 3.4 Budgeting
 
 **accounts**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| name | text | |
-| type | enum(checking, savings, credit, cash, other) | |
-| starting_balance_cents | integer | |
-| created_at | timestamptz | |
+
+| field                  | type                                         | notes |
+| ---------------------- | -------------------------------------------- | ----- |
+| id                     | uuid (pk)                                    |       |
+| user_id                | uuid (fk → users)                            |       |
+| name                   | text                                         |       |
+| type                   | enum(checking, savings, credit, cash, other) |       |
+| starting_balance_cents | integer                                      |       |
+| created_at             | timestamptz                                  |       |
 
 **categories**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| name | text | |
-| kind | enum(income, expense) | |
-| created_at | timestamptz | |
+
+| field      | type                  | notes |
+| ---------- | --------------------- | ----- |
+| id         | uuid (pk)             |       |
+| user_id    | uuid (fk → users)     |       |
+| name       | text                  |       |
+| kind       | enum(income, expense) |       |
+| created_at | timestamptz           |       |
 
 **transactions**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| account_id | uuid (fk → accounts) | |
-| category_id | uuid (fk → categories, nullable) | nullable = uncategorized |
-| amount_cents | integer, positive | |
-| type | enum(income, expense) | stored explicitly rather than inferred from category, so a transaction's direction is never silently dependent on how its category happens to be configured |
-| date | date | |
-| description | text, nullable | |
-| created_at | timestamptz | |
+
+| field        | type                             | notes                                                                                                                                                       |
+| ------------ | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| id           | uuid (pk)                        |                                                                                                                                                             |
+| user_id      | uuid (fk → users)                |                                                                                                                                                             |
+| account_id   | uuid (fk → accounts)             |                                                                                                                                                             |
+| category_id  | uuid (fk → categories, nullable) | nullable = uncategorized                                                                                                                                    |
+| amount_cents | integer, positive                |                                                                                                                                                             |
+| type         | enum(income, expense)            | stored explicitly rather than inferred from category, so a transaction's direction is never silently dependent on how its category happens to be configured |
+| date         | date                             |                                                                                                                                                             |
+| description  | text, nullable                   |                                                                                                                                                             |
+| created_at   | timestamptz                      |                                                                                                                                                             |
 
 **budgets**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| category_id | uuid (fk → categories) | |
-| period_month | date | truncated to first-of-month |
-| amount_cents | integer | |
-| created_at | timestamptz | |
+
+| field        | type                   | notes                       |
+| ------------ | ---------------------- | --------------------------- |
+| id           | uuid (pk)              |                             |
+| user_id      | uuid (fk → users)      |                             |
+| category_id  | uuid (fk → categories) |                             |
+| period_month | date                   | truncated to first-of-month |
+| amount_cents | integer                |                             |
+| created_at   | timestamptz            |                             |
 
 **Monthly rollups are a computed query, not a stored table** — sum of
 `transactions.amount_cents` grouped by category/month, compared against
@@ -305,39 +343,125 @@ doesn't exist yet (YAGNI — revisit only if it's ever actually slow).
 
 ### 3.5 Meal Macros
 
-**foods**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| name | text | |
-| serving_label | text | e.g. "1 cup", "100g" |
-| calories | numeric | per serving |
-| protein_g / carbs_g / fat_g | numeric | per serving |
-| created_at | timestamptz | |
+Macros are `real` (float), not `numeric`. Nutrition doesn't need the
+integer-cents precision money does, and floats sum cleanly as JS numbers.
 
-**meal_entries**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users) | |
-| food_id | uuid (fk → foods) | |
-| date | date | |
-| meal_type | enum(breakfast, lunch, dinner, snack), nullable | |
-| servings | numeric, default 1 | supports fractional servings |
-| created_at | timestamptz | |
+**foods** — the reusable library
 
-**macro_targets**
-| field | type | notes |
-|---|---|---|
-| id | uuid (pk) | |
-| user_id | uuid (fk → users), unique | one active target per user in v1 |
-| calories / protein_g / carbs_g / fat_g | numeric | |
-| updated_at | timestamptz | |
+| field                                     | type                      | notes                                  |
+| ----------------------------------------- | ------------------------- | -------------------------------------- |
+| id                                        | uuid (pk)                 |                                        |
+| user_id                                   | uuid (fk → users)         |                                        |
+| name                                      | text                      |                                        |
+| serving_label                             | text                      | e.g. "1 cup", "100 g"                  |
+| calories                                  | real, not null, default 0 | per serving                            |
+| protein_g / carbs_g / fat_g               | real, not null, default 0 | per serving                            |
+| fiber_g / sugar_g / sat_fat_g / sodium_mg | real, **nullable**        | per serving; null = unknown            |
+| barcode                                   | text, nullable            | set when imported from Open Food Facts |
+| created_at / updated_at                   | timestamptz               |                                        |
 
-Daily totals are computed by summing `meal_entries` (scaled by `servings`)
-joined to `foods` for a given date and user — again a query, not a stored
-aggregate.
+Indexes: `(user_id, name)` — the library is read in full on every `/meals`
+render — and `(user_id, barcode)`, deliberately **not** unique. A unique there
+would change what `restoreFood`'s `onConflictDoNothing` swallows: undo would
+start silently no-op'ing on a barcode collision rather than on the id.
+Duplicates are deduped in the action instead.
+
+**meal_entries** — one logged item
+
+| field                                     | type                                            | notes                                                  |
+| ----------------------------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| id                                        | uuid (pk)                                       |                                                        |
+| user_id                                   | uuid (fk → users)                               |                                                        |
+| food_id                                   | uuid (fk → foods), nullable, ON DELETE SET NULL | kept only for "log again"                              |
+| date                                      | date                                            |                                                        |
+| meal_type                                 | enum(breakfast, lunch, dinner, snack), nullable |                                                        |
+| servings                                  | real, default 1                                 | fractional servings; also how a per-100 g import works |
+| name / serving_label                      | text                                            | **snapshot**                                           |
+| calories / protein_g / carbs_g / fat_g    | real, not null, default 0                       | **snapshot**                                           |
+| fiber_g / sugar_g / sat_fat_g / sodium_mg | real, nullable                                  | **snapshot**                                           |
+| created_at                                | timestamptz                                     |                                                        |
+
+Indexes: `(user_id, date)` — the module's hot path, hit by `/meals`, `/` and
+`/today` — and `(user_id, created_at)` for the newest-first scan behind quick
+picks.
+
+**Every nutrition figure is snapshotted at log time**, which is why the columns
+are duplicated rather than joined. Editing or deleting a food must never rewrite
+what you ate last Tuesday. The micros are snapshotted for the same reason: if
+they were read live, editing a food's sodium would silently rewrite history for
+micros while leaving the macros correct — worse than not having them at all.
+
+**Micronutrients are nullable, unlike the macros' NOT NULL DEFAULT 0.** All four
+macros are on screen whenever a food is entered by hand, so a 0 there means "I
+typed zero". For micros, "unknown" is the _normal_ state — every food that
+predates the columns has none, and Open Food Facts products routinely carry
+fiber but not saturated fat. A 0 default would report "412 mg sodium" for a day
+where three of eight entries simply have no data: precise-looking and wrong.
+`sumMicros` therefore returns totals **plus a per-micro known-count**, so the UI
+can say "412 mg (3 of 8)" instead of implying a precision it doesn't have.
+
+**macro_targets** — effective-dated, one row per period
+
+| field                                  | type                            | notes                                       |
+| -------------------------------------- | ------------------------------- | ------------------------------------------- |
+| id                                     | uuid (pk)                       |                                             |
+| user_id                                | uuid (fk → users)               |                                             |
+| effective_from                         | date, not null                  | the day this set of targets starts applying |
+| calories / protein_g / carbs_g / fat_g | real, not null, default 0       |                                             |
+| created_at / updated_at                | timestamptz                     |                                             |
+|                                        | unique(user_id, effective_from) | also serves as the lookup index             |
+
+The targets in effect on day D are the latest row with `effective_from <= D`.
+There is deliberately **no `effective_to`**: a closed interval needs two writes
+per change and can develop gaps or overlaps no constraint catches, whereas
+"greatest start not after D" is one indexed lookup. Same shape as `budgets`'
+`(user, category, period_month)` key.
+
+This replaced a single row per user (`unique(user_id)`). Changing a target used
+to silently re-score every day already logged, which would have made the trends
+meaningless. Migration `0017` backfills the pre-existing row to `1970-01-01`
+— not `created_at::date` — so every historical day keeps scoring against the
+targets it has always been scored against.
+
+**water_logs** — one row per log
+
+| field        | type              | notes |
+| ------------ | ----------------- | ----- |
+| id           | uuid (pk)         |       |
+| user_id      | uuid (fk → users) |       |
+| date         | date              |       |
+| amount_fl_oz | real, not null    |       |
+| created_at   | timestamptz       |       |
+
+**body_weights** — one row per day
+
+| field                   | type                  | notes                           |
+| ----------------------- | --------------------- | ------------------------------- |
+| id                      | uuid (pk)             |                                 |
+| user_id                 | uuid (fk → users)     |                                 |
+| date                    | date                  |                                 |
+| weight_lb               | real, not null        |                                 |
+| created_at / updated_at | timestamptz           |                                 |
+|                         | unique(user_id, date) | also serves as the lookup index |
+
+**These two have opposite shapes on purpose, and the difference is the point.**
+Water accumulates in +8/+16 taps through the day, so an append-only log makes
+"+8 oz" a plain insert and undo a plain delete. A per-day running total would
+need a read-modify-write — racy against a double tap — and an undo that
+remembers a delta. Weight is measured once, so the unique makes the write a
+clean upsert, makes a typo an edit rather than a second data point, and keeps
+the trend chart's x-axis unambiguous.
+
+**Units live in the column names** (`amount_fl_oz`, `weight_lb`, `sodium_mg`),
+the same idiom as `amount_cents` and `protein_g`. The app is imperial by
+decision; there is no units preference and no conversion layer, so the unit is
+part of the schema rather than a convention someone has to remember.
+
+Daily totals are computed by summing `meal_entries` (scaled by `servings`) for a
+date and user — a query, not a stored aggregate. The weight trend buckets to one
+point per week (`weeklyWeightSeries`, pure and unit-tested) and **omits** weeks
+with no weigh-in rather than emitting 0, since a 0 would draw a cliff to the
+floor of the chart.
 
 ---
 
@@ -358,7 +482,7 @@ determines Docker image architecture: arm64 vs. amd64). Runs:
   `Dockerfile`, listening on an internal port (e.g. 3000), published only
   to `127.0.0.1:3000` on the host (not to `0.0.0.0`) — it should not be
   reachable on the host's LAN interface directly, only via `tailscale
-  serve` or localhost.
+serve` or localhost.
 - **`postgres`** — official Postgres image, with a named Docker volume
   (e.g. `winnow_pgdata`) mounted at the data directory. This volume is the
   single source of truth for all application data and must survive
@@ -367,6 +491,12 @@ determines Docker image architecture: arm64 vs. amd64). Runs:
   `postgres`, using a service-name hostname (e.g. `postgres:5432`) and
   credentials from environment variables / an env file that is **not**
   committed to git.
+- **`app` needs outbound HTTPS** as of T4 — the Open Food Facts lookup runs
+  server-side (§1.1a, ADR-0005). Before T4 the container needed no egress at
+  all, so a locked-down network policy that predates this will make the food
+  database silently unavailable. Set `OFF_ENABLED=false` to turn the feature
+  off deliberately rather than have it fail; everything else in the app
+  continues to work with no egress. `postgres` still needs none.
 
 ### 4.3 Tailscale networking and HTTPS (the critical piece)
 
@@ -411,7 +541,7 @@ On a private tailnet with no public domain, this is solved as follows:
    for unrelated reasons.
 6. **Nothing about this app is ever exposed to the public internet.**
    There is no public DNS record, no port-forward on the home router, and
-   Tailscale Funnel (which *would* expose a tailnet service publicly) is
+   Tailscale Funnel (which _would_ expose a tailnet service publicly) is
    explicitly not used.
 
 ### 4.4 Persistence and backups
@@ -578,7 +708,11 @@ winnow/
 │   │   │   └── validation.ts         # Zod schemas, shared client/server
 │   │   ├── calendar/                 # same shape (+ recurrence expansion in service.ts)
 │   │   ├── budget/                   # same shape (+ rollup calc in service.ts)
-│   │   ├── meals/                    # same shape (+ totals calc in service.ts)
+│   │   ├── meals/                    # same shape, plus the files below
+│   │   │   ├── restore.ts            # row → insert-payload maps for every undo path
+│   │   │   ├── off-mapping.ts        # pure: OFF product → ImportedFood
+│   │   │   ├── off-request.ts        # pure: URL building, error classification
+│   │   │   └── off-client.ts         # server-only: owns fetch, never throws
 │   │   └── dashboard/
 │   │       └── queries.ts            # composes the other modules' queries.ts only
 │   │
@@ -624,6 +758,24 @@ Rules this structure is meant to enforce:
   separate mental map to maintain as a solo developer. Playwright E2E
   tests live separately (e.g., `e2e/`) since they exercise the whole
   running app rather than one module.
+- **The five-file shape is a floor, not a ceiling.** `meals/` is the module
+  that has outgrown it, and the extra files exist for one reason each — to
+  make something testable that otherwise wouldn't be:
+  - `restore.ts` — every `restoreX` action re-inserts a deleted row by listing
+    its columns, and that list has silently fallen behind the schema three
+    times (`842f420` for tasks, T3-S11 for transactions, T4-S11 for the
+    account data tools). TypeScript can't catch it: a column omitted from an
+    insert is left NULL, which is valid. Hoisting the column lists out of
+    `actions.ts` lets `restore.test.ts` assert them against
+    `getTableColumns()`, so forgetting one fails a test instead of losing data
+    on undo. `src/modules/account/coverage.test.ts` does the same job one level
+    up for `clearAllData` / `exportUserData`.
+  - `off-mapping.ts` / `off-request.ts` — pure, so the fiddly parts (per-100 g
+    vs per-serving basis, kJ → kcal, OFF's sodium in grams → our milligrams,
+    URL building, error classification) are unit-tested without a network.
+  - `off-client.ts` — `server-only`, and the _only_ place `fetch` is called.
+    Keeping the I/O in one file is what lets everything around it be pure.
+    Reach for a new file when it buys a test; not otherwise.
 
 ---
 
@@ -635,9 +787,9 @@ starting Phase 0.)
 - Lists (not many-to-many tags) for to-do organization in v1.
 - Binary task status (open/done), no "in progress" state.
 - Recurrence expanded on read, not materialized — no per-occurrence edits
-  in v1. *(Since revised: calendar events kept read-time expansion and gained
+  in v1. _(Since revised: calendar events kept read-time expansion and gained
   per-occurrence edits via an exceptions overlay; to-dos and transactions
-  materialize instead. See §3.3 and ADR-0004.)*
+  materialize instead. See §3.3 and ADR-0004.)_
 - Transaction direction stored explicitly (`type`), not inferred from
   category.
 - Monthly rollups and daily macro totals are computed queries, not

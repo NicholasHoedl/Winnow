@@ -5,7 +5,32 @@ proposed change into **tranches** that are dependency-ordered and independently 
 Each tranche is scoped enough to be expanded into a detailed implementation plan when it's
 picked up — it is **not** code-level detail yet.
 
+## Status
+
+| Tranche                                       | State       |
+| --------------------------------------------- | ----------- |
+| T0 — Foundations, cohesion & safety           | ✅ shipped  |
+| T1 — Frictionless capture & navigation        | ✅ shipped  |
+| T2 — One product: links, Today hub, reminders | ✅ shipped  |
+| T3 — Depth: Budget                            | ✅ shipped  |
+| T4 — Depth: Meals                             | ✅ shipped  |
+| T5 — Depth: planning modules                  | next        |
+| T6 — Robustness & data                        | not started |
+| T7 — Net-new modules                          | not started |
+
+Corrections found while implementing, which this document's later tranches should not
+repeat:
+
+- **T4 corrected a claim made below and in the T4 plan**: `/today` was believed to be
+  stale after every mutation because no module's revalidate helper names it. It isn't.
+  Every route is dynamic (`auth()` reads cookies), `next.config.ts` sets no `staleTimes`,
+  and Next uses staleTime 0 for dynamic routes — measured by reverting the fix and
+  re-running the hub spec, which still passed. `revalidateHubs()` exists for consistency
+  and as insurance if `staleTimes` is ever raised, but it is **defensive tidying, not a
+  fix**, and the same caveat applies to the pre-existing `revalidatePath("/")` calls.
+
 ## How to use this
+
 - Implement **one tranche at a time**, top to bottom (later tranches assume earlier ones).
 - When starting a tranche, expand its "Scope" into concrete tasks and follow the normal
   loop: scope → schema/migration → pure logic + tests → validation → queries/actions →
@@ -22,6 +47,7 @@ picked up — it is **not** code-level detail yet.
     `drizzle.config.ts` glob — no wiring needed.
 
 ## Guiding principles
+
 - **No regressions**: every tranche keeps the existing 90 unit tests green and adds its own.
 - **Smallest safe change** within each item; follow existing idioms (base-ui, Tailwind
   tokens, integer cents, `YYYY-MM-DD` string dates, tz via `todayInZone`).
@@ -37,6 +63,7 @@ it's flagged — confirm the choice when the tranche is picked up (this is a sel
 so prefer small, dependency-light, no-external-key options).
 
 **Shared code to extract (Tranche 0):**
+
 - `src/lib/date.ts` — hoist `todayInZone`, `isValidDateString`, and the private date helpers
   currently duplicated in `todos/service.ts`, `calendar/service.ts`, and `todos/recurrence.ts`.
 - `src/lib/action-result.ts` — one `ActionResult` type + `invalid()` + `fieldErrorsFrom()`
@@ -44,6 +71,7 @@ so prefer small, dependency-light, no-external-key options).
   `meals` actions).
 
 **Library decisions (confirm at point of use):**
+
 - **Charts** (T3/T4/polish): hand-rolled SVG for small sparklines/rings vs a lib. Recommend a
   tiny lib only if we need axes/tooltips — candidate: `recharts` (heavier) or a minimal SVG
   chart component set built in-house (preferred for cohesion + bundle size).
@@ -59,19 +87,20 @@ so prefer small, dependency-light, no-external-key options).
 
 ---
 
-## Tranche 0 — Foundations, cohesion & safety
+## Tranche 0 — Foundations, cohesion & safety ✅
 
 **Goal:** raise trust and remove inconsistencies before adding surface area. Cheap, high-signal,
 and it unblocks later tranches (shared `ActionResult`, Goals module, shared date lib).
 
 **Scope**
+
 - Extract `src/lib/date.ts` and `src/lib/action-result.ts` (see Foundations); refactor callers.
 - **Goals → its own module.** Move `goals`/`milestones` table defs + their queries/actions/
   validation from `src/modules/calendar/` into a new `src/modules/goals/`. Tables are unchanged,
   so **no DB migration** (drizzle sees no diff); update imports in `goals/_components/*` and the
   dashboard `goals-summary`.
 - **Destructive-action consistency.** Today only single-item task/event/transaction/meal deletes
-  have undo. Bring the outliers up to the same bar (undo toast *or* a confirm dialog): category
+  have undo. Bring the outliers up to the same bar (undo toast _or_ a confirm dialog): category
   delete, budget delete, food-library delete, goal delete, milestone delete, and recurring-task
   "Stop repeating".
 - **Currency correctness (Budget).** Replace the hardcoded `Amount ($)` label and `0.00`
@@ -94,11 +123,12 @@ currency round-trips for a zero-decimal currency; Goals still renders after the 
 
 ---
 
-## Tranche 1 — Frictionless capture & navigation
+## Tranche 1 — Frictionless capture & navigation ✅
 
-**Goal:** make getting data *in* and getting *around* nearly instant. Biggest daily-use payoff.
+**Goal:** make getting data _in_ and getting _around_ nearly instant. Biggest daily-use payoff.
 
 **Scope**
+
 - **Command palette (⌘K) + global search.** Headless `cmdk` overlay: fuzzy nav to any page,
   "Create task/event/transaction/meal/goal", and search across tasks, events, foods,
   transactions, goals. Back it with a `search(query)` server action that fans out to each
@@ -124,11 +154,12 @@ palette (focus trap, ESC).
 
 ---
 
-## Tranche 2 — One product: links, Today hub, reminders
+## Tranche 2 — One product: links, Today hub, reminders ✅
 
-**Goal:** make the modules feel like one app and start *prompting* action instead of just showing it.
+**Goal:** make the modules feel like one app and start _prompting_ action instead of just showing it.
 
 **Scope**
+
 - **Cross-module links.** Add nullable references (explicit FKs, not a generic link table, for
   type-safety): `task.goalId → goals` (a task counts toward a goal), and a task↔event association
   ("work on this task at this time"). Surface both directions (goal page shows its tasks; task
@@ -148,11 +179,12 @@ midnight boundary; prefs persistence.
 
 ---
 
-## Tranche 3 — Depth: Budget
+## Tranche 3 — Depth: Budget ✅
 
 **Goal:** turn month-in-isolation budgeting into something with memory and insight.
 
 **Scope**
+
 - **Recurring transactions** (bills/subscriptions) — mirror the recurring-tasks engine: a
   `transaction_recurrences` rule table + lazy materialization of due instances, "This / Series"
   edit, and skip. Reuse the `recurrence.ts` cycle logic where possible.
@@ -168,11 +200,12 @@ rollup still correct with recurring instances; chart data snapshots; search corr
 
 ---
 
-## Tranche 4 — Depth: Meals
+## Tranche 4 — Depth: Meals ✅
 
 **Goal:** remove the "empty hand-typed library" wall and add the tracking people expect.
 
 **Scope**
+
 - **External food database + barcode** (Open Food Facts + `@zxing/browser`): search a real DB and
   import a food into the library; scan a barcode on mobile (PWA camera).
 - **Copy-yesterday / duplicate a day**; **over-target color/warning** on the macro summary (Budget
@@ -186,6 +219,24 @@ rollup still correct with recurring instances; chart data snapshots; search corr
 `@zxing/browser`. **Verify:** food-import + barcode happy paths; snapshot integrity preserved;
 weight/water trends; over-target styling in light+dark.
 
+**Shipped** — migrations `0015`–`0018`; all of the above plus:
+
+- **ADR-0005**: Open Food Facts is called from a **Server Action**, not the browser or a route
+  handler. This is the app's first outbound HTTP of any kind — see `ARCHITECTURE.md §1.1a`, and
+  note §4.2: the app container now needs egress where it previously needed none.
+- **Imperial by decision** (`weight_lb`, `amount_fl_oz`). No units preference, no conversion
+  layer; the unit lives in the column name.
+- **Micros are nullable, not `DEFAULT 0`** — "unknown" is the normal state, so `sumMicros`
+  returns a known-count alongside each total and the UI qualifies the number.
+- Two **pre-existing** bugs surfaced by T4's acceptance checks, both the same class as the
+  `task_recurrences` miss in T3: `calendars` survived "Clear all data" entirely, and both
+  `calendars` and `event_exceptions` were absent from the backup — so any restore silently
+  reverted every per-occurrence event edit. `src/modules/account/coverage.test.ts` now derives
+  the check from the schema, so a table added later fails a test rather than being forgotten.
+- `niceScale` gained an optional `baseline: "data"`. It forced zero into every domain (a
+  money-chart assumption), which renders a 181–186 lb series as a flat line at the top of a
+  0–200 axis. The money charts are unchanged.
+
 ---
 
 ## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos)
@@ -193,6 +244,7 @@ weight/water trends; over-target styling in light+dark.
 **Goal:** deepen the three "planning" modules to match their real-world use.
 
 **Scope**
+
 - **Calendar:** a **week/day time-grid** view (only month + agenda exist); **event reminders**
   (wired to the T2 engine); **drag-to-reschedule**; **"this and following"** recurrence edits
   (currently only This/All); **iCal import/export/subscribe** (`.ics`).
@@ -210,13 +262,14 @@ round-trip; drag reorder persistence; week-grid across DST.
 
 ## Tranche 6 — Robustness & data
 
-**Goal:** close the durability gaps and make the app trustworthy to *rely* on.
+**Goal:** close the durability gaps and make the app trustworthy to _rely_ on.
 
 **Scope**
+
 - **In-app data import** — round-trip the existing JSON export (validate `version`, upsert into
   each module) so a restore doesn't require shell + Docker.
 - **Offline read cache** — add a service worker (Serwist): precache the shell, runtime-cache GET
-  navigations/data so the installed PWA opens and reads offline. (Offline *writes* = a later,
+  navigations/data so the installed PWA opens and reads offline. (Offline _writes_ = a later,
   bigger effort; scope this to read-first.)
 - **Appearance settings backup/sync** — theme + palette live only in `localStorage` today (in
   neither the export nor the DB backup); move to (or mirror in) `user_preferences` so they survive
@@ -236,6 +289,7 @@ persists across devices; account-deletion transactional + irreversible-confirm.
 **Goal:** breadth — the pillars a life-organizer is still missing.
 
 **Scope**
+
 - **Notes / Journal** module (the obvious missing pillar): free-form notes and/or a dated daily
   entry that can feed the Today hub. Full module (schema/queries/actions/validation/UI + nav).
 - **Routines / templates:** define a named set of tasks (+ events) and spin them up in one action
@@ -253,6 +307,7 @@ routine spin-up idempotency; streak math unit tests.
 ## Cross-cutting polish (woven into every tranche)
 
 Not a standalone tranche — apply opportunistically as each area is touched:
+
 - **Empty states:** upgrade the plain one-liners to an icon/illustration + a primary CTA (the
   todos "add an event/task" pattern) for the key screens.
 - **Per-module loading skeletons** that mirror each page's shape (only one generic skeleton exists).
