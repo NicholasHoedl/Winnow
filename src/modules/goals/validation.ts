@@ -7,15 +7,33 @@ const optionalDate = z
   .refine((v) => v === "" || isValidDateString(v), "Enter a valid date")
   .optional()
 
+/**
+ * A measurable quantity on a goal — "30 books", "20 lbs". Nullable AND optional: null is
+ * "not tracked numerically", and optional keeps the form's inferred type intact for a
+ * dialog that may not render the field at all (the same shape meals uses for micros).
+ */
+const optionalAmount = z
+  .number()
+  .min(0, "Must be 0 or more")
+  .max(1_000_000_000)
+  .nullable()
+  .optional()
+
 export const goalInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   notes: z.string().trim().max(2000).or(z.literal("")).optional(),
   targetDate: optionalDate,
+  // Progress for a goal that isn't broken into milestones. `unit` is a display suffix
+  // only — no conversion, no canonical list.
+  targetValue: optionalAmount,
+  currentValue: optionalAmount,
+  unit: z.string().trim().max(20).or(z.literal("")).optional(),
 })
 export type GoalInput = z.infer<typeof goalInputSchema>
 
 export const milestoneInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
+  dueDate: optionalDate,
 })
 export type MilestoneInput = z.infer<typeof milestoneInputSchema>
 

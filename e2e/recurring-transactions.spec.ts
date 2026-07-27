@@ -64,7 +64,7 @@ test("a repeating transaction posts, is badged, and can be stopped", async ({
   await row.getByRole("button", { name: "Transaction actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(row).toHaveCount(0)
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(row).toBeVisible()
   await expect(row.getByRole("img", { name: "Repeating" })).toBeVisible()
 

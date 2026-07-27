@@ -49,7 +49,7 @@ test("a day can be copied onto another, and the copy undone", async ({
   await expect(rows(first)).toContainText("410 kcal")
 
   // --- Undo removes exactly what the copy added.
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(rows(first)).toHaveCount(0)
   await expect(rows(second)).toHaveCount(0)
 

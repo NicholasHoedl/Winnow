@@ -10,6 +10,45 @@ import { test, expect } from "@playwright/test"
 // fail silently in the browser as "Please fix the errors below." on the undo toast.
 //
 // So these specs assert the row comes BACK, not merely that it went away.
+//
+// `exact: true` on the Undo button is load-bearing. T5a gave tasks and goals drag handles
+// labelled `Reorder <title>`, and this spec's goal is titled "E2E undo goal …" — a loose
+// name match found both and failed on a strict-mode violation nowhere near the cause.
+
+// Cleanup here as well as inline. This spec leaked a goal when it failed on a locator
+// collision — end-of-body cleanup is skipped entirely when an assertion aborts the test,
+// which is the fourth time that has bitten in this tranche.
+test.afterEach(async ({ page }) => {
+  await page.goto("/todos")
+  await page.getByRole("button", { name: "All", exact: true }).click()
+  const tasks = page
+    .locator("div.bg-card")
+    .filter({ hasText: "E2E undo task " })
+  for (let i = 0; i < 6; i++) {
+    const before = await tasks.count()
+    if (before === 0) break
+    await tasks.first().getByRole("button", { name: "Task actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+    await expect(tasks).toHaveCount(before - 1)
+    await page.reload()
+    await page.getByRole("button", { name: "All", exact: true }).click()
+  }
+  await expect(tasks).toHaveCount(0)
+
+  await page.goto("/goals")
+  const goals = page
+    .locator("div.bg-card")
+    .filter({ hasText: "E2E undo goal " })
+  for (let i = 0; i < 6; i++) {
+    const before = await goals.count()
+    if (before === 0) break
+    await goals.first().getByRole("button", { name: "Goal actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+    await page.getByRole("button", { name: "Delete goal" }).click()
+    await expect(goals).toHaveCount(before - 1)
+  }
+  await expect(goals).toHaveCount(0)
+})
 
 test("deleting a task can be undone", async ({ page }) => {
   const title = `E2E undo task ${Date.now()}`
@@ -25,7 +64,7 @@ test("deleting a task can be undone", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(row()).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(row()).toHaveCount(1)
 
   // …and it survives a reload, so undo really re-inserted rather than just un-hiding.
@@ -67,7 +106,7 @@ test("deleting a milestone can be undone, and keeps its position", async ({
     .click()
   await expect(card().getByText(first)).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(card().getByText(first)).toBeVisible()
   await page.reload()
   await expect(card().getByText(first)).toBeVisible()

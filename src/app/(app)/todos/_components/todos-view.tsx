@@ -18,12 +18,12 @@ import {
 import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
 import { bucketTasks } from "@/modules/todos/service"
 
+import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
 import { ListManager } from "./list-manager"
 import { QuickAdd } from "./quick-add"
-import { SortableTaskList } from "./sortable-task-list"
 import { RecurrenceManager } from "./recurrence-manager"
 import { TaskDialog } from "./task-dialog"
 import { TaskItem } from "./task-item"
@@ -266,7 +266,13 @@ export function TodosView({
       <div className="flex flex-col gap-5">
         {isEmpty ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            Nothing here yet.
+            {/* "Nothing here yet" was misleading under the Active filter when the only
+                tasks left were completed ones — there IS something here, it's just
+                filtered out. And now that quick-add doesn't date a task, the empty case
+                is worth using to say where one goes. */}
+            {filter === "active" && done.length > 0
+              ? "Nothing active. Switch to All to see what you've finished."
+              : "Nothing here yet. Anything you capture above lands in Someday until you give it a date."}
           </p>
         ) : (
           <>
@@ -284,10 +290,11 @@ export function TodosView({
                       {rows.length}
                     </span>
                   </h2>
-                  <SortableTaskList
-                    tasks={rows}
+                  <SortableList
+                    items={rows}
                     onReorder={handleReorder}
-                    renderTask={(task) => (
+                    labelFor={(task) => task.title}
+                    renderItem={(task) => (
                       <TaskItem
                         task={task}
                         timeZone={timeZone}

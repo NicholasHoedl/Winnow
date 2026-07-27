@@ -54,7 +54,7 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   await page.getByRole("menuitem", { name: "Skip this one" }).click()
   await expect(row()).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(row()).toHaveCount(1)
   await page.reload()
   // Back for real — undo removed the exception rather than just re-rendering.

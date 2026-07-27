@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
@@ -40,12 +40,16 @@ export async function createGoal(input: unknown): Promise<ActionResult> {
   const parsed = goalInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, targetDate } = parsed.data
+  const { title, notes, targetDate, targetValue, currentValue, unit } =
+    parsed.data
   await db.insert(goals).values({
     userId,
     title,
     notes: nullify(notes),
     targetDate: nullify(targetDate),
+    targetValue: targetValue ?? null,
+    currentValue: currentValue ?? null,
+    unit: nullify(unit),
   })
   revalidateGoals()
   return { ok: true }
@@ -61,10 +65,18 @@ export async function updateGoal(
   const parsed = goalInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, targetDate } = parsed.data
+  const { title, notes, targetDate, targetValue, currentValue, unit } =
+    parsed.data
   await db
     .update(goals)
-    .set({ title, notes: nullify(notes), targetDate: nullify(targetDate) })
+    .set({
+      title,
+      notes: nullify(notes),
+      targetDate: nullify(targetDate),
+      targetValue: targetValue ?? null,
+      currentValue: currentValue ?? null,
+      unit: nullify(unit),
+    })
     .where(and(eq(goals.id, parsedId.data), eq(goals.userId, userId)))
   revalidateGoals()
   return { ok: true }
@@ -110,6 +122,7 @@ export async function addMilestone(
     userId,
     goalId: parsedId.data,
     title: parsed.data.title,
+    dueDate: nullify(parsed.data.dueDate),
     sortOrder: (last?.sortOrder ?? -1) + 1,
   })
   revalidateGoals()
@@ -166,6 +179,43 @@ export async function restoreMilestone(
     .insert(milestones)
     .values(restorableMilestone(parsed.data, userId))
     .onConflictDoNothing()
+  revalidateGoals()
+  return { ok: true }
+}
+
+/**
+ * Write the goal order in one transaction. Same shape as `reorderTasks` — the client
+ * sends the full ordered list rather than a moved-item pair, so the stored positions
+ * can't drift from what was on screen, and every id is proven to belong to the caller
+ * before anything is written.
+ */
+export async function reorderGoals(ids: unknown): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = z.array(z.string().uuid()).max(500).safeParse(ids)
+  if (!parsed.success) return invalid(parsed.error)
+  if (parsed.data.length === 0) return { ok: true }
+
+  if (new Set(parsed.data).size !== parsed.data.length) {
+    return { ok: false, error: "The same goal appears twice." }
+  }
+
+  const owned = await db.query.goals.findMany({
+    where: and(eq(goals.userId, userId), inArray(goals.id, parsed.data)),
+    columns: { id: true },
+  })
+  if (owned.length !== parsed.data.length) {
+    return { ok: false, error: "Unknown goal." }
+  }
+
+  await db.transaction(async (tx) => {
+    for (const [index, id] of parsed.data.entries()) {
+      await tx
+        .update(goals)
+        .set({ sortOrder: index })
+        .where(and(eq(goals.id, id), eq(goals.userId, userId)))
+    }
+  })
+
   revalidateGoals()
   return { ok: true }
 }

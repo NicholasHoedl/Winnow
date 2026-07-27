@@ -96,7 +96,7 @@ test("water accumulates in taps and each tap can be undone", async ({
   // Each log is individually removable, and removing one is undoable.
   await page.getByRole("button", { name: "Remove 16 fl oz" }).click()
   await expect(total).toHaveText("8 fl oz")
-  await page.getByRole("button", { name: "Undo" }).click()
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
   await expect(total).toHaveText("24 fl oz")
 
   // Cleanup: drop both logs. Reload between them so the undo toast can't sit over the

@@ -31,7 +31,9 @@ export async function getGoals(): Promise<GoalWithProgress[]> {
   const [goalRows, milestoneRows, taskRows] = await Promise.all([
     db.query.goals.findMany({
       where: eq(goals.userId, userId),
-      orderBy: [asc(goals.createdAt)],
+      // sortOrder first so a manual drag wins; createdAt stays the tiebreak, which
+      // is what every existing row (all sortOrder 0) still sorts by.
+      orderBy: [asc(goals.sortOrder), asc(goals.createdAt)],
     }),
     db.query.milestones.findMany({
       where: eq(milestones.userId, userId),

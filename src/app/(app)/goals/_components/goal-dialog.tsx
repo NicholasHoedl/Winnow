@@ -17,13 +17,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import { optionalNumberField } from "@/lib/forms"
 import { Input } from "@/components/ui/input"
 
 type GoalFormValues = {
   title: string
   notes?: string
   targetDate?: string
+  // Nullable, not `?: number` — a cleared input has to mean "not tracked", and
+  // `optionalNumberField` maps empty to null rather than 0 or NaN.
+  targetValue?: number | null
+  currentValue?: number | null
+  unit?: string
 }
 
 export function GoalDialog({
@@ -44,7 +55,14 @@ export function GoalDialog({
     formState: { errors, isSubmitting },
   } = useForm<GoalFormValues>({
     resolver: standardSchemaResolver(goalInputSchema),
-    defaultValues: { title: "", notes: "", targetDate: "" },
+    defaultValues: {
+      title: "",
+      notes: "",
+      targetDate: "",
+      targetValue: null,
+      currentValue: null,
+      unit: "",
+    },
   })
 
   React.useEffect(() => {
@@ -54,14 +72,26 @@ export function GoalDialog({
         title: goal.title,
         notes: goal.notes ?? "",
         targetDate: goal.targetDate ?? "",
+        targetValue: goal.targetValue,
+        currentValue: goal.currentValue,
+        unit: goal.unit ?? "",
       })
     } else {
-      reset({ title: "", notes: "", targetDate: "" })
+      reset({
+        title: "",
+        notes: "",
+        targetDate: "",
+        targetValue: null,
+        currentValue: null,
+        unit: "",
+      })
     }
   }, [open, goal, reset])
 
   const onSubmit = handleSubmit(async (data) => {
-    const result = isEdit ? await updateGoal(goal.id, data) : await createGoal(data)
+    const result = isEdit
+      ? await updateGoal(goal.id, data)
+      : await createGoal(data)
     if (!result.ok) {
       if (result.fieldErrors) {
         for (const [name, message] of Object.entries(result.fieldErrors)) {
@@ -93,7 +123,11 @@ export function GoalDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="g-notes">Notes</FieldLabel>
-              <Input id="g-notes" placeholder="Optional" {...register("notes")} />
+              <Input
+                id="g-notes"
+                placeholder="Optional"
+                {...register("notes")}
+              />
               <FieldError errors={[errors.notes]} />
             </Field>
             <Field>
@@ -101,9 +135,48 @@ export function GoalDialog({
               <Input id="g-target" type="date" {...register("targetDate")} />
               <FieldError errors={[errors.targetDate]} />
             </Field>
+
+            {/* Progress for a goal you don't break into milestones. Left blank, the goal
+                simply isn't tracked numerically — `optionalNumberField` is what keeps an
+                empty input as null rather than 0, which would read as "0 of 0". */}
+            <div className="grid grid-cols-3 gap-3">
+              <Field>
+                <FieldLabel htmlFor="g-current">Current</FieldLabel>
+                <Input
+                  id="g-current"
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  placeholder="—"
+                  {...register("currentValue", optionalNumberField)}
+                />
+                <FieldError errors={[errors.currentValue]} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="g-targetval">Target</FieldLabel>
+                <Input
+                  id="g-targetval"
+                  type="number"
+                  step="any"
+                  inputMode="decimal"
+                  placeholder="—"
+                  {...register("targetValue", optionalNumberField)}
+                />
+                <FieldError errors={[errors.targetValue]} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="g-unit">Unit</FieldLabel>
+                <Input id="g-unit" placeholder="books" {...register("unit")} />
+                <FieldError errors={[errors.unit]} />
+              </Field>
+            </div>
           </FieldGroup>
           <DialogFooter className="mt-5">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
