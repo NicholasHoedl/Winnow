@@ -1,54 +1,73 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Settings2 } from "lucide-react"
+import { Plus, Repeat, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption } from "@/modules/goals/queries"
 import {
+  clearTaskRecurrenceException,
   deleteTask,
   deleteTaskRecurrence,
+  reorderTasks,
   restoreTask,
+  skipTaskOccurrence,
   toggleTaskStatus,
 } from "@/modules/todos/actions"
-import type { List, TaskWithSeries } from "@/modules/todos/queries"
-import { dueStatus } from "@/modules/todos/service"
+import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
+import { bucketTasks } from "@/modules/todos/service"
+
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
 import { ListManager } from "./list-manager"
 import { QuickAdd } from "./quick-add"
+import { SortableTaskList } from "./sortable-task-list"
+import { RecurrenceManager } from "./recurrence-manager"
 import { TaskDialog } from "./task-dialog"
 import { TaskItem } from "./task-item"
 
-type Filter = "active" | "today" | "overdue" | "all"
+// Just a STATUS filter now. "Due today" and "Overdue" were chips until T5a; the sections
+// below say the same thing without hiding everything else to do it.
+type Filter = "active" | "all"
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "active", label: "Active" },
-  { key: "today", label: "Due today" },
-  { key: "overdue", label: "Overdue" },
   { key: "all", label: "All" },
 ]
+
+/** Rendered top to bottom. Someday last — it's the backlog, not the agenda. */
+const SECTIONS = [
+  { key: "overdue", label: "Overdue" },
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "someday", label: "Someday" },
+] as const
 
 export function TodosView({
   tasks,
   lists,
   goals,
   events,
+  rules,
   timeZone,
 }: {
   tasks: TaskWithSeries[]
   lists: List[]
+  /** Every recurrence rule, including ones with no instance due right now. */
+  rules: TaskSeries[]
   goals: GoalOption[]
   events: EventOption[]
   timeZone: string
 }) {
   const [filter, setFilter] = React.useState<Filter>("active")
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editingTask, setEditingTask] =
-    React.useState<TaskWithSeries | null>(null)
+  const [editingTask, setEditingTask] = React.useState<TaskWithSeries | null>(
+    null,
+  )
   const [listManagerOpen, setListManagerOpen] = React.useState(false)
+  const [rulesOpen, setRulesOpen] = React.useState(false)
   const [confirmSeries, setConfirmSeries] =
     React.useState<TaskWithSeries | null>(null)
   const [, startTransition] = React.useTransition()
@@ -56,17 +75,16 @@ export function TodosView({
   const [optimisticTasks, applyOptimistic] = React.useOptimistic<
     TaskWithSeries[],
     string
-  >(
-    tasks,
-    (state, toggledId) =>
-      state.map((task) =>
-        task.id === toggledId
-          ? {
-              ...task,
-              status: task.status === "open" ? ("done" as const) : ("open" as const),
-            }
-          : task,
-      ),
+  >(tasks, (state, toggledId) =>
+    state.map((task) =>
+      task.id === toggledId
+        ? {
+            ...task,
+            status:
+              task.status === "open" ? ("done" as const) : ("open" as const),
+          }
+        : task,
+    ),
   )
 
   function handleToggle(id: string) {
@@ -78,9 +96,11 @@ export function TodosView({
   }
 
   function handleDelete(task: TaskWithSeries) {
-    // Deleting a recurring instance stops the whole series (a single instance would
-    // just regenerate on the next load) and drops its upcoming occurrences — not
-    // cleanly undoable, so confirm first. One-off tasks delete with an Undo.
+    // Deleting a recurring instance stops the whole SERIES and drops its upcoming
+    // occurrences — not cleanly undoable, so confirm first. One-off tasks delete with
+    // an Undo. Dropping a single cycle is now "Skip this one" (handleSkip); before T5a
+    // there was no such thing, because a deleted instance just regenerated on the next
+    // read and stopping the series was the only way to make it go away.
     if (task.series) {
       setConfirmSeries(task)
       return
@@ -105,6 +125,39 @@ export function TodosView({
     })
   }
 
+  /**
+   * Skip one cycle of a repeating task.
+   *
+   * Deliberately NOT a delete: the generator re-materializes an instance on every read,
+   * so removing the row would only make it vanish until the next page load. The server
+   * writes an exception row, which is also what undo removes.
+   */
+  function handleSkip(task: TaskWithSeries) {
+    const seriesId = task.series?.id
+    const occurrenceDate = task.occurrenceDate
+    if (!seriesId || !occurrenceDate) return
+    startTransition(async () => {
+      const result = await skipTaskOccurrence(seriesId, occurrenceDate)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast("Skipped this one", {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            startTransition(async () => {
+              const undone = await clearTaskRecurrenceException(
+                seriesId,
+                occurrenceDate,
+              )
+              if (!undone.ok) toast.error(undone.error)
+            }),
+        },
+      })
+    })
+  }
+
   function stopRepeating(task: TaskWithSeries) {
     if (!task.series) return
     startTransition(async () => {
@@ -112,6 +165,32 @@ export function TodosView({
       if (!result.ok) toast.error(result.error)
       else toast("Stopped repeating")
     })
+  }
+
+  // The dropped order, held locally until the server round-trip lands. Without it the
+  // list snaps back to the old order for the duration of the transition — the drop looks
+  // like it failed. Keyed by id so a task added meanwhile can't be lost.
+  const [pendingOrder, setPendingOrder] = React.useState<string[] | null>(null)
+
+  function handleReorder(ids: string[]) {
+    setPendingOrder(ids)
+    startTransition(async () => {
+      const result = await reorderTasks(ids)
+      if (!result.ok) toast.error(result.error)
+      setPendingOrder(null)
+    })
+  }
+
+  /** Apply a just-dropped order to one section, ignoring ids from other sections. */
+  function applyPending(rows: TaskWithSeries[]): TaskWithSeries[] {
+    if (!pendingOrder) return rows
+    const rank = new Map(pendingOrder.map((id, index) => [id, index]))
+    if (!rows.some((task) => rank.has(task.id))) return rows
+    return [...rows].sort(
+      (a, b) =>
+        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    )
   }
 
   function openCreate() {
@@ -124,15 +203,13 @@ export function TodosView({
     setDialogOpen(true)
   }
 
-  const visible = optimisticTasks.filter((task) => {
-    if (filter === "all") return true
-    if (filter === "active") return task.status === "open"
-    if (task.status !== "open") return false
-    const status = dueStatus(task.dueDate, new Date(), timeZone)
-    if (filter === "overdue") return status === "overdue"
-    if (filter === "today") return status === "due-today"
-    return true
-  })
+  // `bucketTasks` drops completed tasks, so the "All" filter keeps its own flat list —
+  // a Done task has no date section it belongs in.
+  const openTasks = optimisticTasks.filter((task) => task.status === "open")
+  const buckets = bucketTasks(openTasks, new Date(), timeZone)
+  const done = optimisticTasks.filter((task) => task.status === "done")
+  const isEmpty =
+    filter === "all" ? optimisticTasks.length === 0 : openTasks.length === 0
 
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
@@ -141,9 +218,19 @@ export function TodosView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             To-dos
           </h1>
-          <p className="text-muted-foreground text-sm">Track what needs doing.</p>
+          <p className="text-muted-foreground text-sm">
+            Track what needs doing.
+          </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Repeating tasks"
+            onClick={() => setRulesOpen(true)}
+          >
+            <Repeat className="size-4" />
+          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -176,22 +263,69 @@ export function TodosView({
         ))}
       </div>
 
-      <div className="flex flex-col gap-2">
-        {visible.length === 0 ? (
+      <div className="flex flex-col gap-5">
+        {isEmpty ? (
           <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
             Nothing here yet.
           </p>
         ) : (
-          visible.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              timeZone={timeZone}
-              onToggle={handleToggle}
-              onEdit={openEdit}
-              onDelete={handleDelete}
-            />
-          ))
+          <>
+            {SECTIONS.map((section) => {
+              const rows = applyPending(buckets[section.key])
+              if (rows.length === 0) return null
+              return (
+                <section key={section.key}>
+                  <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+                    {section.label}
+                    {/* aria-hidden: the heading should announce "Today", not "Today3".
+                        The count is a visual convenience and is fully recoverable from
+                        the rows underneath it. */}
+                    <span aria-hidden className="ml-2 font-normal tabular-nums">
+                      {rows.length}
+                    </span>
+                  </h2>
+                  <SortableTaskList
+                    tasks={rows}
+                    onReorder={handleReorder}
+                    renderTask={(task) => (
+                      <TaskItem
+                        task={task}
+                        timeZone={timeZone}
+                        onToggle={handleToggle}
+                        onEdit={openEdit}
+                        onDelete={handleDelete}
+                        onSkip={handleSkip}
+                      />
+                    )}
+                  />
+                </section>
+              )
+            })}
+
+            {filter === "all" && done.length > 0 && (
+              <section>
+                <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+                  Done
+                  <span aria-hidden className="ml-2 font-normal tabular-nums">
+                    {done.length}
+                  </span>
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {done.map((task) => (
+                    <TaskItem
+                      key={task.id}
+                      task={task}
+                      timeZone={timeZone}
+                      onToggle={handleToggle}
+                      onEdit={openEdit}
+                      onDelete={handleDelete}
+                      onSkip={handleSkip}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
 
@@ -202,6 +336,11 @@ export function TodosView({
         task={editingTask}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+      />
+      <RecurrenceManager
+        rules={rules}
+        open={rulesOpen}
+        onOpenChange={setRulesOpen}
       />
       <ListManager
         lists={lists}

@@ -5,6 +5,7 @@ import {
   dayDiff,
   daysInMonth,
   dowOf,
+  dueStatus,
   fmt,
   isValidDateString,
   localDateToString,
@@ -135,5 +136,34 @@ describe("monthSeries", () => {
   it("handles the degenerate lengths", () => {
     expect(monthSeries("2026-07", 1)).toEqual(["2026-07"])
     expect(monthSeries("2026-07", 0)).toEqual([])
+  })
+})
+
+// Moved here from todos/service.test.ts in T5a, with the function itself.
+describe("dueStatus", () => {
+  const now = new Date("2026-07-21T12:00:00Z") // Chicago today = 2026-07-21
+
+  it("treats null/undefined as none", () => {
+    expect(dueStatus(null, now, TZ)).toBe("none")
+    expect(dueStatus(undefined, now, TZ)).toBe("none")
+  })
+
+  it("classifies past/today/future", () => {
+    expect(dueStatus("2026-07-20", now, TZ)).toBe("overdue")
+    expect(dueStatus("2026-07-21", now, TZ)).toBe("due-today")
+    expect(dueStatus("2026-07-22", now, TZ)).toBe("upcoming")
+  })
+
+  it("uses the configured zone, not UTC (late-evening Chicago)", () => {
+    // 2026-07-22T02:00Z: UTC date is 07-22, but Chicago is still 07-21.
+    const lateNow = new Date("2026-07-22T02:00:00Z")
+    expect(dueStatus("2026-07-21", lateNow, TZ)).toBe("due-today") // not overdue
+    expect(dueStatus("2026-07-22", lateNow, TZ)).toBe("upcoming")
+  })
+
+  it("crosses the year boundary correctly", () => {
+    const newYear = new Date("2027-01-01T12:00:00Z") // Chicago 2027-01-01
+    expect(dueStatus("2026-12-31", newYear, TZ)).toBe("overdue")
+    expect(dueStatus("2027-01-01", newYear, TZ)).toBe("due-today")
   })
 })

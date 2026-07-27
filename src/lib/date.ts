@@ -72,6 +72,30 @@ export function todayInZone(now: Date, timeZone: string): string {
   }).format(now)
 }
 
+export type DueStatus = "overdue" | "due-today" | "upcoming" | "none"
+
+/**
+ * Classify a date-only deadline relative to "today" in the given timezone. ISO date
+ * strings compare lexicographically == chronologically, so no date arithmetic (and thus
+ * no DST hazard) is involved.
+ *
+ * Lived in `todos/service.ts` until T5a. Hoisted here when goals needed it for target-date
+ * urgency: a cross-module import of another module's service would have been the first in
+ * the codebase, and this is a date helper with no task-specific logic in it — the same
+ * reasoning T0-S1 used when it pulled `todayInZone` out of two modules.
+ */
+export function dueStatus(
+  dueDate: string | null | undefined,
+  now: Date,
+  timeZone: string,
+): DueStatus {
+  if (!dueDate) return "none"
+  const today = todayInZone(now, timeZone)
+  if (dueDate < today) return "overdue"
+  if (dueDate === today) return "due-today"
+  return "upcoming"
+}
+
 /** True if `value` is a real calendar date in 'YYYY-MM-DD' form (rejects overflow
  *  like month 13 / Feb 30 that a bare regex would accept). */
 export function isValidDateString(value: string): boolean {

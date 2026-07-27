@@ -102,7 +102,11 @@ function GoalCard({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="ghost" size="icon-sm" aria-label="Goal actions" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Goal actions"
+              />
             }
           >
             <MoreVertical className="size-4" />
@@ -127,15 +131,28 @@ function GoalCard({
         <p className="text-muted-foreground text-sm">{goal.notes}</p>
       )}
 
-      {goal.milestones.length > 0 ? (
+      {/* Driven by the discriminated progress rather than by `milestones.length`, so the
+          three cases are exhaustive and "nothing to measure" can't be rendered as 0%.
+          The bar's width is clamped but the printed figure isn't — an overshot goal
+          reads "12 of 10 lbs", the same honesty split T4-S9 settled on for macros. */}
+      {goal.progress.kind === "none" ? (
+        <p className="text-muted-foreground text-xs">
+          No milestones or target yet.
+        </p>
+      ) : (
         <div className="flex items-center gap-2">
-          <Progress value={goal.progress.percent} className="flex-1" />
+          <Progress
+            value={Math.min(goal.progress.percent, 100)}
+            className="flex-1"
+          />
           <span className="text-muted-foreground text-xs tabular-nums">
-            {goal.progress.done}/{goal.progress.total}
+            {goal.progress.kind === "milestones"
+              ? `${goal.progress.done}/${goal.progress.total}`
+              : `${goal.progress.current} / ${goal.progress.target}${
+                  goal.progress.unit ? ` ${goal.progress.unit}` : ""
+                }`}
           </span>
         </div>
-      ) : (
-        <p className="text-muted-foreground text-xs">No milestones yet.</p>
       )}
 
       {goal.milestones.length > 0 && (

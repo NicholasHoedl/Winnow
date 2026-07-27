@@ -1,36 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { dueStatus, summarizeTasks } from "./service"
+import { bucketTasks, summarizeTasks } from "./service"
 
 const TZ = "America/Chicago"
-
-describe("dueStatus", () => {
-  const now = new Date("2026-07-21T12:00:00Z") // Chicago today = 2026-07-21
-
-  it("treats null/undefined as none", () => {
-    expect(dueStatus(null, now, TZ)).toBe("none")
-    expect(dueStatus(undefined, now, TZ)).toBe("none")
-  })
-
-  it("classifies past/today/future", () => {
-    expect(dueStatus("2026-07-20", now, TZ)).toBe("overdue")
-    expect(dueStatus("2026-07-21", now, TZ)).toBe("due-today")
-    expect(dueStatus("2026-07-22", now, TZ)).toBe("upcoming")
-  })
-
-  it("uses the configured zone, not UTC (late-evening Chicago)", () => {
-    // 2026-07-22T02:00Z: UTC date is 07-22, but Chicago is still 07-21.
-    const lateNow = new Date("2026-07-22T02:00:00Z")
-    expect(dueStatus("2026-07-21", lateNow, TZ)).toBe("due-today") // not overdue
-    expect(dueStatus("2026-07-22", lateNow, TZ)).toBe("upcoming")
-  })
-
-  it("crosses the year boundary correctly", () => {
-    const newYear = new Date("2027-01-01T12:00:00Z") // Chicago 2027-01-01
-    expect(dueStatus("2026-12-31", newYear, TZ)).toBe("overdue")
-    expect(dueStatus("2027-01-01", newYear, TZ)).toBe("due-today")
-  })
-})
 
 describe("summarizeTasks", () => {
   const now = new Date("2026-07-21T12:00:00Z")
@@ -50,5 +22,103 @@ describe("summarizeTasks", () => {
     expect(summary.dueTodayCount).toBe(1)
     expect(summary.dueToday).toHaveLength(1)
     expect(summary.dueToday[0].dueDate).toBe("2026-07-21")
+  })
+})
+
+describe("bucketTasks", () => {
+  const now = new Date("2026-07-21T12:00:00Z") // Chicago today = 2026-07-21
+  const task = (
+    id: string,
+    dueDate: string | null,
+    status: "open" | "done" = "open",
+  ) => ({ id, dueDate, status })
+  const ids = (rows: { id: string }[]) => rows.map((r) => r.id)
+
+  it("splits open tasks into the four date buckets", () => {
+    const buckets = bucketTasks(
+      [
+        task("late", "2026-07-19"),
+        task("today", "2026-07-21"),
+        task("soon", "2026-07-25"),
+        task("someday", null),
+      ],
+      now,
+      TZ,
+    )
+    expect(ids(buckets.overdue)).toEqual(["late"])
+    expect(ids(buckets.today)).toEqual(["today"])
+    expect(ids(buckets.upcoming)).toEqual(["soon"])
+    expect(ids(buckets.someday)).toEqual(["someday"])
+  })
+
+  it("gives an undated task its own bucket rather than lumping it with overdue", () => {
+    // The whole point of the Someday bucket: "no deadline" is not "missed a deadline".
+    const buckets = bucketTasks([task("someday", null)], now, TZ)
+    expect(buckets.overdue).toHaveLength(0)
+    expect(ids(buckets.someday)).toEqual(["someday"])
+  })
+
+  it("keeps completed tasks out of every bucket", () => {
+    const buckets = bucketTasks(
+      [
+        task("done-late", "2026-07-19", "done"),
+        task("done-none", null, "done"),
+      ],
+      now,
+      TZ,
+    )
+    expect(buckets.overdue).toHaveLength(0)
+    expect(buckets.someday).toHaveLength(0)
+  })
+
+  it("preserves input order within a bucket", () => {
+    // Manual position (sortOrder) is applied by the query's ORDER BY, so bucketing must
+    // not re-sort — otherwise a drag-reorder would be silently undone on render.
+    const buckets = bucketTasks(
+      [
+        task("c", "2026-07-25"),
+        task("a", "2026-07-25"),
+        task("b", "2026-07-25"),
+      ],
+      now,
+      TZ,
+    )
+    expect(ids(buckets.upcoming)).toEqual(["c", "a", "b"])
+  })
+
+  it("uses the configured zone, not UTC, at the day boundary", () => {
+    // 2026-07-22T02:00Z is already the 22nd in UTC but still the 21st in Chicago, so a
+    // task due the 21st is due TODAY, not overdue.
+    const lateNow = new Date("2026-07-22T02:00:00Z")
+    const buckets = bucketTasks([task("t", "2026-07-21")], lateNow, TZ)
+    expect(ids(buckets.today)).toEqual(["t"])
+    expect(buckets.overdue).toHaveLength(0)
+  })
+
+  it("holds up on both sides of a DST transition", () => {
+    // US DST ends 2026-11-01 at 02:00 local (07:00Z), Chicago going CDT (-5) → CST (-6).
+    //
+    // 05:30Z is BEFORE the change, so the offset is still -5 and it is 00:30 on Nov 1
+    // locally. Code that assumed the standard -6 offset would compute Oct 31 23:30 and
+    // wrongly mark the 1st as upcoming — which is what this asserts against.
+    const beforeChange = new Date("2026-11-01T05:30:00Z")
+    const before = bucketTasks(
+      [task("halloween", "2026-10-31"), task("nov", "2026-11-01")],
+      beforeChange,
+      TZ,
+    )
+    expect(ids(before.today)).toEqual(["nov"])
+    expect(ids(before.overdue)).toEqual(["halloween"])
+
+    // 07:30Z is after it: offset -6, local 01:30 on Nov 1. Same local date, different
+    // offset — the bucketing must not move.
+    const afterChange = new Date("2026-11-01T07:30:00Z")
+    const after = bucketTasks(
+      [task("halloween", "2026-10-31"), task("nov", "2026-11-01")],
+      afterChange,
+      TZ,
+    )
+    expect(ids(after.today)).toEqual(["nov"])
+    expect(ids(after.overdue)).toEqual(["halloween"])
   })
 })

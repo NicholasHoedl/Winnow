@@ -3,7 +3,7 @@
 // `server-only`) so it unit-tests directly, and timezone-sensitive input is explicit
 // (`now` + IANA zone) for determinism — same conventions as todos/service.ts.
 
-import { dueStatus } from "@/modules/todos/service"
+import { dueStatus } from "@/lib/date"
 
 /** The only fields the agenda reads off a task; callers pass their richer rows. */
 export type AgendaTask = { dueDate: string | null; status: "open" | "done" }

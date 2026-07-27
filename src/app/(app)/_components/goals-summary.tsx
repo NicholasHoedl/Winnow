@@ -1,12 +1,7 @@
 import Link from "next/link"
 
 import type { GoalWithProgress } from "@/modules/goals/queries"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
   const rows = goals.slice(0, 4)
@@ -27,22 +22,41 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-3">
-          {rows.map((goal) => (
-            <div key={goal.id}>
-              <div className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate font-medium">{goal.title}</span>
-                <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                  {goal.progress.done}/{goal.progress.total}
-                </span>
+          {rows.map((goal) => {
+            // A goal with no milestones has nothing to measure. This used to render a
+            // literal "0/0" and a 2%-wide bar — a number that means nothing beside a
+            // sliver of progress that doesn't exist. T0's polish item fixed the /goals
+            // page and missed this one. Since T5a the discriminated `kind` carries that
+            // distinction, so the two call sites can't drift apart again.
+            const progress = goal.progress
+            const measurable = progress.kind !== "none"
+            return (
+              <div key={goal.id}>
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="min-w-0 truncate font-medium">
+                    {goal.title}
+                  </span>
+                  <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                    {progress.kind === "milestones"
+                      ? `${progress.done}/${progress.total}`
+                      : progress.kind === "numeric"
+                        ? `${progress.current}/${progress.target}`
+                        : "Not tracked"}
+                  </span>
+                </div>
+                {measurable && (
+                  <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
+                    <div
+                      className="bg-cat-6 h-full rounded-full"
+                      style={{
+                        width: `${Math.max(2, Math.min(progress.percent, 100))}%`,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
-              <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
-                <div
-                  className="bg-cat-6 h-full rounded-full"
-                  style={{ width: `${Math.max(2, goal.progress.percent)}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </CardContent>
     </Card>

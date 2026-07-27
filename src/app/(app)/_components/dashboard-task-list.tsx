@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { dueStatus } from "@/lib/date"
 import Link from "next/link"
 import { ListTodo } from "lucide-react"
 import { toast } from "sonner"
@@ -8,13 +9,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { toggleTaskStatus } from "@/modules/todos/actions"
 import type { TaskWithSeries } from "@/modules/todos/queries"
-import { dueStatus } from "@/modules/todos/service"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 
 const MAX_SHOWN = 10
@@ -96,7 +92,9 @@ export function DashboardTaskList({
             <div className="text-muted-foreground text-xs">Overdue</div>
           </div>
           <div>
-            <div className="text-2xl font-semibold tabular-nums">{dueToday}</div>
+            <div className="text-2xl font-semibold tabular-nums">
+              {dueToday}
+            </div>
             <div className="text-muted-foreground text-xs">Due today</div>
           </div>
         </div>

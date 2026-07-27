@@ -5,15 +5,12 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
-import { todayInZone } from "@/lib/date"
-import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export function QuickAdd() {
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
-  const { timeZone } = usePreferences()
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -21,11 +18,12 @@ export function QuickAdd() {
     if (!trimmed) return
 
     startTransition(async () => {
-      // Default the due date to today, matching the full task dialog.
-      const result = await createTask({
-        title: trimmed,
-        dueDate: todayInZone(new Date(), timeZone),
-      })
+      // NO due date. Quick-add is capture — get it out of your head now, decide when
+      // later — so it lands in Someday. The full task dialog still prefills today,
+      // because opening it is already an act of deliberate scheduling. Until T5a both
+      // paths defaulted to today, which made "no due date" a state you had to go out of
+      // your way to produce, and left the Someday bucket permanently empty.
+      const result = await createTask({ title: trimmed })
       if (result.ok) {
         setTitle("")
       } else {
@@ -42,7 +40,12 @@ export function QuickAdd() {
         placeholder="Add a task…"
         aria-label="Quick add task"
       />
-      <Button type="submit" size="icon" disabled={pending} aria-label="Add task">
+      <Button
+        type="submit"
+        size="icon"
+        disabled={pending}
+        aria-label="Add task"
+      >
         <Plus className="size-4" />
       </Button>
     </form>

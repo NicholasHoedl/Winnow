@@ -16,11 +16,14 @@ test("the daily digest appears once a day and stays dismissed", async ({
 }) => {
   const title = `E2E digest ${Date.now()}`
 
-  // Give the digest something worth reporting (quick-add defaults to today).
+  // Give the digest something worth reporting: a task due TODAY.
+  // The dialog prefills today's date; quick-add deliberately does not (T5a-S6 made it
+  // capture-into-Someday), and this spec needs a task that is actually due today.
   await page.goto("/todos")
-  const input = page.getByLabel("Quick add task")
-  await input.fill(title)
-  await input.press("Enter")
+  await page.getByRole("button", { name: "New task" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(title)
+  await dialog.getByRole("button", { name: "Create" }).click()
   await expect(
     page.locator("div.bg-card").filter({ hasText: title }),
   ).toBeVisible()

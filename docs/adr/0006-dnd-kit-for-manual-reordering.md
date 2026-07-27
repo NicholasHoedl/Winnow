@@ -1,0 +1,79 @@
+# ADR-0006: @dnd-kit For Manual Reordering
+
+**Status:** Accepted (T5a-S7)
+**Date:** 2026-07-27
+
+## Context
+
+T5a adds manual reordering to tasks (and later goals). This app has a standing preference
+for hand-rolling over taking a dependency, and it has held that line in places where doing
+so cost real effort:
+
+- The charts are hand-written SVG (`src/components/charts/`) rather than a charting library.
+- Date arithmetic is hand-written in `src/lib/date.ts` even though `date-fns` is already a
+  dependency for other reasons.
+- The month grid is a plain `grid-cols-7`, not a calendar component.
+
+So a new runtime dependency needs an argument, not a preference.
+
+The deciding constraint is **touch**. Winnow is installed as a PWA on an iPhone
+(`ARCHITECTURE.md §6`), and:
+
+- **Native HTML5 drag-and-drop does not fire on touch at all.** `dragstart`/`dragover`/`drop`
+  are mouse-only on iOS Safari. A native implementation would give a drag affordance that
+  silently does nothing on the device the app is mainly used from.
+- Hand-rolling pointer-event drag is therefore the only no-dependency alternative that
+  works. That means writing hit-testing, auto-scroll, transform animation, and — the part
+  that is easy to skip and hard to add later — a **keyboard** path plus live-region
+  announcements, since a pointer-only implementation is unusable without a mouse.
+
+## Decision
+
+Take **`@dnd-kit`** (`core`, `sortable`, `modifiers`, `utilities`).
+
+Reordering is scoped to **within a date section**. Dragging a task between sections would
+have to rewrite its due date, which is drag-to-*reschedule* — a different feature belonging
+to the calendar tranche. `restrictToParentElement` enforces that physically rather than by
+convention, so a row cannot be dropped into a neighbouring section and silently snap back.
+
+The drag handle is a dedicated button, not the whole card. Dragging the card would swallow
+the taps that toggle a task, and on touch there is no hover state to disambiguate the two.
+
+## Consequences
+
+- Four packages added, **~30 kB gzipped** of ESM (`core` 22.3 kB, `sortable` 4.7 kB,
+  `utilities` 2.4 kB, `modifiers` 0.8 kB — measured, not estimated). This is the app's first
+  UI dependency beyond the base-ui/shadcn primitives.
+
+  It is loaded eagerly with `/todos` rather than lazily like the T4 barcode scanner, because
+  reordering is an ordinary interaction on that page rather than an occasional one behind a
+  dialog. Note the precise First Load JS delta could not be quoted: Turbopack's build output
+  no longer prints the per-route table that would show it — the same limitation T4-S7 hit.
+- **Keyboard reordering comes for free and is tested** (`e2e/todos-reorder.spec.ts`): space
+  lifts, arrows move, space drops, with dnd-kit announcing each step into a live region.
+  That accessibility story is the second half of the justification — it is precisely what a
+  hand-rolled version would have had to build from nothing, and precisely what would have
+  been deferred.
+- `@dnd-kit/core` declares `react >=16.8.0`, which is necessary but not sufficient evidence
+  that it works under React 19.2.4. Verified behaviourally at install rather than assumed:
+  both the pointer and keyboard paths reorder and persist across a reload.
+- Ordering is stored as a plain `sort_order integer` and rewritten wholesale for the
+  affected section in one transaction (`reorderTasks`), rather than using sparse or
+  fractional indices. A single user's section is small enough that the simpler invariant —
+  stored order always equals what was on screen — is worth more than avoiding the writes.
+  Same trade `setBudgets` made in T3-S2.
+
+## Alternatives considered
+
+**Move up / move down menu actions.** Zero dependencies, works on touch and keyboard and
+with a screen reader, and trivial to assert in Playwright — each row already has an actions
+menu to hang them on. Rejected because reordering more than a couple of positions becomes a
+sequence of round-trips, and this is the one interaction where direct manipulation is the
+whole point. Kept as the documented fallback had dnd-kit not worked under React 19.
+
+**Native HTML5 drag events.** Rejected outright: no touch support, which is the primary
+device.
+
+**Hand-rolled pointer drag.** The honest alternative, and rejected on scope rather than
+principle — the accessible keyboard path and live-region announcements are most of the
+work, and they are the part that would have been cut.

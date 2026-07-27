@@ -6,7 +6,7 @@ import { requireUserId } from "@/lib/session"
 import { tasks } from "@/modules/todos/schema"
 
 import { goals, milestones } from "./schema"
-import { goalProgress } from "./service"
+import { type GoalProgress, goalProgress } from "./service"
 
 export type GoalRow = typeof goals.$inferSelect
 export type MilestoneRow = typeof milestones.$inferSelect
@@ -19,7 +19,7 @@ export type LinkedTask = Pick<
 
 export type GoalWithProgress = GoalRow & {
   milestones: MilestoneRow[]
-  progress: { done: number; total: number; percent: number }
+  progress: GoalProgress
   linkedTasks: LinkedTask[]
 }
 
@@ -56,7 +56,8 @@ export async function getGoals(): Promise<GoalWithProgress[]> {
     return {
       ...goal,
       milestones: items,
-      progress: goalProgress(items),
+      // The goal carries the numeric columns; milestones still take precedence.
+      progress: goalProgress(items, goal),
       linkedTasks: taskRows.filter((t) => t.goalId === goal.id),
     }
   })
