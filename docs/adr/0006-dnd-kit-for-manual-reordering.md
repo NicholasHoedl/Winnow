@@ -32,7 +32,7 @@ The deciding constraint is **touch**. Winnow is installed as a PWA on an iPhone
 Take **`@dnd-kit`** (`core`, `sortable`, `modifiers`, `utilities`).
 
 Reordering is scoped to **within a date section**. Dragging a task between sections would
-have to rewrite its due date, which is drag-to-*reschedule* — a different feature belonging
+have to rewrite its due date, which is drag-to-_reschedule_ — a different feature belonging
 to the calendar tranche. `restrictToParentElement` enforces that physically rather than by
 convention, so a row cannot be dropped into a neighbouring section and silently snap back.
 
@@ -49,11 +49,22 @@ the taps that toggle a task, and on touch there is no hover state to disambiguat
   reordering is an ordinary interaction on that page rather than an occasional one behind a
   dialog. Note the precise First Load JS delta could not be quoted: Turbopack's build output
   no longer prints the per-route table that would show it — the same limitation T4-S7 hit.
+
 - **Keyboard reordering comes for free and is tested** (`e2e/todos-reorder.spec.ts`): space
-  lifts, arrows move, space drops, with dnd-kit announcing each step into a live region.
-  That accessibility story is the second half of the justification — it is precisely what a
-  hand-rolled version would have had to build from nothing, and precisely what would have
-  been deferred.
+  lifts, arrows move, space drops. That accessibility story is the second half of the
+  justification — it is precisely what a hand-rolled version would have had to build from
+  nothing, and precisely what would have been deferred.
+
+  "Comes for free" turned out to be half true, and the T5a-S13 accessibility pass caught
+  it: dnd-kit's DEFAULT announcements read out the item's **id**, so a screen-reader user
+  heard _"Draggable item 224f524e-d876-4768-8ecb-66bd96ce2638 was moved over droppable area
+  224f524e-…"_. With uuid keys that is noise, and shipping it would have quietly voided the
+  argument above. `SortableList` supplies its own announcements — _"Picked up Water the
+  plants, position 2 of 2"_, _"Moved to position 1 of 2"_, _"Dropped … at position 1 of
+  2"_, _"Cancelled. … returned to position 2"_ — and suppresses the spurious over-event
+  dnd-kit fires with the item over itself on lift, which otherwise overwrites "Picked up"
+  before it can be read.
+
 - `@dnd-kit/core` declares `react >=16.8.0`, which is necessary but not sufficient evidence
   that it works under React 19.2.4. Verified behaviourally at install rather than assumed:
   both the pointer and keyboard paths reorder and persist across a reload.

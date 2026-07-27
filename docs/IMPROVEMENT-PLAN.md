@@ -14,7 +14,8 @@ picked up — it is **not** code-level detail yet.
 | T2 — One product: links, Today hub, reminders | ✅ shipped  |
 | T3 — Depth: Budget                            | ✅ shipped  |
 | T4 — Depth: Meals                             | ✅ shipped  |
-| T5 — Depth: planning modules                  | next        |
+| T5a — Depth: to-dos + goals                   | ✅ shipped  |
+| T5b — Depth: calendar                         | next        |
 | T6 — Robustness & data                        | not started |
 | T7 — Net-new modules                          | not started |
 
@@ -239,7 +240,7 @@ weight/water trends; over-target styling in light+dark.
 
 ---
 
-## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos)
+## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos) — split into T5a ✅ / T5b
 
 **Goal:** deepen the three "planning" modules to match their real-world use.
 
@@ -257,6 +258,44 @@ weight/water trends; over-target styling in light+dark.
 **Deps:** T2 (reminder engine, task↔goal links). **Decisions:** time-grid library vs hand-rolled;
 drag lib (`@dnd-kit`) vs native. **Verify:** recurrence "this & following" unit tests; iCal
 round-trip; drag reorder persistence; week-grid across DST.
+
+**Split into T5a and T5b.** As written this was 14 features across three modules — larger
+than T4, and several items are each T4-sized on their own. T5a took to-dos and goals
+together because both are list-shaped, so ordering, drag and the checklist pattern got
+built once and shared. Calendar became T5b.
+
+**T5a — shipped**, migration `0019`:
+
+- **Todos:** subtasks (a flat one-level checklist, shaped like a goal's milestones);
+  manual reorder within a date section; a **Someday** bucket, with the list regrouped into
+  overdue / today / upcoming / someday sections and the four filter chips cut to two;
+  per-occurrence **skip-once** for recurring tasks.
+- **Goals:** milestone due dates; numeric progress (`current / target unit`) for goals that
+  aren't broken into milestones; ordering; a target-date urgency indicator; and the linked
+  tasks block gained an open count, due badges and a click-through.
+- **ADR-0006** records taking `@dnd-kit` — native HTML5 drag does not fire on touch at all,
+  and this is an installed iOS PWA, so a hand-rolled or native implementation would have
+  given an affordance that silently does nothing on the primary device. The keyboard path
+  is the other half of the argument and is tested.
+- **Skip-once needed a different mechanism from the calendar's.** Calendar occurrences are
+  expanded on read, so an overlay can drop one; tasks are materialized, so an exception has
+  to suppress the insert. See `ARCHITECTURE.md §3.2`.
+- A **Repeating tasks manager** was added mid-tranche, unplanned: skipping a task's only
+  instance left its rule unreachable, because both routes to a rule hung off a generated
+  row. The same hole already existed for a rule whose start date hadn't arrived.
+- `dueStatus` moved to `@/lib/date` so goals could reuse it without importing across
+  modules, and the sortable list moved to `components/shared/`.
+- Two pre-existing defects fixed on the way: `addMilestone` never wrote `sort_order` (a
+  column with no writer since 0004), and the dashboard rail rendered a literal "0/0" plus a
+  2%-wide bar for a goal with no milestones — T0's polish item fixed only the `/goals` page.
+
+**T5b still owes** the whole calendar third: a week/day **time-grid** (the app has no
+time-of-day layout anywhere today — every view is a chip list keyed by a date string),
+**event reminders** (there is no per-event reminder concept at all; the T2 digest is a
+once-a-day banner), **drag-to-reschedule**, **"this and following"** recurrence edits, and
+**iCal import/export/subscribe** (nothing iCal-related exists). Subscribe in particular
+means a public unauthenticated URL — a security posture nothing in the app has today, and
+worth its own ADR.
 
 ---
 

@@ -1,7 +1,7 @@
 # Winnow — Architecture
 
-Status: Implemented through improvement-plan tranche T4
-Last updated: 2026-07-26
+Status: Implemented through improvement-plan tranche T5a (to-dos + goals)
+Last updated: 2026-07-27
 
 This document assumes SPEC.md. It covers the tech stack and rationale, the
 system layout, the data model, the deployment architecture (including the
@@ -203,12 +203,16 @@ not `numeric` used carelessly) — this is a correctness requirement for the
 budgeting module, called out explicitly because float-based money math is
 a classic, easy-to-introduce bug.
 
-> **The tables below are the v1 plan, not a current reference.** Later work
-> added `calendars`, `event_exceptions`, `goals`, `milestones`,
-> `task_recurrences`, `transaction_recurrences` and `user_preferences`, and
-> never built the planned `accounts` table. `drizzle/` and each module's
-> `schema.ts` are the source of truth; the ADRs in `docs/adr/` record why the
-> shape changed. What is still worth reading here is the _reasoning_.
+> **Some sections below are current, others are the v1 plan.** §3.2 (to-dos and
+> goals) and §3.5 (meals) were rewritten against the real schema when those
+> modules were reworked, and are accurate. §3.3 (calendar) and §3.4 (budgeting)
+> still describe the original plan — later work added `calendars`,
+> `event_exceptions`, `transaction_recurrences` and `user_preferences`, and
+> never built the planned `accounts` table.
+>
+> `drizzle/` and each module's `schema.ts` are always the source of truth; the
+> ADRs in `docs/adr/` record why the shape changed. What is worth reading here
+> either way is the _reasoning_.
 
 ### 3.1 Core
 
@@ -226,7 +230,7 @@ Plus the standard Auth.js/Drizzle-adapter tables (`sessions`, `accounts`,
 `verification_tokens`) if using database-backed sessions — not
 hand-designed here, they follow Auth.js's documented schema.
 
-### 3.2 To-dos
+### 3.2 To-dos and Goals
 
 **lists**
 
@@ -240,18 +244,143 @@ hand-designed here, they follow Auth.js's documented schema.
 
 **tasks**
 
-| field                   | type                        | notes                                    |
-| ----------------------- | --------------------------- | ---------------------------------------- |
-| id                      | uuid (pk)                   |                                          |
-| user_id                 | uuid (fk → users)           |                                          |
-| list_id                 | uuid (fk → lists, nullable) | a task may belong to no list             |
-| title                   | text, required              |                                          |
-| notes                   | text, nullable              |                                          |
-| due_date                | date, nullable              | date-only, no time-of-day in v1          |
-| priority                | enum(low, medium, high)     | default medium                           |
-| status                  | enum(open, done)            | binary for v1, see SPEC open question #4 |
-| completed_at            | timestamptz, nullable       | set when status → done                   |
-| created_at / updated_at | timestamptz                 |                                          |
+| field                   | type                                             | notes                                             |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------- |
+| id                      | uuid (pk)                                        |                                                   |
+| user_id                 | uuid (fk → users)                                |                                                   |
+| list_id                 | uuid (fk → lists, nullable, ON DELETE SET NULL)  | a task may belong to no list                      |
+| series_id               | uuid (fk → task_recurrences, ON DELETE SET NULL) | null for a one-off; see the generator below       |
+| occurrence_date         | date, nullable                                   | the cycle key of a generated instance             |
+| goal_id                 | uuid (fk → goals, ON DELETE SET NULL)            | T2 cross-module link                              |
+| event_id                | uuid (fk → events, ON DELETE SET NULL)           | T2 cross-module link                              |
+| title                   | text, required                                   |                                                   |
+| notes                   | text, nullable                                   |                                                   |
+| due_date                | date, nullable                                   | date-only; **null is a real state** — see Someday |
+| priority                | enum(low, medium, high)                          | default medium                                    |
+| status                  | enum(open, done)                                 |                                                   |
+| sort_order              | int, not null, default 0                         | manual position **within a date section**         |
+| completed_at            | timestamptz, nullable                            | set when status → done                            |
+| created_at / updated_at | timestamptz                                      |                                                   |
+
+Plus `unique(series_id, occurrence_date)`. NULLs are DISTINCT in Postgres, so
+one-off tasks (both null) never collide — the constraint only binds generated rows.
+
+**A null `due_date` is a first-class state, not a missing value.** `bucketTasks`
+splits open tasks into overdue / today / upcoming / **someday**, and the list renders
+those as sections. Quick-add deliberately creates a task with no date (capture now,
+schedule later) while the full dialog prefills today, because opening it is already
+an act of scheduling.
+
+`sort_order` orders tasks _within_ a section, not across the whole list. Dragging
+between sections would have to rewrite `due_date`, which is a different feature — so
+the drag context is per-section and enforced with `restrictToParentElement` rather
+than by convention. Every existing row defaults to 0, which leaves ordering inert
+until something writes it; ties then fall back to `due_date`/`created_at`. See
+ADR-0006 for why `@dnd-kit` rather than native drag or a hand-rolled implementation.
+
+**subtasks** — a one-level checklist under a task
+
+| field      | type                                 | notes |
+| ---------- | ------------------------------------ | ----- |
+| id         | uuid (pk)                            |       |
+| user_id    | uuid (fk → users)                    |       |
+| task_id    | uuid (fk → tasks, ON DELETE cascade) |       |
+| title      | text, required                       |       |
+| done       | boolean, not null, default false     |       |
+| sort_order | int, not null, default 0             |       |
+| created_at | timestamptz                          |       |
+
+Flat on purpose — no nesting — so `tasks` stays a table other modules can join to
+rather than a tree. Identical in shape to `milestones` under a goal, and read the
+same way: one extra `findMany` grouped in memory, not a per-row join.
+
+**task_recurrences** — the rule behind a repeating task
+
+Template fields (title, notes, priority, list) plus the recurrence definition:
+`freq` (daily/weekly/monthly), `recurrence_interval`, `weekdays` (a 7-bit BYDAY mask,
+where 0 means "the anchor's weekday"), `monthly_mode`, `flexible` ("once per period,
+any day within it"), `start_date`, and a nullable inclusive `end_date`.
+
+`syncRuleInstances` materializes the **current cycle only**: it retires off-cycle OPEN
+instances and inserts the current one, idempotently via the unique key above.
+Completed instances are never retired — they are history — and their cycle is never
+re-created. The generator runs lazily inside the task reads, so there is no cron; the
+cost is that it executes on every render of `/todos`, `/today`, the dashboard and the
+digest, which is why anything it needs is batch-loaded once per user rather than
+per rule.
+
+**task_recurrence_exceptions** — "skip this one"
+
+| field           | type                                            |
+| --------------- | ----------------------------------------------- |
+| id              | uuid (pk)                                       |
+| user_id         | uuid (fk → users)                               |
+| rule_id         | uuid (fk → task_recurrences, ON DELETE cascade) |
+| occurrence_date | date, not null                                  |
+| created_at      | timestamptz                                     |
+
+Plus `unique(rule_id, occurrence_date)`, which also makes skipping twice idempotent.
+
+Same shape as the calendar's `event_exceptions`, but **the wiring is where it differs,
+and that difference is the whole design.** Calendar occurrences are expanded on read,
+so an overlay can simply drop one. Tasks are materialized — so deleting the instance
+is not a skip, the generator puts it back on the next page load. The exception has to
+suppress the _insert_ instead, and omitting the `ne(occurrence_date)` from the retire
+clause is what also removes the row that is already there.
+
+A `skipped` boolean on `tasks` was the alternative and was rejected: the row would
+remain OPEN and have to be filtered out of every list, count, digest and search, where
+missing one produces a phantom task. With no row, nothing can leak.
+
+A consequence worth knowing: a rule whose current cycle is skipped has no task row
+anywhere — and neither does one whose `start_date` hasn't arrived yet. Both routes to
+a rule used to hang off a generated row, which left those rules unreachable until the
+next cycle (a month, for a monthly rule). The **Repeating tasks** manager lists rules
+from the rules table instead, so neither case is a dead end.
+
+**goals**
+
+| field                      | type                     | notes                                  |
+| -------------------------- | ------------------------ | -------------------------------------- |
+| id                         | uuid (pk)                |                                        |
+| user_id                    | uuid (fk → users)        |                                        |
+| title                      | text, required           |                                        |
+| notes                      | text, nullable           |                                        |
+| target_date                | date, nullable           | drives the at-risk indicator           |
+| target_value/current_value | real, nullable           | progress for a goal without milestones |
+| unit                       | text, nullable           | display suffix only — no conversion    |
+| sort_order                 | int, not null, default 0 |                                        |
+| created_at / updated_at    | timestamptz              |                                        |
+
+**milestones**
+
+| field      | type                                 | notes |
+| ---------- | ------------------------------------ | ----- |
+| id         | uuid (pk)                            |       |
+| user_id    | uuid (fk → users)                    |       |
+| goal_id    | uuid (fk → goals, ON DELETE cascade) |       |
+| title      | text, required                       |       |
+| done       | boolean, not null, default false     |       |
+| due_date   | date, nullable                       |       |
+| sort_order | int, not null, default 0             |       |
+| created_at | timestamptz                          |       |
+
+`goalProgress` returns a **discriminated** result — `milestones`, `numeric`, or `none`
+— with milestones winning when both are set, because they are the more specific
+statement of intent and combining the two into one bar would be arithmetic nobody
+asked for. The `none` case exists so "there is nothing to measure" cannot be rendered
+as 0%: the previous shape returned `{done: 0, total: 0, percent: 0}` for a goal with
+no milestones, and the dashboard rail dutifully printed a literal "0/0" beside a
+2%-wide bar for four tranches.
+
+The percentage is deliberately **not** clamped — a goal can be overshot ("12 of 10
+lbs") and the printed figure tells the truth; it is the bar's _width_ that is clamped.
+Same split T4-S9 settled on for over-target macros.
+
+Tasks linked to a goal (T2) are surfaced on the goal card **read-only**: `/todos` is
+where you act on a task, and a second checkbox here would be two places to keep in
+step. What the card shows is what you can read at a glance — how many are outstanding,
+which are overdue, and a way through.
 
 ### 3.3 Calendar / Events
 
@@ -704,8 +833,10 @@ winnow/
 │   │   │   ├── schema.ts             # Drizzle table definitions
 │   │   │   ├── queries.ts            # reads (used by RSC + dashboard)
 │   │   │   ├── actions.ts            # Server Actions (mutations)
-│   │   │   ├── service.ts            # pure business logic (overdue calc, etc.)
+│   │   │   ├── service.ts            # pure business logic (bucketing, overdue calc)
+│   │   │   ├── restore.ts            # row → insert-payload map for the undo path
 │   │   │   └── validation.ts         # Zod schemas, shared client/server
+│   │   ├── goals/                    # same shape, + restore.ts
 │   │   ├── calendar/                 # same shape (+ recurrence expansion in service.ts)
 │   │   ├── budget/                   # same shape (+ rollup calc in service.ts)
 │   │   ├── meals/                    # same shape, plus the files below
@@ -719,6 +850,7 @@ winnow/
 │   ├── components/
 │   │   ├── ui/                       # shadcn primitives, unmodified/lightly themed
 │   │   └── shared/                   # nav, page headers, app-wide shared pieces
+│   │       └── sortable-list.tsx     # drag/keyboard reorder (see ADR-0006)
 │   │
 │   ├── lib/
 │   │   ├── db.ts                     # Drizzle client/connection
@@ -759,12 +891,13 @@ Rules this structure is meant to enforce:
   tests live separately (e.g., `e2e/`) since they exercise the whole
   running app rather than one module.
 - **The five-file shape is a floor, not a ceiling.** `meals/` is the module
-  that has outgrown it, and the extra files exist for one reason each — to
+  that has outgrown it most, and the extra files exist for one reason each — to
   make something testable that otherwise wouldn't be:
-  - `restore.ts` — every `restoreX` action re-inserts a deleted row by listing
-    its columns, and that list has silently fallen behind the schema three
-    times (`842f420` for tasks, T3-S11 for transactions, T4-S11 for the
-    account data tools). TypeScript can't catch it: a column omitted from an
+  - `restore.ts` — now in `meals/`, `todos/` and `goals/`. Every `restoreX`
+    action re-inserts a deleted row by listing its columns, and that list has
+    silently fallen behind the schema four times (`842f420` for tasks, T3-S11
+    for transactions, T4-S11 for the account data tools, and T5a-S2 would have
+    been the fourth had S1 not moved the lists out first). TypeScript can't catch it: a column omitted from an
     insert is left NULL, which is valid. Hoisting the column lists out of
     `actions.ts` lets `restore.test.ts` assert them against
     `getTableColumns()`, so forgetting one fails a test instead of losing data
