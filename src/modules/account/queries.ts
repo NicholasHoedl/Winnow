@@ -19,7 +19,13 @@ import {
   waterLogs,
 } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
-import { lists, taskRecurrences, tasks } from "@/modules/todos/schema"
+import {
+  lists,
+  subtasks,
+  taskRecurrenceExceptions,
+  taskRecurrences,
+  tasks,
+} from "@/modules/todos/schema"
 
 /** Everything the current user owns, for a JSON export/backup. */
 export async function exportUserData() {
@@ -27,6 +33,7 @@ export async function exportUserData() {
   const [
     listRows,
     taskRows,
+    subtaskRows,
     foodRows,
     mealEntryRows,
     macroTargetRows,
@@ -42,10 +49,12 @@ export async function exportUserData() {
     milestoneRows,
     preferenceRows,
     taskRecurrenceRows,
+    taskRecurrenceExceptionRows,
     transactionRecurrenceRows,
   ] = await Promise.all([
     db.query.lists.findMany({ where: eq(lists.userId, userId) }),
     db.query.tasks.findMany({ where: eq(tasks.userId, userId) }),
+    db.query.subtasks.findMany({ where: eq(subtasks.userId, userId) }),
     db.query.foods.findMany({ where: eq(foods.userId, userId) }),
     db.query.mealEntries.findMany({ where: eq(mealEntries.userId, userId) }),
     db.query.macroTargets.findMany({ where: eq(macroTargets.userId, userId) }),
@@ -72,6 +81,9 @@ export async function exportUserData() {
     db.query.taskRecurrences.findMany({
       where: eq(taskRecurrences.userId, userId),
     }),
+    db.query.taskRecurrenceExceptions.findMany({
+      where: eq(taskRecurrenceExceptions.userId, userId),
+    }),
     db.query.transactionRecurrences.findMany({
       where: eq(transactionRecurrences.userId, userId),
     }),
@@ -81,6 +93,7 @@ export async function exportUserData() {
     version: 1,
     lists: listRows,
     tasks: taskRows,
+    subtasks: subtaskRows,
     foods: foodRows,
     mealEntries: mealEntryRows,
     macroTargets: macroTargetRows,
@@ -95,6 +108,7 @@ export async function exportUserData() {
     goals: goalRows,
     milestones: milestoneRows,
     taskRecurrences: taskRecurrenceRows,
+    taskRecurrenceExceptions: taskRecurrenceExceptionRows,
     transactionRecurrences: transactionRecurrenceRows,
     preferences: preferenceRows[0] ?? null,
   }

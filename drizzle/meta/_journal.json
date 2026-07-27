@@ -134,6 +134,13 @@
       "when": 1785088078426,
       "tag": "0018_oval_captain_britain",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785118439152,
+      "tag": "0019_tranquil_chronomancer",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, eq } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
@@ -10,8 +10,13 @@ import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 
 import type { MilestoneRow } from "./queries"
+import { restorableMilestone } from "./restore"
 import { goals, milestones } from "./schema"
-import { goalInputSchema, milestoneInputSchema } from "./validation"
+import {
+  goalInputSchema,
+  milestoneInputSchema,
+  restoreMilestoneSchema,
+} from "./validation"
 
 /**
  * The row id every single-item delete takes. A Server Action is a public RPC endpoint, so
@@ -89,9 +94,24 @@ export async function addMilestone(
   const parsed = milestoneInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db
-    .insert(milestones)
-    .values({ userId, goalId: parsedId.data, title: parsed.data.title })
+  // Append, rather than leaving sortOrder at its DB default. The column has existed since
+  // 0004 and getGoals orders by it, but nothing ever wrote it — so every row was 0 and the
+  // ordering silently fell through to createdAt. A column with no writer.
+  const [last] = await db
+    .select({ sortOrder: milestones.sortOrder })
+    .from(milestones)
+    .where(
+      and(eq(milestones.userId, userId), eq(milestones.goalId, parsedId.data)),
+    )
+    .orderBy(desc(milestones.sortOrder))
+    .limit(1)
+
+  await db.insert(milestones).values({
+    userId,
+    goalId: parsedId.data,
+    title: parsed.data.title,
+    sortOrder: (last?.sortOrder ?? -1) + 1,
+  })
   revalidateGoals()
   return { ok: true }
 }
@@ -137,20 +157,14 @@ export async function deleteMilestone(
 /** Re-inserts a milestone removed via {@link deleteMilestone} (the "undo" path).
  * The user id always comes from the session — any client-supplied one is ignored. */
 export async function restoreMilestone(
-  milestone: MilestoneRow,
+  milestone: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
+  const parsed = restoreMilestoneSchema.safeParse(milestone)
+  if (!parsed.success) return invalid(parsed.error)
   await db
     .insert(milestones)
-    .values({
-      id: milestone.id,
-      userId,
-      goalId: milestone.goalId,
-      title: milestone.title,
-      done: milestone.done,
-      sortOrder: milestone.sortOrder,
-      createdAt: milestone.createdAt,
-    })
+    .values(restorableMilestone(parsed.data, userId))
     .onConflictDoNothing()
   revalidateGoals()
   return { ok: true }

@@ -25,7 +25,13 @@ import {
   waterLogs,
 } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
-import { lists, taskRecurrences, tasks } from "@/modules/todos/schema"
+import {
+  lists,
+  subtasks,
+  taskRecurrenceExceptions,
+  taskRecurrences,
+  tasks,
+} from "@/modules/todos/schema"
 
 import { changePasswordSchema, profileSchema } from "./validation"
 
@@ -91,7 +97,14 @@ export async function clearAllData(): Promise<ActionResult> {
       .where(eq(transactionRecurrences.userId, userId))
     await tx.delete(budgets).where(eq(budgets.userId, userId))
     await tx.delete(categories).where(eq(categories.userId, userId))
+    // Subtasks cascade from tasks and exceptions from their rule, but both are deleted
+    // explicitly for the same reason the event exceptions below are: relying on a cascade
+    // means the day the parent stops being deleted first, the child silently leaks.
+    await tx.delete(subtasks).where(eq(subtasks.userId, userId))
     await tx.delete(tasks).where(eq(tasks.userId, userId))
+    await tx
+      .delete(taskRecurrenceExceptions)
+      .where(eq(taskRecurrenceExceptions.userId, userId))
     // Recurrence rules were missing here: clearing all data left them behind, and
     // they immediately regenerated tasks (and would now post bills) into the empty
     // account on the next page load.

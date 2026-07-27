@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  index,
   integer,
   pgEnum,
   pgTable,
@@ -86,7 +87,9 @@ export const tasks = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     // A task belongs to at most one list; deleting a list orphans its tasks.
-    listId: uuid("list_id").references(() => lists.id, { onDelete: "set null" }),
+    listId: uuid("list_id").references(() => lists.id, {
+      onDelete: "set null",
+    }),
     // The recurring series this task was generated from (null for one-off tasks).
     // Deleting the rule detaches completed instances into standalone history.
     seriesId: uuid("series_id").references(() => taskRecurrences.id, {
@@ -98,7 +101,9 @@ export const tasks = pgTable(
     // Optional cross-module links (T2): a task can count toward a goal and/or be
     // associated with a calendar event (series-level). Deleting either detaches the
     // task (set null) rather than removing it.
-    goalId: uuid("goal_id").references(() => goals.id, { onDelete: "set null" }),
+    goalId: uuid("goal_id").references(() => goals.id, {
+      onDelete: "set null",
+    }),
     eventId: uuid("event_id").references(() => events.id, {
       onDelete: "set null",
     }),
@@ -109,6 +114,12 @@ export const tasks = pgTable(
     dueDate: date("due_date", { mode: "string" }),
     priority: priorityEnum("priority").notNull().default("medium"),
     status: statusEnum("status").notNull().default("open"),
+    // Manual position WITHIN a date section (overdue / today / upcoming / someday), not
+    // across the whole list — dragging between sections would have to rewrite dueDate,
+    // which is a different feature. Defaulting every existing row to 0 keeps ordering
+    // inert until something writes it, at which point ties fall back to the previous
+    // dueDate/createdAt order, so no backfill is needed.
+    sortOrder: integer("sort_order").notNull().default(0),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -122,5 +133,74 @@ export const tasks = pgTable(
   // one-off tasks (both null) never collide — the constraint only binds generated rows.
   (table) => [
     unique("tasks_series_occurrence").on(table.seriesId, table.occurrenceDate),
+  ],
+)
+
+/**
+ * A one-level checklist under a task. Flat on purpose — no nesting — so `tasks` stays a
+ * table every other module can join to rather than a tree. Same shape as `milestones`
+ * under a goal, which is the existing in-repo pattern for a done-flagged child list, and
+ * it is read the same way: one extra findMany grouped in memory, not a per-row join.
+ */
+export const subtasks = pgTable(
+  "subtasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    done: boolean("done").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("subtasks_user_task").on(table.userId, table.taskId)],
+)
+
+/**
+ * "Skip this one" for a recurring task. Same shape as the calendar's `event_exceptions`,
+ * minus the override columns — a skipped task needs no per-occurrence edit, because the
+ * materialized row already supports that.
+ *
+ * The WIRING differs from the calendar, and that's the whole design. Calendar occurrences
+ * are expanded on read, so an overlay can simply drop one. Tasks are materialized by
+ * `syncRuleInstances`, which runs on every render of /todos, /today, the dashboard and the
+ * digest — so deleting the instance is not a skip, it reappears on the next page load. The
+ * exception has to suppress the INSERT instead. See todos/queries.ts.
+ *
+ * Row-absent rather than row-flagged on purpose: a `skipped` boolean on `tasks` would
+ * leave an OPEN task that every list, count, digest and search has to remember to filter
+ * out. With no row, nothing can leak.
+ */
+export const taskRecurrenceExceptions = pgTable(
+  "task_recurrence_exceptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    ruleId: uuid("rule_id")
+      .notNull()
+      .references(() => taskRecurrences.id, { onDelete: "cascade" }),
+    // The cycle key being skipped — matches `tasks.occurrence_date`, which for a flexible
+    // rule is the period start rather than the due date.
+    occurrenceDate: date("occurrence_date", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("task_recurrence_exceptions_rule_occurrence").on(
+      table.ruleId,
+      table.occurrenceDate,
+    ),
+    // The generator loads every exception for a user in one query per render, so the
+    // lookup is by user, not by rule.
+    index("task_recurrence_exceptions_user").on(table.userId),
   ],
 )
