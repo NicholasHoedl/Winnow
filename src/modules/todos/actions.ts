@@ -5,6 +5,8 @@ import { and, desc, eq, inArray } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
+import { events } from "@/modules/calendar/schema"
+import { goals } from "@/modules/goals/schema"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
 import { revalidateHubs } from "@/lib/revalidate"
@@ -46,6 +48,50 @@ function revalidateTaskViews(): void {
   revalidateHubs()
 }
 
+/**
+ * Every client-supplied foreign id on a task, proven to belong to the caller before it is
+ * written. Returns an error message, or null when everything checks out — the same shape
+ * and the same reasoning as budget's `checkCategory`, which exists because T3-S11 found
+ * exactly this hole for categories.
+ *
+ * Without it a crafted action call could point your task at someone else's list, goal or
+ * event. The row would still be keyed to YOUR user, so it renders as a silently broken
+ * link rather than an error — which is what makes it worth checking rather than trusting
+ * the FK. Nothing enforces this at the database level: the columns are plain foreign keys
+ * to tables that also carry a user_id, and Postgres has no opinion about the pair matching.
+ */
+async function checkTaskLinks(
+  userId: string,
+  links: {
+    listId: string | null
+    goalId: string | null
+    eventId: string | null
+  },
+): Promise<string | null> {
+  if (links.listId) {
+    const owned = await db.query.lists.findFirst({
+      where: and(eq(lists.id, links.listId), eq(lists.userId, userId)),
+      columns: { id: true },
+    })
+    if (!owned) return "Unknown list."
+  }
+  if (links.goalId) {
+    const owned = await db.query.goals.findFirst({
+      where: and(eq(goals.id, links.goalId), eq(goals.userId, userId)),
+      columns: { id: true },
+    })
+    if (!owned) return "Unknown goal."
+  }
+  if (links.eventId) {
+    const owned = await db.query.events.findFirst({
+      where: and(eq(events.id, links.eventId), eq(events.userId, userId)),
+      columns: { id: true },
+    })
+    if (!owned) return "Unknown event."
+  }
+  return null
+}
+
 // --- Tasks ---
 
 export async function createTask(input: unknown): Promise<ActionResult> {
@@ -55,15 +101,21 @@ export async function createTask(input: unknown): Promise<ActionResult> {
 
   const { title, notes, dueDate, priority, listId, goalId, eventId } =
     parsed.data
+  const links = {
+    listId: nullify(listId),
+    goalId: nullify(goalId),
+    eventId: nullify(eventId),
+  }
+  const linkError = await checkTaskLinks(userId, links)
+  if (linkError) return { ok: false, error: linkError }
+
   await db.insert(tasks).values({
     userId,
     title,
     notes: nullify(notes),
     dueDate: nullify(dueDate),
     priority,
-    listId: nullify(listId),
-    goalId: nullify(goalId),
-    eventId: nullify(eventId),
+    ...links,
   })
 
   revalidateTaskViews()
@@ -82,6 +134,14 @@ export async function updateTask(
 
   const { title, notes, dueDate, priority, listId, goalId, eventId } =
     parsed.data
+  const links = {
+    listId: nullify(listId),
+    goalId: nullify(goalId),
+    eventId: nullify(eventId),
+  }
+  const linkError = await checkTaskLinks(userId, links)
+  if (linkError) return { ok: false, error: linkError }
+
   await db
     .update(tasks)
     .set({
@@ -89,9 +149,7 @@ export async function updateTask(
       notes: nullify(notes),
       dueDate: nullify(dueDate),
       priority,
-      listId: nullify(listId),
-      goalId: nullify(goalId),
-      eventId: nullify(eventId),
+      ...links,
     })
     .where(and(eq(tasks.id, parsedId.data), eq(tasks.userId, userId)))
 
