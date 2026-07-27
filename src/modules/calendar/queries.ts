@@ -43,6 +43,14 @@ export async function getCalendars(): Promise<Calendar[]> {
   })
 }
 
+// How far a multi-day occurrence is assumed to reach past the day it starts on.
+// A terminated series' LAST occurrence begins on or before its recurrence end date
+// but can span beyond it, so the lower bound below is relaxed by this much — the
+// same kind of deliberate slack as the +1 day on `upper`. An event spanning longer
+// than this would be missed on the days past the slack; a month is well beyond any
+// realistic entry, and expandOccurrences filters the over-fetch precisely anyway.
+const MAX_SPAN_DAYS = 31
+
 // A series can produce an occurrence in a view only if it starts before the view
 // ends and its (inclusive) recurrence end is not before the view starts. This
 // coarse filter over-fetches slightly; expandOccurrences then filters precisely.
@@ -51,7 +59,10 @@ function candidateWhere(userId: string, rangeStart: string, rangeEnd: string) {
   return and(
     eq(events.userId, userId),
     lt(events.startAt, upper),
-    or(isNull(events.recurrenceEndDate), gte(events.recurrenceEndDate, rangeStart)),
+    or(
+      isNull(events.recurrenceEndDate),
+      gte(events.recurrenceEndDate, addDays(rangeStart, -MAX_SPAN_DAYS)),
+    ),
   )
 }
 
@@ -84,6 +95,40 @@ async function overlayExceptions(
   return applyExceptions(occurrences, exceptions, tz)
 }
 
+// The one path every calendar read narrows to: candidate rows → expansion →
+// exception overlay → sort. Takes an already-resolved userId so a caller that needs
+// it for something else (the month grid) doesn't resolve the session twice.
+async function rangeOccurrences(
+  userId: string,
+  start: string,
+  end: string,
+  tz: string,
+): Promise<EventOccurrence[]> {
+  const rows = await db.query.events.findMany({
+    where: candidateWhere(userId, start, end),
+  })
+  const expanded = rows.flatMap((e) => expandOccurrences(e, start, end, tz))
+  const occurrences = await overlayExceptions(
+    userId,
+    rows.map((e) => e.id),
+    expanded,
+    start,
+    end,
+    tz,
+  )
+  return occurrences.sort(byDateThenTime)
+}
+
+/** Occurrences overlapping an arbitrary half-open [start, end) date range, sorted.
+ *  Week and day views bind to this; a week straddling two months is why it exists. */
+export async function getRangeEvents(
+  start: string,
+  end: string,
+  tz: string,
+): Promise<EventOccurrence[]> {
+  return rangeOccurrences(await requireUserId(), start, end, tz)
+}
+
 export async function getMonthEvents(
   month: string,
   tz: string,
@@ -91,20 +136,7 @@ export async function getMonthEvents(
 ) {
   const userId = await requireUserId()
   const { grid, start, end } = gridRange(month, weekStartsOn)
-  const rows = await db.query.events.findMany({
-    where: candidateWhere(userId, start, end),
-  })
-  const expanded = rows.flatMap((e) => expandOccurrences(e, start, end, tz))
-  const occurrences = (
-    await overlayExceptions(
-      userId,
-      rows.map((e) => e.id),
-      expanded,
-      start,
-      end,
-      tz,
-    )
-  ).sort(byDateThenTime)
+  const occurrences = await rangeOccurrences(userId, start, end, tz)
   return { month, grid, byDay: bucketByDay(occurrences), occurrences }
 }
 
@@ -113,22 +145,7 @@ export async function getDayEvents(
   date: string,
   tz: string,
 ): Promise<EventOccurrence[]> {
-  const userId = await requireUserId()
-  const end = addDays(date, 1)
-  const rows = await db.query.events.findMany({
-    where: candidateWhere(userId, date, end),
-  })
-  const expanded = rows.flatMap((e) => expandOccurrences(e, date, end, tz))
-  return (
-    await overlayExceptions(
-      userId,
-      rows.map((e) => e.id),
-      expanded,
-      date,
-      end,
-      tz,
-    )
-  ).sort(byDateThenTime)
+  return getRangeEvents(date, addDays(date, 1), tz)
 }
 
 /** Minimal shape the task-dialog event picker binds to (series-level). */

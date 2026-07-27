@@ -20,46 +20,57 @@ import type {
 } from "@/modules/calendar/queries"
 import { Button, buttonVariants } from "@/components/ui/button"
 
+import { TimeGrid } from "@/components/calendar/time-grid"
+import { usePreferences } from "@/components/preferences/preferences-provider"
+
 import { AgendaView } from "./agenda-view"
 import { CalendarManager } from "./calendar-manager"
 import { EventDialog, type EditScope } from "./event-dialog"
 import { MonthGrid } from "./month-grid"
+import {
+  CALENDAR_VIEWS,
+  calendarHref,
+  isCurrentPeriod,
+  shiftForView,
+  viewTitle,
+  type CalendarViewKind,
+} from "./views"
 
-function shiftMonth(month: string, delta: number): string {
-  const [year, m] = month.split("-").map(Number)
-  const d = new Date(Date.UTC(year, m - 1 + delta, 1))
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+/** What the prev/next arrows step by, for their labels. Agenda is a month of events,
+ *  so it steps like the month view. */
+const STEP_LABEL: Record<CalendarViewKind, string> = {
+  month: "month",
+  week: "week",
+  day: "day",
+  agenda: "month",
 }
-
-function formatMonth(month: string): string {
-  const [year, m] = month.split("-").map(Number)
-  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  })
-}
-
-type CalendarView = "month" | "agenda"
 
 export function CalendarView({
-  month,
+  view,
+  date,
   today,
   timeZone,
   grid,
+  dates,
   byDay,
   occurrences,
   calendars,
 }: {
-  month: string
+  view: CalendarViewKind
+  /** The anchor date the view is showing — a day, a day within the week, or a day
+   *  within the month. Always in the URL, so every view is linkable. */
+  date: string
   today: string
   timeZone: string
+  /** Month grid weeks; empty for the week and day views. */
   grid: string[][]
+  /** Time-grid columns; empty for the month and agenda views. */
+  dates: string[]
   byDay: Record<string, EventOccurrence[]>
   occurrences: EventOccurrence[]
   calendars: Calendar[]
 }) {
-  const [view, setView] = React.useState<CalendarView>("month")
+  const { weekStartsOn } = usePreferences()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingOccurrence, setEditingOccurrence] =
     React.useState<EventOccurrence | null>(null)
@@ -70,8 +81,6 @@ export function CalendarView({
     () => new Set<string>(),
   )
   const [, startTransition] = React.useTransition()
-
-  const currentMonth = today.slice(0, 7)
 
   const isVisible = (occ: EventOccurrence) =>
     !occ.event.calendarId || !hiddenIds.has(occ.event.calendarId)
@@ -164,11 +173,11 @@ export function CalendarView({
         </div>
         <div className="flex items-center gap-2">
           <div className="bg-muted inline-flex rounded-lg p-0.5">
-            {(["month", "agenda"] as const).map((v) => (
-              <button
+            {CALENDAR_VIEWS.map((v) => (
+              <Link
                 key={v}
-                type="button"
-                onClick={() => setView(v)}
+                href={calendarHref(v, date)}
+                aria-current={view === v ? "page" : undefined}
                 className={cn(
                   "rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors",
                   view === v
@@ -177,7 +186,7 @@ export function CalendarView({
                 )}
               >
                 {v}
-              </button>
+              </Link>
             ))}
           </div>
           <Button
@@ -227,28 +236,28 @@ export function CalendarView({
 
       <div className="mb-4 flex items-center justify-center gap-1">
         <Link
-          href={`/calendar?month=${shiftMonth(month, -1)}`}
-          aria-label="Previous month"
+          href={calendarHref(view, shiftForView(view, date, -1))}
+          aria-label={`Previous ${STEP_LABEL[view]}`}
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
           <ChevronLeft className="size-4" />
         </Link>
-        <span className="min-w-40 text-center text-sm font-medium">
-          {formatMonth(month)}
+        <span className="min-w-52 text-center text-sm font-medium">
+          {viewTitle(view, date, weekStartsOn)}
         </span>
         <Link
-          href={`/calendar?month=${shiftMonth(month, 1)}`}
-          aria-label="Next month"
+          href={calendarHref(view, shiftForView(view, date, 1))}
+          aria-label={`Next ${STEP_LABEL[view]}`}
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
           <ChevronRight className="size-4" />
         </Link>
-        {month !== currentMonth && (
+        {!isCurrentPeriod(view, date, today, weekStartsOn) && (
           <Link
-            href="/calendar"
+            href={calendarHref(view, today)}
             className={cn(buttonVariants({ variant: "link", size: "sm" }))}
           >
-            This month
+            {view === "day" ? "Today" : `This ${STEP_LABEL[view]}`}
           </Link>
         )}
       </div>
@@ -257,20 +266,30 @@ export function CalendarView({
         <MonthGrid
           grid={grid}
           byDay={shownByDay}
-          month={month}
+          month={date.slice(0, 7)}
           today={today}
           calendars={calendars}
           onSelectDay={openCreate}
           onEditEvent={openEdit}
         />
-      ) : (
+      ) : view === "agenda" ? (
         <AgendaView
           occurrences={shownOccurrences}
-          month={month}
+          month={date.slice(0, 7)}
           today={today}
           calendars={calendars}
           onEditEvent={openEdit}
           onDelete={handleDeleteSeries}
+        />
+      ) : (
+        <TimeGrid
+          dates={dates}
+          byDay={shownByDay}
+          today={today}
+          timeZone={timeZone}
+          calendars={calendars}
+          onSelectDay={openCreate}
+          onEditEvent={openEdit}
         />
       )}
 

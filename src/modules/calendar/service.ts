@@ -106,8 +106,9 @@ export function zonedDateTimeToUtc(date: string, time: string, tz: string): Date
 
 const CAP = 1000
 
-/** Expand an event into its occurrences whose start date falls in
- *  [rangeStart, rangeEnd) (both YYYY-MM-DD). Series end is inclusive. */
+/** Expand an event into its occurrences overlapping [rangeStart, rangeEnd) (both
+ *  YYYY-MM-DD) — a multi-day occurrence counts when any of its span lands in the
+ *  range, so its `date` may precede rangeStart. Series end is inclusive. */
 export function expandOccurrences<E extends RecurringEvent>(
   event: E,
   rangeStart: string,
@@ -148,8 +149,18 @@ export function expandOccurrences<E extends RecurringEvent>(
 
   const interval = Math.max(1, event.recurrenceInterval)
   const out: Occurrence<E>[] = []
+
+  // An occurrence is in view when its SPAN overlaps the range — the same test the
+  // one-off path above uses (endDate >= rangeStart && date < rangeEnd). Since every
+  // occurrence spans `endOffset` days, that is exactly "starts on or after
+  // rangeStart - endOffset", so shifting the start is equivalent to comparing
+  // endDate and keeps each frequency's seek-ahead arithmetic intact. Without it a
+  // recurring Mon–Wed event is invisible in a week beginning Tuesday while an
+  // identical one-off is not.
+  const seekStart = endOffset > 0 ? addDays(rangeStart, -endOffset) : rangeStart
+
   const emit = (date: string) => {
-    if (date >= rangeStart && date < hardEnd) out.push(make(date))
+    if (date >= seekStart && date < hardEnd) out.push(make(date))
   }
 
   // Weekly with a selected weekday set (BYDAY): emit each chosen weekday within
@@ -160,7 +171,7 @@ export function expandOccurrences<E extends RecurringEvent>(
   ) {
     const mask = event.recurrenceWeekdays & 0b1111111
     const anchorWeekStart = addDays(anchor, -dowOf(anchor))
-    const rsWeekStart = addDays(rangeStart, -dowOf(rangeStart))
+    const rsWeekStart = addDays(seekStart, -dowOf(seekStart))
     const weeksToRs = dayDiff(anchorWeekStart, rsWeekStart) / 7
     let block = weeksToRs > 0 ? Math.floor(weeksToRs / interval) : 0
     for (let guard = 0; guard < CAP; guard++, block++) {
@@ -177,8 +188,9 @@ export function expandOccurrences<E extends RecurringEvent>(
 
   if (event.recurrenceFreq === "daily" || event.recurrenceFreq === "weekly") {
     const step = interval * (event.recurrenceFreq === "weekly" ? 7 : 1)
-    // Jump straight to the first occurrence >= rangeStart.
-    const k = anchor < rangeStart ? Math.ceil(dayDiff(anchor, rangeStart) / step) : 0
+    // Jump straight to the first occurrence >= seekStart.
+    const k =
+      anchor < seekStart ? Math.ceil(dayDiff(anchor, seekStart) / step) : 0
     let date = addDays(anchor, k * step)
     for (let i = 0; i < CAP && date < hardEnd; i++) {
       emit(date)
@@ -191,7 +203,7 @@ export function expandOccurrences<E extends RecurringEvent>(
 
   if (event.recurrenceFreq === "monthly") {
     const anchorIndex = anchorYear * 12 + (anchorMonth - 1)
-    const [rsY, rsM] = parse(rangeStart)
+    const [rsY, rsM] = parse(seekStart)
     const rangeIndex = rsY * 12 + (rsM - 1)
     let i =
       anchorIndex < rangeIndex
@@ -228,7 +240,7 @@ export function expandOccurrences<E extends RecurringEvent>(
   }
 
   // yearly — skip years without the anchor day (e.g. Feb 29 in non-leap years).
-  const [rsY] = parse(rangeStart)
+  const [rsY] = parse(seekStart)
   let y =
     anchorYear < rsY
       ? anchorYear + Math.floor((rsY - anchorYear) / interval) * interval
@@ -349,6 +361,14 @@ export function monthGrid(month: string, weekStartsOn = 0): string[][] {
     weeks.push(week)
   } while (weeks[weeks.length - 1][6] < last)
   return weeks
+}
+
+/** The seven dates of the week containing `date`, starting on `weekStartsOn`
+ *  (0 = Sunday, 1 = Monday). A week routinely straddles two months, which is why the
+ *  week view cannot be served from `gridRange`. */
+export function weekDates(date: string, weekStartsOn = 0): string[] {
+  const start = addDays(date, -((dowOf(date) - weekStartsOn + 7) % 7))
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i))
 }
 
 /** The visible month grid plus its half-open date range [start, end). */

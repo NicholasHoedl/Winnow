@@ -6,6 +6,7 @@ import {
   expandOccurrences,
   localDateTime,
   monthGrid,
+  weekDates,
   zonedDateTimeToUtc,
   type ExceptionOverlay,
   type RecurringEvent,
@@ -311,6 +312,88 @@ describe("expandOccurrences — recurrence", () => {
   })
 })
 
+// A recurring multi-day event is in view when its SPAN overlaps the range, which is
+// what the one-off path has always done ("keeps a multi-day span" above). Each
+// frequency seeks to its first candidate differently, so each seek is covered: all
+// four used to start at rangeStart and silently drop the occurrence that begins
+// before the range and reaches into it. A single-day range is used throughout so
+// only the overlapping occurrence can match.
+describe("expandOccurrences — recurring spans overlapping the range", () => {
+  it("weekly (no BYDAY): a Wed–Fri span seen from the Thursday", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-01T12:00:00Z", // Wednesday
+        endAt: "2026-07-03T15:00:00Z", // Friday, +2 days
+        recurrenceFreq: "weekly",
+      }),
+      "2026-07-09",
+      "2026-07-10",
+      "UTC",
+    )
+    expect(occ).toHaveLength(1)
+    expect(occ[0].date).toBe("2026-07-08")
+    expect(occ[0].endDate).toBe("2026-07-10")
+  })
+
+  it("weekly BYDAY: a Mon–Wed span seen from the Tuesday", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-06T09:00:00Z", // Monday
+        endAt: "2026-07-08T17:00:00Z", // Wednesday, +2 days
+        recurrenceFreq: "weekly",
+        recurrenceWeekdays: WD.MON,
+      }),
+      "2026-07-14", // Tuesday of the following week
+      "2026-07-15",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual(["2026-07-13"])
+  })
+
+  it("monthly: a span crossing into the next month", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-01-30T12:00:00Z",
+        endAt: "2026-02-02T12:00:00Z", // +3 days
+        recurrenceFreq: "monthly",
+      }),
+      "2026-04-01",
+      "2026-04-02",
+      "UTC",
+    )
+    // February has no 30th, so the March occurrence is the one reaching into April.
+    expect(dates(occ)).toEqual(["2026-03-30"])
+  })
+
+  it("yearly: a span crossing into the next year", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2025-12-30T12:00:00Z",
+        endAt: "2026-01-02T12:00:00Z", // +3 days
+        recurrenceFreq: "yearly",
+      }),
+      "2027-01-01",
+      "2027-01-02",
+      "UTC",
+    )
+    expect(dates(occ)).toEqual(["2026-12-30"])
+  })
+
+  it("still excludes a span that ends before the range starts", () => {
+    const occ = expandOccurrences(
+      ev({
+        startAt: "2026-07-01T12:00:00Z",
+        endAt: "2026-07-03T15:00:00Z",
+        recurrenceFreq: "weekly",
+      }),
+      "2026-07-11", // the 08–10 occurrence ended yesterday; the next starts the 15th
+      "2026-07-12",
+      "UTC",
+    )
+    expect(occ).toEqual([])
+  })
+})
+
 // An overlayable event (recurrence shape + the fields exceptions can replace).
 type OverlayEvent = RecurringEvent & {
   id: string
@@ -470,6 +553,41 @@ describe("monthGrid", () => {
     expect(new Date(`${flat.at(-1)}T00:00:00Z`).getUTCDay()).toBe(0)
     expect(flat).toContain("2026-07-01")
     expect(flat).toContain("2026-07-31")
+  })
+})
+
+describe("weekDates", () => {
+  it("returns the seven days of the containing week, Sunday-started", () => {
+    // 2026-07-15 is a Wednesday.
+    expect(weekDates("2026-07-15")).toEqual([
+      "2026-07-12",
+      "2026-07-13",
+      "2026-07-14",
+      "2026-07-15",
+      "2026-07-16",
+      "2026-07-17",
+      "2026-07-18",
+    ])
+  })
+
+  it("honours weekStartsOn", () => {
+    expect(weekDates("2026-07-15", 1)[0]).toBe("2026-07-13") // the Monday
+  })
+
+  it("straddles a month boundary, which is why gridRange cannot serve it", () => {
+    expect(weekDates("2026-08-01")).toEqual([
+      "2026-07-26",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+    ])
+  })
+
+  it("returns the date itself first when it already starts the week", () => {
+    expect(weekDates("2026-07-12")[0]).toBe("2026-07-12") // a Sunday
   })
 })
 
