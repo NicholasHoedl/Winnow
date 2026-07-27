@@ -110,6 +110,22 @@ export function SortableList<T extends { id: string }>({
   /** Container classes — must match the layout (a flex column, or a grid).  */
   className?: string
 }) {
+  /**
+   * Passed to DndContext so it does NOT generate its own id.
+   *
+   * dnd-kit's `useUniqueId` falls back to a MODULE-LEVEL counter when given no id.
+   * On the server that counter keeps climbing for the life of the process, while on
+   * the client it restarts near zero, so the `aria-describedby="DndDescribedBy-N"` it
+   * puts on every drag handle can never agree between the two. React reports the
+   * mismatch and — in its words — "won't be patched up", leaving the attribute
+   * pointing at a description element that isn't there. That quietly undoes part of
+   * what ADR-0006 took this dependency FOR.
+   *
+   * `useId` is hydration-stable by construction, and a truthy id short-circuits the
+   * counter on dnd-kit's first line.
+   */
+  const dndId = React.useId()
+
   const sensors = useSensors(
     // A small distance threshold so a tap on the handle still behaves like a tap and
     // only a deliberate drag starts one.
@@ -175,6 +191,7 @@ export function SortableList<T extends { id: string }>({
 
   return (
     <DndContext
+      id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={

@@ -65,6 +65,22 @@ the taps that toggle a task, and on touch there is no hover state to disambiguat
   dnd-kit fires with the item over itself on lift, which otherwise overwrites "Picked up"
   before it can be read.
 
+- **`DndContext` must be given an explicit `id`, or it breaks hydration.** Left to itself,
+  dnd-kit's `useUniqueId` falls back to a MODULE-LEVEL counter for the
+  `aria-describedby="DndDescribedBy-N"` it puts on every drag handle. On the server that
+  counter keeps climbing for the life of the process; on the client it restarts near zero.
+  They can never agree, so every render of `/todos` and `/goals` produced a React hydration
+  mismatch — and React's own wording is that it "won't be patched up", leaving the attribute
+  pointing at a description element that isn't there.
+
+  That is the second time this dependency has quietly undone the accessibility argument it
+  was taken for, and it cost more than the announcements did: in dev React 19 prints the
+  whole component tree per occurrence, which buried one verification run in 3.3 MB of output
+  and grew the dev server to 11 GB before anyone connected the two. `SortableList` now passes
+  `id={React.useId()}`, which is hydration-stable by construction and short-circuits the
+  counter. **Any new `DndContext` — the calendar's drag-to-reschedule included — has to do
+  the same.** Confirmed by removing the prop and watching the mismatch come straight back.
+
 - `@dnd-kit/core` declares `react >=16.8.0`, which is necessary but not sufficient evidence
   that it works under React 19.2.4. Verified behaviourally at install rather than assumed:
   both the pointer and keyboard paths reorder and persist across a reload.
