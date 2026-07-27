@@ -46,6 +46,24 @@ test.afterEach(async ({ page }) => {
   await expect(goals).toHaveCount(0)
 })
 
+/**
+ * Tick a task off on /todos and wait for the write to actually land.
+ *
+ * The reload is the load-bearing part. `toggleTaskStatus` runs inside a transition and
+ * `useOptimistic` drops the row the instant it is clicked, so navigating straight to
+ * /goals races the Server Action — and every assertion over there reads the database,
+ * not the optimistic state. This spec lost that race intermittently and reported
+ * "1 open of 2" for a task it had already ticked.
+ */
+async function complete(page: import("@playwright/test").Page, title: string) {
+  await page.goto("/todos")
+  const row = page.locator("div.bg-card").filter({ hasText: title })
+  await row.getByLabel("Mark as done").click()
+  await expect(row).toHaveCount(0) // optimistic — proves only that the click took
+  await page.reload()
+  await expect(row).toHaveCount(0) // and now it has actually been written
+}
+
 test("a goal card counts its open linked tasks and flags the late ones", async ({
   page,
 }) => {
@@ -83,24 +101,14 @@ test("a goal card counts its open linked tasks and flags the late ones", async (
   // --- Completing the LATE one is the case that matters: the count drops AND the overdue
   // flag goes with it, because a task you finished is not late. Completing the undated
   // task instead would have asserted nothing about that.
-  await page.goto("/todos")
-  await page
-    .locator("div.bg-card")
-    .filter({ hasText: LATE })
-    .getByLabel("Mark as done")
-    .click()
+  await complete(page, LATE)
 
   await page.goto("/goals")
   await expect(card(page)).toContainText("1 open of 2")
   await expect(card(page)).not.toContainText("Overdue")
 
   // --- Finishing the rest reads as done rather than "0 open of 2".
-  await page.goto("/todos")
-  await page
-    .locator("div.bg-card")
-    .filter({ hasText: OPEN })
-    .getByLabel("Mark as done")
-    .click()
+  await complete(page, OPEN)
   await page.goto("/goals")
   await expect(card(page)).toContainText("all done")
 
