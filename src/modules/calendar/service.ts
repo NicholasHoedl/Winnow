@@ -38,6 +38,26 @@ export type Occurrence<E extends RecurringEvent = RecurringEvent> = {
   endDate: string // YYYY-MM-DD local end date (== date unless multi-day)
   time: string | null // HH:MM local start, null when all-day
   endTime: string | null
+  /**
+   * The date the SERIES would produce this on, which is what any per-occurrence
+   * override is keyed under. Equal to `date` until something moves the occurrence.
+   *
+   * Carried separately because `date` stops being the key the moment a move is
+   * possible: rescheduling a moved occurrence again has to update the row it already
+   * has, and addressing that row by where the block currently sits would write a
+   * second one instead — leaving the series with two overrides fighting over it.
+   */
+  originalDate: string
+}
+
+/** An occurrence's stable identity — iCalendar's RECURRENCE-ID. Occurrences carry no
+ *  id of their own, and `bucketByDay` puts the SAME object into every day a span
+ *  covers, so neither object identity nor a list index can tell two of them apart. */
+export function occurrenceKey(occ: {
+  seriesEvent: { id: string }
+  originalDate: string
+}): string {
+  return `${occ.seriesEvent.id}::${occ.originalDate}`
 }
 
 function minStr(a: string, b: string): string {
@@ -102,6 +122,18 @@ export function zonedDateTimeToUtc(date: string, time: string, tz: string): Date
   return new Date(instant)
 }
 
+/**
+ * How far an occurrence may be rescheduled from the day its series would produce it.
+ *
+ * A bound rather than a preference. An occurrence is found again by its ORIGINAL date,
+ * so a view has to scan far enough either side of itself to catch anything that moved
+ * in — and "far enough" is only knowable if moves are bounded. Unbounded, every read
+ * would have to consider every exception ever written. Two months is far past anything
+ * a single occurrence of a repeating event has business being moved to; beyond that,
+ * editing the series is the honest answer.
+ */
+export const MAX_MOVE_DAYS = 60
+
 // --- recurrence expansion ---
 
 const CAP = 1000
@@ -131,6 +163,7 @@ export function expandOccurrences<E extends RecurringEvent>(
     event,
     seriesEvent: event,
     date,
+    originalDate: date, // nothing has moved it yet
     endDate: endOffset > 0 ? addDays(date, endOffset) : date,
     time,
     endTime,
@@ -276,17 +309,37 @@ type OverlayableEvent = RecurringEvent & {
   calendarId: string | null
 }
 
+/**
+ * Where an override actually puts its occurrence, or null when it leaves it alone.
+ *
+ * An override always carries a full instant, so the day it lands on is already stored
+ * and needs no column of its own — which also means the day and the time can never
+ * disagree about the same occurrence. A row with no `startAt` inherits the series
+ * anchor's instant, whose date is the ANCHOR's, not this occurrence's; that is not a
+ * move, so it reads as null rather than as a jump to the anchor's day.
+ */
+export function overrideDate(ex: ExceptionOverlay, tz: string): string | null {
+  return ex.startAt ? localDateTime(new Date(ex.startAt), tz).date : null
+}
+
 /** Apply per-occurrence exceptions to expanded occurrences (pure, order-preserving):
  *  - canceled → the occurrence is dropped ("skip this day");
  *  - override → `event` becomes the effective event (series + defined overrides) and
- *    time/endTime/endDate are recomputed from the override instants; the untouched
- *    series stays on `seriesEvent`. v1 locks the occurrence to its original date;
+ *    date/time/endTime/endDate are recomputed from the override instants;
+ *    the untouched series stays on `seriesEvent`;
  *  - no match → passed through unchanged.
- *  Keyed on (eventId, originalDate) = the occurrence's RECURRENCE-ID. */
+ *  Keyed on (eventId, originalDate) = the occurrence's RECURRENCE-ID.
+ *
+ *  `range` is the half-open view the result has to fit. An override can move its
+ *  occurrence to another day, so one expanded INSIDE the view can land outside it and
+ *  has to be dropped here — `expandOccurrences` filtered on the natural date and cannot
+ *  know. The mirror case (moved in from outside) is the caller's, since the occurrence
+ *  it would apply to was never expanded. Omit `range` to skip the check. */
 export function applyExceptions<E extends OverlayableEvent>(
   occurrences: Occurrence<E>[],
   exceptions: ExceptionOverlay[],
   tz: string,
+  range?: { start: string; end: string },
 ): Occurrence<E>[] {
   if (exceptions.length === 0) return occurrences
   const byKey = new Map<string, ExceptionOverlay>()
@@ -294,7 +347,7 @@ export function applyExceptions<E extends OverlayableEvent>(
 
   const out: Occurrence<E>[] = []
   for (const occ of occurrences) {
-    const ex = byKey.get(`${occ.seriesEvent.id}::${occ.date}`)
+    const ex = byKey.get(occurrenceKey(occ))
     if (!ex) {
       out.push(occ)
       continue
@@ -314,10 +367,10 @@ export function applyExceptions<E extends OverlayableEvent>(
       notes: ex.notes ?? series.notes,
       calendarId: ex.calendarId ?? series.calendarId,
     } as E
-    // Derive the local time-of-day and multi-day span from the effective instants,
-    // but keep the occurrence anchored on occ.date. endAt may be inherited from the
-    // series anchor (a different calendar day), so use only its offset in days — never
-    // its absolute date, which would push endDate onto the anchor's day.
+    // Derive the local time-of-day and multi-day span from the effective instants.
+    // endAt may be inherited from the series anchor (a different calendar day), so use
+    // only its offset in days — never its absolute date, which would push endDate onto
+    // the anchor's day.
     const start = localDateTime(new Date(startAt), tz)
     let endOffset = 0
     let endTime: string | null = null
@@ -326,14 +379,81 @@ export function applyExceptions<E extends OverlayableEvent>(
       endOffset = Math.max(0, dayDiff(start.date, end.date))
       endTime = allDay ? null : end.time
     }
+    // An override that sets its own instant also sets its own day; one that inherits
+    // the series' stays where the series put it.
+    const date = overrideDate(ex, tz) ?? occ.date
+    if (range && (date < range.start || date >= range.end)) continue
     out.push({
       event: effective,
       seriesEvent: series,
-      date: occ.date, // locked to the original occurrence date in v1
-      endDate: endOffset > 0 ? addDays(occ.date, endOffset) : occ.date,
+      date,
+      originalDate: occ.originalDate, // the key the override is stored under
+      endDate: endOffset > 0 ? addDays(date, endOffset) : date,
       time: allDay ? null : start.time,
       endTime,
     })
+  }
+  return out
+}
+
+/**
+ * Split a recurring event in two at `fromDate` — the "this and following" edit.
+ *
+ * `head` is the original stopped the day BEFORE the split, since `recurrenceEndDate` is
+ * inclusive. `tail` is the continuation re-anchored ON the split date, carrying whatever
+ * the edit changed.
+ *
+ * Re-anchoring is what preserves phase. An every-other-week series counted from its
+ * original anchor and one counted from the split date land on the same days only because
+ * the split date is itself an occurrence — which it always is, since it comes from one.
+ * The same holds for every-third-month and for a weekly BYDAY set.
+ *
+ * Pure, and returns the two shapes rather than writing anything, so the boundary can be
+ * checked by expanding both and comparing against the original. Off by one either way
+ * and the series quietly gains a duplicate day or loses one.
+ *
+ * One inherited caveat: `nth_weekday` does not store its ordinal and re-derives it from
+ * whichever month the anchor lands in, so splitting a "4th Friday" series at a month
+ * whose 4th Friday is also its last can turn it into a "last Friday" one. That
+ * ambiguity is in the schema, not in the split — but the split is where it shows up.
+ */
+export function splitSeriesAt<E extends RecurringEvent>(
+  event: E,
+  fromDate: string,
+  tailFields: Partial<E>,
+): { head: E; tail: E } {
+  return {
+    head: { ...event, recurrenceEndDate: addDays(fromDate, -1) },
+    tail: { ...event, ...tailFields },
+  }
+}
+
+/**
+ * The natural dates a view has to expand ON TOP of its own range, because an override
+ * moved their occurrence into it from outside.
+ *
+ * This is the half `applyExceptions` cannot do. Dropping an occurrence that moved OUT
+ * is easy — it was expanded, so there is something to drop. One that moved IN was never
+ * expanded at all: `expandOccurrences` filters on the natural date, and the natural date
+ * is outside the view. Without this the occurrence simply isn't there, and the bug looks
+ * like data loss rather than a missing query.
+ *
+ * Returns one entry per affected occurrence, so the caller expands exactly those days
+ * and nothing more.
+ */
+export function inboundOccurrenceDates(
+  exceptions: ExceptionOverlay[],
+  range: { start: string; end: string },
+  tz: string,
+): { eventId: string; date: string }[] {
+  const out: { eventId: string; date: string }[] = []
+  for (const ex of exceptions) {
+    if (ex.canceled) continue
+    const moved = overrideDate(ex, tz)
+    if (!moved || moved < range.start || moved >= range.end) continue
+    // Already inside the view — it was expanded normally.
+    if (ex.originalDate >= range.start && ex.originalDate < range.end) continue
+    out.push({ eventId: ex.eventId, date: ex.originalDate })
   }
   return out
 }

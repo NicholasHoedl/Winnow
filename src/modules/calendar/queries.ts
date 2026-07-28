@@ -11,6 +11,10 @@ import {
   bucketByDay,
   expandOccurrences,
   gridRange,
+  inboundOccurrenceDates,
+  MAX_MOVE_DAYS,
+  occurrenceKey,
+  zonedDateTimeToUtc,
   type Occurrence,
 } from "./service"
 
@@ -51,17 +55,28 @@ export async function getCalendars(): Promise<Calendar[]> {
 // realistic entry, and expandOccurrences filters the over-fetch precisely anyway.
 const MAX_SPAN_DAYS = 31
 
-// A series can produce an occurrence in a view only if it starts before the view
-// ends and its (inclusive) recurrence end is not before the view starts. This
-// coarse filter over-fetches slightly; expandOccurrences then filters precisely.
+// A series can produce an occurrence in a view only if it starts before the view ends
+// and its (inclusive) recurrence end is not before the view starts. This coarse filter
+// over-fetches slightly; expandOccurrences then filters precisely.
+//
+// Both bounds are relaxed by MAX_MOVE_DAYS, because a rescheduled occurrence can reach
+// a view its series otherwise has no business in: dragged backwards, it can land before
+// the series even starts, and dragged forwards it can land after the series has ended.
+// Unlike MAX_SPAN_DAYS this slack is exact rather than assumed — the reschedule action
+// refuses a longer move, so nothing can fall outside it.
 function candidateWhere(userId: string, rangeStart: string, rangeEnd: string) {
-  const upper = new Date(`${addDays(rangeEnd, 1)}T00:00:00.000Z`)
+  const upper = new Date(
+    `${addDays(rangeEnd, 1 + MAX_MOVE_DAYS)}T00:00:00.000Z`,
+  )
   return and(
     eq(events.userId, userId),
     lt(events.startAt, upper),
     or(
       isNull(events.recurrenceEndDate),
-      gte(events.recurrenceEndDate, addDays(rangeStart, -MAX_SPAN_DAYS)),
+      gte(
+        events.recurrenceEndDate,
+        addDays(rangeStart, -(MAX_SPAN_DAYS + MAX_MOVE_DAYS)),
+      ),
     ),
   )
 }
@@ -72,32 +87,44 @@ function byDateThenTime(a: EventOccurrence, b: EventOccurrence): number {
   )
 }
 
-// Overlay per-occurrence exceptions (edits/skips) onto expanded occurrences. Fetches
-// the exceptions for the in-play series whose original date falls in [start, end) —
-// v1 locks an occurrence to its original date, so that window covers every one in view.
-async function overlayExceptions(
+/**
+ * Every exception that can affect the view [start, end).
+ *
+ * Two windows, not one. Matching on `original_date` alone was sound only while an
+ * override was pinned to its own day; now that it can move, an occurrence rescheduled
+ * INTO the view from outside has an original date nowhere near it, and filtering on that
+ * date alone drops the row silently — the occurrence just isn't drawn, which reads as
+ * data loss. So the second window matches where the override actually LANDS, comparing
+ * the stored instant against the view's own boundaries in the viewer's zone.
+ */
+async function fetchExceptions(
   userId: string,
   seriesIds: string[],
-  occurrences: EventOccurrence[],
   start: string,
   end: string,
   tz: string,
-): Promise<EventOccurrence[]> {
-  if (seriesIds.length === 0) return occurrences
-  const exceptions = await db.query.eventExceptions.findMany({
+) {
+  return db.query.eventExceptions.findMany({
     where: and(
       eq(eventExceptions.userId, userId),
       inArray(eventExceptions.eventId, seriesIds),
-      gte(eventExceptions.originalDate, start),
-      lt(eventExceptions.originalDate, end),
+      or(
+        and(
+          gte(eventExceptions.originalDate, start),
+          lt(eventExceptions.originalDate, end),
+        ),
+        and(
+          gte(eventExceptions.startAt, zonedDateTimeToUtc(start, "00:00", tz)),
+          lt(eventExceptions.startAt, zonedDateTimeToUtc(end, "00:00", tz)),
+        ),
+      ),
     ),
   })
-  return applyExceptions(occurrences, exceptions, tz)
 }
 
-// The one path every calendar read narrows to: candidate rows → expansion →
-// exception overlay → sort. Takes an already-resolved userId so a caller that needs
-// it for something else (the month grid) doesn't resolve the session twice.
+// The one path every calendar read narrows to: candidate rows → expansion → exception
+// overlay → sort. Takes an already-resolved userId so a caller that needs it for
+// something else (the month grid) doesn't resolve the session twice.
 async function rangeOccurrences(
   userId: string,
   start: string,
@@ -107,16 +134,46 @@ async function rangeOccurrences(
   const rows = await db.query.events.findMany({
     where: candidateWhere(userId, start, end),
   })
-  const expanded = rows.flatMap((e) => expandOccurrences(e, start, end, tz))
-  const occurrences = await overlayExceptions(
+  if (rows.length === 0) return []
+
+  const range = { start, end }
+  const exceptions = await fetchExceptions(
     userId,
     rows.map((e) => e.id),
-    expanded,
     start,
     end,
     tz,
   )
-  return occurrences.sort(byDateThenTime)
+
+  const expanded = rows.flatMap((e) => expandOccurrences(e, start, end, tz))
+
+  // An occurrence rescheduled INTO the view was never expanded — its natural date is
+  // outside the range, so expandOccurrences filtered it out before the overlay could
+  // move it. Expand exactly the days that need it, one per arrival, and nothing more.
+  //
+  // Deduped against what is already here, because "outside the range" and "not already
+  // expanded" are not the same thing: a MULTI-DAY occurrence starting before the range
+  // is emitted when its span reaches in, so asking for it again renders it twice once
+  // the overlay has moved both copies onto the same day.
+  const byId = new Map(rows.map((e) => [e.id, e]))
+  const seen = new Set(expanded.map(occurrenceKey))
+  for (const { eventId, date } of inboundOccurrenceDates(
+    exceptions,
+    range,
+    tz,
+  )) {
+    const event = byId.get(eventId)
+    if (!event) continue
+    for (const occ of expandOccurrences(event, date, addDays(date, 1), tz)) {
+      const key = occurrenceKey(occ)
+      if (seen.has(key)) continue
+      seen.add(key)
+      expanded.push(occ)
+    }
+  }
+
+  // `range` lets the overlay drop the mirror case: expanded inside the view, moved out.
+  return applyExceptions(expanded, exceptions, tz, range).sort(byDateThenTime)
 }
 
 /** Occurrences overlapping an arbitrary half-open [start, end) date range, sorted.

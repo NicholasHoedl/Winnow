@@ -1,6 +1,8 @@
 import { z } from "zod"
 
-import { isValidDateString } from "@/lib/date"
+import { dayDiff, isValidDateString } from "@/lib/date"
+
+import { MAX_MOVE_DAYS } from "./service"
 
 export const RECURRENCE_FREQS = [
   "none",
@@ -67,12 +69,21 @@ export const eventInputSchema = z
 
 export type EventInput = z.infer<typeof eventInputSchema>
 
-// A single-occurrence override ("This event" edit). The date is fixed to the
-// occurrence's original date (v1 locks it there), so there are no date inputs — only
-// a time-of-day and the fields a one-off can change.
+/** Neither end of a move may drift further than the series intends. Shared by the
+ *  override and reschedule schemas, since either can now carry a date. */
+const withinMoveLimit = (d: { originalDate: string; date?: string }) =>
+  !d.date || Math.abs(dayDiff(d.originalDate, d.date)) <= MAX_MOVE_DAYS
+
+const moveLimitMessage = `Move an occurrence within ${MAX_MOVE_DAYS} days of its original date`
+
+// A single-occurrence override ("This event" edit). `originalDate` is the RECURRENCE-ID
+// the occurrence is found by and never changes; `date` is where it actually lands, and
+// defaults to `originalDate` when the caller doesn't move it.
 export const eventExceptionSchema = z
   .object({
     originalDate: z.string().refine(isValidDateString, "Enter a valid date"),
+    date: optionalDate,
+    endDate: optionalDate,
     title: z.string().trim().min(1, "Title is required").max(200),
     notes: z.string().trim().max(2000).or(z.literal("")).optional(),
     calendarId: z.string().uuid().or(z.literal("")),
@@ -88,7 +99,32 @@ export const eventExceptionSchema = z
     (d) => d.allDay || !d.startTime || !d.endTime || d.endTime >= d.startTime,
     { message: "End time must be on or after the start", path: ["endTime"] },
   )
+  .refine(withinMoveLimit, { message: moveLimitMessage, path: ["date"] })
 export type EventExceptionInput = z.infer<typeof eventExceptionSchema>
+
+// A drag-to-reschedule: move one occurrence to another day and time, keeping everything
+// else. Deliberately not the override schema — a drag has no title to send, and
+// requiring one would mean the grid had to carry the whole event just to move it.
+export const rescheduleSchema = z
+  .object({
+    originalDate: z.string().refine(isValidDateString, "Enter a valid date"),
+    date: z.string().refine(isValidDateString, "Enter a valid date"),
+    /** Keeps a multi-day occurrence's span; defaults to `date`. */
+    endDate: optionalDate,
+    allDay: z.boolean(),
+    startTime: optionalTime,
+    endTime: optionalTime,
+  })
+  .refine((d) => d.allDay || !!d.startTime, {
+    message: "Start time is required for a timed event",
+    path: ["startTime"],
+  })
+  .refine((d) => !d.endDate || d.endDate >= d.date, {
+    message: "End must be on or after the start",
+    path: ["endDate"],
+  })
+  .refine(withinMoveLimit, { message: moveLimitMessage, path: ["date"] })
+export type RescheduleInput = z.infer<typeof rescheduleSchema>
 
 export const calendarInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(60),

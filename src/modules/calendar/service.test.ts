@@ -4,8 +4,12 @@ import {
   applyExceptions,
   bucketByDay,
   expandOccurrences,
+  inboundOccurrenceDates,
   localDateTime,
   monthGrid,
+  occurrenceKey,
+  overrideDate,
+  splitSeriesAt,
   weekDates,
   zonedDateTimeToUtc,
   type ExceptionOverlay,
@@ -88,6 +92,7 @@ describe("expandOccurrences — single events", () => {
         event: ev(),
         seriesEvent: ev(),
         date: "2026-07-15",
+        originalDate: "2026-07-15",
         endDate: "2026-07-15",
         time: "12:00",
         endTime: null,
@@ -511,6 +516,92 @@ describe("applyExceptions", () => {
     expect([day8.time, day8.endTime]).toEqual([null, null])
   })
 
+  // --- moving an occurrence to another day.
+  //
+  // An override carries a full instant, so the day it lands on is already stored and
+  // needs no column of its own. What used to pin `date` to the occurrence's original
+  // day was a v1 decision, not a missing field.
+
+  it("moves an occurrence to the day its override lands on", () => {
+    const result = applyExceptions(
+      week(),
+      [exc({ startAt: "2026-07-10T14:00:00Z", endAt: "2026-07-10T15:00:00Z" })],
+      "UTC",
+    )
+    // Wednesday's occurrence is now on Friday, and Wednesday is empty.
+    expect(result.filter((o) => o.date === "2026-07-08")).toHaveLength(0)
+    const moved = result.filter((o) => o.date === "2026-07-10")
+    expect(moved).toHaveLength(2) // Friday's own occurrence, plus the arrival
+    expect(moved.some((o) => o.time === "14:00")).toBe(true)
+    // The key it is found by is still the day the series would have produced it on.
+    expect(moved.find((o) => o.time === "14:00")!.seriesEvent.id).toBe("evt-1")
+  })
+
+  it("keeps the key a moved occurrence is stored under", () => {
+    // The point of tracking originalDate separately. Moving this occurrence again has
+    // to update the row it already has; addressing it by where the block now sits
+    // would write a SECOND override and leave the two fighting over the same day.
+    const result = applyExceptions(
+      week(),
+      [exc({ startAt: "2026-07-10T14:00:00Z", endAt: "2026-07-10T15:00:00Z" })],
+      "UTC",
+    )
+    const moved = result.find((o) => o.time === "14:00")!
+    expect(moved.date).toBe("2026-07-10")
+    expect(moved.originalDate).toBe("2026-07-08")
+    expect(occurrenceKey(moved)).toBe("evt-1::2026-07-08")
+  })
+
+  it("carries a multi-day span with the occurrence when it moves", () => {
+    const result = applyExceptions(
+      week(),
+      [exc({ startAt: "2026-07-09T14:00:00Z", endAt: "2026-07-11T15:00:00Z" })],
+      "UTC",
+    )
+    const moved = result.find((o) => o.time === "14:00")!
+    expect([moved.date, moved.endDate]).toEqual(["2026-07-09", "2026-07-11"])
+  })
+
+  it("leaves an inherited override where the series put it", () => {
+    // The trap: a title-only override has no startAt of its own, so it inherits the
+    // SERIES anchor's instant — whose date is 07-06. Reading that as a move would drag
+    // every partial override back onto the anchor's day.
+    const result = applyExceptions(week(), [exc({ title: "Renamed" })], "UTC")
+    expect(result.find((o) => o.event.title === "Renamed")!.date).toBe(
+      "2026-07-08",
+    )
+  })
+
+  it("drops an occurrence that moved out of the view", () => {
+    // Expanded inside the range, lands outside it. Nothing else can catch this:
+    // expandOccurrences filtered on the natural date and never sees the override.
+    const range = { start: "2026-07-06", end: "2026-07-11" }
+    const result = applyExceptions(
+      week(),
+      [exc({ startAt: "2026-08-20T14:00:00Z", endAt: "2026-08-20T15:00:00Z" })],
+      "UTC",
+      range,
+    )
+    expect(dates(result)).toEqual([
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-09",
+      "2026-07-10",
+    ])
+  })
+
+  it("keeps a move that stays inside the view", () => {
+    const range = { start: "2026-07-06", end: "2026-07-11" }
+    const result = applyExceptions(
+      week(),
+      [exc({ startAt: "2026-07-10T14:00:00Z", endAt: "2026-07-10T15:00:00Z" })],
+      "UTC",
+      range,
+    )
+    expect(result).toHaveLength(5)
+    expect(result.filter((o) => o.date === "2026-07-10")).toHaveLength(2)
+  })
+
   it("ignores exceptions whose date or event id does not match", () => {
     const result = applyExceptions(
       week(),
@@ -521,6 +612,227 @@ describe("applyExceptions", () => {
       "UTC",
     )
     expect(dates(result)).toEqual(dates(week()))
+  })
+})
+
+describe("splitSeriesAt", () => {
+  const RANGE = ["2026-07-01", "2026-11-01"] as const
+
+  /** Everything the two halves produce together, in order. */
+  function coverage(head: RecurringEvent, tail: RecurringEvent): string[] {
+    return [
+      ...dates(expandOccurrences(head, ...RANGE, "UTC")),
+      ...dates(expandOccurrences(tail, ...RANGE, "UTC")),
+    ].sort()
+  }
+
+  /** A tail anchored on the split date at the series' own time. */
+  const anchoredOn = (date: string) => ({ startAt: `${date}T09:00:00Z` })
+
+  it("covers exactly what the original did — no gap, no duplicate", () => {
+    // The whole property in one assertion. Getting the inclusive end wrong by a day
+    // shows up here as either a missing occurrence or one produced twice.
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+      recurrenceInterval: 2,
+    })
+    const before = dates(expandOccurrences(original, ...RANGE, "UTC"))
+    const split = "2026-08-12" // the fourth occurrence
+    expect(before).toContain(split)
+
+    const { head, tail } = splitSeriesAt(original, split, anchoredOn(split))
+    expect(coverage(head, tail)).toEqual(before)
+  })
+
+  it("gives the occurrence ON the split date to the tail", () => {
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+    })
+    const split = "2026-07-15"
+    const { head, tail } = splitSeriesAt(original, split, anchoredOn(split))
+    expect(dates(expandOccurrences(head, ...RANGE, "UTC"))).not.toContain(split)
+    expect(dates(expandOccurrences(tail, ...RANGE, "UTC"))[0]).toBe(split)
+  })
+
+  it("keeps the phase of an every-other-week series", () => {
+    // Re-anchoring only works because the split date is itself an occurrence. If the
+    // tail counted fortnights from anywhere else it would land on the off weeks.
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+      recurrenceInterval: 2,
+    })
+    const { tail } = splitSeriesAt(
+      original,
+      "2026-08-12",
+      anchoredOn("2026-08-12"),
+    )
+    expect(dates(expandOccurrences(tail, ...RANGE, "UTC"))).toEqual([
+      "2026-08-12",
+      "2026-08-26",
+      "2026-09-09",
+      "2026-09-23",
+      "2026-10-07",
+      "2026-10-21",
+    ])
+  })
+
+  it("keeps the phase of an every-third-month series", () => {
+    const original = ev({
+      startAt: "2026-01-15T09:00:00Z",
+      recurrenceFreq: "monthly",
+      recurrenceInterval: 3,
+    })
+    const { head, tail } = splitSeriesAt(
+      original,
+      "2026-07-15",
+      anchoredOn("2026-07-15"),
+    )
+    expect(coverage(head, tail)).toEqual(
+      dates(expandOccurrences(original, ...RANGE, "UTC")),
+    )
+    expect(
+      dates(expandOccurrences(tail, "2026-07-01", "2027-01-01", "UTC")),
+    ).toEqual(["2026-07-15", "2026-10-15"])
+  })
+
+  it("carries the series' own end date into the tail", () => {
+    // The continuation inherits where the whole thing was always going to stop.
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+      recurrenceEndDate: "2026-08-19",
+    })
+    const { head, tail } = splitSeriesAt(
+      original,
+      "2026-07-29",
+      anchoredOn("2026-07-29"),
+    )
+    expect(head.recurrenceEndDate).toBe("2026-07-28")
+    expect(tail.recurrenceEndDate).toBe("2026-08-19")
+    expect(coverage(head, tail)).toEqual(
+      dates(expandOccurrences(original, ...RANGE, "UTC")),
+    )
+  })
+
+  it("leaves the head empty when the split is the very first occurrence", () => {
+    // "This and following" from the first day is really "all", and the caller is
+    // expected to notice rather than write a series row that produces nothing.
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+    })
+    const { head } = splitSeriesAt(
+      original,
+      "2026-07-01",
+      anchoredOn("2026-07-01"),
+    )
+    expect(expandOccurrences(head, ...RANGE, "UTC")).toEqual([])
+  })
+
+  it("carries the edit into the tail and leaves the head alone", () => {
+    const original = ev({
+      startAt: "2026-07-01T09:00:00Z",
+      recurrenceFreq: "weekly",
+    })
+    const { head, tail } = splitSeriesAt(original, "2026-07-15", {
+      startAt: "2026-07-15T14:00:00Z",
+      recurrenceInterval: 2,
+    })
+    expect(expandOccurrences(head, ...RANGE, "UTC")[0].time).toBe("09:00")
+    const after = expandOccurrences(tail, ...RANGE, "UTC")
+    expect(after[0].time).toBe("14:00")
+    expect(dates(after).slice(0, 3)).toEqual([
+      "2026-07-15",
+      "2026-07-29",
+      "2026-08-12",
+    ])
+  })
+})
+
+describe("overrideDate", () => {
+  it("reads the day out of the override's own instant", () => {
+    expect(overrideDate(exc({ startAt: "2026-07-10T14:00:00Z" }), "UTC")).toBe(
+      "2026-07-10",
+    )
+  })
+
+  it("is null when the override has no instant of its own", () => {
+    // Not a move: this row inherits the series anchor's instant, whose date belongs to
+    // the anchor rather than to this occurrence.
+    expect(overrideDate(exc({ title: "Renamed" }), "UTC")).toBeNull()
+  })
+
+  it("reads the day in the viewer's zone, not UTC", () => {
+    // 02:30Z on the 10th is still the 9th in Chicago, so that is the day it lands on.
+    expect(
+      overrideDate(exc({ startAt: "2026-07-10T02:30:00Z" }), "America/Chicago"),
+    ).toBe("2026-07-09")
+  })
+})
+
+describe("inboundOccurrenceDates", () => {
+  const range = { start: "2026-07-06", end: "2026-07-11" }
+
+  it("names the natural date of an occurrence moved in from outside", () => {
+    // Its own day is 06-20, well outside the week — so expandOccurrences never produced
+    // it, and without this the arrival on 07-08 simply would not be there.
+    expect(
+      inboundOccurrenceDates(
+        [exc({ originalDate: "2026-06-20", startAt: "2026-07-08T14:00:00Z" })],
+        range,
+        "UTC",
+      ),
+    ).toEqual([{ eventId: "evt-1", date: "2026-06-20" }])
+  })
+
+  it("ignores an override that was already inside the view", () => {
+    // Expanded normally; asking for it again would render it twice.
+    expect(
+      inboundOccurrenceDates(
+        [exc({ originalDate: "2026-07-08", startAt: "2026-07-09T14:00:00Z" })],
+        range,
+        "UTC",
+      ),
+    ).toEqual([])
+  })
+
+  it("ignores an override that lands outside the view", () => {
+    expect(
+      inboundOccurrenceDates(
+        [exc({ originalDate: "2026-06-20", startAt: "2026-08-01T14:00:00Z" })],
+        range,
+        "UTC",
+      ),
+    ).toEqual([])
+  })
+
+  it("ignores a skip, which has nowhere to arrive", () => {
+    expect(
+      inboundOccurrenceDates(
+        [
+          exc({
+            originalDate: "2026-06-20",
+            canceled: true,
+            startAt: "2026-07-08T14:00:00Z",
+          }),
+        ],
+        range,
+        "UTC",
+      ),
+    ).toEqual([])
+  })
+
+  it("ignores an override with no instant of its own", () => {
+    expect(
+      inboundOccurrenceDates(
+        [exc({ originalDate: "2026-06-20", title: "Renamed" })],
+        range,
+        "UTC",
+      ),
+    ).toEqual([])
   })
 })
 

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, eq } from "drizzle-orm"
+import { and, eq, gte } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
@@ -13,11 +13,12 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 
 import type { EventRow } from "./queries"
 import { calendars, eventExceptions, events } from "./schema"
-import { zonedDateTimeToUtc } from "./service"
+import { localDateTime, splitSeriesAt, zonedDateTimeToUtc } from "./service"
 import {
   calendarInputSchema,
   eventExceptionSchema,
   eventInputSchema,
+  rescheduleSchema,
   type EventExceptionInput,
   type EventInput,
 } from "./validation"
@@ -78,18 +79,9 @@ async function checkCalendar(
   return row ? null : "Unknown calendar."
 }
 
-export async function createEvent(input: unknown): Promise<ActionResult> {
-  const userId = await requireUserId()
-  const parsed = eventInputSchema.safeParse(input)
-  if (!parsed.success) return invalid(parsed.error)
-
-  const d = parsed.data
-  const calendarError = await checkCalendar(userId, d.calendarId)
-  if (calendarError) return { ok: false, error: calendarError }
-  const { timeZone } = await getUserPreferences()
-  const { startAt, endAt } = toTimestamps(d, timeZone)
-  await db.insert(events).values({
-    userId,
+/** The event fields a form submission fully specifies. */
+function eventFields(d: EventInput, startAt: Date, endAt: Date | null) {
+  return {
     calendarId: d.calendarId || null,
     title: d.title,
     notes: nullify(d.notes),
@@ -101,7 +93,20 @@ export async function createEvent(input: unknown): Promise<ActionResult> {
     recurrenceWeekdays: d.recurrenceWeekdays,
     recurrenceMonthlyMode: d.recurrenceMonthlyMode,
     recurrenceEndDate: nullify(d.recurrenceEndDate),
-  })
+  }
+}
+
+export async function createEvent(input: unknown): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = eventInputSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const d = parsed.data
+  const calendarError = await checkCalendar(userId, d.calendarId)
+  if (calendarError) return { ok: false, error: calendarError }
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = toTimestamps(d, timeZone)
+  await db.insert(events).values({ userId, ...eventFields(d, startAt, endAt) })
   revalidateCalendar()
   return { ok: true }
 }
@@ -123,19 +128,7 @@ export async function updateEvent(
   const { startAt, endAt } = toTimestamps(d, timeZone)
   await db
     .update(events)
-    .set({
-      calendarId: d.calendarId || null,
-      title: d.title,
-      notes: nullify(d.notes),
-      startAt,
-      endAt,
-      allDay: d.allDay,
-      recurrenceFreq: d.recurrenceFreq,
-      recurrenceInterval: d.recurrenceInterval,
-      recurrenceWeekdays: d.recurrenceWeekdays,
-      recurrenceMonthlyMode: d.recurrenceMonthlyMode,
-      recurrenceEndDate: nullify(d.recurrenceEndDate),
-    })
+    .set(eventFields(d, startAt, endAt))
     .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
   revalidateCalendar()
   return { ok: true }
@@ -182,23 +175,217 @@ export async function restoreEvent(ev: EventRow): Promise<ActionResult> {
   return { ok: true }
 }
 
+// --- "This and following" ---
+
+/**
+ * Apply an edit from one occurrence onward: stop the original the day before, and start
+ * a fresh series carrying the edit from that date.
+ *
+ * `updateEvent` could not be extended to do this — it takes no date context, so it has
+ * no way to know where "from here" begins.
+ *
+ * `fromDate` is the occurrence's ORIGINAL date, the one the series would produce it on.
+ * A moved occurrence sits somewhere else, but the boundary is about the series, and the
+ * series only knows its natural dates.
+ */
+export async function splitSeriesFrom(
+  eventId: unknown,
+  fromDate: unknown,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
+  if (typeof fromDate !== "string" || !isValidDateString(fromDate)) {
+    return { ok: false, error: "Invalid date." }
+  }
+  const parsed = eventInputSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const d = parsed.data
+  const existing = await db.query.events.findFirst({
+    where: and(eq(events.id, parsedId.data), eq(events.userId, userId)),
+  })
+  if (!existing) return { ok: false, error: "Event not found." }
+  if (existing.recurrenceFreq === "none") {
+    return { ok: false, error: "This event does not repeat." }
+  }
+  const calendarError = await checkCalendar(userId, d.calendarId)
+  if (calendarError) return { ok: false, error: calendarError }
+
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = toTimestamps(d, timeZone)
+  const fields = eventFields(d, startAt, endAt)
+
+  // Splitting at the series' own first occurrence leaves nothing behind, so it is just
+  // an edit of the whole thing. Writing the split anyway would strand a truncated row
+  // that produces no occurrences at all.
+  const anchorDate = localDateTime(existing.startAt, timeZone).date
+  if (fromDate <= anchorDate) {
+    await db
+      .update(events)
+      .set(fields)
+      .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
+    revalidateCalendar()
+    return { ok: true }
+  }
+  if (d.startDate < fromDate) {
+    return { ok: false, error: "The new series cannot start before the split." }
+  }
+
+  // The truncation point comes from splitSeriesAt so the inclusive-end arithmetic has
+  // exactly one definition, and one that is covered by tests expanding both halves and
+  // comparing them against the original.
+  const { head } = splitSeriesAt(existing, fromDate, {})
+
+  // One transaction. A truncate that lands without its continuation silently deletes
+  // every future occurrence; a continuation without its truncate renders the series
+  // twice from the split onward. Neither half is meaningful alone.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(events)
+      .set({ recurrenceEndDate: head.recurrenceEndDate })
+      .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
+
+    const [created] = await tx
+      .insert(events)
+      .values({ userId, ...fields })
+      .returning({ id: events.id })
+
+    // Per-occurrence edits from the split date onward belong to the continuation, per
+    // the tranche's locked decision. Re-pointing them cannot collide: the unique key is
+    // (event_id, original_date) and the new series has none of its own yet.
+    await tx
+      .update(eventExceptions)
+      .set({ eventId: created.id })
+      .where(
+        and(
+          eq(eventExceptions.userId, userId),
+          eq(eventExceptions.eventId, parsedId.data),
+          gte(eventExceptions.originalDate, fromDate),
+        ),
+      )
+  })
+  revalidateCalendar()
+  return { ok: true }
+}
+
+export type DeleteFollowingResult =
+  | { ok: true; kind: "truncated"; previousEndDate: string | null }
+  | { ok: true; kind: "deleted"; event: EventRow }
+  | { ok: false; error: string }
+
+/**
+ * Stop a series from one occurrence onward — the delete counterpart of the split, and
+ * only its truncating half.
+ *
+ * Undo is why the result is a union. Truncating is reversed by putting the old
+ * recurrence end back, but a split at the FIRST occurrence removes the row outright and
+ * has to be undone by `restoreEvent` instead. Reporting which happened is cheaper than
+ * making the caller work it out.
+ *
+ * Exceptions past the cut are deliberately left in place. They describe occurrences that
+ * no longer exist, so they are inert — and keeping them is what lets undo restore the
+ * series exactly as it was rather than approximately.
+ */
+export async function deleteSeriesFrom(
+  eventId: unknown,
+  fromDate: unknown,
+): Promise<DeleteFollowingResult> {
+  const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
+  if (typeof fromDate !== "string" || !isValidDateString(fromDate)) {
+    return { ok: false, error: "Invalid date." }
+  }
+
+  const existing = await db.query.events.findFirst({
+    where: and(eq(events.id, parsedId.data), eq(events.userId, userId)),
+  })
+  if (!existing) return { ok: false, error: "Event not found." }
+
+  const { timeZone } = await getUserPreferences()
+  if (fromDate <= localDateTime(existing.startAt, timeZone).date) {
+    const [deleted] = await db
+      .delete(events)
+      .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
+      .returning()
+    revalidateCalendar()
+    return { ok: true, kind: "deleted", event: deleted ?? existing }
+  }
+
+  const { head } = splitSeriesAt(existing, fromDate, {})
+  await db
+    .update(events)
+    .set({ recurrenceEndDate: head.recurrenceEndDate })
+    .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
+  revalidateCalendar()
+  return {
+    ok: true,
+    kind: "truncated",
+    previousEndDate: existing.recurrenceEndDate,
+  }
+}
+
+/** Undo for the truncating half of `deleteSeriesFrom`. */
+export async function setSeriesEnd(
+  eventId: unknown,
+  endDate: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
+  if (
+    endDate !== null &&
+    (typeof endDate !== "string" || !isValidDateString(endDate))
+  ) {
+    return { ok: false, error: "Invalid date." }
+  }
+  await db
+    .update(events)
+    .set({ recurrenceEndDate: endDate })
+    .where(and(eq(events.id, parsedId.data), eq(events.userId, userId)))
+  revalidateCalendar()
+  return { ok: true }
+}
+
 // --- Per-occurrence exceptions ("This event" edit / skip) ---
 
-// Like toTimestamps, but the date is locked to the occurrence's original date, so
-// both instants land on that day (v1 keeps an edited occurrence where it was).
+/**
+ * The instants a single occurrence lands on.
+ *
+ * `date` is where it goes and defaults to `originalDate`, which stays the key it is
+ * found by either way. This used to build both instants from `originalDate`
+ * unconditionally, which is what pinned an edited occurrence to its own day — the lock
+ * lived here rather than in the schema, so a crafted payload could not move a day even
+ * though nothing validated one.
+ *
+ * The day is stored in the instant itself, so there is no separate column to keep in
+ * step with it — and no way for the two to disagree about the same occurrence.
+ */
 function exceptionTimestamps(
-  d: EventExceptionInput,
+  d: Pick<
+    EventExceptionInput,
+    "originalDate" | "date" | "endDate" | "allDay" | "startTime" | "endTime"
+  >,
   tz: string,
 ): { startAt: Date; endAt: Date | null } {
+  const date = d.date || d.originalDate
   const startAt = zonedDateTimeToUtc(
-    d.originalDate,
+    date,
     d.allDay ? "00:00" : d.startTime || "00:00",
     tz,
   )
-  const endAt =
-    !d.allDay && d.endTime
-      ? zonedDateTimeToUtc(d.originalDate, d.endTime, tz)
-      : null
+  // A multi-day occurrence keeps its span: endDate carries the far end, and an
+  // end time alone means it finishes on the same day.
+  const hasEnd = !!d.endDate || (!d.allDay && !!d.endTime)
+  const endAt = hasEnd
+    ? zonedDateTimeToUtc(
+        d.endDate || date,
+        d.allDay ? "00:00" : d.endTime || d.startTime || "00:00",
+        tz,
+      )
+    : null
   return { startAt, endAt }
 }
 
@@ -241,6 +428,52 @@ export async function setEventException(
     notes: nullify(d.notes),
     calendarId: d.calendarId || null,
   }
+  await db
+    .insert(eventExceptions)
+    .values({
+      userId,
+      eventId: parsedId.data,
+      originalDate: d.originalDate,
+      ...fields,
+    })
+    .onConflictDoUpdate({
+      target: [eventExceptions.eventId, eventExceptions.originalDate],
+      set: { ...fields, updatedAt: new Date() },
+    })
+  revalidateCalendar()
+  return { ok: true }
+}
+
+/**
+ * Move one occurrence of a series to another day and time (drag-to-reschedule).
+ *
+ * Writes the same exception row a "This event" edit does — a move IS an override, it
+ * just happens to change the day — but takes only what a drag knows, so the grid does
+ * not have to carry a whole event around to move a block. Fields it says nothing about
+ * (title, notes, calendar) stay null and keep inheriting from the series, which is what
+ * makes a later rename of the series still reach a moved occurrence.
+ *
+ * Deliberately clears `canceled`: dropping a block onto a day is an unambiguous
+ * statement that the occurrence should be there.
+ */
+export async function rescheduleOccurrence(
+  eventId: unknown,
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  // Before ownsEvent, which would otherwise compare a non-uuid against events.id.
+  const parsedId = idSchema.safeParse(eventId)
+  if (!parsedId.success) return invalid(parsedId.error)
+  const parsed = rescheduleSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  if (!(await ownsEvent(userId, parsedId.data))) {
+    return { ok: false, error: "Event not found." }
+  }
+
+  const d = parsed.data
+  const { timeZone } = await getUserPreferences()
+  const { startAt, endAt } = exceptionTimestamps(d, timeZone)
+  const fields = { canceled: false, startAt, endAt, allDay: d.allDay }
   await db
     .insert(eventExceptions)
     .values({
