@@ -9,8 +9,10 @@ import { toast } from "sonner"
 import {
   createEvent,
   setEventException,
+  splitSeriesFrom,
   updateEvent,
 } from "@/modules/calendar/actions"
+import { addDays, dayDiff } from "@/lib/date"
 import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import { type ActionResult } from "@/lib/action-result"
 import {
@@ -32,7 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -43,7 +50,13 @@ import {
 } from "@/components/ui/select"
 
 // Which slice of a recurring series an edit/delete targets.
-export type EditScope = "this" | "all"
+export type EditScope = "this" | "following" | "all"
+
+const SCOPE_OPTIONS: { value: EditScope; label: string }[] = [
+  { value: "this", label: "This event" },
+  { value: "following", label: "This and following" },
+  { value: "all", label: "All events" },
+]
 
 type EventFormValues = {
   title: string
@@ -96,13 +109,21 @@ function weekdayOf(date: string): number {
 }
 
 /** Labels the two monthly modes off the start date, Google-style. */
-function monthlyLabels(date: string): { dayOfMonth: string; nthWeekday: string } {
+function monthlyLabels(date: string): {
+  dayOfMonth: string
+  nthWeekday: string
+} {
   const [y, m, d] = date.split("-").map(Number)
-  if (!y || !m || !d) return { dayOfMonth: "the same day", nthWeekday: "the same weekday" }
+  if (!y || !m || !d)
+    return { dayOfMonth: "the same day", nthWeekday: "the same weekday" }
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const which = d + 7 > daysInMonth ? "last" : (ORDINALS[Math.ceil(d / 7) - 1] ?? "last")
-  return { dayOfMonth: `day ${d}`, nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}` }
+  const which =
+    d + 7 > daysInMonth ? "last" : (ORDINALS[Math.ceil(d / 7) - 1] ?? "last")
+  return {
+    dayOfMonth: `day ${d}`,
+    nthWeekday: `the ${which} ${WEEKDAY_NAMES[dow]}`,
+  }
 }
 
 /** "Sat, Jul 25" for a single occurrence's date (parsed as UTC to avoid drift). */
@@ -188,8 +209,9 @@ export function EventDialog({
       return
     }
     if (scope === "this") {
-      // Edit just this occurrence: fields from the effective event, the date pinned
-      // to the occurrence's own day (v1 keeps it there).
+      // Just this occurrence: fields from the effective event, dates from wherever the
+      // occurrence actually sits — which since T5b is not necessarily the day its
+      // series would have produced it on.
       const e = occurrence.event
       reset({
         title: e.title,
@@ -198,7 +220,7 @@ export function EventDialog({
         allDay: e.allDay,
         startDate: occurrence.date,
         startTime: e.allDay ? "09:00" : (occurrence.time ?? "09:00"),
-        endDate: occurrence.date,
+        endDate: occurrence.endDate,
         endTime: e.allDay ? "" : (occurrence.endTime ?? ""),
         recurrenceFreq: "none",
         recurrenceInterval: 1,
@@ -208,18 +230,27 @@ export function EventDialog({
       })
       return
     }
-    // Edit the whole series from its anchor (recurrence controls visible).
+    // "following" and "all" both edit a SERIES, so both show the recurrence controls.
+    // They differ in where that series starts: "all" from the original anchor, and
+    // "following" from this occurrence, which is where the new one will begin.
     const s = occurrence.seriesEvent
     const start = localDateTime(new Date(s.startAt), timeZone)
     const end = s.endAt ? localDateTime(new Date(s.endAt), timeZone) : null
+    const splitting = scope === "following"
     reset({
       title: s.title,
       notes: s.notes ?? "",
       calendarId: s.calendarId ?? "",
       allDay: s.allDay,
-      startDate: start.date,
+      startDate: splitting ? occurrence.originalDate : start.date,
       startTime: s.allDay ? "09:00" : start.time,
-      endDate: end?.date ?? "",
+      // The series' end offset, re-anchored on the split date — otherwise a multi-day
+      // series would keep the ANCHOR's end date and read as ending in the past.
+      endDate: splitting
+        ? end
+          ? addDays(occurrence.originalDate, dayDiff(start.date, end.date))
+          : ""
+        : (end?.date ?? ""),
       endTime: end && !s.allDay ? end.time : "",
       recurrenceFreq: s.recurrenceFreq,
       recurrenceInterval: s.recurrenceInterval,
@@ -234,9 +265,14 @@ export function EventDialog({
     if (!occurrence) {
       result = await createEvent(data)
     } else if (scope === "this") {
-      // Single-occurrence override — the date is fixed to occurrence.date.
+      // A single-occurrence override, keyed on the date the SERIES would produce this
+      // on rather than where it currently sits. For an occurrence that has already been
+      // moved those differ, and using the visible date would write a second override
+      // instead of updating the one that exists.
       result = await setEventException(occurrence.seriesEvent.id, {
-        originalDate: occurrence.date,
+        originalDate: occurrence.originalDate,
+        date: data.startDate,
+        endDate: data.endDate,
         title: data.title,
         notes: data.notes,
         calendarId: data.calendarId,
@@ -244,6 +280,12 @@ export function EventDialog({
         startTime: data.startTime,
         endTime: data.endTime,
       })
+    } else if (scope === "following") {
+      result = await splitSeriesFrom(
+        occurrence.seriesEvent.id,
+        occurrence.originalDate,
+        data,
+      )
     } else {
       result = await updateEvent(occurrence.seriesEvent.id, data)
     }
@@ -270,7 +312,10 @@ export function EventDialog({
   const allDay = watch("allDay")
   const freq = watch("recurrenceFreq")
   const startDate = watch("startDate")
-  const lockDate = scope === "this" // v1 pins an edited occurrence to its own day
+  // Only "this and following" pins its date: that date IS the split point, so changing
+  // it would move the boundary rather than the event. "This event" is free to move to
+  // another day (T5b-S5 lifted the v1 lock), and "All events" moves the whole anchor.
+  const lockDate = scope === "following"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -281,14 +326,18 @@ export function EventDialog({
               ? "Add event"
               : scope === "this"
                 ? "Edit this event"
-                : "Edit event"}
+                : scope === "following"
+                  ? "Edit this and following"
+                  : "Edit event"}
           </DialogTitle>
           <DialogDescription>
             {!occurrence
               ? "Add an event to your calendar."
               : scope === "this"
                 ? `Editing ${formatOccurrenceDate(occurrence.date)} only — other days are unchanged.`
-                : "Changes apply to the whole series."}
+                : scope === "following"
+                  ? `From ${formatOccurrenceDate(occurrence.originalDate)} onwards. Earlier days keep the current settings.`
+                  : "Changes apply to the whole series."}
           </DialogDescription>
         </DialogHeader>
 
@@ -298,12 +347,7 @@ export function EventDialog({
               <Field>
                 <FieldLabel>Apply changes to</FieldLabel>
                 <div className="flex gap-2">
-                  {(
-                    [
-                      ["this", "This event"],
-                      ["all", "All events"],
-                    ] as const
-                  ).map(([value, label]) => (
+                  {SCOPE_OPTIONS.map(({ value, label }) => (
                     <button
                       key={value}
                       type="button"
@@ -331,7 +375,11 @@ export function EventDialog({
 
             <Field>
               <FieldLabel htmlFor="e-notes">Notes</FieldLabel>
-              <Input id="e-notes" placeholder="Optional" {...register("notes")} />
+              <Input
+                id="e-notes"
+                placeholder="Optional"
+                {...register("notes")}
+              />
               <FieldError errors={[errors.notes]} />
             </Field>
 
@@ -380,7 +428,9 @@ export function EventDialog({
                 <label className="flex items-center gap-2 text-sm">
                   <Checkbox
                     checked={field.value}
-                    onCheckedChange={(checked) => field.onChange(checked === true)}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
                   />
                   All day
                 </label>
@@ -405,7 +455,11 @@ export function EventDialog({
               {!allDay && (
                 <Field>
                   <FieldLabel htmlFor="e-start-time">Start time</FieldLabel>
-                  <Input id="e-start-time" type="time" {...register("startTime")} />
+                  <Input
+                    id="e-start-time"
+                    type="time"
+                    {...register("startTime")}
+                  />
                   <FieldError errors={[errors.startTime]} />
                 </Field>
               )}
@@ -452,11 +506,13 @@ export function EventDialog({
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {(Object.keys(FREQ_LABELS) as RecurrenceFreq[]).map((f) => (
-                          <SelectItem key={f} value={f}>
-                            {FREQ_LABELS[f]}
-                          </SelectItem>
-                        ))}
+                        {(Object.keys(FREQ_LABELS) as RecurrenceFreq[]).map(
+                          (f) => (
+                            <SelectItem key={f} value={f}>
+                              {FREQ_LABELS[f]}
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
                   )}
@@ -512,7 +568,9 @@ export function EventDialog({
                                   type="button"
                                   aria-pressed={on}
                                   aria-label={WEEKDAY_NAMES[wd]}
-                                  onClick={() => field.onChange(mask ^ (1 << wd))}
+                                  onClick={() =>
+                                    field.onChange(mask ^ (1 << wd))
+                                  }
                                   className={cn(
                                     "size-9 rounded-md text-xs font-medium transition-colors",
                                     on
@@ -540,8 +598,14 @@ export function EventDialog({
                       render={({ field }) => {
                         const labels = monthlyLabels(startDate)
                         const options = [
-                          { value: "day_of_month" as const, label: labels.dayOfMonth },
-                          { value: "nth_weekday" as const, label: labels.nthWeekday },
+                          {
+                            value: "day_of_month" as const,
+                            label: labels.dayOfMonth,
+                          },
+                          {
+                            value: "nth_weekday" as const,
+                            label: labels.nthWeekday,
+                          },
                         ]
                         return (
                           <div className="flex flex-col gap-2 sm:flex-row">
@@ -583,7 +647,13 @@ export function EventDialog({
                 }}
               >
                 <Trash2 className="size-4" />
-                {isRecurring && scope === "this" ? "Skip this day" : "Delete"}
+                {!isRecurring
+                  ? "Delete"
+                  : scope === "this"
+                    ? "Skip this day"
+                    : scope === "following"
+                      ? "Delete from here"
+                      : "Delete"}
               </Button>
             ) : (
               <span />

@@ -4,11 +4,15 @@ import {
   DAY_MINUTES,
   DEFAULT_MINUTES,
   MIN_MINUTES,
+  SLOT_MINUTES,
   daySpan,
   dstNotes,
   layoutLanes,
+  droppedMinute,
   minutesOf,
+  movedSpan,
   spanFractions,
+  timeOf,
   type Span,
 } from "./grid-geometry"
 
@@ -38,6 +42,118 @@ describe("minutesOf", () => {
     expect(minutesOf("00:00")).toBe(0)
     expect(minutesOf("09:30")).toBe(570)
     expect(minutesOf("23:59")).toBe(1439)
+  })
+})
+
+describe("timeOf", () => {
+  it("round-trips through minutesOf", () => {
+    for (const t of ["00:00", "09:30", "14:45", "23:59"]) {
+      expect(timeOf(minutesOf(t))).toBe(t)
+    }
+  })
+
+  it("stays inside the day", () => {
+    expect(timeOf(-30)).toBe("00:00")
+    expect(timeOf(DAY_MINUTES + 60)).toBe("23:59")
+  })
+})
+
+describe("droppedMinute", () => {
+  // A 24-hour column 1440px tall makes a pixel a minute, so the arithmetic in these
+  // cases is readable rather than incidental.
+  const H = DAY_MINUTES
+
+  it("converts a downward drag into later minutes", () => {
+    // 09:00 dragged down two hours.
+    expect(droppedMinute(540, 120, H)).toBe(660)
+  })
+
+  it("converts an upward drag into earlier minutes", () => {
+    expect(droppedMinute(540, -120, H)).toBe(420)
+  })
+
+  it("snaps to the nearest slot", () => {
+    expect(droppedMinute(540, 7, H)).toBe(540) // rounds back down
+    expect(droppedMinute(540, 8, H)).toBe(555) // over halfway to the next slot
+    expect(droppedMinute(540, 20, H)).toBe(555)
+  })
+
+  it("scales to whatever height the column actually has", () => {
+    // Half the pixels per minute: the same 120px drag is now four hours.
+    expect(droppedMinute(540, 120, H / 2)).toBe(780)
+  })
+
+  it("will not drag a block off the top of the day", () => {
+    expect(droppedMinute(30, -500, H)).toBe(0)
+  })
+
+  it("will not leave a block hanging past midnight", () => {
+    // Clamped to the last whole slot, so the block keeps its height instead of being
+    // clipped away at the bottom of the column.
+    expect(droppedMinute(1400, 500, H)).toBe(DAY_MINUTES - SLOT_MINUTES)
+  })
+
+  it("returns the start unchanged when the column has not been measured", () => {
+    // A drop can arrive before layout has settled; guessing from a zero height would
+    // divide by nothing and move the event to a garbage time.
+    expect(droppedMinute(540, 300, 0)).toBe(540)
+  })
+})
+
+describe("movedSpan", () => {
+  it("keeps the duration when the start moves", () => {
+    expect(
+      movedSpan(
+        occ({ time: "09:00", endTime: "10:30" }),
+        "2026-07-20",
+        "14:00",
+      ),
+    ).toEqual({
+      date: "2026-07-20",
+      endDate: "2026-07-20",
+      time: "14:00",
+      endTime: "15:30",
+    })
+  })
+
+  it("pushes the end onto the next day when the move crosses midnight", () => {
+    // 90 minutes from 23:00 lands at 00:30 tomorrow, not at 00:30 the same morning.
+    expect(
+      movedSpan(
+        occ({ time: "09:00", endTime: "10:30" }),
+        "2026-07-20",
+        "23:00",
+      ),
+    ).toEqual({
+      date: "2026-07-20",
+      endDate: "2026-07-21",
+      time: "23:00",
+      endTime: "00:30",
+    })
+  })
+
+  it("carries a multi-day span with it", () => {
+    const two = occ({
+      date: PLAIN,
+      endDate: "2026-07-17",
+      time: "09:00",
+      endTime: "11:00",
+    })
+    expect(movedSpan(two, "2026-08-01", "09:00")).toEqual({
+      date: "2026-08-01",
+      endDate: "2026-08-03",
+      time: "09:00",
+      endTime: "11:00",
+    })
+  })
+
+  it("leaves an occurrence with no end time a point", () => {
+    expect(movedSpan(occ({ endTime: null }), "2026-07-20", "14:00")).toEqual({
+      date: "2026-07-20",
+      endDate: "2026-07-20",
+      time: "14:00",
+      endTime: null,
+    })
   })
 })
 

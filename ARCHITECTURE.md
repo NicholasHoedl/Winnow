@@ -1,6 +1,6 @@
 # Winnow — Architecture
 
-Status: Implemented through improvement-plan tranche T5a (to-dos + goals)
+Status: Implemented through improvement-plan tranche T5b (calendar: grid, drag, split)
 Last updated: 2026-07-27
 
 This document assumes SPEC.md. It covers the tech stack and rationale, the
@@ -204,11 +204,10 @@ budgeting module, called out explicitly because float-based money math is
 a classic, easy-to-introduce bug.
 
 > **Some sections below are current, others are the v1 plan.** §3.2 (to-dos and
-> goals) and §3.5 (meals) were rewritten against the real schema when those
-> modules were reworked, and are accurate. §3.3 (calendar) and §3.4 (budgeting)
-> still describe the original plan — later work added `calendars`,
-> `event_exceptions`, `transaction_recurrences` and `user_preferences`, and
-> never built the planned `accounts` table.
+> goals), §3.3 (calendar) and §3.5 (meals) were rewritten against the real schema
+> when those modules were reworked, and are accurate. §3.4 (budgeting) still
+> describes the original plan — later work added `transaction_recurrences` and
+> `user_preferences`, and never built the planned `accounts` table.
 >
 > `drizzle/` and each module's `schema.ts` are always the source of truth; the
 > ADRs in `docs/adr/` record why the shape changed. What is worth reading here
@@ -384,28 +383,41 @@ which are overdue, and a way through.
 
 ### 3.3 Calendar / Events
 
+**calendars** — named groups (Personal, Work, …), seeded on first read.
+
+| field      | type                     | notes                                   |
+| ---------- | ------------------------ | --------------------------------------- |
+| id         | uuid (pk)                |                                         |
+| user_id    | uuid (fk → users)        |                                         |
+| name       | text, required           |                                         |
+| color      | int, not null, default 1 | palette slot 1–6 → `--cat-1..6`; no hex |
+| sort_order | int, not null, default 0 |                                         |
+| created_at | timestamptz              |                                         |
+
 **events**
 
-| field                   | type                                                 | notes                                     |
-| ----------------------- | ---------------------------------------------------- | ----------------------------------------- |
-| id                      | uuid (pk)                                            |                                           |
-| user_id                 | uuid (fk → users)                                    |                                           |
-| title                   | text, required                                       |                                           |
-| notes                   | text, nullable                                       |                                           |
-| start_at                | timestamptz                                          |                                           |
-| end_at                  | timestamptz, nullable                                | nullable to allow open-ended/point events |
-| all_day                 | boolean                                              |                                           |
-| recurrence_freq         | enum(none, daily, weekly, monthly, yearly), nullable |                                           |
-| recurrence_interval     | int, default 1                                       | e.g. every 2 weeks                        |
-| recurrence_end_date     | date, nullable                                       | open-ended if null                        |
-| created_at / updated_at | timestamptz                                          |                                           |
+| field                   | type                                       | notes                                      |
+| ----------------------- | ------------------------------------------ | ------------------------------------------ |
+| id                      | uuid (pk)                                  |                                            |
+| user_id                 | uuid (fk → users)                          |                                            |
+| calendar_id             | uuid, nullable (fk → calendars, cascade)   | deleting a calendar takes its events       |
+| title                   | text, required                             |                                            |
+| notes                   | text, nullable                             |                                            |
+| start_at                | timestamptz                                | the ANCHOR instant — see the model below   |
+| end_at                  | timestamptz, nullable                      | nullable to allow open-ended/point events  |
+| all_day                 | boolean                                    |                                            |
+| recurrence_freq         | enum(none, daily, weekly, monthly, yearly) |                                            |
+| recurrence_interval     | int, default 1                             | e.g. every 2 weeks                         |
+| recurrence_weekdays     | int, default 0                             | 7-bit BYDAY mask; 0 = the anchor's weekday |
+| recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                 |
+| recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null              |
+| created_at / updated_at | timestamptz                                |                                            |
 
 Recurring **calendar** occurrences are **computed on the fly** for whatever
-date range is being viewed (e.g., the visible month), not pre-materialized as
-individual rows. This avoids the classic recurrence bug class of stale
-materialized instances after an edit. The tradeoff originally accepted here —
-no "edit just this one occurrence" — was later bought back with an
-`event_exceptions` overlay rather than by materializing.
+date range is being viewed, not pre-materialized as individual rows. This avoids
+the classic recurrence bug class of stale materialized instances after an edit.
+The tradeoff originally accepted here — no "edit just this one occurrence" — was
+later bought back with an `event_exceptions` overlay rather than by materializing.
 
 **This rule turned out to be specific to the calendar.** Recurring to-dos and
 recurring transactions both materialize real rows, lazily on read, because a
@@ -415,6 +427,86 @@ one open instance and retires the rest, while the transaction generator is
 insert-only and never rewrites a posted row. See ADR-0004 for the money case
 and the constraint it carries (enabling `cacheComponents` would make writing
 during a render illegal).
+
+#### The wall-clock model
+
+An occurrence is a **local date plus a time-of-day derived once from the anchor**,
+not an instant. Recurrence stepping is therefore plain calendar-date arithmetic
+with no timezone reconstruction, and a 09:00 standup stays 09:00 across a DST
+boundary instead of drifting to 08:00 or 10:00.
+
+The cost is that `start_at` is only an accurate instant **for the anchor itself**.
+Anything computing an offset for a later occurrence has to work from `occ.time`,
+never from `event.start_at`, or every occurrence past a transition lands an hour
+out. The week grid's vertical axis is wall clock for the same reason — see
+`components/calendar/grid-geometry.ts`, which explains why elapsed-time positioning
+was built first and then rejected.
+
+An occurrence is **in view when its span overlaps the range**, not when its start
+date falls inside it. Both paths in `expandOccurrences` agree on this now; until
+T5b-S1 only the non-recurring one did, so a recurring Mon–Wed event was invisible
+in a week beginning Tuesday while an identical one-off was not.
+
+**event_exceptions** — per-occurrence overrides and skips
+
+| field                   | type                                      | notes                          |
+| ----------------------- | ----------------------------------------- | ------------------------------ |
+| id                      | uuid (pk)                                 |                                |
+| user_id                 | uuid (fk → users)                         |                                |
+| event_id                | uuid (fk → events, ON DELETE cascade)     |                                |
+| original_date           | date, not null                            | the RECURRENCE-ID — see below  |
+| canceled                | boolean, not null, default false          | "skip this day"                |
+| start_at / end_at       | timestamptz, nullable                     | null = inherit from the series |
+| all_day / title / notes | nullable                                  | null = inherit                 |
+| calendar_id             | uuid, nullable (fk → calendars, set null) |                                |
+| created_at / updated_at | timestamptz                               |                                |
+
+Plus `unique(event_id, original_date)`, which makes re-saving the same day an
+upsert rather than a duplicate.
+
+**`original_date` is the key, and it is deliberately not "where the occurrence
+is".** It is the date the SERIES would produce the occurrence on — iCalendar's
+RECURRENCE-ID. Since T5b an override can also **move** its occurrence to another
+day, and the two then differ. Addressing the row by where the block currently sits
+writes a _second_ override instead of updating the one that exists, leaving the
+series with two rows fighting over one day. `Occurrence` carries `originalDate`
+alongside `date` for exactly this reason, and `occurrenceKey` is built from it.
+
+The moved day needs **no column of its own**: an override already stores a full
+`start_at`, so the day it lands on is in the data. A `moved_to_date` was planned
+and dropped — one fact with two homes is one fact that can disagree with itself.
+
+Two consequences fall out of moves being possible:
+
+- **Reads scan wider than their own range.** An occurrence moved _into_ a view was
+  never expanded, because its natural date is outside it; one moved _out_ was
+  expanded and has to be dropped. `inboundOccurrenceDates` handles the first and
+  `applyExceptions`' range check the second, and the exception fetch matches on
+  `original_date ∈ range` **OR** the stored instant landing in it.
+- **Moves are bounded** (`MAX_MOVE_DAYS`, 60). Not a taste judgement: "scan far
+  enough either side" is only knowable if there is a limit, and the query windows
+  widen by exactly that amount. Unbounded, every read would have to consider every
+  exception ever written.
+
+#### "This and following"
+
+Splitting a series stops the original the day **before** the split (`recurrence_end_date`
+is inclusive) and inserts a continuation re-anchored **on** it. Re-anchoring is what
+preserves phase — an every-other-week series counted from the split date lands on the
+same days only because the split date is itself an occurrence.
+
+All three writes — truncate, insert, and re-point every exception from the split date
+onward — run in **one transaction**. Alone, each is a bug: a truncate without its
+continuation silently deletes every future occurrence, and a continuation without its
+truncate renders the series twice.
+
+Splitting at the series' own first occurrence is just an edit of the whole thing, and is
+handled as one; writing the split anyway would strand a row that produces nothing.
+
+One inherited wart: `nth_weekday` never stores its ordinal and re-derives it from
+whichever month the anchor lands in, so splitting a "4th Friday" series at a month whose
+4th Friday is also its last can quietly turn it into a "last Friday" one. The ambiguity
+is in the schema rather than in the split, but the split is where it surfaces.
 
 ### 3.4 Budgeting
 
@@ -849,6 +941,11 @@ winnow/
 │   │
 │   ├── components/
 │   │   ├── ui/                       # shadcn primitives, unmodified/lightly themed
+│   │   ├── charts/
+│   │   │   └── geometry.ts           # pure chart maths, no React/DOM/measurement
+│   │   ├── calendar/                 # same contract as charts/
+│   │   │   ├── grid-geometry.ts      # pure: slots, overlap lanes, DST notes
+│   │   │   └── time-grid.tsx         # week/day grid + drag-to-reschedule
 │   │   └── shared/                   # nav, page headers, app-wide shared pieces
 │   │       └── sortable-list.tsx     # drag/keyboard reorder (see ADR-0006)
 │   │

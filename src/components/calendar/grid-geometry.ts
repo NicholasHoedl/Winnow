@@ -17,7 +17,7 @@
 // collapse into its single row — which is all the data model can express anyway, since
 // `zonedDateTimeToUtc` resolves an ambiguous wall clock to the earlier instant.
 
-import { addDays } from "@/lib/date"
+import { addDays, dayDiff } from "@/lib/date"
 import { localDateTime, zonedDateTimeToUtc } from "@/modules/calendar/service"
 
 /** The axis, in minutes. Always a plain 24 hours — see the note above. */
@@ -35,10 +35,82 @@ export const DEFAULT_MINUTES = 30
  *  its start. Thinner than this and the block cannot be tapped. */
 export const MIN_MINUTES = 15
 
+/** What a drag snaps to. Fine enough for a real appointment, coarse enough that a
+ *  15-minute block is still a comfortable keyboard step. */
+export const SLOT_MINUTES = 15
+
 /** Wall-clock "HH:MM" as minutes past midnight. */
 export function minutesOf(time: string): number {
   const [h, m] = time.split(":").map(Number)
   return (h || 0) * 60 + (m || 0)
+}
+
+/** Minutes past midnight back to "HH:MM" — the inverse of {@link minutesOf}. */
+export function timeOf(minute: number): string {
+  const clamped = Math.max(0, Math.min(DAY_MINUTES - 1, Math.round(minute)))
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${pad(Math.floor(clamped / 60))}:${pad(clamped % 60)}`
+}
+
+/**
+ * Where a drag of `deltaY` pixels lands, snapped to the nearest slot.
+ *
+ * `columnHeight` is the full 24-hour column measured at drag time rather than a
+ * constant, so the conversion holds whatever the row height is — the grid sizes itself
+ * from a CSS variable and nothing here should have to know what that resolves to.
+ *
+ * The result is clamped so a block can neither be dragged off the top of the day nor
+ * hang past midnight, where the column would clip it to nothing.
+ */
+export function droppedMinute(
+  startMinute: number,
+  deltaY: number,
+  columnHeight: number,
+  slot = SLOT_MINUTES,
+): number {
+  if (columnHeight <= 0) return startMinute
+  const moved = startMinute + (deltaY / columnHeight) * DAY_MINUTES
+  const snapped = Math.round(moved / slot) * slot
+  return Math.max(0, Math.min(DAY_MINUTES - slot, snapped))
+}
+
+/**
+ * Where an occurrence lands when its start is dragged to `date` at `time`, keeping the
+ * duration it already had.
+ *
+ * Spans are carried rather than collapsed: a two-hour block stays two hours, and one
+ * that runs past midnight still ends on the following day. Working from a single total
+ * minute count rather than from the clock alone is what makes the midnight case fall
+ * out instead of needing a branch of its own.
+ *
+ * An occurrence with no end time has no duration to keep, so it stays a point.
+ */
+export function movedSpan(
+  occ: {
+    date: string
+    endDate: string
+    time: string | null
+    endTime: string | null
+  },
+  date: string,
+  time: string,
+): { date: string; endDate: string; time: string; endTime: string | null } {
+  if (!occ.time || !occ.endTime) {
+    return { date, endDate: date, time, endTime: null }
+  }
+  const duration = Math.max(
+    0,
+    dayDiff(occ.date, occ.endDate) * DAY_MINUTES +
+      minutesOf(occ.endTime) -
+      minutesOf(occ.time),
+  )
+  const end = minutesOf(time) + duration
+  return {
+    date,
+    endDate: addDays(date, Math.floor(end / DAY_MINUTES)),
+    time,
+    endTime: timeOf(end % DAY_MINUTES),
+  }
 }
 
 /** A block's vertical extent within one column, in minutes past midnight. */

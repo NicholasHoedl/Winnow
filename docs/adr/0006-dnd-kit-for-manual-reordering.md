@@ -65,6 +65,23 @@ the taps that toggle a task, and on touch there is no hover state to disambiguat
   dnd-kit fires with the item over itself on lift, which otherwise overwrites "Picked up"
   before it can be read.
 
+- **The calendar's drag-to-reschedule (T5b-S6) is a second, differently shaped context,
+  not a reuse of `SortableList`.** The feature this ADR deferred turned out to share only
+  the sensor configuration. `SortableList` permutes one list and reports `(ids: string[])`;
+  a reschedule reports a day and a time. It puts one `DndContext` per instance where the
+  grid needs a single context spanning seven droppable columns. It pins items with
+  `restrictToParentElement`, which is the very thing that has to be crossed here. And it
+  requires `T extends { id: string }`, which occurrences do not satisfy — they have no id,
+  and `bucketByDay` hands the same object to every day a span covers, so identity comes
+  from `occurrenceKey` instead.
+
+  Two things did carry over, both of them the accessibility parts: a keyboard path (arrow
+  keys move a column or a 15-minute slot, via a custom `coordinateGetter`, since the
+  sortable one only knows how to walk a list), and announcements written by hand. The grid
+  goes further and drives its own live region, because dnd-kit only announces when the
+  droppable changes — which here means only when the DAY changes, leaving an arrow-key
+  move down an hour completely silent.
+
 - **`DndContext` must be given an explicit `id`, or it breaks hydration.** Left to itself,
   dnd-kit's `useUniqueId` falls back to a MODULE-LEVEL counter for the
   `aria-describedby="DndDescribedBy-N"` it puts on every drag handle. On the server that

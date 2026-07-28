@@ -15,7 +15,8 @@ picked up — it is **not** code-level detail yet.
 | T3 — Depth: Budget                            | ✅ shipped  |
 | T4 — Depth: Meals                             | ✅ shipped  |
 | T5a — Depth: to-dos + goals                   | ✅ shipped  |
-| T5b — Depth: calendar                         | next        |
+| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped  |
+| T5c — Calendar: reminders + iCal              | next        |
 | T6 — Robustness & data                        | not started |
 | T7 — Net-new modules                          | not started |
 
@@ -240,7 +241,7 @@ weight/water trends; over-target styling in light+dark.
 
 ---
 
-## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos) — split into T5a ✅ / T5b
+## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos) — T5a ✅ / T5b ✅ / T5c
 
 **Goal:** deepen the three "planning" modules to match their real-world use.
 
@@ -289,13 +290,50 @@ built once and shared. Calendar became T5b.
   column with no writer since 0004), and the dashboard rail rendered a literal "0/0" plus a
   2%-wide bar for a goal with no milestones — T0's polish item fixed only the `/goals` page.
 
-**T5b still owes** the whole calendar third: a week/day **time-grid** (the app has no
-time-of-day layout anywhere today — every view is a chip list keyed by a date string),
-**event reminders** (there is no per-event reminder concept at all; the T2 digest is a
-once-a-day banner), **drag-to-reschedule**, **"this and following"** recurrence edits, and
-**iCal import/export/subscribe** (nothing iCal-related exists). Subscribe in particular
-means a public unauthenticated URL — a security posture nothing in the app has today, and
-worth its own ADR.
+**T5b — shipped**, and split again on the same reasoning. The calendar third was five
+features, two of which are not really calendar work. T5b took the three that are:
+
+- **A week/day time-grid.** The app had no time-of-day layout anywhere — every view was a
+  chip list keyed on a date string. Positioned in fractions of a column, with the pure
+  geometry (including overlap lanes) unit-tested in `components/calendar/grid-geometry.ts`.
+- **View and date in the URL** (`?view=`/`?date=`), so a week is linkable, survives a
+  reload and works with the back button. `?month=` still resolves for existing links.
+- **Drag-to-reschedule**, pointer and keyboard, in a second `DndContext` that shares
+  almost nothing with `SortableList` but its sensors — see ADR-0006.
+- **"This and following"**, as a three-write transaction.
+- **No migration.** A `moved_to_date` column was planned and dropped: an override already
+  stores a full `start_at`, so the day it lands on is in the data. Two homes for one fact
+  is a fact that can disagree with itself.
+
+Found and fixed on the way, none of it planned:
+
+- **`expandOccurrences` dropped recurring multi-day occurrences** whose span reached into
+  the range but whose start date did not — a recurring Mon–Wed event was invisible in a
+  week beginning Tuesday while an identical one-off was not. Latent since T2; a week view
+  exposes it on day one.
+- **`SortableList` broke hydration on every render of `/todos` and `/goals`.** dnd-kit
+  falls back to a module-level counter for `aria-describedby` when given no `id`, and the
+  server's counter climbs while the client's restarts. React's own wording is that it
+  "won't be patched up" — so the attribute stayed wrong, pointing at a description element
+  that isn't there, which is precisely the accessibility story ADR-0006 was justified on.
+- **A cross-user data-loss vector.** `createEvent`/`updateEvent`/`setEventException` wrote
+  a client-supplied `calendar_id` straight through. `events.calendar_id` cascades on
+  delete, so an event pointed at someone else's calendar is an event _they_ can destroy.
+  Same class as the to-do link hole closed in T5a.
+
+**T5c owes** the two deferred features, and both need a decision before any code:
+
+- **Event reminders have nowhere to be delivered.** No service worker (T6 owns that), no
+  Web Push, no cron, no SMTP. The only notification surface is a once-a-day in-app banner,
+  and `computeDigest` reads a single day with no forward window — so "30 minutes before"
+  has no data path even in principle.
+- **iCal subscribe needs a security posture the app does not have.** `requireUserId()` is
+  the only auth mechanism in the codebase; a subscribe feed means a public unauthenticated
+  URL and has to invent tokens or signed URLs. Worth its own ADR.
+- The RRULE mapping also has five known gaps, written down in the T5b plan so they are not
+  rediscovered: the implicit BYDAY in `recurrence_weekdays = 0`; `nth_weekday` not storing
+  its ordinal; no `COUNT` column; `recurrence_end_date` being a date where `UNTIL` is a UTC
+  date-time; and events carrying no zone of their own for `DTSTART;TZID=`.
 
 ---
 

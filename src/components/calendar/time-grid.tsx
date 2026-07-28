@@ -1,22 +1,96 @@
 "use client"
 
 import * as React from "react"
+import {
+  type CollisionDetection,
+  DndContext,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+  type KeyboardCoordinateGetter,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
+import { CSS } from "@dnd-kit/utilities"
 
 import { accentForCalendar } from "@/lib/colors"
 import { formatTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
+import { occurrenceKey } from "@/modules/calendar/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 
 import {
   DAY_MINUTES,
   HOURS,
+  SLOT_MINUTES,
   daySpan,
+  droppedMinute,
   dstNotes,
   layoutLanes,
   minutesOf,
   spanFractions,
+  timeOf,
+  type Lane,
+  type Span,
 } from "./grid-geometry"
+
+/** Where a drop lands: the column's day plus the snapped time. */
+export type Reschedule = { date: string; time: string }
+
+/** The column under the pointer while dragging by hand, since that is what the user is
+ *  aiming with; the nearest column by centre when moving by keyboard, where there is no
+ *  pointer to ask and `pointerWithin` finds nothing at all. */
+const gridCollisionDetection: CollisionDetection = (args) => {
+  const pointer = pointerWithin(args)
+  return pointer.length > 0 ? pointer : closestCenter(args)
+}
+
+/** One voice: the grid's own live region does the talking, so dnd-kit's announcer stays
+ *  quiet rather than interleaving a second commentary over the top of it. */
+const SILENT_ANNOUNCEMENTS = {
+  onDragStart: () => undefined,
+  onDragOver: () => undefined,
+  onDragEnd: () => undefined,
+  onDragCancel: () => undefined,
+}
+
+/**
+ * Arrow keys move a lifted block by one column or one slot.
+ *
+ * dnd-kit's sortable coordinate getter is no use here — it walks a list looking for the
+ * next item to swap with, and this grid has no list, just a plane. Column width and slot
+ * height come from the measured droppables rather than from the CSS variable, so the
+ * keyboard step is always exactly what the same drag would do with a pointer.
+ */
+const gridCoordinateGetter: KeyboardCoordinateGetter = (
+  event,
+  { currentCoordinates, context },
+) => {
+  const column = [...context.droppableRects.values()][0]
+  if (!column) return undefined
+  const slot = (column.height / DAY_MINUTES) * SLOT_MINUTES
+  const move: Record<string, { x: number; y: number }> = {
+    ArrowRight: { x: column.width, y: 0 },
+    ArrowLeft: { x: -column.width, y: 0 },
+    ArrowDown: { x: 0, y: slot },
+    ArrowUp: { x: 0, y: -slot },
+  }
+  const step = move[event.code]
+  if (!step) return undefined
+  // Otherwise the page scrolls out from under the block being moved.
+  event.preventDefault()
+  return {
+    x: currentCoordinates.x + step.x,
+    y: currentCoordinates.y + step.y,
+  }
+}
 
 /** How often the now-line catches up. A minute is the finest the grid can show. */
 const NOW_TICK_MS = 60_000
@@ -113,6 +187,7 @@ export function TimeGrid({
   calendars,
   onSelectDay,
   onEditEvent,
+  onReschedule,
 }: {
   dates: string[]
   byDay: Record<string, EventOccurrence[]>
@@ -121,6 +196,8 @@ export function TimeGrid({
   calendars: Calendar[]
   onSelectDay?: (date: string) => void
   onEditEvent?: (occ: EventOccurrence) => void
+  /** Omit to render the grid read-only — blocks are then not draggable at all. */
+  onReschedule?: (occ: EventOccurrence, to: Reschedule) => void
 }) {
   const { use24HourTime } = usePreferences()
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -160,6 +237,110 @@ export function TimeGrid({
     (byDay[date] ?? []).filter((occ) => occ.time === null),
   )
   const hasAllDay = allDayByDate.some((list) => list.length > 0)
+
+  // --- drag to reschedule
+
+  const sensors = useSensors(
+    // The whole block is the handle rather than a corner grip: a block can be fifteen
+    // minutes tall, and there is no room in one for a separate grip. The distance
+    // threshold is what keeps a tap a tap — below it the click opens the editor.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: gridCoordinateGetter,
+      // Space lifts and drops; Enter is left alone so it still opens the editor, which
+      // is the block's primary action. dnd-kit binds both by default.
+      keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space"] },
+    }),
+  )
+  // Without an explicit id, dnd-kit falls back to a module-level counter that cannot
+  // survive hydration. See ADR-0006 — this is the second DndContext in the app and the
+  // reason that note is in the ADR at all.
+  const dndId = React.useId()
+
+  const byKey = React.useMemo(() => {
+    const map = new Map<string, EventOccurrence>()
+    for (const date of dates) {
+      for (const occ of byDay[date] ?? []) map.set(occurrenceKey(occ), occ)
+    }
+    return map
+  }, [dates, byDay])
+
+  /** Where the drag currently points, recomputed from the live delta. */
+  function targetOf(
+    active: string,
+    over: string | null,
+    overHeight: number,
+    deltaY: number,
+  ): { occ: EventOccurrence; to: Reschedule } | null {
+    const occ = byKey.get(active)
+    if (!occ?.time || over === null) return null
+    const minute = droppedMinute(minutesOf(occ.time), deltaY, overHeight)
+    return { occ, to: { date: over, time: timeOf(minute) } }
+  }
+
+  // dnd-kit's own announcements only fire when the droppable under the pointer changes,
+  // which in this grid means only when the DAY changes — an arrow-key move down an hour
+  // would say nothing at all. So the running commentary is ours, updated whenever the
+  // destination changes and no more often than that: snapping to a slot means the string
+  // turns over a handful of times per drag rather than once per pixel.
+  const [liveMessage, setLiveMessage] = React.useState("")
+  const spoken = React.useRef<string | null>(null)
+
+  const describe = React.useCallback(
+    (to: Reschedule) =>
+      `${spokenDate(to.date)} at ${formatTime(to.time, use24HourTime)}`,
+    [use24HourTime],
+  )
+
+  function handleDragStart({ active }: DragStartEvent) {
+    const occ = byKey.get(String(active.id))
+    if (!occ?.time) return
+    spoken.current = null
+    setLiveMessage(
+      `Picked up ${occ.event.title}, ${describe({ date: occ.date, time: occ.time })}.`,
+    )
+  }
+
+  function handleDragMove({ active, over, delta }: DragMoveEvent) {
+    const target = targetOf(
+      String(active.id),
+      over ? String(over.id) : null,
+      over?.rect.height ?? 0,
+      delta.y,
+    )
+    if (!target) return
+    const next = describe(target.to)
+    if (next === spoken.current) return
+    spoken.current = next
+    setLiveMessage(`Moving to ${next}.`)
+  }
+
+  function handleDragEnd({ active, over, delta }: DragEndEvent) {
+    spoken.current = null
+    const target = targetOf(
+      String(active.id),
+      over ? String(over.id) : null,
+      over?.rect.height ?? 0,
+      delta.y,
+    )
+    if (!target) {
+      setLiveMessage("Cancelled. The event is back where it was.")
+      return
+    }
+    const { occ, to } = target
+    // A drop that changes nothing is not worth a write or an announcement.
+    if (to.date === occ.date && to.time === occ.time) {
+      setLiveMessage("")
+      return
+    }
+    setLiveMessage(`Moved to ${describe(to)}.`)
+    onReschedule?.(occ, to)
+  }
+
+  function handleDragCancel() {
+    spoken.current = null
+    setLiveMessage("Cancelled. The event is back where it was.")
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border [--gutter:3.5rem] [--hour-h:3rem]">
@@ -230,42 +411,57 @@ export function TimeGrid({
       )}
 
       {/* Hour rows. */}
-      <div ref={scrollRef} className="max-h-[65vh] overflow-y-auto">
-        <div className="flex h-[calc(24*var(--hour-h))]">
-          {/* The gutter is decoration: its labels sit beside absolutely positioned
+      <DndContext
+        id={dndId}
+        sensors={sensors}
+        collisionDetection={gridCollisionDetection}
+        accessibility={{ announcements: SILENT_ANNOUNCEMENTS }}
+        onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div role="status" aria-live="polite" className="sr-only">
+          {liveMessage}
+        </div>
+        <div ref={scrollRef} className="max-h-[65vh] overflow-y-auto">
+          <div className="flex h-[calc(24*var(--hour-h))]">
+            {/* The gutter is decoration: its labels sit beside absolutely positioned
               blocks and cannot be associated with them, so every event carries its own
               time in `eventLabel` instead and this column is hidden from readers. */}
-          <div aria-hidden className="w-(--gutter) shrink-0">
-            {HOURS.map((hour) => (
-              <div
-                key={hour}
-                className="text-muted-foreground relative h-(--hour-h) pr-1.5 text-right text-[0.65rem]"
-              >
-                {hour > 0 && (
-                  <span className="absolute top-0 right-1.5 -translate-y-1/2">
-                    {hourLabel(hour, use24HourTime)}
-                  </span>
-                )}
-              </div>
+            <div aria-hidden className="w-(--gutter) shrink-0">
+              {HOURS.map((hour) => (
+                <div
+                  key={hour}
+                  className="text-muted-foreground relative h-(--hour-h) pr-1.5 text-right text-[0.65rem]"
+                >
+                  {hour > 0 && (
+                    <span className="absolute top-0 right-1.5 -translate-y-1/2">
+                      {hourLabel(hour, use24HourTime)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {dates.map((date) => (
+              <DayColumn
+                key={date}
+                date={date}
+                today={today}
+                timeZone={timeZone}
+                occurrences={byDay[date] ?? []}
+                calendars={calendars}
+                nowMinutes={date === today ? nowMinutes : null}
+                use24Hour={use24HourTime}
+                draggable={!!onReschedule}
+                onSelectDay={onSelectDay}
+                onEditEvent={onEditEvent}
+              />
             ))}
           </div>
-
-          {dates.map((date) => (
-            <DayColumn
-              key={date}
-              date={date}
-              today={today}
-              timeZone={timeZone}
-              occurrences={byDay[date] ?? []}
-              calendars={calendars}
-              nowMinutes={date === today ? nowMinutes : null}
-              use24Hour={use24HourTime}
-              onSelectDay={onSelectDay}
-              onEditEvent={onEditEvent}
-            />
-          ))}
         </div>
-      </div>
+      </DndContext>
     </div>
   )
 }
@@ -278,6 +474,7 @@ function DayColumn({
   calendars,
   nowMinutes,
   use24Hour,
+  draggable,
   onSelectDay,
   onEditEvent,
 }: {
@@ -288,6 +485,7 @@ function DayColumn({
   calendars: Calendar[]
   nowMinutes: number | null
   use24Hour: boolean
+  draggable: boolean
   onSelectDay?: (date: string) => void
   onEditEvent?: (occ: EventOccurrence) => void
 }) {
@@ -307,11 +505,18 @@ function DayColumn({
   const lanes = layoutLanes(placed.map((entry) => entry.span))
   const { skipped } = dstNotes(date, timeZone)
 
+  // One droppable per column, not per slot: a 15-minute grid would mean 672 of them in
+  // a week. The day comes from which column a block is over, the time from how far it
+  // travelled — so the vertical axis needs no droppables at all.
+  const { setNodeRef, isOver } = useDroppable({ id: date })
+
   return (
     <div
+      ref={setNodeRef}
       className={cn(
         "relative flex-1 border-l first:border-l-0",
         date === today && "bg-brand-accent/5",
+        isOver && "bg-brand-accent/10",
       )}
     >
       {/* Hour cells: the gridlines, and the click target for creating on this day. */}
@@ -336,43 +541,22 @@ function DayColumn({
 
       {/* Event blocks, floating over the cells. */}
       <div className="pointer-events-none absolute inset-0">
-        {placed.map(({ occ, span }, index) => {
-          const { top, height } = spanFractions(span)
-          const lane = lanes[index]
-          const accent = accentForCalendar(
-            occ.event.calendarId,
-            calendars,
-            occ.event.id,
-          )
-          return (
-            <button
-              key={`${occ.seriesEvent.id}::${occ.date}-${index}`}
-              type="button"
-              onClick={() => onEditEvent?.(occ)}
-              aria-label={eventLabel(occ, date, use24Hour)}
-              style={{
-                top: `${top * 100}%`,
-                height: `${height * 100}%`,
-                left: `${lane.left * 100}%`,
-                width: `${lane.width * 100}%`,
-              }}
-              className={cn(
-                "pointer-events-auto absolute overflow-hidden rounded border border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
-                accent.tint,
-                accent.border,
-              )}
-            >
-              <span className="block truncate font-medium">
-                {occ.event.title}
-              </span>
-              {occ.time && height > 0.03 && (
-                <span className="text-muted-foreground block truncate">
-                  {formatTime(occ.time, use24Hour)}
-                </span>
-              )}
-            </button>
-          )
-        })}
+        {placed.map(({ occ, span }, index) => (
+          <EventBlock
+            key={`${occurrenceKey(occ)}-${index}`}
+            occ={occ}
+            date={date}
+            span={span}
+            lane={lanes[index]}
+            calendars={calendars}
+            use24Hour={use24Hour}
+            // Only the day a span STARTS on can be dragged. Dropping a middle segment
+            // somewhere would have to guess whether the user meant to move the whole
+            // occurrence or resize it, and there is no honest default.
+            draggable={draggable && occ.date === date}
+            onEditEvent={onEditEvent}
+          />
+        ))}
       </div>
 
       {nowMinutes !== null && (
@@ -385,5 +569,76 @@ function DayColumn({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * One event, positioned in its column and draggable to another.
+ *
+ * The block is both the drag handle and the button that opens the editor. That is the
+ * opposite of what `SortableList` does — a task row has space for a dedicated grip and
+ * a calendar block does not, since a fifteen-minute one is a few pixels tall. The
+ * pointer distance threshold separates the two gestures, and on the keyboard Space
+ * lifts while Enter still opens the editor.
+ */
+function EventBlock({
+  occ,
+  date,
+  span,
+  lane,
+  calendars,
+  use24Hour,
+  draggable,
+  onEditEvent,
+}: {
+  occ: EventOccurrence
+  date: string
+  span: Span
+  lane: Lane
+  calendars: Calendar[]
+  use24Hour: boolean
+  draggable: boolean
+  onEditEvent?: (occ: EventOccurrence) => void
+}) {
+  const { top, height } = spanFractions(span)
+  const accent = accentForCalendar(
+    occ.event.calendarId,
+    calendars,
+    occ.event.id,
+  )
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: occurrenceKey(occ), disabled: !draggable })
+
+  return (
+    <button
+      ref={setNodeRef}
+      type="button"
+      {...attributes}
+      {...listeners}
+      onClick={() => onEditEvent?.(occ)}
+      aria-label={eventLabel(occ, date, use24Hour)}
+      style={{
+        top: `${top * 100}%`,
+        height: `${height * 100}%`,
+        left: `${lane.left * 100}%`,
+        width: `${lane.width * 100}%`,
+        transform: CSS.Translate.toString(transform),
+      }}
+      className={cn(
+        "pointer-events-auto absolute overflow-hidden rounded border border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
+        accent.tint,
+        accent.border,
+        draggable && "touch-none",
+        // Above its neighbours while moving, or it slides under the next lane.
+        isDragging && "z-10 opacity-90 shadow-lg",
+      )}
+    >
+      <span className="block truncate font-medium">{occ.event.title}</span>
+      {occ.time && height > 0.03 && (
+        <span className="text-muted-foreground block truncate">
+          {formatTime(occ.time, use24Hour)}
+        </span>
+      )}
+    </button>
   )
 }
