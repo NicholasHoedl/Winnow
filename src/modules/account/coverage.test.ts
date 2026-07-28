@@ -12,6 +12,8 @@ import * as mealsSchema from "@/modules/meals/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
 import * as todosSchema from "@/modules/todos/schema"
 
+import { exportKeyFor } from "./payload"
+
 // `clearAllData` and `exportUserData` enumerate tables by hand, and that hand-written
 // list has now fallen behind the schema three times: `842f420` (tasks), T3-S8
 // (task_recurrences left behind by clear-all, then immediately regenerating tasks into
@@ -44,16 +46,34 @@ const SCHEMAS = {
   todos: todosSchema,
 } satisfies Record<string, Record<string, unknown>>
 
-/**
- * The key each table appears under in the export JSON, where it differs from the
- * drizzle export name. Only one does, and it predates this test.
- */
-const EXPORT_KEY: Record<string, string> = { userPreferences: "preferences" }
-
 const MODULES_DIR = join(import.meta.dirname, "..")
 
 function readAccountSource(file: string) {
   return readFileSync(join(import.meta.dirname, file), "utf8")
+}
+
+/**
+ * One exported function's source, bounded at the next top-level `export`.
+ *
+ * The bound is the whole point. These slices used to run to end-of-file, which was
+ * harmless only because the function being checked happened to be the last one in its
+ * file. It stops being harmless the moment anything below it mentions the same tables —
+ * and an import that clears before inserting does exactly that. It would have satisfied
+ * the `clearAllData` assertion on `clearAllData`'s behalf while `clearAllData` itself had
+ * quietly stopped deleting something, which is precisely the bug this file exists for.
+ *
+ * `export` at column zero is unambiguous: nothing inside a function body can start a line
+ * that way.
+ */
+function functionSource(source: string, name: string): string {
+  const start = source.indexOf(`export async function ${name}`)
+  expect(
+    start,
+    `${name} is not in this file — the guard is looking at the wrong thing`,
+  ).toBeGreaterThanOrEqual(0)
+  const rest = source.slice(start)
+  const end = rest.indexOf("\nexport ")
+  return end === -1 ? rest : rest.slice(0, end)
 }
 
 /** Every `[exportName, sqlName]` pair, across every module, that has a userId column. */
@@ -91,9 +111,9 @@ describe("account data tools cover every user-owned table", () => {
   })
 
   it("clearAllData deletes from each one", () => {
-    const source = readAccountSource("actions.ts")
-    const clearAll = source.slice(
-      source.indexOf("export async function clearAllData"),
+    const clearAll = functionSource(
+      readAccountSource("actions.ts"),
+      "clearAllData",
     )
     for (const [exportName, table] of userOwnedTables()) {
       expect(
@@ -104,7 +124,10 @@ describe("account data tools cover every user-owned table", () => {
   })
 
   it("exportUserData reads each one AND returns it", () => {
-    const source = readAccountSource("queries.ts")
+    const source = functionSource(
+      readAccountSource("queries.ts"),
+      "exportUserData",
+    )
     for (const [exportName, table] of userOwnedTables()) {
       // Both halves: T3-S8 found a table that was queried but dropped from the
       // returned object, which loses the data just as completely.
@@ -112,7 +135,7 @@ describe("account data tools cover every user-owned table", () => {
         source.includes(`db.query.${exportName}.findMany`),
         `exportUserData never reads ${table} — backups would omit it`,
       ).toBe(true)
-      const key = EXPORT_KEY[exportName] ?? exportName
+      const key = exportKeyFor(exportName)
       expect(
         new RegExp(`^\\s*${key}: `, "m").test(source),
         `exportUserData reads ${table} but never returns it`,

@@ -8,6 +8,7 @@ import * as goalsSchema from "../src/modules/goals/schema"
 import * as mealsSchema from "../src/modules/meals/schema"
 import * as preferencesSchema from "../src/modules/preferences/schema"
 import * as todosSchema from "../src/modules/todos/schema"
+import { exportKeyFor } from "../src/modules/account/payload"
 
 // `src/modules/account/coverage.test.ts` guards the same invariant, but it can only read
 // SOURCE TEXT — both account functions are `server-only` and open a DB connection, so a
@@ -30,9 +31,6 @@ const SCHEMAS = [
   todosSchema,
 ]
 
-/** The key each table appears under, where it differs from the drizzle export name. */
-const EXPORT_KEY: Record<string, string> = { userPreferences: "preferences" }
-
 function expectedKeys(): string[] {
   const keys: string[] = []
   for (const schema of SCHEMAS) {
@@ -40,7 +38,7 @@ function expectedKeys(): string[] {
       if (!is(value, PgTable)) continue
       const config = getTableConfig(value)
       if (!config.columns.some((column) => column.name === "user_id")) continue
-      keys.push(EXPORT_KEY[name] ?? name)
+      keys.push(exportKeyFor(name))
     }
   }
   return [...new Set(keys)].sort()

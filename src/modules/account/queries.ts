@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
+
+import { EXPORT_VERSION } from "./payload"
 import {
   budgets,
   categories,
@@ -90,7 +92,7 @@ export async function exportUserData() {
   ])
 
   return {
-    version: 1,
+    version: EXPORT_VERSION,
     lists: listRows,
     tasks: taskRows,
     subtasks: subtaskRows,
