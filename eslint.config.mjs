@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Git worktrees keep their own build output, and `.next/**` above is anchored at the
+    // repo root so it does not reach `.claude/worktrees/*/.next/`. Linting generated
+    // Turbopack chunks in there made `pnpm lint` permanently red on code nobody wrote.
+    // vitest.config.ts already excludes the same directory, for the same reason.
+    ".claude/**",
   ]),
 ]);
 
