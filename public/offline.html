@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Offline — Winnow</title>
+    <meta name="robots" content="noindex" />
+
+    <script>
+      // Mirrors what PALETTE_SCRIPT does in the root layout, and for the same
+      // reason: it has to run before first paint or it is just a flash with extra
+      // steps. `theme` is next-themes' own key (see
+      // src/components/theme/appearance-sync.tsx); "system" needs no attribute
+      // because the prefers-color-scheme query below already handles it.
+      try {
+        var t = localStorage.getItem("theme")
+        if (t === "dark" || t === "light") {
+          document.documentElement.dataset.theme = t
+        }
+      } catch (e) {
+        /* private mode / storage disabled — the media query still applies */
+      }
+    </script>
+
+    <!--
+      Served by the service worker when a NAVIGATION fails at the network layer
+      (see public/sw.js). It has to stand completely alone: every asset the app
+      builds is content-hashed, so this file cannot name the app's CSS or fonts.
+      Hence inline styles, and hence the one committed font below.
+
+      Nothing here is personalised, because nothing user-owned is ever cached —
+      that is the whole shape of the offline story. Do not add anything that
+      implies the user's data is sitting here waiting for them. It isn't.
+    -->
+
+    <style>
+      /*
+        The Latin subset of Bricolage Grotesque, copied out of a production build
+        and committed under a stable name (the built filename is content-hashed
+        and changes every build, so it cannot be referenced from here).
+        Variable 200–800, so this page still gets the weight extremes the rest of
+        the type system uses. Precached by the worker on install.
+      */
+      @font-face {
+        font-family: "Bricolage Grotesque";
+        font-style: normal;
+        font-weight: 200 800;
+        font-display: swap;
+        src: url("/fonts/bricolage-grotesque-latin.woff2") format("woff2");
+      }
+      /*
+        The same metric-override fallback next/font generates for this family, so
+        that if the woff2 is ever missing the page renders at the same size and
+        rhythm instead of reflowing into something else.
+      */
+      @font-face {
+        font-family: "Bricolage Fallback";
+        src: local("Arial");
+        ascent-override: 88.21%;
+        descent-override: 25.61%;
+        line-gap-override: 0%;
+        size-adjust: 105.43%;
+      }
+
+      /*
+        Lifted from src/app/globals.css so this matches the app. Only light/dark
+        is honoured, not the chosen palette: the palette accent would mean
+        duplicating the table in src/lib/palettes.ts into a file that cannot
+        import it, and a stale copy is worse than a default indigo on an error
+        page. Light vs dark is a single boolean and genuinely matters — a white
+        flash on a dark-themed phone at night is the jarring part.
+      */
+      :root {
+        --background: oklch(0.994 0.003 275);
+        --foreground: oklch(0.21 0.02 275);
+        --muted-foreground: oklch(0.516 0.024 274);
+        --primary: oklch(0.505 0.19 273);
+        --border: oklch(0.914 0.008 275);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: oklch(0.172 0.012 275);
+          --foreground: oklch(0.966 0.005 275);
+          --muted-foreground: oklch(0.724 0.02 275);
+          --primary: oklch(0.552 0.196 273);
+          --border: oklch(1 0 0 / 12%);
+        }
+      }
+      /* An explicit choice in next-themes' `theme` key overrides the OS. */
+      :root[data-theme="light"] {
+        --background: oklch(0.994 0.003 275);
+        --foreground: oklch(0.21 0.02 275);
+        --muted-foreground: oklch(0.516 0.024 274);
+        --primary: oklch(0.505 0.19 273);
+        --border: oklch(0.914 0.008 275);
+      }
+      :root[data-theme="dark"] {
+        --background: oklch(0.172 0.012 275);
+        --foreground: oklch(0.966 0.005 275);
+        --muted-foreground: oklch(0.724 0.02 275);
+        --primary: oklch(0.552 0.196 273);
+        --border: oklch(1 0 0 / 12%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(2rem + env(safe-area-inset-top))
+          calc(1.5rem + env(safe-area-inset-right))
+          calc(2rem + env(safe-area-inset-bottom))
+          calc(1.5rem + env(safe-area-inset-left));
+        background-color: var(--background);
+        /* Atmospheric depth rather than a flat fill — two soft accent washes. */
+        background-image:
+          radial-gradient(
+            ellipse 80% 55% at 50% -10%,
+            color-mix(in oklab, var(--primary) 22%, transparent),
+            transparent 70%
+          ),
+          radial-gradient(
+            ellipse 60% 50% at 15% 110%,
+            color-mix(in oklab, var(--primary) 12%, transparent),
+            transparent 70%
+          );
+        color: var(--foreground);
+        font-family: "Bricolage Grotesque", "Bricolage Fallback", sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      main {
+        width: 100%;
+        max-width: 30rem;
+        text-align: center;
+      }
+
+      /* One orchestrated reveal, staggered — not four scattered animations. */
+      .reveal {
+        animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .reveal:nth-child(1) {
+        animation-delay: 0.02s;
+      }
+      .reveal:nth-child(2) {
+        animation-delay: 0.09s;
+      }
+      .reveal:nth-child(3) {
+        animation-delay: 0.16s;
+      }
+      .reveal:nth-child(4) {
+        animation-delay: 0.23s;
+      }
+      .reveal:nth-child(5) {
+        animation-delay: 0.3s;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(0.6rem);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .reveal {
+          animation: none;
+        }
+      }
+
+      .mark {
+        width: 3.5rem;
+        height: 3.5rem;
+        border-radius: 1rem;
+        display: block;
+        margin: 0 auto 2rem;
+        box-shadow:
+          0 1px 2px oklch(0 0 0 / 8%),
+          0 8px 24px oklch(0 0 0 / 10%);
+      }
+
+      h1 {
+        margin: 0 0 0.75rem;
+        /* Weight extreme + a >3x jump over the supporting copy. */
+        font-size: clamp(2.25rem, 11vw, 3.25rem);
+        font-weight: 800;
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+      }
+
+      p {
+        margin: 0 auto;
+        max-width: 26rem;
+        font-size: 1rem;
+        font-weight: 200;
+        line-height: 1.6;
+        color: var(--muted-foreground);
+        text-wrap: pretty;
+      }
+
+      .hint {
+        margin-top: 0.75rem;
+        font-size: 0.8125rem;
+      }
+
+      button {
+        margin-top: 2.25rem;
+        font: inherit;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--background);
+        background: var(--primary);
+        border: 0;
+        border-radius: 0.625rem;
+        padding: 0.75rem 1.75rem;
+        min-height: 2.75rem;
+        cursor: pointer;
+        transition:
+          transform 0.12s ease,
+          filter 0.12s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+      button:hover {
+        filter: brightness(1.08);
+      }
+      button:active {
+        transform: scale(0.97);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <!-- Precached alongside this page, so it renders offline too. -->
+      <img
+        class="mark reveal"
+        src="/icons/icon-192.png"
+        alt=""
+        width="56"
+        height="56"
+      />
+      <h1 class="reveal">No connection</h1>
+      <p class="reveal">
+        Winnow can't reach your home server, so there's nothing to show yet.
+        Your data is safe on the server — it just isn't available from here.
+      </p>
+      <p class="hint reveal">
+        Check that Tailscale is connected, then try again.
+      </p>
+      <button class="reveal" type="button" onclick="location.reload()">
+        Try again
+      </button>
+    </main>
+  </body>
+</html>

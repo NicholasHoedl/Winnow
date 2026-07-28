@@ -3,6 +3,7 @@ import Script from "next/script"
 import { Bricolage_Grotesque, Fraunces, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { PALETTE_SCRIPT } from "@/lib/palettes"
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 
@@ -31,7 +32,8 @@ export const metadata: Metadata = {
   title: "Winnow",
   description: "Your life, organized in one place.",
   // Installable PWA — manifest + icons live in app/manifest.ts and app/apple-icon.
-  // (A service worker for offline is a post-MVP add.)
+  // The service worker (public/sw.js, registered below) caches static assets and serves
+  // an offline page; it caches no user data. See ADR-0007.
   appleWebApp: {
     capable: true,
     title: "Winnow",
@@ -63,6 +65,7 @@ export default function RootLayout({
         <Script id="winnow-palette" strategy="beforeInteractive">
           {PALETTE_SCRIPT}
         </Script>
+        <RegisterServiceWorker />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

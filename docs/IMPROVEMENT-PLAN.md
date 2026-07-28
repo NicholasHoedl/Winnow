@@ -18,7 +18,7 @@ picked up — it is **not** code-level detail yet.
 | T5b — Depth: calendar (grid, drag, split)     | ✅ shipped  |
 | T5c — Calendar: reminders + iCal              | next        |
 | T6a — Robustness: data durability             | ✅ shipped  |
-| T6b — Robustness: offline reads               | not started |
+| T6b — Robustness: offline fallback            | ✅ shipped  |
 | T7 — Net-new modules                          | not started |
 
 Corrections found while implementing, which this document's later tranches should not
@@ -81,8 +81,11 @@ so prefer small, dependency-light, no-external-key options).
 - **Command palette** (T1): `cmdk` (small, headless) — pairs well with the existing base-ui.
 - **Natural-language dates** (T1): `chrono-node` for "tomorrow 3pm"/"next fri"; keep the
   amount/macro parsing hand-rolled (small, testable regex in a pure `service.ts`).
-- **Offline/service worker** (T6): `@serwist/next` (maintained Workbox successor) — read-only
-  precache + runtime GET caching first; offline writes are a separate, larger effort.
+- **Offline/service worker** (T6): ~~`@serwist/next`~~ — **no dependency taken.** T6b
+  hand-wrote `public/sw.js` instead; see `docs/adr/0007-hand-written-service-worker.md`.
+  Serwist is viable and maintained (the "needs webpack" objection died in Dec 2025), but its
+  precache manifest has nothing to precache when every route is dynamic and auth-gated. The
+  ADR records when to revisit: if navigations are ever cached, take the library.
 - **External food DB / barcode** (T4): Open Food Facts REST API (free, no key) + `@zxing/browser`
   for camera barcode scan (PWA camera permission).
 - **Reminder delivery** (T2): in-app "today digest" (no infra) as the baseline; optional email
@@ -116,8 +119,9 @@ and it unblocks later tranches (shared `ActionResult`, Goals module, shared date
   the meals log date) so entries can't silently land in another period.
 - **Per-module error/loading boundaries.** Add `error.tsx`/`loading.tsx` to each of the 6 route
   segments so a failure in one module doesn't blank the shell (today there's one `(app)` pair).
-- **Docs:** fix the false "a service worker is registered" claim in `ARCHITECTURE.md §6.2`
-  (align with reality until T6 ships one).
+- ~~**Docs:** fix the false "a service worker is registered" claim in `ARCHITECTURE.md §6.2`
+  (align with reality until T6 ships one).~~ Done twice over: T6a corrected §6.2 to "not yet
+  implemented", and **T6b** then actually registered one, so §6.2 now describes what runs.
 - **Micro-polish:** the Goals `0/0` empty progress bar (show "no milestones yet" or hide the bar);
   add a skip-to-content link.
 
@@ -403,20 +407,30 @@ exist: `clearAllData` for a fresh start, `docker compose down -v` to destroy the
   `winnow-export.json`; and the dashboard's week toggle is gone (~110 lines) now that
   `/calendar?view=week` exists — it could only ever show the week containing today.
 
-**T6b owes** the offline read cache, and two things have to be decided before any code:
+**T6b — shipped, and deliberately narrower than "offline reads".** Both blockers this
+section raised turned out to point at the same answer: **cache the static shell and an
+offline fallback page, and no user data at all.**
 
-- **`/sw.js` would be gated by the proxy.** `src/proxy.ts`'s matcher exempts `api`,
-  `_next/static`, `_next/image`, `favicon.ico` and paths ending
-  `.png|.svg|.ico|.webmanifest` — but **not `.js`**. An unauthenticated request for a root
-  service worker gets a 307 to `/login`, which browsers refuse to register. Widening that
-  matcher is a security decision.
-- **`ARCHITECTURE.md` §6.2 currently argues the opposite case** — pages rendering live data
-  are "network-only, never cached", and there is "no cached 'last known' data view".
-  Offline reads replace that design rather than extending it. Every `(app)` route is
-  authenticated and its layout awaits four queries before rendering, so any cached
-  navigation is a fully-rendered page full of user data; what may be cached, and what
-  happens when the session expires behind it, **is** the design. SPEC §6 also defers
-  offline explicitly, so this deserves a deliberate revisit and probably an ADR.
+- The second blocker resolved itself. Caching a navigation means caching a fully-rendered
+  page full of user data — and the app depends on those pages being live in four separate
+  ways that are easy to miss: `ensureRecurringTasks()` materialises rows *during a read*
+  (page rendering is the scheduler; there is no cron), every hub freezes "today" into its
+  HTML, `revalidatePath()` cannot reach Cache Storage, and sign-out cannot clear it. So
+  `ARCHITECTURE.md` §6.2's network-only rule was not overturned — it was kept, and doing so
+  is what made the tranche small. §6.2 now documents what shipped.
+- The first was real and got slightly worse on contact. `src/proxy.ts` gated `/sw.js`,
+  **and** `/offline.html`, **and** `/fonts/*.woff2` — the last one found by the font 307ing
+  mid-implementation. Because `cache.addAll` is all-or-nothing and `cache.put` rejects a
+  redirected Response, one missing exemption means no offline support at all, silently.
+  Fixed with anchored exact-path exemptions (plus a `fonts/` prefix) rather than by widening
+  the extension class, which already over-matches routes. `src/components/pwa/sw.test.ts`
+  drives the real install handler and asserts every path it requests is un-gated, so the
+  next precache addition cannot repeat it.
+- The ADR this section predicted exists: `docs/adr/0007-hand-written-service-worker.md`,
+  which reverses the pre-committed `@serwist/next` dependency.
+
+**Still not done, and still Later:** offline *reads* of real data. That needs a local-first
+data layer, not an extension of this worker — SPEC §6 keeps deferring it, correctly.
 
 ---
 

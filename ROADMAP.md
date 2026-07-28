@@ -114,6 +114,9 @@ verified before moving to the next.
   - `manifest.webmanifest`, icon set, and a minimal service worker
     registered per ARCHITECTURE.md §6 (static-shell caching only,
     network-only for everything dynamic).
+    *(The manifest and icons shipped here; the service worker did not —
+    this line over-claimed until **T6b**, which registered `public/sw.js`
+    on exactly those terms and added an offline fallback page.)*
 - Acceptance criteria:
   - App is reachable at `https://<hostname>.<tailnet>.ts.net` from the
     laptop, over Tailscale, with a browser-trusted certificate (no
