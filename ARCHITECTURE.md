@@ -1,7 +1,7 @@
 # Winnow — Architecture
 
-Status: Implemented through improvement-plan tranche T5b (calendar: grid, drag, split)
-Last updated: 2026-07-27
+Status: Implemented through improvement-plan tranche T6a (data durability)
+Last updated: 2026-07-28
 
 This document assumes SPEC.md. It covers the tech stack and rationale, the
 system layout, the data model, the deployment architecture (including the
@@ -208,6 +208,14 @@ a classic, easy-to-introduce bug.
 > when those modules were reworked, and are accurate. §3.4 (budgeting) still
 > describes the original plan — later work added `transaction_recurrences` and
 > `user_preferences`, and never built the planned `accounts` table.
+>
+> `user_preferences` has no section of its own: one row per user, holding the
+> settings the server must read (zone, week start, currency, time format, default
+> priority, digest) plus — since T6a — the account's saved `theme` and `palette`.
+> Those two are **mirrored, not moved**: they are applied before first paint from
+> localStorage by blocking scripts in the root layout, above any session lookup,
+> so the server cannot supply them in time. The columns exist so a new device
+> adopts them and so they appear in the export, where they were missing.
 >
 > `drizzle/` and each module's `schema.ts` are always the source of truth; the
 > ADRs in `docs/adr/` record why the shape changed. What is worth reading here
@@ -921,6 +929,11 @@ winnow/
 │   │   └── layout.tsx                # root layout: PWA meta tags, fonts
 │   │
 │   ├── modules/                      # one folder per domain module
+│   │   ├── account/                  # export/import/erase — see §7 note below
+│   │   │   ├── payload.ts            # the backup JSON's shape (version, key map)
+│   │   │   ├── tables.ts             # user-owned table graph, DERIVED from schemas
+│   │   │   ├── import.ts             # pure validation incl. referential integrity
+│   │   │   └── clear.ts              # the twenty deletes, shared by clear + restore
 │   │   ├── todos/
 │   │   │   ├── schema.ts             # Drizzle table definitions
 │   │   │   ├── queries.ts            # reads (used by RSC + dashboard)
@@ -999,7 +1012,19 @@ Rules this structure is meant to enforce:
     `actions.ts` lets `restore.test.ts` assert them against
     `getTableColumns()`, so forgetting one fails a test instead of losing data
     on undo. `src/modules/account/coverage.test.ts` does the same job one level
-    up for `clearAllData` / `exportUserData`.
+    up for `deleteAllUserRows` / `exportUserData`.
+  - `account/` outgrew the shape for the same reason, when T6a added an import:
+    - `payload.ts` — the JSON's shape (version, the one table whose key differs).
+      Four things have to agree on what a backup file looks like; before this
+      they agreed by coincidence.
+    - `tables.ts` — the user-owned table graph **derived** from drizzle metadata:
+      which tables a backup covers, which columns point at which other table, and
+      the topological insert order. Three lists that would otherwise be written
+      down and fall behind, which is the failure above.
+    - `import.ts` — pure validation, so the rules are testable without a database
+      and nothing reaches SQL until the whole file has been judged.
+    - `clear.ts` — the twenty deletes, extracted once a restore needed them inside
+      its own transaction. Two copies of that list is the bug being guarded against.
   - `off-mapping.ts` / `off-request.ts` — pure, so the fiddly parts (per-100 g
     vs per-serving basis, kJ → kcal, OFF's sodium in grams → our milligrams,
     URL building, error classification) are unit-tested without a network.

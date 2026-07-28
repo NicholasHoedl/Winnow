@@ -31,15 +31,6 @@ function monthLabel(month: string): string {
   })
 }
 
-function shortDate(date: string): string {
-  const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  })
-}
-
 function EventChip({
   occ,
   onOpen,
@@ -53,7 +44,11 @@ function EventChip({
   use24Hour: boolean
   withTime?: boolean
 }) {
-  const accent = accentForCalendar(occ.event.calendarId, calendars, occ.event.id)
+  const accent = accentForCalendar(
+    occ.event.calendarId,
+    calendars,
+    occ.event.id,
+  )
   return (
     <button
       type="button"
@@ -157,73 +152,6 @@ function MonthView({
   )
 }
 
-function WeekView({
-  weekRow,
-  byDay,
-  today,
-  calendars,
-  use24Hour,
-  onDay,
-  onEvent,
-}: {
-  weekRow: string[]
-  byDay: Record<string, EventOccurrence[]>
-  today: string
-  calendars: Calendar[]
-  use24Hour: boolean
-  onDay: (date: string) => void
-  onEvent: (e: React.MouseEvent) => void
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <div className="grid min-w-[38rem] grid-cols-7 gap-2">
-        {weekRow.map((date) => {
-          const isToday = date === today
-          const dow = new Date(`${date}T00:00:00Z`).getUTCDay()
-          const dayEvents = byDay[date] ?? []
-          return (
-            <div key={date} className="flex min-w-0 flex-col gap-1.5">
-              <button
-                type="button"
-                onClick={() => onDay(date)}
-                className={cn(
-                  "hover:bg-accent flex flex-col items-center rounded-lg py-1.5 transition-colors",
-                  isToday && "bg-brand-accent text-brand-accent-foreground",
-                )}
-              >
-                <span className="text-[0.65rem] font-medium uppercase">
-                  {ABSOLUTE_WEEKDAYS[dow]}
-                </span>
-                <span className="text-sm font-semibold tabular-nums">
-                  {Number(date.slice(8))}
-                </span>
-              </button>
-              <div className="flex flex-col gap-1">
-                {dayEvents.length === 0 ? (
-                  <span className="text-muted-foreground/30 py-1 text-center text-xs">
-                    –
-                  </span>
-                ) : (
-                  dayEvents.map((occ, i) => (
-                    <EventChip
-                      key={`${occ.event.id}-${i}`}
-                      occ={occ}
-                      onOpen={onEvent}
-                      calendars={calendars}
-                      use24Hour={use24Hour}
-                      withTime
-                    />
-                  ))
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export function DashboardCalendar({
   month,
   today,
@@ -239,8 +167,6 @@ export function DashboardCalendar({
 }) {
   const router = useRouter()
   const { weekStartsOn, use24HourTime } = usePreferences()
-  const [view, setView] = React.useState<"month" | "week">("month")
-  const weekRow = grid.find((w) => w[0] <= today && today <= w[6]) ?? grid[0]
   const headers = [
     ...ABSOLUTE_WEEKDAYS.slice(weekStartsOn),
     ...ABSOLUTE_WEEKDAYS.slice(0, weekStartsOn),
@@ -258,28 +184,9 @@ export function DashboardCalendar({
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-xl font-semibold tracking-tight">
-            {view === "month"
-              ? monthLabel(month)
-              : `${shortDate(weekRow[0])} – ${shortDate(weekRow[6])}`}
+            {monthLabel(month)}
           </h2>
           <div className="flex items-center gap-2">
-            <div className="bg-muted inline-flex rounded-lg p-0.5">
-              {(["month", "week"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  className={cn(
-                    "rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors",
-                    view === v
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
             <Link
               href="/calendar"
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs font-medium"
@@ -291,29 +198,17 @@ export function DashboardCalendar({
         </div>
       </CardHeader>
       <CardContent>
-        {view === "month" ? (
-          <MonthView
-            grid={grid}
-            byDay={byDay}
-            month={month}
-            today={today}
-            headers={headers}
-            calendars={calendars}
-            use24Hour={use24HourTime}
-            onDay={onDay}
-            onEvent={onEvent}
-          />
-        ) : (
-          <WeekView
-            weekRow={weekRow}
-            byDay={byDay}
-            today={today}
-            calendars={calendars}
-            use24Hour={use24HourTime}
-            onDay={onDay}
-            onEvent={onEvent}
-          />
-        )}
+        <MonthView
+          grid={grid}
+          byDay={byDay}
+          month={month}
+          today={today}
+          headers={headers}
+          calendars={calendars}
+          use24Hour={use24HourTime}
+          onDay={onDay}
+          onEvent={onEvent}
+        />
       </CardContent>
     </Card>
   )

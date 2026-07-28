@@ -19,6 +19,7 @@ import { CreateIntentProvider } from "@/components/create/create-intent"
 import { GlobalCreateDialogs } from "@/components/create/global-create-dialogs"
 import { DigestBanner } from "@/components/shared/digest-banner"
 import { PreferencesProvider } from "@/components/preferences/preferences-provider"
+import { AppearanceSync } from "@/components/theme/appearance-sync"
 import { buttonVariants } from "@/components/ui/button"
 
 // Authenticated app frame: responsive nav shell (desktop sidebar / mobile
@@ -45,6 +46,10 @@ export default async function AppLayout({
   return (
     <CreateIntentProvider>
       <PreferencesProvider value={preferences}>
+        {/* Renders nothing; reconciles this device's appearance with the account's. */}
+        <AppearanceSync
+          saved={{ theme: preferences.theme, palette: preferences.palette }}
+        />
         <div className="flex min-h-svh flex-col md:flex-row">
           {/* Keyboard/screen-reader users can jump past the nav straight to the page. */}
           <a

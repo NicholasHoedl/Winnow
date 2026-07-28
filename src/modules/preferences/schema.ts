@@ -12,9 +12,16 @@ import { users } from "../../db/schema"
 // Reuse the existing "priority" enum rather than declaring a second one.
 import { priorityEnum } from "../todos/schema"
 
-// One preferences row per user (singleton — same shape as macro_targets). Only
-// settings the SERVER must read live here (date/money logic). Appearance
-// (light/dark theme + colour palette) stays client-side via next-themes.
+// One preferences row per user (singleton — same shape as macro_targets).
+//
+// Mostly settings the SERVER must read (date/money logic). Appearance is the exception
+// and was deliberately excluded until T6a: theme and palette are applied before first
+// paint by blocking scripts in the ROOT layout, above any session lookup, so the server
+// cannot know them in time and localStorage remains where they are read from.
+//
+// They are MIRRORED here rather than moved. The point is durability, not authority — a
+// device that has never seen this account adopts these, and everything else lands in the
+// JSON export, which is where they were conspicuously missing before.
 export const userPreferences = pgTable("user_preferences", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -35,6 +42,11 @@ export const userPreferences = pgTable("user_preferences", {
     .default("medium"),
   // Show the once-a-day digest banner on the first load of a new local day (T2).
   digestEnabled: boolean("digest_enabled").notNull().default(true),
+  // "light" | "dark" | "system" — next-themes' own vocabulary, stored as text so the
+  // set can change without a migration. Validated by Zod on the way in.
+  theme: text("theme").notNull().default("system"),
+  // A palette id from `@/lib/palettes`; the colour values themselves live in CSS.
+  palette: text("palette").notNull().default("indigo"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

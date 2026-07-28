@@ -17,7 +17,8 @@ picked up — it is **not** code-level detail yet.
 | T5a — Depth: to-dos + goals                   | ✅ shipped  |
 | T5b — Depth: calendar (grid, drag, split)     | ✅ shipped  |
 | T5c — Calendar: reminders + iCal              | next        |
-| T6 — Robustness & data                        | not started |
+| T6a — Robustness: data durability             | ✅ shipped  |
+| T6b — Robustness: offline reads               | not started |
 | T7 — Net-new modules                          | not started |
 
 Corrections found while implementing, which this document's later tranches should not
@@ -337,7 +338,7 @@ Found and fixed on the way, none of it planned:
 
 ---
 
-## Tranche 6 — Robustness & data
+## Tranche 6 — Robustness & data — split into T6a ✅ / T6b
 
 **Goal:** close the durability gaps and make the app trustworthy to _rely_ on.
 
@@ -358,6 +359,64 @@ Found and fixed on the way, none of it planned:
 **Deps:** T0. **Decisions:** `@serwist/next`; import conflict policy (merge vs replace).
 **Verify:** export→import round-trip fidelity; offline open of the installed PWA; appearance
 persists across devices; account-deletion transactional + irreversible-confirm.
+
+**Split into T6a and T6b**, on the same reasoning as T5: the service worker is a different
+kind of work with a dependency decision, a security decision and an ADR of its own.
+
+**Two of the five items were already done** before T6a started, and are recorded here
+rather than re-invented:
+
+- **Error/loading boundaries** — all six module segments plus `settings` already have
+  both, delegating to `components/shared/route-error.tsx`. T0 finished this; the roadmap
+  text was stale. (`(auth)/login` still has neither, deliberately: it renders no data.)
+- **Stat cards drill in on click** — both dashboard cards were already whole-card `Link`s
+  with an `ArrowUpRight` affordance.
+
+**Account deletion is dropped, not deferred.** There is no service to leave. `users` is the
+only row in `db/schema.ts` and there are no Auth.js adapter tables, so deleting it cascades
+all twenty user-owned tables away and locks the owner out of their own install —
+recoverable only by re-running `scripts/seed-user.ts`. The operations that matter already
+exist: `clearAllData` for a fresh start, `docker compose down -v` to destroy the volume.
+
+**T6a — shipped**, migration `0020`:
+
+- **In-app import**, replace-mode: validate the whole file, then clear and insert in ONE
+  transaction. A rejected file costs nothing because nothing is deleted until it passes.
+  The acceptance bar is a round trip — export → import → export, byte-identical, ids and
+  timestamps included. Note this is the no-shell convenience path; `pg_dump` /
+  `scripts/restore.sh` remains the proven disaster-recovery route.
+- **Referential integrity is checked _within the payload_**, which makes the cross-user FK
+  hazard structural rather than per-column. A crafted `tasks.goal_id` naming someone else's
+  goal satisfies Postgres perfectly well; it is only wrong relative to the file. Third
+  sighting of this class, after `checkTaskLinks` (T5a) and `checkCalendar` (T5b).
+- **The table graph is derived, not written down** (`account/tables.ts`): which tables a
+  backup covers, the foreign-key edges, and the topological insert order all come from
+  drizzle metadata. Three more lists that would otherwise fall behind the schema.
+- **Appearance mirrored** into `user_preferences` — mirrored rather than moved, because the
+  pre-paint scripts run above any session lookup. A device with no stored preference adopts
+  the account's; one with a preference keeps it and writes through.
+- **`serverActions.bodySizeLimit` raised to 8 MB.** A measured export is ~350 bytes/row, so
+  the 1 MB default is roughly 3,000 rows — reachable after a few years of daily use, and a
+  ceiling nobody would find until a restore failed.
+- Tidying found on the way: `(app)/error.tsx` now delegates to `RouteError` like its six
+  siblings; the export route catches so a failure isn't an HTML 500 delivered as
+  `winnow-export.json`; and the dashboard's week toggle is gone (~110 lines) now that
+  `/calendar?view=week` exists — it could only ever show the week containing today.
+
+**T6b owes** the offline read cache, and two things have to be decided before any code:
+
+- **`/sw.js` would be gated by the proxy.** `src/proxy.ts`'s matcher exempts `api`,
+  `_next/static`, `_next/image`, `favicon.ico` and paths ending
+  `.png|.svg|.ico|.webmanifest` — but **not `.js`**. An unauthenticated request for a root
+  service worker gets a 307 to `/login`, which browsers refuse to register. Widening that
+  matcher is a security decision.
+- **`ARCHITECTURE.md` §6.2 currently argues the opposite case** — pages rendering live data
+  are "network-only, never cached", and there is "no cached 'last known' data view".
+  Offline reads replace that design rather than extending it. Every `(app)` route is
+  authenticated and its layout awaits four queries before rendering, so any cached
+  navigation is a fully-rendered page full of user data; what may be cached, and what
+  happens when the session expires behind it, **is** the design. SPEC §6 also defers
+  offline explicitly, so this deserves a deliberate revisit and probably an ADR.
 
 ---
 

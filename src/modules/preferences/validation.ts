@@ -1,6 +1,7 @@
 import { z } from "zod"
 
-import { CURRENCY_CODES } from "@/lib/preferences"
+import { CURRENCY_CODES, THEMES } from "@/lib/preferences"
+import { PALETTE_IDS } from "@/lib/palettes"
 
 // Robust across runtimes: constructing a formatter throws RangeError for an
 // unknown IANA zone (no dependence on Intl.supportedValuesOf).
@@ -32,4 +33,21 @@ export const notificationPreferencesSchema = z.object({
 })
 export type NotificationPreferencesInput = z.infer<
   typeof notificationPreferencesSchema
+>
+
+/**
+ * Appearance — owned by the Appearance section alone, for the same reason the two
+ * schemas above are separate: each section submits its whole form, and a shared schema
+ * would let one silently clear another's fields.
+ *
+ * Unlike the others this is not submitted by a form. The device writes through whenever
+ * its own theme or palette changes, so the values arrive from localStorage rather than
+ * from an input — which is exactly why they still need validating.
+ */
+export const appearancePreferencesSchema = z.object({
+  theme: z.enum(THEMES as [string, ...string[]]),
+  palette: z.enum(PALETTE_IDS as unknown as [string, ...string[]]),
+})
+export type AppearancePreferencesInput = z.infer<
+  typeof appearancePreferencesSchema
 >

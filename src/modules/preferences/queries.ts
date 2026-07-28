@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
-import { DEFAULT_PREFERENCES, type UserPreferences } from "@/lib/preferences"
+import {
+  DEFAULT_PREFERENCES,
+  THEMES,
+  type Theme,
+  type UserPreferences,
+} from "@/lib/preferences"
 
 import { userPreferences } from "./schema"
 
@@ -24,5 +29,11 @@ export async function getUserPreferences(): Promise<UserPreferences> {
     use24HourTime: row.use24HourTime,
     defaultTaskPriority: row.defaultTaskPriority,
     digestEnabled: row.digestEnabled,
+    // The account's saved appearance. Not what this device is currently rendering —
+    // that comes from localStorage before any of this runs. See lib/preferences.ts.
+    theme: THEMES.includes(row.theme as Theme)
+      ? (row.theme as Theme)
+      : "system",
+    palette: row.palette,
   }
 }

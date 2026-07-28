@@ -92,7 +92,7 @@ export function AppearanceSection() {
   return (
     <SettingsSection
       title="Appearance"
-      description="Theme and accent colours. Saved on this device."
+      description="Theme and accent colours. Saved to your account, so a new device picks them up."
     >
       <div className="flex flex-col gap-6">
         <ThemeControl />
