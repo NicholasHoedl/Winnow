@@ -57,12 +57,35 @@ function toTimestamps(
   return { startAt, endAt }
 }
 
+/**
+ * Confirm a client-supplied `calendarId` belongs to the caller.
+ *
+ * The column is a plain foreign key to a table that also carries a `user_id`, and
+ * Postgres has no opinion about whether the pair belongs to the same person — the FK
+ * only proves the row exists. Same hole `checkTaskLinks` closed for to-dos, and it bites
+ * harder here: `events.calendar_id` cascades on delete, so an event pointed at someone
+ * else's calendar is an event THEY can destroy by tidying up their own.
+ */
+async function checkCalendar(
+  userId: string,
+  calendarId: string,
+): Promise<string | null> {
+  if (!calendarId) return null
+  const row = await db.query.calendars.findFirst({
+    where: and(eq(calendars.id, calendarId), eq(calendars.userId, userId)),
+    columns: { id: true },
+  })
+  return row ? null : "Unknown calendar."
+}
+
 export async function createEvent(input: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
   const parsed = eventInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   const d = parsed.data
+  const calendarError = await checkCalendar(userId, d.calendarId)
+  if (calendarError) return { ok: false, error: calendarError }
   const { timeZone } = await getUserPreferences()
   const { startAt, endAt } = toTimestamps(d, timeZone)
   await db.insert(events).values({
@@ -94,6 +117,8 @@ export async function updateEvent(
   if (!parsed.success) return invalid(parsed.error)
 
   const d = parsed.data
+  const calendarError = await checkCalendar(userId, d.calendarId)
+  if (calendarError) return { ok: false, error: calendarError }
   const { timeZone } = await getUserPreferences()
   const { startAt, endAt } = toTimestamps(d, timeZone)
   await db
@@ -203,6 +228,8 @@ export async function setEventException(
   }
 
   const d = parsed.data
+  const calendarError = await checkCalendar(userId, d.calendarId)
+  if (calendarError) return { ok: false, error: calendarError }
   const { timeZone } = await getUserPreferences()
   const { startAt, endAt } = exceptionTimestamps(d, timeZone)
   const fields = {
