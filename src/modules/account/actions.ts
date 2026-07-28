@@ -9,30 +9,10 @@ import { users } from "@/db/schema"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { unstable_update as updateSession } from "@/lib/auth"
-import {
-  budgets,
-  categories,
-  transactionRecurrences,
-  transactions,
-} from "@/modules/budget/schema"
-import { calendars, eventExceptions, events } from "@/modules/calendar/schema"
-import { goals, milestones } from "@/modules/goals/schema"
-import {
-  bodyWeights,
-  foods,
-  macroTargets,
-  mealEntries,
-  waterLogs,
-} from "@/modules/meals/schema"
-import { userPreferences } from "@/modules/preferences/schema"
-import {
-  lists,
-  subtasks,
-  taskRecurrenceExceptions,
-  taskRecurrences,
-  tasks,
-} from "@/modules/todos/schema"
 
+import { deleteAllUserRows } from "./clear"
+import { parseImport, toInsertRow } from "./import"
+import { INSERT_ORDER } from "./tables"
 import { changePasswordSchema, profileSchema } from "./validation"
 
 export async function updateProfile(input: unknown): Promise<ActionResult> {
@@ -79,45 +59,66 @@ export async function changePassword(input: unknown): Promise<ActionResult> {
   return { ok: true }
 }
 
-// Wipe every domain row for the user (keeping the account). FK-safe order:
-// children before parents. Wrapped in a transaction so it's all-or-nothing.
+/**
+ * Replace everything the user owns with the contents of a backup file.
+ *
+ * The single most destructive thing the app can do, so the order is deliberate:
+ *
+ * 1. **Validate first, entirely.** `parseImport` judges the whole file — version, shape,
+ *    and that every foreign key resolves inside the payload — before a row is deleted.
+ *    A file that is wrong should cost nothing.
+ * 2. **Clear and insert in ONE transaction.** `clearAllData` has a transaction of its
+ *    own, so calling it would open a window where the wipe has committed and the restore
+ *    has not. Anything that fails after that point leaves an empty account.
+ * 3. **Insert in `INSERT_ORDER`**, a topological sort of the foreign-key graph, so a
+ *    row's target always exists by the time it arrives.
+ *
+ * No `onConflictDoNothing`. Elsewhere in the app that is right — an undo racing a real
+ * insert should lose quietly. Here the table was empty a moment ago, so a conflict means
+ * the file contradicts itself, and swallowing it would silently drop rows from a restore.
+ */
+export async function importUserData(payload: unknown): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = parseImport(payload)
+  if (!parsed.ok) return { ok: false, error: parsed.error }
+
+  try {
+    await db.transaction(async (tx) => {
+      await deleteAllUserRows(tx, userId)
+      for (const table of INSERT_ORDER) {
+        const rows = parsed.data.tables[table.key]
+        if (rows.length === 0) continue
+        await tx
+          .insert(table.table)
+          .values(rows.map((row) => toInsertRow(table, row, userId)))
+      }
+    })
+  } catch {
+    // `parseImport` judges the file's shape and its links; the database judges the
+    // values, and it gets the last word — a missing NOT NULL column, a date that isn't
+    // one, two rows sharing an id. Those reach the insert.
+    //
+    // The transaction already protects the DATA. This protects the person: without it a
+    // rejected row escapes as an unhandled rejection and the settings page is replaced
+    // by an error boundary, which looks exactly like a restore that destroyed everything
+    // — at the one moment they can least afford to guess.
+    return {
+      ok: false,
+      error:
+        "That backup couldn't be restored — some of its records are invalid.",
+    }
+  }
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+// Wipe every domain row for the user (keeping the account). The list itself lives in
+// `clear.ts` because a restore needs the same twenty deletes inside its own transaction,
+// and two copies of that list is the bug `coverage.test.ts` exists to catch.
 export async function clearAllData(): Promise<ActionResult> {
   const userId = await requireUserId()
   await db.transaction(async (tx) => {
-    await tx.delete(milestones).where(eq(milestones.userId, userId))
-    await tx.delete(goals).where(eq(goals.userId, userId))
-    await tx.delete(mealEntries).where(eq(mealEntries.userId, userId))
-    await tx.delete(waterLogs).where(eq(waterLogs.userId, userId))
-    await tx.delete(bodyWeights).where(eq(bodyWeights.userId, userId))
-    await tx.delete(macroTargets).where(eq(macroTargets.userId, userId))
-    await tx.delete(foods).where(eq(foods.userId, userId))
-    await tx.delete(transactions).where(eq(transactions.userId, userId))
-    await tx
-      .delete(transactionRecurrences)
-      .where(eq(transactionRecurrences.userId, userId))
-    await tx.delete(budgets).where(eq(budgets.userId, userId))
-    await tx.delete(categories).where(eq(categories.userId, userId))
-    // Subtasks cascade from tasks and exceptions from their rule, but both are deleted
-    // explicitly for the same reason the event exceptions below are: relying on a cascade
-    // means the day the parent stops being deleted first, the child silently leaks.
-    await tx.delete(subtasks).where(eq(subtasks.userId, userId))
-    await tx.delete(tasks).where(eq(tasks.userId, userId))
-    await tx
-      .delete(taskRecurrenceExceptions)
-      .where(eq(taskRecurrenceExceptions.userId, userId))
-    // Recurrence rules were missing here: clearing all data left them behind, and
-    // they immediately regenerated tasks (and would now post bills) into the empty
-    // account on the next page load.
-    await tx.delete(taskRecurrences).where(eq(taskRecurrences.userId, userId))
-    await tx.delete(lists).where(eq(lists.userId, userId))
-    // Exceptions cascade from events, but delete them explicitly: relying on the
-    // cascade means the day someone adds a standalone exception this silently
-    // leaks. Calendars were genuinely leaking — nothing deleted them, so "clear
-    // all data" wiped every event and left the calendar list fully populated.
-    await tx.delete(eventExceptions).where(eq(eventExceptions.userId, userId))
-    await tx.delete(events).where(eq(events.userId, userId))
-    await tx.delete(calendars).where(eq(calendars.userId, userId))
-    await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))
+    await deleteAllUserRows(tx, userId)
   })
   revalidatePath("/", "layout")
   return { ok: true }

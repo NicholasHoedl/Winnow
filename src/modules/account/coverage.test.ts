@@ -13,6 +13,7 @@ import * as preferencesSchema from "@/modules/preferences/schema"
 import * as todosSchema from "@/modules/todos/schema"
 
 import { exportKeyFor } from "./payload"
+import { INSERT_ORDER } from "./tables"
 
 // `clearAllData` and `exportUserData` enumerate tables by hand, and that hand-written
 // list has now fallen behind the schema three times: `842f420` (tasks), T3-S8
@@ -110,17 +111,34 @@ describe("account data tools cover every user-owned table", () => {
     expect(tables.map(([, table]) => table)).toContain("water_logs")
   })
 
-  it("clearAllData deletes from each one", () => {
+  it("deleteAllUserRows deletes from each one", () => {
+    // The list moved out of `clearAllData` when a restore needed the same twenty deletes
+    // inside its own transaction. This test moved with it — and noticed on its own that
+    // it had, by failing the moment the deletes left the file it was reading.
     const clearAll = functionSource(
-      readAccountSource("actions.ts"),
-      "clearAllData",
+      readAccountSource("clear.ts"),
+      "deleteAllUserRows",
     )
     for (const [exportName, table] of userOwnedTables()) {
       expect(
         clearAll.includes(`delete(${exportName})`),
-        `clearAllData never deletes ${table} — it would survive "clear all data"`,
+        `deleteAllUserRows never deletes ${table} — it would survive "clear all data"`,
       ).toBe(true)
     }
+  })
+
+  it("importUserData restores each one", () => {
+    // No source scan here, because the importer has no hand-written list to fall behind:
+    // it walks INSERT_ORDER, which `tables.ts` derives from the same schemas. So the
+    // thing worth checking is that the two independent derivations agree — this file
+    // discovers tables by looking for a `user_id` column, `tables.ts` does its own walk,
+    // and a restore that quietly covered nineteen of twenty tables would show up as a
+    // disagreement rather than as data missing after a restore.
+    expect(INSERT_ORDER.map((t) => t.key).sort()).toEqual(
+      userOwnedTables()
+        .map(([exportName]) => exportKeyFor(exportName))
+        .sort(),
+    )
   })
 
   it("exportUserData reads each one AND returns it", () => {
