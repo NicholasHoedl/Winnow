@@ -60,7 +60,9 @@ export const events = pgTable("events", {
   // Nullable to allow open-ended / point-in-time events.
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolean("all_day").notNull().default(false),
-  recurrenceFreq: recurrenceFreqEnum("recurrence_freq").notNull().default("none"),
+  recurrenceFreq: recurrenceFreqEnum("recurrence_freq")
+    .notNull()
+    .default("none"),
   recurrenceInterval: integer("recurrence_interval").notNull().default(1),
   // Weekly BYDAY as a 7-bit mask (bit i = weekday i, getUTCDay 0=Sun). 0 = repeat
   // on the start date's weekday only (legacy behavior — valid for existing rows).
@@ -118,3 +120,25 @@ export const eventExceptions = pgTable(
     unique("event_exceptions_event_date").on(table.eventId, table.originalDate),
   ],
 )
+
+// The bearer token behind the .ics subscribe feed (T5c-a, ADR-0008).
+//
+// A calendar app polling a feed sends no session cookie — iOS Calendar has nowhere to put
+// one — so the URL itself has to be the credential. This is the first non-session auth in
+// the app; `requireUserId()` was the only mechanism before it.
+//
+// One row per user (`user_id` is unique), because there is one feed. Regenerating replaces
+// the token in place, which is also the only way to revoke a URL that has leaked.
+export const calendarFeedTokens = pgTable("calendar_feed_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  // Random, not derived: nothing about it should be guessable from the account. Unique so
+  // a lookup can be a single indexed equality rather than a scan.
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+})

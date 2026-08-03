@@ -111,7 +111,11 @@ function tzOffsetMs(tz: string, date: Date): number {
 
 /** Interpret a local wall-clock (`YYYY-MM-DD` + `HH:MM`) in `tz` as a UTC instant —
  *  the inverse of localDateTime. DST-safe via a one-pass offset correction. */
-export function zonedDateTimeToUtc(date: string, time: string, tz: string): Date {
+export function zonedDateTimeToUtc(
+  date: string,
+  time: string,
+  tz: string,
+): Date {
   const [y, mo, d] = date.split("-").map(Number)
   const [h, mi] = (time || "00:00").split(":").map(Number)
   const asUtc = Date.UTC(y, mo - 1, d, h, mi)
@@ -137,6 +141,37 @@ export const MAX_MOVE_DAYS = 60
 // --- recurrence expansion ---
 
 const CAP = 1000
+
+/**
+ * Read a monthly `nth_weekday` rule off its anchor date: which weekday, which
+ * occurrence of it in the month, and whether that is also the month's LAST one.
+ *
+ * None of this is stored — `recurrence_monthly_mode` records only that the rule IS
+ * nth-weekday, so every reader has to re-derive the rest from the anchor. That was
+ * survivable while `expandOccurrences` was the only reader. It isn't now: the iCal
+ * writer has to emit the same rule as `BYDAY=3MO` / `BYDAY=-1FR`, and two independent
+ * derivations that disagree would publish a feed saying "last Friday" for a series the
+ * app draws on the 4th. One function, two callers, no room to drift.
+ *
+ * `isLast` wins over `ordinal` where both apply, which is why it is a separate flag: a
+ * 4th Friday that is also the last should keep landing on the last Friday in months
+ * that have five. `splitSeriesAt` already calls that ambiguity out as living "in the
+ * schema, not in the split" — this is the same wart, just now shared deliberately.
+ */
+export function nthWeekdayOf(anchor: string): {
+  /** 0 = Sunday, matching `dowOf` / `getUTCDay`. */
+  weekday: number
+  /** 1-based: the 1st..5th such weekday of the month. */
+  ordinal: number
+  isLast: boolean
+} {
+  const [year, month, day] = parse(anchor)
+  return {
+    weekday: dowOf(anchor),
+    ordinal: Math.ceil(day / 7),
+    isLast: day + 7 > daysInMonth(year, month),
+  }
+}
 
 /** Expand an event into its occurrences overlapping [rangeStart, rangeEnd) (both
  *  YYYY-MM-DD) — a multi-day occurrence counts when any of its span lands in the
@@ -243,12 +278,10 @@ export function expandOccurrences<E extends RecurringEvent>(
         ? Math.floor((rangeIndex - anchorIndex) / interval)
         : 0
 
-    // "Nth weekday" mode derives its target from the anchor: the weekday, which
-    // occurrence in the month (1-based), and whether that was the *last* one.
+    // "Nth weekday" mode derives its target from the anchor. Shared with the iCal
+    // writer so the two can't disagree about which Friday a series means.
     const nthWeekday = event.recurrenceMonthlyMode === "nth_weekday"
-    const anchorDow = dowOf(anchor)
-    const ordinal = Math.ceil(anchorDay / 7)
-    const isLast = anchorDay + 7 > daysInMonth(anchorYear, anchorMonth)
+    const { weekday: anchorDow, ordinal, isLast } = nthWeekdayOf(anchor)
 
     for (let guard = 0; guard < CAP; guard++, i++) {
       const idx = anchorIndex + i * interval
@@ -280,7 +313,8 @@ export function expandOccurrences<E extends RecurringEvent>(
       : anchorYear
   for (let guard = 0; guard < CAP; guard++, y += interval) {
     if (fmt(y, 1, 1) >= hardEnd) break
-    if (daysInMonth(y, anchorMonth) >= anchorDay) emit(fmt(y, anchorMonth, anchorDay))
+    if (daysInMonth(y, anchorMonth) >= anchorDay)
+      emit(fmt(y, anchorMonth, anchorDay))
   }
   return out
 }
@@ -343,7 +377,8 @@ export function applyExceptions<E extends OverlayableEvent>(
 ): Occurrence<E>[] {
   if (exceptions.length === 0) return occurrences
   const byKey = new Map<string, ExceptionOverlay>()
-  for (const ex of exceptions) byKey.set(`${ex.eventId}::${ex.originalDate}`, ex)
+  for (const ex of exceptions)
+    byKey.set(`${ex.eventId}::${ex.originalDate}`, ex)
 
   const out: Occurrence<E>[] = []
   for (const occ of occurrences) {

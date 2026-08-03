@@ -107,7 +107,7 @@ describe("account data tools cover every user-owned table", () => {
     const tables = userOwnedTables()
     // A sanity floor: if discovery silently broke, every assertion below would pass
     // vacuously and the guard would be worse than useless.
-    expect(tables.length).toBeGreaterThanOrEqual(20)
+    expect(tables.length).toBeGreaterThanOrEqual(21)
     expect(tables.map(([, table]) => table)).toContain("water_logs")
   })
 

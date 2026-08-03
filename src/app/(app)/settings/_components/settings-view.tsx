@@ -4,6 +4,7 @@ import type { UserPreferences } from "@/lib/preferences"
 
 import { AccountSection } from "./account-section"
 import { AppearanceSection } from "./appearance-section"
+import { CalendarSection } from "./calendar-section"
 import { DataSection } from "./data-section"
 import { NotificationsSection } from "./notifications-section"
 import { PreferencesSection } from "./preferences-section"
@@ -11,9 +12,11 @@ import { PreferencesSection } from "./preferences-section"
 export function SettingsView({
   user,
   preferences,
+  feedUrl,
 }: {
   user: { name: string; email: string }
   preferences: UserPreferences
+  feedUrl: string
 }) {
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
@@ -31,6 +34,7 @@ export function SettingsView({
         <AppearanceSection />
         <PreferencesSection preferences={preferences} />
         <NotificationsSection preferences={preferences} />
+        <CalendarSection feedUrl={feedUrl} />
         <DataSection />
       </div>
     </div>

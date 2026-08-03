@@ -11,8 +11,14 @@ import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
+import { newFeedToken } from "./feed-token"
 import type { EventRow } from "./queries"
-import { calendars, eventExceptions, events } from "./schema"
+import {
+  calendarFeedTokens,
+  calendars,
+  eventExceptions,
+  events,
+} from "./schema"
 import { localDateTime, splitSeriesAt, zonedDateTimeToUtc } from "./service"
 import {
   calendarInputSchema,
@@ -598,5 +604,29 @@ export async function deleteCalendar(id: unknown): Promise<ActionResult> {
     .delete(calendars)
     .where(and(eq(calendars.id, parsed.data), eq(calendars.userId, userId)))
   revalidateCalendar()
+  return { ok: true }
+}
+
+/**
+ * Replace the subscribe-feed token, invalidating the old URL.
+ *
+ * This is the only revocation there is: a bearer URL cannot be un-shared, so the answer to
+ * a leaked feed link is to make it stop working. Any calendar already subscribed to the
+ * old URL starts failing and has to be re-added, which the UI says out loud before asking.
+ */
+export async function regenerateFeedToken(): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const token = newFeedToken()
+
+  await db
+    .insert(calendarFeedTokens)
+    .values({ userId, token })
+    .onConflictDoUpdate({
+      target: calendarFeedTokens.userId,
+      set: { token, createdAt: new Date() },
+    })
+
+  // The settings page renders the URL, so it has to re-read.
+  revalidatePath("/settings")
   return { ok: true }
 }

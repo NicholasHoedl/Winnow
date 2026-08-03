@@ -8,7 +8,12 @@ import {
   transactionRecurrences,
   transactions,
 } from "@/modules/budget/schema"
-import { calendars, eventExceptions, events } from "@/modules/calendar/schema"
+import {
+  calendarFeedTokens,
+  calendars,
+  eventExceptions,
+  events,
+} from "@/modules/calendar/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import {
   bodyWeights,
@@ -71,5 +76,8 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   await tx.delete(eventExceptions).where(eq(eventExceptions.userId, userId))
   await tx.delete(events).where(eq(events.userId, userId))
   await tx.delete(calendars).where(eq(calendars.userId, userId))
+  await tx
+    .delete(calendarFeedTokens)
+    .where(eq(calendarFeedTokens.userId, userId))
   await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))
 }

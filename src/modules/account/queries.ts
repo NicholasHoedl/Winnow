@@ -11,7 +11,12 @@ import {
   transactionRecurrences,
   transactions,
 } from "@/modules/budget/schema"
-import { calendars, eventExceptions, events } from "@/modules/calendar/schema"
+import {
+  calendarFeedTokens,
+  calendars,
+  eventExceptions,
+  events,
+} from "@/modules/calendar/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import {
   bodyWeights,
@@ -53,6 +58,7 @@ export async function exportUserData() {
     calendarRows,
     eventRows,
     eventExceptionRows,
+    calendarFeedTokenRows,
     goalRows,
     milestoneRows,
     preferenceRows,
@@ -119,6 +125,13 @@ export async function exportUserData() {
       where: eq(eventExceptions.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
+    // The .ics subscribe token rides along deliberately: a restored backup should leave
+    // the phone's existing subscription working rather than silently going dead. It does
+    // mean the export file carries a live credential — see ADR-0008.
+    db.query.calendarFeedTokens.findMany({
+      where: eq(calendarFeedTokens.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
     db.query.goals.findMany({
       where: eq(goals.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
@@ -163,6 +176,7 @@ export async function exportUserData() {
     calendars: calendarRows,
     events: eventRows,
     eventExceptions: eventExceptionRows,
+    calendarFeedTokens: calendarFeedTokenRows,
     goals: goalRows,
     milestones: milestoneRows,
     taskRecurrences: taskRecurrenceRows,

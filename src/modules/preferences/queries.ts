@@ -17,7 +17,18 @@ export type UserPreferencesRow = typeof userPreferences.$inferSelect
 /** Effective preferences for the current user: the saved row normalised over the
  * defaults, so callers never special-case a missing row (first run). */
 export async function getUserPreferences(): Promise<UserPreferences> {
-  const userId = await requireUserId()
+  return preferencesFor(await requireUserId())
+}
+
+/**
+ * The same, for a user resolved some way other than the session.
+ *
+ * Split out for the .ics subscribe feed, which authenticates with a token and so has no
+ * session to read a user from — but still needs the zone, because the feed renders
+ * wall-clock times exactly as the app does. Same shape as `rangeOccurrences` taking an
+ * explicit userId next to `getRangeEvents`.
+ */
+export async function preferencesFor(userId: string): Promise<UserPreferences> {
   const row = await db.query.userPreferences.findFirst({
     where: eq(userPreferences.userId, userId),
   })

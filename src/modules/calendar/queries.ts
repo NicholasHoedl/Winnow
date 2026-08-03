@@ -4,8 +4,16 @@ import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
 import { db } from "@/db"
 import { addDays } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
+import { preferencesFor } from "@/modules/preferences/queries"
 
-import { calendars, eventExceptions, events } from "./schema"
+import { newFeedToken } from "./feed-token"
+import { toVCalendar } from "./ical"
+import {
+  calendarFeedTokens,
+  calendars,
+  eventExceptions,
+  events,
+} from "./schema"
 import {
   applyExceptions,
   bucketByDay,
@@ -211,6 +219,97 @@ export type EventOption = {
   title: string
   startAt: Date
   allDay: boolean
+}
+
+/**
+ * Everything the .ics writer needs: raw series rows and every exception, unexpanded.
+ *
+ * The opposite of every other read in this file. A feed publishes the RULE — one VEVENT
+ * carrying an RRULE — and lets the subscriber expand it, so running the occurrences
+ * through `rangeOccurrences` first would throw away the very thing being exported (and
+ * bound to a date range a feed has no business having).
+ *
+ * Takes an explicit userId: the subscribe route authenticates with a token and has no
+ * session to resolve one from.
+ */
+export async function getCalendarFeedData(userId: string) {
+  const [eventRows, exceptionRows] = await Promise.all([
+    db.query.events.findMany({
+      where: eq(events.userId, userId),
+      orderBy: [asc(events.startAt), asc(events.id)],
+    }),
+    db.query.eventExceptions.findMany({
+      where: eq(eventExceptions.userId, userId),
+      orderBy: [asc(eventExceptions.originalDate), asc(eventExceptions.id)],
+    }),
+  ])
+  return { events: eventRows, exceptions: exceptionRows }
+}
+
+/**
+ * The whole calendar as an .ics document.
+ *
+ * Shared by the signed-in download and the token feed, so the two can never drift into
+ * publishing different calendars. Takes a userId rather than resolving a session for the
+ * same reason `getCalendarFeedData` does.
+ *
+ * The zone matters even though the output carries no zone at all: times are emitted as
+ * floating wall-clock, so this is what decides WHICH wall-clock. See `toVCalendar`.
+ */
+export async function buildCalendarIcs(userId: string): Promise<string> {
+  const [feed, preferences] = await Promise.all([
+    getCalendarFeedData(userId),
+    preferencesFor(userId),
+  ])
+  return toVCalendar(feed.events, feed.exceptions, preferences.timeZone)
+}
+
+/**
+ * The user behind a feed token, or null.
+ *
+ * A single indexed equality on a unique column. The token is 256 random bits, so there is
+ * nothing to guess and nothing for a timing difference to leak — but a caller must still
+ * answer a miss the same way it answers a malformed token, or the response confirms which
+ * tokens exist.
+ */
+export async function resolveFeedToken(token: string): Promise<string | null> {
+  if (!token) return null
+  const row = await db.query.calendarFeedTokens.findFirst({
+    where: eq(calendarFeedTokens.token, token),
+    columns: { userId: true },
+  })
+  return row?.userId ?? null
+}
+
+/**
+ * The current user's feed token, minting one the first time it is asked for.
+ *
+ * Lazy creation on read, like `ensureDefaultCalendars` above: there is no signup hook to
+ * provision it from, and a token nobody has looked at yet has no reason to exist.
+ */
+export async function getFeedToken(): Promise<string> {
+  const userId = await requireUserId()
+  const existing = await db.query.calendarFeedTokens.findFirst({
+    where: eq(calendarFeedTokens.userId, userId),
+    columns: { token: true },
+  })
+  if (existing) return existing.token
+
+  const token = newFeedToken()
+  const [row] = await db
+    .insert(calendarFeedTokens)
+    .values({ userId, token })
+    // Two tabs opening Settings at once would otherwise race to insert; the loser should
+    // read the winner's token, not fail.
+    .onConflictDoNothing({ target: calendarFeedTokens.userId })
+    .returning({ token: calendarFeedTokens.token })
+  if (row) return row.token
+
+  const winner = await db.query.calendarFeedTokens.findFirst({
+    where: eq(calendarFeedTokens.userId, userId),
+    columns: { token: true },
+  })
+  return winner!.token
 }
 
 /** Flat list of event *series* (unexpanded), newest first, for pickers — e.g. linking
