@@ -1,7 +1,8 @@
 # Winnow — Architecture
 
-Status: Implemented through improvement-plan tranche T6a (data durability)
-Last updated: 2026-07-28
+Status: Implemented through improvement-plan tranche T5c-a (iCal export + feed),
+plus the dashboard consolidation that folded `/today` in.
+Last updated: 2026-08-03
 
 This document assumes SPEC.md. It covers the tech stack and rationale, the
 system layout, the data model, the deployment architecture (including the
@@ -182,10 +183,49 @@ Notes on this diagram:
   UI layer and the raw query layer specifically so it can be unit-tested
   without needing a browser or, in most cases, a live database (pure
   functions where possible).
-- The **dashboard depends on the four modules' read queries; the modules
+- The **dashboard depends on the modules' read queries; the modules
   never depend on the dashboard.** This one-directional rule is what keeps
   the "unified home" from turning into duplicated logic — the dashboard is
   an aggregator, never a second implementation of a module's rules.
+
+### 2.1 The dashboard is the only hub
+
+There was a second one — `/today` — until it was folded in. The two pages ran
+five of the same queries (`getTasks`, `getDayEvents`, `getCalendars`,
+`getMacroSummary`, `getBudgetSummary`) and shared a header, the capture bar and
+the stat cards; the merged agenda was the only thing one had that the other
+didn't. `/today` now 308-redirects to `/` (`next.config.ts`), because the app is
+installed to a home screen and a bare 404 would be a dead icon.
+
+The page is three columns that fill the viewport rather than one tall column
+that scrolls:
+
+| Column | Holds                                          |
+| ------ | ---------------------------------------------- |
+| Left   | Overdue → today's agenda → "Coming up"         |
+| Centre | The month grid, or the week strip, full height |
+| Right  | Tomorrow → macros/budget → categories → goals  |
+
+Three things about it are load-bearing rather than cosmetic:
+
+- **"Coming up" shows only what the agenda does not**, and the filter is derived
+  from the agenda's own output rather than a second definition of "overdue" and
+  "due today". Two definitions of one boundary is how a task ends up listed
+  twice, or in neither place, the day one of them changes.
+- **`Tomorrow` is deliberately only tomorrow.** It was `UpNext` and showed today
+  as well; the agenda covers today better, and keeping both printed the same
+  events twice on one page.
+- **Height is reached for, never forced.** The grid uses `min-h`, which fills
+  spare space but never adds any, and the agenda and task lists cap with
+  internal scroll — so no volume of data turns this back into a scrolling page.
+  Fits without scrolling from 1366×768 up; 1280×800 overflows by ~19px, and the
+  digest banner adds ~180px on the one visit a day it appears.
+
+The month/week toggle keeps its state in the URL (`/?calendar=week`), not in
+client state, so the server renders the chosen view — no flash of the wrong one,
+and no localStorage read during render. The cost is that the dashboard opens on
+the month each visit; making it stick means a `user_preferences` column so the
+server still knows it up front.
 
 ---
 
@@ -435,13 +475,13 @@ which are overdue, and a way through.
 **These five columns map onto an RRULE on the way out, and only on the way out**
 (`modules/calendar/ical.ts`, T5c-a). Four things the schema leaves implicit have
 to be re-derived to say it in iCalendar's terms: BYDAY when the mask is `0`, the
-nth-weekday ordinal (`recurrence_monthly_mode` records only that the rule *is*
+nth-weekday ordinal (`recurrence_monthly_mode` records only that the rule _is_
 nth-weekday), a `COUNT` that does not exist here and is expressed as `UNTIL`, and
 `recurrence_end_date` being an inclusive DATE where `UNTIL` is a date-time. The
 ordinal derivation is shared with the expander via `nthWeekdayOf` precisely so the
 published feed cannot claim a different Friday than the app draws.
 
-Reading an arbitrary RRULE *back* is not the mirror of this — `COUNT`, `BYSETPOS`
+Reading an arbitrary RRULE _back_ is not the mirror of this — `COUNT`, `BYSETPOS`
 and multi-`BYDAY`-with-ordinals have nowhere to live in five columns — which is
 why import is not offered. See ADR-0008.
 
@@ -912,7 +952,7 @@ small:
   app should clearly show that, not silently serve stale content.
 
   The app leans on this harder than it looks. `ensureRecurringTasks()`
-  materialises and retires rows *during a page read* (page rendering is
+  materialises and retires rows _during a page read_ (page rendering is
   the scheduler — there is no cron; see ADR-0004), every hub freezes
   "today" into its HTML at render time, `revalidatePath()` cannot reach
   Cache Storage, and signing out cannot clear it. A navigation cache
@@ -921,7 +961,7 @@ small:
 - **What was added on top:** a failed **navigation** is answered with
   `public/offline.html`, a self-contained page that names the problem
   instead of leaving an installed PWA on a blank screen. Only a network
-  *rejection* triggers it — a 307 to `/login` or a 500 is passed through
+  _rejection_ triggers it — a 307 to `/login` or a 500 is passed through
   untouched, so auth redirects and error boundaries still work. The
   fallback keys on `request.mode === "navigate"`, never on the URL,
   because App Router client navigation fetches the same path with
@@ -992,14 +1032,14 @@ winnow/
 │   │   └── layout.tsx                # root layout: PWA meta tags, fonts
 │   │
 │   ├── modules/                      # one folder per domain module
-│   │   ├── account/                  # export/import/erase — see §7 note below
+│   │   ├── account/                  # export/import/clear — see §7 note below
 │   │   │   ├── payload.ts            # the backup JSON's shape (version, key map)
 │   │   │   ├── tables.ts             # user-owned table graph, DERIVED from schemas
 │   │   │   ├── import.ts             # pure validation incl. referential integrity
 │   │   │   └── clear.ts              # the twenty deletes, shared by clear + restore
 │   │   ├── todos/
 │   │   │   ├── schema.ts             # Drizzle table definitions
-│   │   │   ├── queries.ts            # reads (used by RSC + dashboard)
+│   │   │   ├── queries.ts            # reads (used by RSC + the dashboard page)
 │   │   │   ├── actions.ts            # Server Actions (mutations)
 │   │   │   ├── service.ts            # pure business logic (bucketing, overdue calc)
 │   │   │   ├── restore.ts            # row → insert-payload map for the undo path
@@ -1015,8 +1055,9 @@ winnow/
 │   │   │   ├── off-mapping.ts        # pure: OFF product → ImportedFood
 │   │   │   ├── off-request.ts        # pure: URL building, error classification
 │   │   │   └── off-client.ts         # server-only: owns fetch, never throws
-│   │   └── dashboard/
-│   │       └── queries.ts            # composes the other modules' queries.ts only
+│   │   ├── digest/                   # the once-a-day banner's assembly (T2)
+│   │   ├── preferences/              # the singleton user_preferences row
+│   │   └── search/                   # the ⌘K palette's cross-module search (T1)
 │   │
 │   ├── components/
 │   │   ├── ui/                       # shadcn primitives, unmodified/lightly themed
@@ -1062,11 +1103,15 @@ Rules this structure is meant to enforce:
 - **`modules/*` owns its schema, reads, writes, business logic, and
   validation.** `app/*` routes are thin — they render UI and call into
   `modules/*`, they don't contain business logic themselves.
-- **`modules/dashboard` may only import from other modules' `queries.ts`
-  files**, never their `actions.ts`, and other modules never import from
-  `dashboard`. This is the mechanical enforcement of §2's one-directional
-  rule and directly protects the "unified home, not duplicated logic"
-  principle from SPEC.md.
+- **The dashboard may only import other modules' `queries.ts`**, never their
+  `actions.ts`, and no module imports from the dashboard. This is §2's
+  one-directional rule and it protects the "unified home, not duplicated
+  logic" principle from SPEC.md.
+
+  There is no `modules/dashboard` any more: it was one file composing other
+  modules' reads, and `app/(app)/page.tsx` does that directly. The rule is
+  about direction, not about where the composition lives.
+
 - Unit tests are colocated with the code they test (e.g.,
   `modules/budget/service.test.ts` next to `service.ts`) so there's no
   separate mental map to maintain as a solo developer. Playwright E2E

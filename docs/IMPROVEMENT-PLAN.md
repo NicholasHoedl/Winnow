@@ -203,6 +203,20 @@ palette (focus trap, ESC).
 > shows only what the agenda doesn't, filtered against the agenda's own output rather than
 > a second definition of "due today", and its overdue/due-today tallies are gone with it.
 >
+> **Two follow-up passes on the same surface, after using it:**
+>
+> 1. **It filled a third of the screen and scrolled.** `max-w-7xl` centred everything in
+>    1280px, leaving ~270px dead each side of a 1920 display. Widened to `max-w-[120rem]`
+>    (measured gutters: 0px). The height fix was structural rather than padding —
+>    per-column measurement showed the centre carrying 706px against the right column's
+>    464px, so the page height was set by an imbalance; moving the stat cards across fixed
+>    it. The agenda came out of its full-width row into the first column at the same time.
+>    Fits without scrolling from 1366×768 up. See ARCHITECTURE §2.1.
+> 2. **A month/week toggle**, state in the URL so the server renders the chosen view.
+>
+> Both are documented in ARCHITECTURE §2.1 rather than here, because they describe how the
+> page is built rather than what a tranche decided.
+>
 > The rest of T2 stands: the cross-module links and the digest engine are untouched, and
 > the digest banner simply points at `/` now. `buildTodayAgenda` moved rather than changed.
 
@@ -422,7 +436,9 @@ so it has to be keyed by `(event_id, original_date)` like every other per-occurr
   a device change and appear in the export.
 - **Account deletion** (only "clear data" exists today); finish any remaining per-module
   error/loading boundaries not done in T0.
-- **Dashboard polish:** stat cards drill in on click; optional Week view.
+- ~~**Dashboard polish:** stat cards drill in on click; optional Week view.~~ Both done —
+  the stat cards were already whole-card links by T6a, and a month/week toggle landed with
+  the dashboard consolidation (see the T2 note).
 
 **Deps:** T0. **Decisions:** `@serwist/next`; import conflict policy (merge vs replace).
 **Verify:** export→import round-trip fidelity; offline open of the installed PWA; appearance
@@ -482,6 +498,9 @@ exist: `clearAllData` for a fresh start, `docker compose down -v` to destroy the
   siblings; the export route catches so a failure isn't an HTML 500 delivered as
   `winnow-export.json`; and the dashboard's week toggle is gone (~110 lines) now that
   `/calendar?view=week` exists — it could only ever show the week containing today.
+  _(A week view came back later, on the same reasoning being outweighed: the dashboard
+  calendar column is full height now, so the strip shows more than the month grid can.
+  It still cannot navigate. See the T2 note.)_
 
 **T6b — shipped, and deliberately narrower than "offline reads".** Both blockers this
 section raised turned out to point at the same answer: **cache the static shell and an
@@ -489,7 +508,7 @@ offline fallback page, and no user data at all.**
 
 - The second blocker resolved itself. Caching a navigation means caching a fully-rendered
   page full of user data — and the app depends on those pages being live in four separate
-  ways that are easy to miss: `ensureRecurringTasks()` materialises rows *during a read*
+  ways that are easy to miss: `ensureRecurringTasks()` materialises rows _during a read_
   (page rendering is the scheduler; there is no cron), every hub freezes "today" into its
   HTML, `revalidatePath()` cannot reach Cache Storage, and sign-out cannot clear it. So
   `ARCHITECTURE.md` §6.2's network-only rule was not overturned — it was kept, and doing so
@@ -505,7 +524,7 @@ offline fallback page, and no user data at all.**
 - The ADR this section predicted exists: `docs/adr/0007-hand-written-service-worker.md`,
   which reverses the pre-committed `@serwist/next` dependency.
 
-**Still not done, and still Later:** offline *reads* of real data. That needs a local-first
+**Still not done, and still Later:** offline _reads_ of real data. That needs a local-first
 data layer, not an extension of this worker — SPEC §6 keeps deferring it, correctly.
 
 ---
