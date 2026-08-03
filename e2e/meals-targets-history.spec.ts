@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 
 // Browser coverage for T4-S8, and the reason the whole step exists: macro_targets used
 // to hold ONE row per user, so raising your calorie goal silently re-scored every day

@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T3-S10. Three things this must prove:
 //   1. the create-time preview counts what will actually post, and refuses a
@@ -15,7 +17,7 @@ test("a repeating transaction posts, is badged, and can be stopped", async ({
   page,
 }) => {
   const payee = `E2E Repeat ${Date.now()}`
-  const row = page.locator("div.bg-card").filter({ hasText: payee })
+  const row = visibleCard(page, payee)
 
   await page.goto("/budget")
   await page.getByRole("button", { name: "Add", exact: true }).click()

@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Coverage for the two undo paths that had none: task delete and milestone delete.
 //
@@ -21,9 +23,7 @@ import { test, expect } from "@playwright/test"
 test.afterEach(async ({ page }) => {
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const tasks = page
-    .locator("div.bg-card")
-    .filter({ hasText: "E2E undo task " })
+  const tasks = visibleCard(page, "E2E undo task ")
   for (let i = 0; i < 6; i++) {
     const before = await tasks.count()
     if (before === 0) break
@@ -36,9 +36,7 @@ test.afterEach(async ({ page }) => {
   await expect(tasks).toHaveCount(0)
 
   await page.goto("/goals")
-  const goals = page
-    .locator("div.bg-card")
-    .filter({ hasText: "E2E undo goal " })
+  const goals = visibleCard(page, "E2E undo goal ")
   for (let i = 0; i < 6; i++) {
     const before = await goals.count()
     if (before === 0) break
@@ -52,7 +50,7 @@ test.afterEach(async ({ page }) => {
 
 test("deleting a task can be undone", async ({ page }) => {
   const title = `E2E undo task ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   await page.goto("/todos")
   const input = page.getByLabel("Quick add task")
@@ -84,7 +82,7 @@ test("deleting a milestone can be undone, and keeps its position", async ({
   const goalTitle = `E2E undo goal ${stamp}`
   const first = `alpha ${stamp}`
   const second = `bravo ${stamp}`
-  const card = () => page.locator("div.bg-card").filter({ hasText: goalTitle })
+  const card = () => visibleCard(page, goalTitle)
 
   await page.goto("/goals")
   await page.getByRole("button", { name: "Add goal" }).click()

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T6a: restoring a backup.
 //
@@ -19,6 +19,52 @@ async function exportPayload(page: Page) {
   return (await response.json()) as Record<string, unknown>
 }
 
+/**
+ * Touch the surfaces that provision lazily, before taking a baseline export.
+ *
+ * Two reads in this app create rows on first use: `ensureDefaultCalendars` on any
+ * calendar read, and the .ics feed token when Settings renders (T5c-a). Both are
+ * deliberate — there is no signup hook to provision from, and a restore can legitimately
+ * leave an account without either — but it means an export taken BEFORE the first visit
+ * differs from one taken after by rows that have nothing to do with importing. Straddling
+ * that reads as "the import changed the data", which is exactly the alarm this file
+ * exists to raise, so it must not be able to fire for this reason.
+ */
+async function provision(page: Page) {
+  await page.goto("/settings")
+  await expect(page.getByRole("button", { name: "Choose file" })).toBeVisible()
+  await page.goto("/calendar")
+  await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
+
+  // And wait for the appearance mirror to land. `AppearanceSync` (T6a) writes this
+  // device's saved palette/theme into the account on load, fire-and-forget — there is
+  // nothing to await from out here, and the storage state this suite logs in with can
+  // legitimately hold a different palette than the database does. Capture the baseline
+  // mid-write and the very next render "changes the data" by flipping `palette` and
+  // `updatedAt`, which is a false alarm on the one assertion that must never cry wolf.
+  const saved = await page.evaluate(() => ({
+    palette: localStorage.getItem("winnow-palette"),
+    theme: localStorage.getItem("theme"),
+  }))
+  if (saved.palette || saved.theme) {
+    await expect
+      .poll(async () => {
+        const preferences = (await exportPayload(page)).preferences as {
+          palette?: string
+          theme?: string
+        } | null
+        return {
+          palette: saved.palette ? preferences?.palette : null,
+          theme: saved.theme ? preferences?.theme : null,
+        }
+      })
+      .toEqual({
+        palette: saved.palette ?? null,
+        theme: saved.theme ?? null,
+      })
+  }
+}
+
 /** Choose a file and type the confirmation, but stop short of confirming. */
 async function stageImport(page: Page, payload: unknown, name = "winnow.json") {
   await page.goto("/settings")
@@ -33,6 +79,7 @@ async function stageImport(page: Page, payload: unknown, name = "winnow.json") {
 test("a backup round-trips through export, import and export again", async ({
   page,
 }) => {
+  await provision(page)
   const before = await exportPayload(page)
   // A vacuous pass guard: an empty account would round-trip trivially and prove nothing.
   const rows = Object.values(before).filter(Array.isArray).flat().length
@@ -56,6 +103,7 @@ test("a backup round-trips through export, import and export again", async ({
 test("a file it can't read changes nothing", async ({ page }) => {
   // Validation happens before the first delete, so a rejected file must cost nothing.
   // Proven against a POPULATED account: an empty one would look the same either way.
+  await provision(page)
   const before = await exportPayload(page)
   expect(
     Object.values(before).filter(Array.isArray).flat().length,
@@ -131,6 +179,7 @@ test("a file it can't read changes nothing", async ({ page }) => {
 
 test("the confirmation has to be typed", async ({ page }) => {
   // The gate on the single most destructive action in the app.
+  await provision(page)
   const before = await exportPayload(page)
   await stageImport(page, before)
 

@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T3-S4. The headline invariant: filtering narrows the LIST but
 // must not move the month's Income/Expenses/Net, which are read separately and always
@@ -11,8 +13,7 @@ test("filtering narrows the list but not the month's totals", async ({
   const stamp = Date.now()
   const alpha = `E2E Alpha ${stamp}`
   const beta = `E2E Beta ${stamp}`
-  const row = (payee: string) =>
-    page.locator("div.bg-card").filter({ hasText: payee })
+  const row = (payee: string) => visibleCard(page, payee)
 
   await page.goto("/budget")
   for (const [payee, amount] of [
@@ -51,7 +52,9 @@ test("filtering narrows the list but not the month's totals", async ({
   await expect(row(alpha)).toBeVisible()
 
   for (const payee of [alpha, beta]) {
-    await row(payee).getByRole("button", { name: "Transaction actions" }).click()
+    await row(payee)
+      .getByRole("button", { name: "Transaction actions" })
+      .click()
     await page.getByRole("menuitem", { name: "Delete" }).click()
     await expect(row(payee)).toHaveCount(0)
   }

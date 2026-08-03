@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S5. The invariant worth protecting: a blank micronutrient
 // field means "no figure for this", NOT zero. The day's total therefore counts only the
@@ -19,8 +21,7 @@ test("micronutrients are optional, and the day's total says how many entries had
   const stamp = Date.now()
   const withMicros = `e2emicroA${stamp}`
   const without = `e2emicroB${stamp}`
-  const row = (name: string) =>
-    page.locator("div.bg-card").filter({ hasText: name })
+  const row = (name: string) => visibleCard(page, name)
 
   await page.goto(`/meals?date=${DAY}`)
 

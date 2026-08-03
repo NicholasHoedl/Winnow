@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Full write-path through a real browser: quick-add → complete → delete (cleanup).
 test("add, complete, and delete a to-do", async ({ page }) => {
@@ -13,17 +15,17 @@ test("add, complete, and delete a to-do", async ({ page }) => {
   // completed row stays visible to assert on.
   await page.getByRole("button", { name: "All", exact: true }).click()
 
-  const row = page.locator("div.bg-card").filter({ hasText: title })
+  const row = visibleCard(page, title)
   await expect(row).toBeVisible()
 
   // Complete it — the title picks up a line-through.
   await row.getByLabel("Mark as done").click()
-  await expect(row.getByText(title, { exact: true })).toHaveClass(/line-through/)
+  await expect(row.getByText(title, { exact: true })).toHaveClass(
+    /line-through/,
+  )
 
   // Delete it (cleanup) via the row menu.
   await row.getByRole("button", { name: "Task actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: title }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, title)).toHaveCount(0)
 })

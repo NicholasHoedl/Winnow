@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T2-S2: linking a task to a goal from the task dialog, seeing it
 // on the goal card, and confirming a goal delete DETACHES its tasks instead of removing
@@ -18,7 +20,7 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   await goalDialog.getByLabel("Title").fill(goalTitle)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()
 
-  const card = page.locator("div.bg-card").filter({ hasText: goalTitle })
+  const card = visibleCard(page, goalTitle)
   await expect(card).toBeVisible()
 
   // A task pointing at it.
@@ -41,20 +43,16 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   await card.getByRole("button", { name: "Goal actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await page.getByRole("button", { name: "Delete goal" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: goalTitle }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, goalTitle)).toHaveCount(0)
 
   await page.goto("/todos")
-  const row = page.locator("div.bg-card").filter({ hasText: taskTitle })
+  const row = visibleCard(page, taskTitle)
   await expect(row).toBeVisible()
 
   // Cleanup.
   await row.getByRole("button", { name: "Task actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: taskTitle }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, taskTitle)).toHaveCount(0)
 })
 
 test("the link pickers are hidden for a repeating task", async ({ page }) => {

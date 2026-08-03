@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 import { is } from "drizzle-orm"
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core"
 

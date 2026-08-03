@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 
 // Browser coverage for T3-S2: the budgets dialog saves a whole month in one atomic
 // call, and can seed a month from the previous one.

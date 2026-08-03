@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 
 // Browser coverage for T3-S7: the trend charts render as real server-side SVG with
 // accessible names, and each shape carries a <title> so hovering names its value.

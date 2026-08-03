@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S6: date sections, and the Someday bucket that gives an
 // undated task somewhere to live.
@@ -19,9 +21,7 @@ const section = (page: import("@playwright/test").Page, name: string) =>
 test.afterEach(async ({ page }) => {
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const strays = page
-    .locator("div.bg-card")
-    .filter({ hasText: /E2E (someday|todayish|donesec) \d+/ })
+  const strays = visibleCard(page, /E2E (someday|todayish|donesec) \d+/)
   for (let i = 0; i < 12; i++) {
     const before = await strays.count()
     if (before === 0) break
@@ -41,8 +41,7 @@ test("quick-add captures into Someday, the dialog schedules for today", async ({
   const stamp = Date.now()
   const captured = `E2E someday ${stamp}`
   const scheduled = `E2E todayish ${stamp}`
-  const row = (title: string) =>
-    page.locator("div.bg-card").filter({ hasText: title })
+  const row = (title: string) => visibleCard(page, title)
 
   await page.goto("/todos")
 
@@ -83,7 +82,7 @@ test("quick-add captures into Someday, the dialog schedules for today", async ({
 
 test("a completed task leaves the date sections for Done", async ({ page }) => {
   const title = `E2E donesec ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   await page.goto("/todos")
   const input = page.getByLabel("Quick add task")

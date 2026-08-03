@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S6.
 //
@@ -33,7 +35,7 @@ test("the food-database panel appears without blocking hand entry", async ({
   await page.getByRole("checkbox", { name: /save as a new food/i }).uncheck()
   await page.getByRole("button", { name: "Log", exact: true }).click()
 
-  const row = page.locator("div.bg-card").filter({ hasText: name })
+  const row = visibleCard(page, name)
   await expect(row).toBeVisible()
 
   await row.getByRole("button", { name: "Entry actions" }).click()

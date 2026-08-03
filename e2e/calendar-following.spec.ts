@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T5b-S7/S8: "this and following".
 //

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T5b-S3/S4: the week time-grid and the URL that reaches it.
 //

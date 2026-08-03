@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for the ⌘K command palette (T1-S3): open/close, the visible
 // trigger, page-jump commands, cross-module search, and the `g`-then-letter nav.
@@ -67,10 +69,8 @@ test("searches across modules and opens a result", async ({ page }) => {
 
   // Cleanup: delete the seeded task ("All" shows every row regardless of status).
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const row = page.locator("div.bg-card").filter({ hasText: title })
+  const row = visibleCard(page, title)
   await row.getByRole("button", { name: "Task actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: title }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, title)).toHaveCount(0)
 })

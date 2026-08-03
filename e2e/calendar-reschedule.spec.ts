@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T5b-S6: drag-to-reschedule in the week grid.
 //

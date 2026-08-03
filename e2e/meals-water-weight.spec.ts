@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 
 // Browser coverage for T4-S12: logging water, recording a weigh-in, and the trend chart.
 //
@@ -23,8 +23,18 @@ const weightInput = (page: Page) => page.getByLabel("Weight", { exact: true })
 const removeWeight = (page: Page) =>
   page.getByRole("button", { name: "Remove", exact: true })
 
-/** The day's running total — the `<span>` reading e.g. "24 fl oz". */
-const waterTotal = (page: Page) => page.getByText(/^\d+(\.\d+)? fl oz$/)
+/**
+ * The day's running total — the `<span>` reading e.g. "24 fl oz".
+ *
+ * `visible` is load-bearing for the same reason it is in `_card.ts`: React's streaming
+ * SSR parks completed Suspense content in a `<div hidden id="S:n">` and leaves it in the
+ * DOM, so this span exists twice — once rendered, once staged. Strict mode counts both
+ * before `toBeVisible()` filters them, and the failure ("resolved to 2 elements … one
+ * hidden") looks nothing like its cause. Reproduces against a production build too, so
+ * it is not a dev-server artifact.
+ */
+const waterTotal = (page: Page) =>
+  page.getByText(/^\d+(\.\d+)? fl oz$/).filter({ visible: true })
 
 /**
  * Remove the weigh-in on `date` if one is there, so the next run starts empty.

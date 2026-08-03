@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T6a-S5: appearance mirrored into the account.
 //

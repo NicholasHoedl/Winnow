@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T1-S7: budget NL quick-add + jump-to-date pickers (meals day / budget month).
 
@@ -10,7 +12,7 @@ test("budget quick-add logs a transaction", async ({ page }) => {
   await bar.fill(`${desc} $4`)
   await bar.press("Enter")
 
-  const row = page.locator("div.bg-card").filter({ hasText: desc })
+  const row = visibleCard(page, desc)
   await expect(row).toBeVisible()
 
   // The suite runs serially against the persistent dev database, so a row left here

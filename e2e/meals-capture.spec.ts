@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
 
 // Browser coverage for T1-S6 meals capture: the NL quick-add bar, one-tap re-log, and the
 // in-dialog food-search (Enter selects a food, does not submit the form).

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect, type Page } from "./_test"
 
 // Browser coverage for T2-S5. The point of this spec is the CLOBBER guard: the
 // Preferences and Notifications sections are separate forms over the same
@@ -27,11 +27,13 @@ test("saving notifications doesn't revert regional preferences", async ({
 
   // Remember what to restore at the end.
   const wasDigestOn =
-    (await notifs.getByRole("button", { name: "On", exact: true }).getAttribute("aria-pressed")) ===
-    "true"
+    (await notifs
+      .getByRole("button", { name: "On", exact: true })
+      .getAttribute("aria-pressed")) === "true"
   const was24Hour =
-    (await prefs.getByRole("button", { name: "24-hour" }).getAttribute("aria-pressed")) ===
-    "true"
+    (await prefs
+      .getByRole("button", { name: "24-hour" })
+      .getAttribute("aria-pressed")) === "true"
 
   const nextTimeFormat = was24Hour ? "12-hour" : "24-hour"
   const nextDigest = wasDigestOn ? "Off" : "On"
@@ -52,7 +54,10 @@ test("saving notifications doesn't revert regional preferences", async ({
     preferencesForm(page).getByRole("button", { name: nextTimeFormat }),
   ).toHaveAttribute("aria-pressed", "true")
   await expect(
-    notificationsForm(page).getByRole("button", { name: nextDigest, exact: true }),
+    notificationsForm(page).getByRole("button", {
+      name: nextDigest,
+      exact: true,
+    }),
   ).toHaveAttribute("aria-pressed", "true")
 
   // Restore both to how we found them.

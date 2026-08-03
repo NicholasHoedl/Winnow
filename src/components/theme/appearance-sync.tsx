@@ -74,7 +74,27 @@ export function AppearanceSync({ saved }: { saved: Appearance }) {
 
   React.useEffect(() => {
     if (theme === undefined) return
-    const current = { theme: theme as Theme, palette }
+    /**
+     * The palette comes from STORAGE here, not from `palette`.
+     *
+     * `theme` announces its own readiness by being `undefined`; the palette store does
+     * not — it returns DEFAULT_PALETTE as its server snapshot, so the first client render
+     * and this effect's first run report indigo whatever the device holds. Believing that
+     * wrote the default into the account on every authenticated page load and corrected
+     * it a tick later: two writes a navigation, and a window in which a second device
+     * reading the account would have seen the wrong palette.
+     *
+     * localStorage is authoritative and is already correct by the time an effect runs, so
+     * it needs no readiness signal. A `useSyncExternalStore` hydration flag also fixes the
+     * double write and was tried first — but this component sits ABOVE `{children}` in the
+     * (app) layout, so the re-render it forces re-triggers the Suspense boundary wrapping
+     * every page, and in dev that left two copies of the page body mounted at once
+     * (caught by e2e/task-links.spec.ts). Reading storage re-renders nothing.
+     */
+    const current = {
+      theme: theme as Theme,
+      palette: stored(PALETTE_STORAGE_KEY) ?? palette,
+    }
     const onRecord = written.current ?? saved
     if (
       current.theme === onRecord.theme &&

@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S11: the linked-tasks block on a goal card.
 //
@@ -12,14 +14,13 @@ const GOAL = `E2E link goal ${STAMP}`
 const LATE = `E2E link late ${STAMP}`
 const OPEN = `E2E link open ${STAMP}`
 
-const card = (page: import("@playwright/test").Page) =>
-  page.locator("div.bg-card").filter({ hasText: GOAL })
+const card = (page: import("@playwright/test").Page) => visibleCard(page, GOAL)
 
 test.afterEach(async ({ page }) => {
   // Tasks first: deleting the goal only detaches them (goal_id ON DELETE SET NULL).
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const tasks = page.locator("div.bg-card").filter({ hasText: `E2E link ` })
+  const tasks = visibleCard(page, `E2E link `)
   for (let i = 0; i < 10; i++) {
     const before = await tasks.count()
     if (before === 0) break
@@ -32,9 +33,7 @@ test.afterEach(async ({ page }) => {
   await expect(tasks).toHaveCount(0)
 
   await page.goto("/goals")
-  const goals = page
-    .locator("div.bg-card")
-    .filter({ hasText: "E2E link goal " })
+  const goals = visibleCard(page, "E2E link goal ")
   for (let i = 0; i < 5; i++) {
     const before = await goals.count()
     if (before === 0) break
@@ -57,7 +56,7 @@ test.afterEach(async ({ page }) => {
  */
 async function complete(page: import("@playwright/test").Page, title: string) {
   await page.goto("/todos")
-  const row = page.locator("div.bg-card").filter({ hasText: title })
+  const row = visibleCard(page, title)
   await row.getByLabel("Mark as done").click()
   await expect(row).toHaveCount(0) // optimistic — proves only that the click took
   await page.reload()
@@ -88,9 +87,7 @@ test("a goal card counts its open linked tasks and flags the late ones", async (
     await dialog.getByLabel("Goal").click()
     await page.getByRole("option", { name: GOAL }).click()
     await dialog.getByRole("button", { name: "Create" }).click()
-    await expect(
-      page.locator("div.bg-card").filter({ hasText: title }),
-    ).toHaveCount(1)
+    await expect(visibleCard(page, title)).toHaveCount(1)
   }
 
   await page.goto("/goals")

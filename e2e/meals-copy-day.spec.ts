@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S10: duplicating a day, and undoing it.
 //
@@ -18,8 +20,7 @@ test("a day can be copied onto another, and the copy undone", async ({
   const stamp = Date.now()
   const first = `e2ecopyA${stamp}`
   const second = `e2ecopyB${stamp}`
-  const rows = (name: string) =>
-    page.locator("div.bg-card").filter({ hasText: name })
+  const rows = (name: string) => visibleCard(page, name)
 
   // --- Two entries on the source day.
   await page.goto(`/meals?date=${SOURCE}`)

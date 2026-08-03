@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S9. Two things, and the second is the one that was actually
 // broken rather than merely missing:
@@ -18,7 +20,7 @@ test("going past a target is shown, and announced truthfully", async ({
   page,
 }) => {
   const name = `e2eover${Date.now()}`
-  const row = page.locator("div.bg-card").filter({ hasText: name })
+  const row = visibleCard(page, name)
   const summary = page.locator("div.rounded-xl.border").first()
 
   await page.goto(`/meals?date=${DAY}`)
@@ -60,7 +62,9 @@ test("going past a target is shown, and announced truthfully", async ({
   await expect(row).toHaveCount(0)
   await page.reload()
   await page.getByRole("button", { name: "Set targets" }).click()
-  const remove = page.getByRole("button", { name: `Delete targets from ${DAY}` })
+  const remove = page.getByRole("button", {
+    name: `Delete targets from ${DAY}`,
+  })
   await remove.click()
   await expect(remove).toHaveCount(0)
 })

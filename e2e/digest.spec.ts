@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T2-S6: the digest banner fires once on the first visit of a
 // new local day, and dismissing it sticks for the rest of that day.
@@ -24,9 +26,7 @@ test("the daily digest appears once a day and stays dismissed", async ({
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
   await dialog.getByRole("button", { name: "Create" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: title }),
-  ).toBeVisible()
+  await expect(visibleCard(page, title)).toBeVisible()
 
   // Pretend this is the first load of a new day.
   await page.evaluate(CLEAR_SEEN)
@@ -49,10 +49,8 @@ test("the daily digest appears once a day and stays dismissed", async ({
   // Cleanup.
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const row = page.locator("div.bg-card").filter({ hasText: title })
+  const row = visibleCard(page, title)
   await row.getByRole("button", { name: "Task actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: title }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, title)).toHaveCount(0)
 })

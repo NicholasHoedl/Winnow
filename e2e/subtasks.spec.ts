@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S8: a task's checklist.
 //
@@ -10,7 +12,7 @@ import { test, expect } from "@playwright/test"
 test.afterEach(async ({ page }) => {
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const strays = page.locator("div.bg-card").filter({ hasText: "E2E subtask " })
+  const strays = visibleCard(page, "E2E subtask ")
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
     if (before === 0) break
@@ -27,7 +29,7 @@ test("a checklist can be started, ticked off, and counted", async ({
   page,
 }) => {
   const title = `E2E subtask ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   await page.goto("/todos")
   const input = page.getByLabel("Quick add task")
@@ -78,7 +80,7 @@ test("a checklist can be started, ticked off, and counted", async ({
 
 test("deleting a task takes its checklist with it", async ({ page }) => {
   const title = `E2E subtask cascade ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   await page.goto("/todos")
   const input = page.getByLabel("Quick add task")

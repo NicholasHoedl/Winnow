@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S7: manual reorder.
 //
@@ -15,7 +17,13 @@ const NAMES = ["alpha", "bravo", "charlie"].map(
 
 /** Titles in the Someday section, top to bottom. */
 async function somedayOrder(page: import("@playwright/test").Page) {
-  const section = page.locator("section").filter({ hasText: "Someday" })
+  // Scoped to `#content`. React's streaming staging div (`<div hidden id="S:n">`) sits at
+  // body level, so an unscoped `section` matches the real one AND the staged copy — and
+  // this reads via innerText(), which throws on a strict-mode violation instead of
+  // retrying. See e2e/_test.ts.
+  const section = page
+    .locator("#content section")
+    .filter({ hasText: "Someday" })
   const text = await section.innerText()
   return NAMES.filter((name) => text.includes(name)).sort(
     (a, b) => text.indexOf(a) - text.indexOf(b),
@@ -28,16 +36,14 @@ test.beforeEach(async ({ page }) => {
     const input = page.getByLabel("Quick add task")
     await input.fill(name)
     await input.press("Enter")
-    await expect(
-      page.locator("div.bg-card").filter({ hasText: name }),
-    ).toHaveCount(1)
+    await expect(visibleCard(page, name)).toHaveCount(1)
   }
 })
 
 test.afterEach(async ({ page }) => {
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const strays = page.locator("div.bg-card").filter({ hasText: `E2E order ` })
+  const strays = visibleCard(page, `E2E order `)
   for (let i = 0; i < 12; i++) {
     const before = await strays.count()
     if (before === 0) break

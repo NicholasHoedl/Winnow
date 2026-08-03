@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S9: numeric progress for a goal that isn't broken into
 // milestones, and the target-date urgency indicator.
@@ -7,9 +9,6 @@ import { test, expect } from "@playwright/test"
 // came back {done:0,total:0,percent:0} — which the /goals page hid but the dashboard rail
 // dutifully rendered as a literal "0/0" beside a 2%-wide bar. The discriminated result
 // makes "nothing to measure" a case the UI has to handle rather than a zero it can print.
-
-const card = (page: import("@playwright/test").Page, title: string) =>
-  page.locator("div.bg-card").filter({ hasText: title })
 
 /** Create a goal through the dialog; every field is optional except the title. */
 async function addGoal(
@@ -33,12 +32,12 @@ async function addGoal(
     await dialog.getByLabel("Target date (optional)").fill(fields.targetDate)
   }
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(card(page, fields.title)).toHaveCount(1)
+  await expect(visibleCard(page, fields.title)).toHaveCount(1)
 }
 
 test.afterEach(async ({ page }) => {
   await page.goto("/goals")
-  const strays = page.locator("div.bg-card").filter({ hasText: "E2E goal " })
+  const strays = visibleCard(page, "E2E goal ")
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
     if (before === 0) break
@@ -57,11 +56,11 @@ test("a goal can be measured numerically instead of by milestones", async ({
   await page.goto("/goals")
   await addGoal(page, { title, current: "12", target: "30", unit: "books" })
 
-  await expect(card(page, title)).toContainText("12 / 30 books")
-  await expect(card(page, title)).not.toContainText("No milestones")
+  await expect(visibleCard(page, title)).toContainText("12 / 30 books")
+  await expect(visibleCard(page, title)).not.toContainText("No milestones")
 
   await page.reload()
-  await expect(card(page, title)).toContainText("12 / 30 books")
+  await expect(visibleCard(page, title)).toContainText("12 / 30 books")
 })
 
 test("a goal with neither milestones nor a target says so, on both surfaces", async ({
@@ -72,7 +71,9 @@ test("a goal with neither milestones nor a target says so, on both surfaces", as
   await addGoal(page, { title })
 
   // Not "0/0", and no progress bar pretending there is something to show.
-  await expect(card(page, title)).toContainText("No milestones or target yet")
+  await expect(visibleCard(page, title)).toContainText(
+    "No milestones or target yet",
+  )
 
   // The dashboard rail is the surface that got this wrong for four tranches. Asserted
   // POSITIVELY — a bare `not.toContainText("0/0")` would also pass if the goal never made
@@ -98,7 +99,7 @@ test("a target date in the past reads as at risk, unless the goal is done", asyn
     target: "10",
     targetDate: past,
   })
-  await expect(card(page, late)).toContainText("Past target")
+  await expect(visibleCard(page, late)).toContainText("Past target")
 
   // Hitting the target retires the warning — a goal at 100% is finished, not late, and
   // nagging about something you completed is worse than saying nothing.
@@ -108,6 +109,6 @@ test("a target date in the past reads as at risk, unless the goal is done", asyn
     target: "10",
     targetDate: past,
   })
-  await expect(card(page, finished)).not.toContainText("Past target")
-  await expect(card(page, finished)).toContainText("Target")
+  await expect(visibleCard(page, finished)).not.toContainText("Past target")
+  await expect(visibleCard(page, finished)).toContainText("Target")
 })

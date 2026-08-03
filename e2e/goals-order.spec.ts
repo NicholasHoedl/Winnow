@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S10: milestone due dates, and reordering goals.
 //
@@ -17,9 +19,6 @@ const NAMES = ["alpha", "bravo", "charlie"].map(
   (n) => `E2E gorder ${n} ${STAMP}`,
 )
 
-const card = (page: import("@playwright/test").Page, title: string) =>
-  page.locator("div.bg-card").filter({ hasText: title })
-
 /** The E2E goals, in the order they appear on the page. */
 async function order(page: import("@playwright/test").Page) {
   const text = await page.locator("main, body").first().innerText()
@@ -30,7 +29,7 @@ async function order(page: import("@playwright/test").Page) {
 
 test.afterEach(async ({ page }) => {
   await page.goto("/goals")
-  const strays = page.locator("div.bg-card").filter({ hasText: "E2E gorder " })
+  const strays = visibleCard(page, "E2E gorder ")
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
     if (before === 0) break
@@ -51,7 +50,7 @@ test("goals can be reordered from the keyboard, and it persists", async ({
     const dialog = page.getByRole("dialog")
     await dialog.getByLabel("Title", { exact: true }).fill(name)
     await dialog.getByRole("button", { name: "Add", exact: true }).click()
-    await expect(card(page, name)).toHaveCount(1)
+    await expect(visibleCard(page, name)).toHaveCount(1)
   }
 
   const before = await order(page)
@@ -91,9 +90,9 @@ test("a milestone can carry a due date, and shows it", async ({ page }) => {
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(card(page, title)).toHaveCount(1)
+  await expect(visibleCard(page, title)).toHaveCount(1)
 
-  const goal = card(page, title)
+  const goal = visibleCard(page, title)
   await goal.getByPlaceholder("Add a milestone").fill("draft the outline")
   await goal.getByLabel("Milestone due date").fill("2020-06-15")
   await goal.getByRole("button", { name: "Add", exact: true }).click()
@@ -103,14 +102,14 @@ test("a milestone can carry a due date, and shows it", async ({ page }) => {
 
   // Persisted, not just rendered from the form.
   await page.reload()
-  await expect(card(page, title)).toContainText("Jun 15, 2020")
+  await expect(visibleCard(page, title)).toContainText("Jun 15, 2020")
 
   // A past date on an outstanding milestone reads as overdue; ticking it off retires
   // that, because a milestone finished late is just finished.
-  const dueLabel = card(page, title).getByText("Jun 15, 2020")
+  const dueLabel = visibleCard(page, title).getByText("Jun 15, 2020")
   await expect(dueLabel).toHaveClass(/text-destructive/)
-  await card(page, title).getByRole("checkbox").first().click()
-  await expect(card(page, title).getByText("Jun 15, 2020")).not.toHaveClass(
-    /text-destructive/,
-  )
+  await visibleCard(page, title).getByRole("checkbox").first().click()
+  await expect(
+    visibleCard(page, title).getByText("Jun 15, 2020"),
+  ).not.toHaveClass(/text-destructive/)
 })

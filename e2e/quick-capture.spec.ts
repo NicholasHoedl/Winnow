@@ -1,4 +1,6 @@
-import { test, expect } from "@playwright/test"
+import { test, expect } from "./_test"
+
+import { visibleCard } from "./_card"
 
 // Browser coverage for T1-S4: the dashboard natural-language quick-capture bar and the
 // three "create a task in place" affordances (n shortcut, palette command, header button).
@@ -23,16 +25,14 @@ test("dashboard quick-capture creates a task, parsing the date out of the text",
   // The saved task's title has the "tomorrow" phrase removed.
   await page.goto("/todos")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const row = page.locator("div.bg-card").filter({ hasText: label })
+  const row = visibleCard(page, label)
   await expect(row).toBeVisible()
   await expect(row.getByText(`${label} tomorrow`)).toHaveCount(0)
 
   // Cleanup.
   await row.getByRole("button", { name: "Task actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(
-    page.locator("div.bg-card").filter({ hasText: label }),
-  ).toHaveCount(0)
+  await expect(visibleCard(page, label)).toHaveCount(0)
 })
 
 test("the n shortcut opens the new-task dialog in place", async ({ page }) => {
