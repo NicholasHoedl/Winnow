@@ -16,7 +16,8 @@ picked up — it is **not** code-level detail yet.
 | T4 — Depth: Meals                             | ✅ shipped  |
 | T5a — Depth: to-dos + goals                   | ✅ shipped  |
 | T5b — Depth: calendar (grid, drag, split)     | ✅ shipped  |
-| T5c — Calendar: reminders + iCal              | next        |
+| T5c-a — Calendar: iCal export + feed          | ✅ shipped  |
+| T5c-b — Calendar: event reminders (Web Push)  | next        |
 | T6a — Robustness: data durability             | ✅ shipped  |
 | T6b — Robustness: offline fallback            | ✅ shipped  |
 | T7 — Net-new modules                          | not started |
@@ -31,6 +32,29 @@ repeat:
   re-running the hub spec, which still passed. `revalidateHubs()` exists for consistency
   and as insurance if `staleTimes` is ever raised, but it is **defensive tidying, not a
   fix**, and the same caveat applies to the pre-existing `revalidatePath("/")` calls.
+
+- **A whole class of e2e flake was locator hygiene, not app behaviour.** React's streaming
+  SSR parks completed Suspense content in a `<div hidden id="S:n">` and leaves that div in
+  the DOM, so a row exists twice — once rendered, once staged. Playwright's strict mode
+  counts matches **before** `toBeVisible()` filters them, so any loose locator
+  intermittently failed with "resolved to 2 elements" on a page showing exactly one. It is
+  timing-dependent, so the failing spec kept moving around the suite instead of staying
+  put, which is what made it look like flakiness rather than a bug. Confirmed by
+  instrumentation (3/3: one `visible: true`, one `visible: false` inside `DIV#S:1`) and it
+  reproduces against a **production** build, so it is not a dev-server artifact.
+
+  Filtering each locator was whack-a-mole — it recurred across `div.bg-card`, `getByText`,
+  `getByTestId`, a class selector and a `section` filter — so the fix is central:
+  **`e2e/_test.ts`** wraps `page.goto` and `page.reload` to wait until no staging div
+  remains, and every spec takes `test` from there instead of `@playwright/test`. React's
+  `$RC` script does remove the div; the window is just short, and it bites hardest on
+  DIRECT calls like `locator.innerText()`, because a strict-mode violation throws at once
+  rather than retrying. Two cases the fixture can't see are handled at the call site:
+  `todos-reorder` reads after a client-side mutation (scoped to `#content`, since the
+  staging div sits at body level) and `meals-water-weight`'s water total keeps a
+  `visible` filter. `e2e/_card.ts`'s `visibleCard()` stays as the standard card locator.
+
+  **Result: 76/76 on three consecutive full runs**, from a rotating 2–4 failures before.
 
 ## How to use this
 
@@ -163,6 +187,25 @@ palette (focus trap, ESC).
 
 ## Tranche 2 — One product: links, Today hub, reminders ✅
 
+> **Later correction (post-T5c-a): the `/today` hub is gone — folded into the dashboard.**
+> T2 shipped it as a separate route on the reasoning below, that a focused agenda was
+> "distinct from the dense dashboard". In daily use it read as two pages doing one job:
+> they ran five of the same queries (`getTasks`, `getDayEvents`, `getCalendars`,
+> `getMacroSummary`, `getBudgetSummary`) and shared a header, the capture bar and the stat
+> cards. The only thing one had that the other didn't was the merged agenda, so the agenda
+> moved to the dashboard and the route was deleted (`/today` now 308s to `/`). The
+> dashboard's `UpNext` panel narrowed to `Tomorrow` at the same time — it had shown today's
+> events too, which the agenda now covers, and keeping both printed them twice on one page.
+>
+> The dashboard's task card narrowed at the same time, to "Coming up": the agenda pins
+> overdue and lists today's tasks inline, so leaving the card listing everything meant a
+> task due today rendered twice on one screen — the same duplication one page down. It now
+> shows only what the agenda doesn't, filtered against the agenda's own output rather than
+> a second definition of "due today", and its overdue/due-today tallies are gone with it.
+>
+> The rest of T2 stands: the cross-module links and the digest engine are untouched, and
+> the digest banner simply points at `/` now. `buildTodayAgenda` moved rather than changed.
+
 **Goal:** make the modules feel like one app and start _prompting_ action instead of just showing it.
 
 **Scope**
@@ -246,7 +289,7 @@ weight/water trends; over-target styling in light+dark.
 
 ---
 
-## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos) — T5a ✅ / T5b ✅ / T5c
+## Tranche 5 — Depth: planning modules (Calendar, Goals, Todos) — T5a ✅ / T5b ✅ / T5c-a ✅ / T5c-b
 
 **Goal:** deepen the three "planning" modules to match their real-world use.
 
@@ -326,19 +369,40 @@ Found and fixed on the way, none of it planned:
   delete, so an event pointed at someone else's calendar is an event _they_ can destroy.
   Same class as the to-do link hole closed in T5a.
 
-**T5c owes** the two deferred features, and both need a decision before any code:
+**T5c split into T5c-a (iCal) and T5c-b (reminders).** The two features share nothing but a
+tranche number, and each is about the size of T5b — the same split T5 and T6 both needed.
 
-- **Event reminders have nowhere to be delivered.** No service worker (T6 owns that), no
-  Web Push, no cron, no SMTP. The only notification surface is a once-a-day in-app banner,
-  and `computeDigest` reads a single day with no forward window — so "30 minutes before"
-  has no data path even in principle.
-- **iCal subscribe needs a security posture the app does not have.** `requireUserId()` is
-  the only auth mechanism in the codebase; a subscribe feed means a public unauthenticated
-  URL and has to invent tokens or signed URLs. Worth its own ADR.
-- The RRULE mapping also has five known gaps, written down in the T5b plan so they are not
-  rediscovered: the implicit BYDAY in `recurrence_weekdays = 0`; `nth_weekday` not storing
-  its ordinal; no `COUNT` column; `recurrence_end_date` being a date where `UNTIL` is a UTC
-  date-time; and events carrying no zone of their own for `DTSTART;TZID=`.
+**T5c-a — shipped.** `.ics` download at `/settings/calendar.ics` and a subscribe feed at
+`/api/calendar/<token>`, plus a Calendar section in Settings. `docs/adr/0008-*.md` records
+the decisions.
+
+- **The "public unauthenticated URL" framing above was wrong, and it made this look bigger
+  than it was.** Nothing becomes public: the subscriber is the user's own iPhone, on the
+  tailnet, so SPEC §6's no-public-access constraint is untouched. What was real is the
+  smaller half — iOS Calendar sends no cookie, so the URL is the credential. That is the
+  app's first non-session auth and its first `crypto` use, hence the ADR.
+- **`/api` was already outside the proxy matcher**, so no auth regex had to be widened for
+  the feed. The matcher's own comment warns why that mattered.
+- **All five RRULE gaps are closed for export**, and two of them dissolved rather than being
+  solved: emitting **floating local time** (no `Z`, no `TZID`) means no per-event zone is
+  needed and `UNTIL` inherits the inclusive date directly. Floating is also the faithful
+  serialization — the app renders wall-clock in the saved zone and never converts, so a
+  subscribed device shows exactly what the app shows.
+- **Import is deliberately not offered.** Writing an RRULE is a mapping problem; reading an
+  arbitrary one into five columns is a representability problem. The ADR says when that is
+  worth reopening.
+
+**T5c-b owes** event reminders. One blocker of the original two is now stale — T6b shipped a
+service worker — but the rest still stands, verified: no Web Push code anywhere, no cron
+inside the app, no SMTP, and `computeDigest` still reads a single day with no forward
+window, so "30 minutes before" has no data path yet. Decided: delivery is **Web Push**.
+What it needs is a `web-push` dependency and VAPID keys, a subscriptions table, `push` /
+`notificationclick` listeners added to a service worker ADR-0007 deliberately kept short, a
+per-event lead time, and a scheduler. The scheduler is less than it sounds: a host cron
+already runs daily for backups (`docs/runbooks/backup-restore.md`) and the app binds
+`127.0.0.1:3000`, so a cron-hit internal endpoint is a second crontab line rather than new
+infrastructure. The sharp part is the send-once ledger — recurring occurrences are not rows,
+so it has to be keyed by `(event_id, original_date)` like every other per-occurrence record.
 
 ---
 
@@ -383,6 +447,18 @@ recoverable only by re-running `scripts/seed-user.ts`. The operations that matte
 exist: `clearAllData` for a fresh start, `docker compose down -v` to destroy the volume.
 
 **T6a — shipped**, migration `0020`:
+
+> **Defect found later and fixed:** the appearance mirror wrote on every authenticated
+> page load. `AppearanceSync` compared against the palette store's value before hydration,
+> which is `DEFAULT_PALETTE` regardless of what the device holds — so each navigation wrote
+> indigo into the account and corrected it a tick later. Two writes per page, plus a window
+> where a second device would read the wrong palette. It reads localStorage directly in
+> the effect now — a hydration flag also fixes the write, but this component sits above
+> `{children}` in the (app) layout, so the re-render it forces re-triggered the Suspense
+> boundary around every page and left two copies of the page body mounted in dev
+> (`e2e/task-links.spec.ts` caught that). It surfaced as
+> `e2e/import.spec.ts` reporting that a **rejected** import had changed the data — the one
+> assertion in the suite that must never cry wolf, and it was right to.
 
 - **In-app import**, replace-mode: validate the whole file, then clear and insert in ONE
   transaction. A rejected file costs nothing because nothing is deleted until it passes.

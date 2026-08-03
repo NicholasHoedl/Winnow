@@ -217,6 +217,17 @@ a classic, easy-to-introduce bug.
 > so the server cannot supply them in time. The columns exist so a new device
 > adopts them and so they appear in the export, where they were missing.
 >
+> The mirror (`components/theme/appearance-sync.tsx`) must not act before hydration,
+> and this is easy to get wrong: `theme` announces its own readiness by being
+> `undefined`, but the palette store returns `DEFAULT_PALETTE` as its server snapshot,
+> so the first client render reports indigo whatever the device holds. Believing it
+> wrote the default into the account on **every** authenticated page load and corrected
+> it a tick later — two writes a navigation, and a window where a second device would
+> read the wrong palette. It reads the palette straight from localStorage in the
+> effect now, which is already correct there. A hydration flag fixes the write too,
+> but this component sits above `{children}` in the (app) layout, so the re-render it
+> forces re-triggers the Suspense boundary around every page.
+>
 > `drizzle/` and each module's `schema.ts` are always the source of truth; the
 > ADRs in `docs/adr/` record why the shape changed. What is worth reading here
 > either way is the _reasoning_.
@@ -312,7 +323,7 @@ any day within it"), `start_date`, and a nullable inclusive `end_date`.
 instances and inserts the current one, idempotently via the unique key above.
 Completed instances are never retired — they are history — and their cycle is never
 re-created. The generator runs lazily inside the task reads, so there is no cron; the
-cost is that it executes on every render of `/todos`, `/today`, the dashboard and the
+cost is that it executes on every render of `/todos`, the dashboard and the
 digest, which is why anything it needs is batch-loaded once per user rather than
 per rule.
 
@@ -420,6 +431,19 @@ which are overdue, and a way through.
 | recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                 |
 | recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null              |
 | created_at / updated_at | timestamptz                                |                                            |
+
+**These five columns map onto an RRULE on the way out, and only on the way out**
+(`modules/calendar/ical.ts`, T5c-a). Four things the schema leaves implicit have
+to be re-derived to say it in iCalendar's terms: BYDAY when the mask is `0`, the
+nth-weekday ordinal (`recurrence_monthly_mode` records only that the rule *is*
+nth-weekday), a `COUNT` that does not exist here and is expressed as `UNTIL`, and
+`recurrence_end_date` being an inclusive DATE where `UNTIL` is a date-time. The
+ordinal derivation is shared with the expander via `nthWeekdayOf` precisely so the
+published feed cannot claim a different Friday than the app draws.
+
+Reading an arbitrary RRULE *back* is not the mirror of this — `COUNT`, `BYSETPOS`
+and multi-`BYDAY`-with-ordinals have nowhere to live in five columns — which is
+why import is not offered. See ADR-0008.
 
 Recurring **calendar** occurrences are **computed on the fly** for whatever
 date range is being viewed, not pre-materialized as individual rows. This avoids
@@ -611,7 +635,7 @@ Duplicates are deduped in the action instead.
 | created_at                                | timestamptz                                     |                                                        |
 
 Indexes: `(user_id, date)` — the module's hot path, hit by `/meals`, `/` and
-`/today` — and `(user_id, created_at)` for the newest-first scan behind quick
+the dashboard — and `(user_id, created_at)` for the newest-first scan behind quick
 picks.
 
 **Every nutrition figure is snapshotted at log time**, which is why the columns
@@ -799,6 +823,14 @@ On a private tailnet with no public domain, this is solved as follows:
 **Single-account login via Auth.js v5 (NextAuth), Credentials provider,
 stateless JWT sessions.**
 
+> **A second credential exists as of T5c-a.** The session is no longer the only
+> way in: `/api/calendar/<token>` serves the iCalendar subscribe feed to a bearer
+> token, because a calendar app polling a feed has nowhere to put a cookie. It is
+> the only route in the app that answers without a session, it is read-only, it
+> is scoped to one user's events, and every miss is a 404 so probing learns
+> nothing. Regenerating the token is the only revocation there is. See
+> `docs/adr/0008-token-authenticated-calendar-feed.md`.
+
 > Implemented in Checkpoint 0.2. This updates the original plan: Auth.js's
 > Credentials provider only supports **JWT** sessions, not database sessions,
 > so the "delete the session row to log out everywhere" idea below was dropped.
@@ -947,13 +979,16 @@ winnow/
 │   │   │   └── login/
 │   │   ├── (app)/                    # authenticated shell route group
 │   │   │   ├── layout.tsx            # nav shell shared by every module
-│   │   │   ├── page.tsx              # dashboard — default route
+│   │   │   ├── page.tsx              # dashboard — default route, and the ONLY hub
+│   │   │   ├── _lib/agenda.ts        # pure: today's tasks + events, merged
+│   │   │   ├── _components/          # dashboard-only UI (agenda, tomorrow, cards)
 │   │   │   ├── todos/
 │   │   │   ├── calendar/
 │   │   │   ├── budget/
 │   │   │   └── meals/
 │   │   ├── api/
-│   │   │   └── auth/[...nextauth]/
+│   │   │   ├── auth/[...nextauth]/
+│   │   │   └── calendar/[token]/     # the .ics feed — the ONLY unauthenticated route
 │   │   └── layout.tsx                # root layout: PWA meta tags, fonts
 │   │
 │   ├── modules/                      # one folder per domain module
@@ -970,7 +1005,10 @@ winnow/
 │   │   │   ├── restore.ts            # row → insert-payload map for the undo path
 │   │   │   └── validation.ts         # Zod schemas, shared client/server
 │   │   ├── goals/                    # same shape, + restore.ts
-│   │   ├── calendar/                 # same shape (+ recurrence expansion in service.ts)
+│   │   ├── calendar/                 # same shape, plus:
+│   │   │   ├── service.ts            # recurrence expansion, wall-clock occurrences
+│   │   │   ├── ical.ts               # pure RFC 5545 writer (see ADR-0008)
+│   │   │   └── feed-token.ts         # the subscribe feed's bearer token
 │   │   ├── budget/                   # same shape (+ rollup calc in service.ts)
 │   │   ├── meals/                    # same shape, plus the files below
 │   │   │   ├── restore.ts            # row → insert-payload maps for every undo path
