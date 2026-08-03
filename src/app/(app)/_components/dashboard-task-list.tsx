@@ -88,7 +88,7 @@ export function DashboardTaskList({
             <p className="text-sm">Nothing else on the list.</p>
           </div>
         ) : (
-          <ol className="flex flex-col gap-0.5">
+          <ol className="flex max-h-[26svh] flex-col gap-0.5 overflow-y-auto">
             {shown.map((task) => {
               const done = task.status === "done"
               const status = dueStatus(task.dueDate, now, timeZone)

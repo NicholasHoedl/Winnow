@@ -18,7 +18,10 @@ import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 
 import { CategoryBars } from "./_components/category-bars"
-import { DashboardCalendar } from "./_components/dashboard-calendar"
+import {
+  DashboardCalendar,
+  type DashboardCalendarView,
+} from "./_components/dashboard-calendar"
 import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
@@ -27,7 +30,16 @@ import { Tomorrow } from "./_components/tomorrow"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
 import { buildTodayAgenda } from "./_lib/agenda"
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ calendar?: string }>
+}) {
+  // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
+  // than in client state so the server renders the right one — no flash of the wrong view,
+  // and no localStorage read during render. Anything unrecognised falls back to the month.
+  const calendarView: DashboardCalendarView =
+    (await searchParams).calendar === "week" ? "week" : "month"
   const { timeZone, weekStartsOn, currency, use24HourTime } =
     await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
@@ -83,22 +95,25 @@ export default async function DashboardPage() {
   const upcomingTasks = openTasks.filter((task) => !inAgenda.has(task.id))
 
   return (
-    <div className="relative mx-auto w-full max-w-7xl p-6 lg:p-8">
+    // Wide, not centred-in-a-gutter. `max-w-7xl` (1280px) left ~270px dead on each side
+    // of a 1920 screen once the sidebar is accounted for; this fills a desktop and only
+    // starts centring on displays wider than most people have.
+    <div className="relative mx-auto w-full max-w-[120rem] p-4 lg:p-5 [@media(max-height:820px)]:py-3">
       <div
         aria-hidden
         className="from-primary/[0.06] pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b to-transparent"
       />
 
       <Reveal>
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
               {formatLongDate(today)}
             </p>
-            <h1 className="font-display mt-1 text-4xl font-semibold tracking-tight">
+            <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight xl:text-4xl">
               Good to see you, {name}
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-sm [@media(max-height:820px)]:hidden">
               Here&apos;s your day at a glance.
             </p>
           </div>
@@ -116,57 +131,62 @@ export default async function DashboardPage() {
       </Reveal>
 
       <Reveal delay={0.03}>
-        <div className="mb-6">
+        <div className="mb-4">
           <QuickCapture />
         </div>
       </Reveal>
 
-      {/* Full width, above the grid: what actually needs you today leads the page,
-          and everything below it is context. */}
-      <Reveal delay={0.05}>
-        <div className="mb-6">
-          <TodayAgenda
-            overdue={overdue}
-            items={items}
-            calendars={calendars}
-            use24Hour={use24HourTime}
-          />
-        </div>
-      </Reveal>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
-        {/* Task backlog — what the agenda above doesn't already show */}
-        <div className="flex min-w-0 flex-col gap-6">
+      {/*
+        Three columns of roughly equal height rather than one tall centre column.
+        The agenda used to run full width above this grid, which read well but spent a
+        1600px row on four short lines and pushed everything else below the fold. It is
+        the first column instead — still the first thing read, at a width its content
+        actually wants — and the month grid no longer sets the height of the page on its
+        own. Each column's own components cap and scroll internally (see TodayAgenda and
+        DashboardTaskList), so no amount of data turns this back into a scrolling page.
+      */}
+      <div className="grid grid-cols-1 gap-5 lg:min-h-[calc(100svh-12.5rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
+        {/* Today: what needs you, then the backlog it doesn't cover */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Reveal delay={0.05}>
+            <TodayAgenda
+              overdue={overdue}
+              items={items}
+              calendars={calendars}
+              use24Hour={use24HourTime}
+            />
+          </Reveal>
           <Reveal delay={0.08}>
             <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
           </Reveal>
         </div>
 
-        {/* Center column — calendar + stats */}
-        <div className="flex min-w-0 flex-col gap-6">
-          <Reveal delay={0.1}>
+        {/* The month */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Reveal delay={0.1} className="flex min-h-0 flex-1 flex-col">
             <DashboardCalendar
               month={month}
               today={today}
               grid={monthData.grid}
               byDay={monthData.byDay}
               calendars={calendars}
+              view={calendarView}
             />
-          </Reveal>
-          <Reveal delay={0.15}>
-            <StatCards macros={macros} budget={budget} currency={currency} />
           </Reveal>
         </div>
 
-        {/* Rail */}
-        <div className="flex min-w-0 flex-col gap-6">
-          <Reveal delay={0.15}>
+        {/* What's next, today's numbers, and the two trackers */}
+        <div className="flex min-w-0 flex-col gap-5">
+          <Reveal delay={0.12}>
             <Tomorrow
               date={nextDate}
               events={nextDayEvents}
               calendars={calendars}
               use24Hour={use24HourTime}
             />
+          </Reveal>
+          <Reveal delay={0.15}>
+            <StatCards macros={macros} budget={budget} currency={currency} />
           </Reveal>
           <Reveal delay={0.2}>
             <CategoryBars

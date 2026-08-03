@@ -160,7 +160,9 @@ export function TodayAgenda({
               {overdue.length}
             </span>
           </div>
-          <ol className="flex flex-col gap-0.5">
+          {/* Capped so a long-overdue backlog scrolls here rather than pushing the
+              rest of the dashboard below the fold. */}
+          <ol className="flex max-h-[22svh] flex-col gap-0.5 overflow-y-auto">
             {overdue.map((task) => (
               <li key={task.id}>
                 <TaskRow
@@ -192,7 +194,7 @@ export function TodayAgenda({
             Nothing scheduled or due today.
           </p>
         ) : (
-          <ol className="flex flex-col gap-0.5">
+          <ol className="flex max-h-[34svh] flex-col gap-0.5 overflow-y-auto">
             {items.map((item, i) => (
               <li key={item.kind === "task" ? item.task.id : `event-${i}`}>
                 {item.kind === "task" ? (
