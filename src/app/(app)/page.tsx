@@ -13,7 +13,6 @@ import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
-import { summarizeTasks } from "@/modules/todos/service"
 import { formatLongDate } from "@/lib/format"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
@@ -23,8 +22,10 @@ import { DashboardCalendar } from "./_components/dashboard-calendar"
 import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
 import { StatCards } from "./_components/stat-cards"
-import { UpNext } from "./_components/up-next"
+import { TodayAgenda } from "./_components/today-agenda"
+import { Tomorrow } from "./_components/tomorrow"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
+import { buildTodayAgenda } from "./_lib/agenda"
 
 export default async function DashboardPage() {
   const { timeZone, weekStartsOn, currency, use24HourTime } =
@@ -59,7 +60,27 @@ export default async function DashboardPage() {
 
   const name = session?.user?.name ?? "there"
   const openTasks = tasks.filter((task) => task.status === "open")
-  const taskSummary = summarizeTasks(tasks, new Date(), timeZone)
+
+  // Overdue tasks, and today's events and due tasks merged into one time-ordered list.
+  // This was a separate `/today` route until it was folded in here — the two pages ran
+  // five of the same queries and differed only by this.
+  const { overdue, items } = buildTodayAgenda(
+    tasks,
+    dayEvents,
+    new Date(),
+    timeZone,
+  )
+
+  // What the card beside the agenda shows: the open tasks the agenda does NOT.
+  //
+  // Derived from the agenda's own output rather than re-deriving "overdue" and "due
+  // today" here — two independent definitions of the same boundary is how a task ends up
+  // listed twice, or in neither place, the day one of them changes.
+  const inAgenda = new Set<string>([
+    ...overdue.map((task) => task.id),
+    ...items.flatMap((item) => (item.kind === "task" ? [item.task.id] : [])),
+  ])
+  const upcomingTasks = openTasks.filter((task) => !inAgenda.has(task.id))
 
   return (
     <div className="relative mx-auto w-full max-w-7xl p-6 lg:p-8">
@@ -100,11 +121,24 @@ export default async function DashboardPage() {
         </div>
       </Reveal>
 
+      {/* Full width, above the grid: what actually needs you today leads the page,
+          and everything below it is context. */}
+      <Reveal delay={0.05}>
+        <div className="mb-6">
+          <TodayAgenda
+            overdue={overdue}
+            items={items}
+            calendars={calendars}
+            use24Hour={use24HourTime}
+          />
+        </div>
+      </Reveal>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,2.5fr)_minmax(0,1fr)]">
-        {/* Tasks column */}
+        {/* Task backlog — what the agenda above doesn't already show */}
         <div className="flex min-w-0 flex-col gap-6">
-          <Reveal delay={0.05}>
-            <DashboardTaskList tasks={openTasks} timeZone={timeZone} />
+          <Reveal delay={0.08}>
+            <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
           </Reveal>
         </div>
 
@@ -127,13 +161,10 @@ export default async function DashboardPage() {
         {/* Rail */}
         <div className="flex min-w-0 flex-col gap-6">
           <Reveal delay={0.15}>
-            <UpNext
-              today={today}
-              nextDate={nextDate}
-              todayEvents={dayEvents}
-              nextDayEvents={nextDayEvents}
+            <Tomorrow
+              date={nextDate}
+              events={nextDayEvents}
               calendars={calendars}
-              tasks={taskSummary}
               use24Hour={use24HourTime}
             />
           </Reveal>

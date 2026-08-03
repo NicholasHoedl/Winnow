@@ -1,9 +1,11 @@
 import { test, expect } from "@playwright/test"
 
+import { visibleCard } from "./_card"
+
 // Browser coverage for T5a-S5: skipping ONE cycle of a repeating task.
 //
 // The assertion that carries this spec is the RELOAD. `ensureRecurringTasks` re-materializes
-// an instance on every render of /todos, /today, the dashboard and the digest, so a skip
+// an instance on every render of /todos, the dashboard and the digest, so a skip
 // that only removes the row looks correct right up until the next page load. Asserting the
 // row is gone without reloading would pass against a plain delete — the very bug this
 // feature exists to fix.
@@ -37,7 +39,7 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   page,
 }) => {
   const title = `E2E skip ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   // --- A daily repeating task. The generator materializes today's instance.
   await page.goto("/todos")
@@ -68,7 +70,7 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   await expect(row()).toHaveCount(0)
 
   // …and it stays gone on the other surface that runs the same generator.
-  await page.goto("/today")
+  await page.goto("/")
   await expect(page.getByText(title)).toHaveCount(0)
 
   // --- Cleanup through the Repeating tasks manager, which is the ONLY way to reach a rule
@@ -99,7 +101,7 @@ test("a one-off task is not offered a skip", async ({ page }) => {
   // Skipping only makes sense for a generated instance — for anything else the menu
   // would be offering a no-op, and the action would reject it server-side anyway.
   const title = `E2E noskip ${Date.now()}`
-  const row = () => page.locator("div.bg-card").filter({ hasText: title })
+  const row = () => visibleCard(page, title)
 
   await page.goto("/todos")
   const input = page.getByLabel("Quick add task")

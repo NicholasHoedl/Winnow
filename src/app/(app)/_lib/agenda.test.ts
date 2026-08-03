@@ -77,7 +77,10 @@ describe("buildTodayAgenda", () => {
   })
 
   it("returns empty groups for empty input", () => {
-    expect(buildTodayAgenda([], [], now, TZ)).toEqual({ overdue: [], items: [] })
+    expect(buildTodayAgenda([], [], now, TZ)).toEqual({
+      overdue: [],
+      items: [],
+    })
   })
 
   it("classifies against the configured zone, not UTC", () => {

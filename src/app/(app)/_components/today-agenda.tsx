@@ -1,8 +1,12 @@
 "use client"
 
-// The Today hub's body: overdue tasks pinned above one merged, time-ordered agenda of
+// The dashboard's agenda: overdue tasks pinned above one merged, time-ordered list of
 // today's events and due tasks. Tasks stay checkable here (optimistic, like the
-// dashboard list); tapping anything else jumps to the module that owns it.
+// dashboard task list); tapping anything else jumps to the module that owns it.
+//
+// This was the whole body of a separate `/today` route until that page was folded into
+// the dashboard. The two ran five of the same queries and shared a header, a capture bar
+// and the stat cards — the agenda was the only thing one had that the other didn't.
 
 import * as React from "react"
 import Link from "next/link"
@@ -23,7 +27,9 @@ import type { AgendaItem } from "../_lib/agenda"
  * every title starts at the same x. */
 function Gutter({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex w-14 shrink-0 items-center justify-end">{children}</span>
+    <span className="flex w-14 shrink-0 items-center justify-end">
+      {children}
+    </span>
   )
 }
 
@@ -93,7 +99,7 @@ function EventRow({
   )
 }
 
-export function TodayView({
+export function TodayAgenda({
   overdue,
   items,
   calendars,

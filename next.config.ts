@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  async redirects() {
+    return [
+      // `/today` was its own route until its agenda was folded into the dashboard. The
+      // app is installed to a home screen and the digest banner linked here, so a bare
+      // 404 would be a dead icon on a device this repo can't reach to fix.
+      { source: "/today", destination: "/", permanent: true },
+    ]
+  },
   experimental: {
     serverActions: {
       // Restoring a backup posts the whole export as a Server Action argument, and the

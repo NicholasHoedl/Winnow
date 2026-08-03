@@ -130,11 +130,15 @@ export function DigestBanner({
               </p>
             )}
 
+            {/* Pointed at /today until that page's agenda was folded into the
+                dashboard. The banner renders on every authenticated route, so the link
+                still earns its place from /todos or /meals — it is only redundant on the
+                dashboard itself, where the agenda it promises is already on screen. */}
             <Link
-              href="/today"
+              href="/"
               className="text-foreground mt-2 inline-flex items-center gap-1 text-sm font-medium hover:underline"
             >
-              Open Today
+              Open dashboard
               <ArrowRight className="size-4" />
             </Link>
           </div>

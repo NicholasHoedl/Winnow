@@ -169,7 +169,7 @@ export const subtasks = pgTable(
  *
  * The WIRING differs from the calendar, and that's the whole design. Calendar occurrences
  * are expanded on read, so an overlay can simply drop one. Tasks are materialized by
- * `syncRuleInstances`, which runs on every render of /todos, /today, the dashboard and the
+ * `syncRuleInstances`, which runs on every render of /todos, the dashboard and the
  * digest — so deleting the instance is not a skip, it reappears on the next page load. The
  * exception has to suppress the INSERT instead. See todos/queries.ts.
  *

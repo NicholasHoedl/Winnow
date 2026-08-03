@@ -37,7 +37,7 @@ const cycleKey = (ruleId: string, occurrenceDate: string) =>
  * Every skipped cycle for a user, in ONE query.
  *
  * Batched deliberately. `ensureRecurringTasks` already loops rules sequentially, and it
- * runs on every render of /todos, /today, the dashboard and the digest — a per-rule lookup
+ * runs on every render of /todos, the dashboard and the digest — a per-rule lookup
  * would double the query count on the app's hottest path. Pass `ruleId` only for the
  * single-rule callers (createTaskRecurrence / updateTaskRecurrence), which sync one rule
  * and shouldn't scan the rest.
@@ -74,7 +74,7 @@ export async function syncRuleInstances(
   const cycle = currentCycle(rule, today, weekStartsOn)
 
   // "Skip this one". Deleting the instance is NOT a skip — this generator runs on every
-  // render of /todos, /today, the dashboard and the digest, so the row would be back
+  // render of /todos, the dashboard and the digest, so the row would be back
   // before the page finished loading. The exception has to suppress the INSERT.
   const isSkipped = cycle
     ? (skipped ?? (await loadSkipped(userId, rule.id))).has(

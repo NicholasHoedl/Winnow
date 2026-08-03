@@ -130,7 +130,7 @@ export async function getMacroSummary(date: string) {
       },
     }),
     // Same resolution as getMacroTargets. This function already took a date, so
-    // every caller — the dashboard, /today, the digest — got history for free.
+    // every caller — the dashboard, the digest — got history for free.
     db.query.macroTargets.findFirst({
       where: and(
         eq(macroTargets.userId, userId),

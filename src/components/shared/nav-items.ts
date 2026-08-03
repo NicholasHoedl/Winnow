@@ -2,7 +2,6 @@ import {
   CalendarDays,
   LayoutDashboard,
   ListTodo,
-  Sun,
   Target,
   Utensils,
   Wallet,
@@ -19,7 +18,6 @@ export type NavItem = {
 // sync (the "truly equal" responsive decision — one nav, two presentations).
 export const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/today", label: "Today", icon: Sun },
   { href: "/todos", label: "To-dos", icon: ListTodo },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/goals", label: "Goals", icon: Target },

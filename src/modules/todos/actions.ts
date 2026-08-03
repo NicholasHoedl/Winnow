@@ -368,7 +368,7 @@ export async function deleteList(id: unknown): Promise<ActionResult> {
  * Skip the current cycle of a recurring task.
  *
  * Not a delete: the generator re-materializes an instance on every render of /todos,
- * /today, the dashboard and the digest, so removing the row alone would put it straight
+ * the dashboard and the digest, so removing the row alone would put it straight
  * back. The exception row is what suppresses the next insert; `syncRuleInstances` then
  * removes the open instance on the same pass.
  *

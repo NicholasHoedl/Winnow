@@ -1,4 +1,4 @@
-// Pure agenda assembly for the Today hub: today's due tasks and today's event
+// Pure agenda assembly for the dashboard: today's due tasks and today's event
 // occurrences merged into one chronological list. Dependency-free (no DB, no
 // `server-only`) so it unit-tests directly, and timezone-sensitive input is explicit
 // (`now` + IANA zone) for determinism — same conventions as todos/service.ts.
@@ -25,7 +25,7 @@ export type TodayAgenda<T, E> = {
 }
 
 /**
- * Build the Today hub's agenda.
+ * Build the dashboard's agenda.
  *
  * `occurrences` are expected to be a single day's — hand it `getDayEvents(today, tz)`,
  * which has already expanded recurrence and applied per-occurrence exceptions.

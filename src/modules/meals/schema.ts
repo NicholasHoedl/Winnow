@@ -110,7 +110,7 @@ export const mealEntries = pgTable(
       .defaultNow(),
   },
   (t) => [
-    // The module's hot path: one day's entries, on /meals, / and /today.
+    // The module's hot path: one day's entries, on /meals and /.
     index("meal_entries_user_date").on(t.userId, t.date),
     // getRecentEntries scans newest-first across every date to build the quick picks.
     index("meal_entries_user_created").on(t.userId, t.createdAt),
