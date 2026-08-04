@@ -1,10 +1,12 @@
 # Handoff
 
-Last updated: **2026-08-04**, at commit `6457310` on branch
-`feat/t7-notes-routines-habits`, which now carries five commits: T7a–T7c, T7d, the
-dashboard week grid, the recolour, and the quick-add capture fix. `main` is still at
-`edd4838` — every earlier tranche went straight to `main`, so this branch is a deviation
-and is waiting on a fast-forward. `origin` is one commit behind the local branch.
+Last updated: **2026-08-04**, on branch `feat/t7-notes-routines-habits`.
+
+`main` is still at `edd4838` and every earlier tranche went straight to it, so this branch
+is a deviation waiting on a fast-forward — and it is where all recent work lives, so read
+it rather than `main`. Run `git log --oneline main..HEAD` for what it carries and
+`git log --oneline origin/HEAD..HEAD` for what is unpushed; both were enumerated here
+once and went stale within a day, which is the argument for asking git instead.
 
 Read `SPEC.md` for what Winnow is and `ARCHITECTURE.md` for how it is built. This file
 covers only what those two can't tell you: where the project actually stands, the working
