@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import {
   CURRENCIES,
+  MOMENTUM_OPTIONS,
   PRIORITY_OPTIONS,
   WEEK_START_OPTIONS,
   timeZoneOptions,
@@ -81,7 +82,9 @@ export function PreferencesSection({
                 >
                   <SelectTrigger id="tz-trigger" className="w-full">
                     <SelectValue>
-                      {(val) => (val as string)?.replace(/_/g, " ") || "Select…"}
+                      {(val) =>
+                        (val as string)?.replace(/_/g, " ") || "Select…"
+                      }
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -169,6 +172,25 @@ export function PreferencesSection({
                 />
               )}
             />
+          </Field>
+
+          <Field>
+            <FieldLabel>Goal momentum window</FieldLabel>
+            <Controller
+              control={control}
+              name="goalMomentumDays"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={MOMENTUM_OPTIONS}
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              How far back a goal looks for finished work. A goal with nothing
+              completed in this window reads as stalled.
+            </p>
           </Field>
 
           <div>

@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Pause } from "lucide-react"
 
 import type { GoalWithProgress } from "@/modules/goals/queries"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,8 +34,23 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
             return (
               <div key={goal.id}>
                 <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="min-w-0 truncate font-medium">
-                    {goal.title}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 truncate font-medium">
+                      {goal.title}
+                    </span>
+                    {/* Stalled is the one thing worth saying about a goal on a surface
+                        you see every day — the count and the window belong on /goals,
+                        where there is room to explain them. The dashboard already runs
+                        tight below 1400px, so this is an icon, not a row. */}
+                    {goal.momentum?.stalled && (
+                      <>
+                        <Pause
+                          className="text-brand-accent size-3 shrink-0"
+                          aria-hidden
+                        />
+                        <span className="sr-only">Stalled</span>
+                      </>
+                    )}
                   </span>
                   <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                     {progress.kind === "milestones"

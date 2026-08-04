@@ -5,6 +5,8 @@ import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 import {
   DEFAULT_PREFERENCES,
+  MOMENTUM_DAYS,
+  type MomentumDays,
   THEMES,
   type Theme,
   type UserPreferences,
@@ -40,6 +42,14 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     use24HourTime: row.use24HourTime,
     defaultTaskPriority: row.defaultTaskPriority,
     digestEnabled: row.digestEnabled,
+    // Narrowed the same way weekStartsOn is: the column is a plain integer, so an import
+    // or a hand-edited row can hold anything, and the reading it drives has to be one of
+    // the three the UI can express.
+    goalMomentumDays: MOMENTUM_DAYS.includes(
+      row.goalMomentumDays as MomentumDays,
+    )
+      ? (row.goalMomentumDays as MomentumDays)
+      : DEFAULT_PREFERENCES.goalMomentumDays,
     // The account's saved appearance. Not what this device is currently rendering —
     // that comes from localStorage before any of this runs. See lib/preferences.ts.
     theme: THEMES.includes(row.theme as Theme)

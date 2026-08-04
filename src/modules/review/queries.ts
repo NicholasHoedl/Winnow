@@ -3,7 +3,10 @@ import "server-only"
 import { addDays, todayInZone, weekRange } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 import { getBudgetSummary, getRangeSummary } from "@/modules/budget/queries"
-import { getMilestonesCompletedInRange } from "@/modules/goals/queries"
+import {
+  getGoalOptions,
+  getMilestonesCompletedInRange,
+} from "@/modules/goals/queries"
 import {
   getMacroTargetHistory,
   getMealEntriesRange,
@@ -57,18 +60,45 @@ export async function getWeeklyReview(
   // finishes in, which is the one whose budget it is still spending against.
   const month = end.slice(0, 7)
 
-  const [tasksCompleted, milestones, entries, targets, weekMoney, monthMoney] =
-    await Promise.all([
-      getCompletedInRange(start, end, timeZone),
-      getMilestonesCompletedInRange(start, end, timeZone),
-      getMealEntriesRange(start, end),
-      // Every target period, resolved per day below — NOT one lookup for the week. A
-      // week that straddles a target change would otherwise be scored entirely against
-      // whichever end happened to be asked for.
-      getMacroTargetHistory(),
-      getRangeSummary(start, addDays(end, 1)),
-      getBudgetSummary(month),
-    ])
+  const [
+    tasksCompleted,
+    milestones,
+    goalTitles,
+    entries,
+    targets,
+    weekMoney,
+    monthMoney,
+  ] = await Promise.all([
+    getCompletedInRange(start, end, timeZone),
+    getMilestonesCompletedInRange(start, end, timeZone),
+    // id + title only, and already used by the task dialog's picker. Cheaper than a
+    // join, and the completed tasks already carry the goalId to match against.
+    getGoalOptions(),
+    getMealEntriesRange(start, end),
+    // Every target period, resolved per day below — NOT one lookup for the week. A
+    // week that straddles a target change would otherwise be scored entirely against
+    // whichever end happened to be asked for.
+    getMacroTargetHistory(),
+    getRangeSummary(start, addDays(end, 1)),
+    getBudgetSummary(month),
+  ])
+
+  // Goal-linked work, pulled out of the week's completions rather than re-queried. A task
+  // whose goal was deleted has a null goalId (the FK is ON DELETE SET NULL), so it simply
+  // falls out here — no orphan rows attributed to a goal that no longer exists.
+  const titles = new Map(goalTitles.map((goal) => [goal.id, goal.title]))
+  const goalTasks = tasksCompleted.flatMap((task) => {
+    const goalTitle = task.goalId ? titles.get(task.goalId) : undefined
+    if (!goalTitle) return []
+    return [
+      {
+        id: task.id,
+        title: task.title,
+        goalTitle,
+        completedOn: task.completedOn,
+      },
+    ]
+  })
 
   const entriesByDate = new Map<string, typeof entries>()
   for (const entry of entries) {
@@ -95,6 +125,7 @@ export async function getWeeklyReview(
       weekEnd: end,
       tasksCompleted,
       milestones,
+      goalTasks,
       macroDays,
       money: {
         incomeCents: weekMoney.incomeCents,

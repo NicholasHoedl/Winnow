@@ -330,7 +330,13 @@ export async function getTaskSummary(timeZone: string) {
   return summarizeTasks(rows, new Date(), timeZone)
 }
 
-export type CompletedTask = { id: string; title: string; completedOn: string }
+export type CompletedTask = {
+  id: string
+  title: string
+  completedOn: string
+  /** Null for most tasks. Lets the weekly review attribute work to a goal (T8). */
+  goalId: string | null
+}
 
 /**
  * Tasks completed on a local date within [start, end], inclusive.
@@ -356,13 +362,13 @@ export async function getCompletedInRange(
       gte(tasks.completedAt, new Date(`${addDays(start, -1)}T00:00:00Z`)),
       lt(tasks.completedAt, new Date(`${addDays(end, 2)}T00:00:00Z`)),
     ),
-    columns: { id: true, title: true, completedAt: true },
+    columns: { id: true, title: true, completedAt: true, goalId: true },
     orderBy: [asc(tasks.completedAt)],
   })
   return rows.flatMap((row) => {
     if (!row.completedAt) return []
     const completedOn = todayInZone(row.completedAt, timeZone)
     if (completedOn < start || completedOn > end) return []
-    return [{ id: row.id, title: row.title, completedOn }]
+    return [{ id: row.id, title: row.title, completedOn, goalId: row.goalId }]
   })
 }

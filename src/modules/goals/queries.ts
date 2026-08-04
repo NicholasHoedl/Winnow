@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, eq, gte, isNotNull, lt } from "drizzle-orm"
+import { and, asc, count, eq, gte, isNotNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
@@ -7,29 +7,63 @@ import { requireUserId } from "@/lib/session"
 import { tasks } from "@/modules/todos/schema"
 
 import { goals, milestones } from "./schema"
-import { type GoalProgress, goalProgress } from "./service"
+import {
+  type GoalMomentum,
+  goalMomentum,
+  type GoalProgress,
+  goalProgress,
+} from "./service"
 
 export type GoalRow = typeof goals.$inferSelect
 export type MilestoneRow = typeof milestones.$inferSelect
 
-/** A task linked to this goal (T2), projected for read-only display on the goal card. */
+/** A task linked to this goal (T2), projected for display on the goal card. */
 export type LinkedTask = Pick<
   typeof tasks.$inferSelect,
-  "id" | "title" | "status" | "dueDate"
+  "id" | "title" | "status" | "dueDate" | "completedAt"
 >
 
 export type GoalWithProgress = GoalRow & {
   milestones: MilestoneRow[]
   progress: GoalProgress
+  /**
+   * Open linked tasks, plus those finished inside the momentum window — NOT every task
+   * ever linked to this goal.
+   *
+   * It used to be all of them, with no bound at all, which grew forever and made the card
+   * taller every month; the same shape as the `getEventOptions()` caveat. Bounding it here
+   * was folded in with the momentum work because this is the query that had to change
+   * anyway. `linkedTaskTotal` carries the real denominator so nothing under-reports.
+   */
   linkedTasks: LinkedTask[]
+  /** Every task ever linked, counted in SQL rather than by loading the rows. */
+  linkedTaskTotal: number
+  /** Null when the goal has nothing to measure movement on — see `goalMomentum`. */
+  momentum: GoalMomentum | null
+  /** The soonest-due open linked task: what to actually do next for this goal. */
+  nextAction: LinkedTask | null
 }
 
 /** Minimal shape the task-dialog goal picker binds to. */
 export type GoalOption = { id: string; title: string }
 
-export async function getGoals(): Promise<GoalWithProgress[]> {
+/**
+ * `timeZone` and `momentumDays` are parameters rather than a preferences read inside,
+ * matching `getMilestonesCompletedInRange` below. The dashboard already reads preferences
+ * for four other cards, so taking them here keeps the hottest page at one lookup.
+ */
+export async function getGoals(
+  timeZone: string,
+  momentumDays: number,
+): Promise<GoalWithProgress[]> {
   const userId = await requireUserId()
-  const [goalRows, milestoneRows, taskRows] = await Promise.all([
+  const today = todayInZone(new Date(), timeZone)
+  const windowStart = addDays(today, -(momentumDays - 1))
+  // A day of slack on a UTC instant, because the precise cut is by LOCAL date and only
+  // `goalMomentum` can make it. Same two-step as getMilestonesCompletedInRange.
+  const windowFloor = new Date(`${addDays(windowStart, -1)}T00:00:00Z`)
+
+  const [goalRows, milestoneRows, taskRows, taskTotals] = await Promise.all([
     db.query.goals.findMany({
       where: eq(goals.userId, userId),
       // sortOrder first so a manual drag wins; createdAt stays the tiebreak, which
@@ -40,28 +74,63 @@ export async function getGoals(): Promise<GoalWithProgress[]> {
       where: eq(milestones.userId, userId),
       orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
     }),
-    // Tasks pointing at any of this user's goals (T2). Projected — the card only
-    // displays them; /todos stays the place to act on a task.
+    // Tasks pointing at any of this user's goals (T2), bounded to what the card can
+    // actually use: everything still open, plus whatever was finished recently enough to
+    // count as movement. A task closed last year is in `linkedTaskTotal` and nowhere else.
+    //
+    // `gte` on a nullable column excludes NULLs, so a done task with no completedAt drops
+    // out here — correct, since it can evidence neither an open commitment nor movement.
     db.query.tasks.findMany({
-      where: and(eq(tasks.userId, userId), isNotNull(tasks.goalId)),
+      where: and(
+        eq(tasks.userId, userId),
+        isNotNull(tasks.goalId),
+        or(eq(tasks.status, "open"), gte(tasks.completedAt, windowFloor)),
+      ),
       columns: {
         id: true,
         title: true,
         status: true,
         dueDate: true,
         goalId: true,
+        completedAt: true,
       },
+      // NULLs sort last in Postgres ASC, so a dated task outranks an undated one — which
+      // is exactly the order `nextAction` wants.
       orderBy: [asc(tasks.dueDate), asc(tasks.createdAt)],
     }),
+    db
+      .select({ goalId: tasks.goalId, total: count() })
+      .from(tasks)
+      .where(and(eq(tasks.userId, userId), isNotNull(tasks.goalId)))
+      .groupBy(tasks.goalId),
   ])
+
+  const totals = new Map(taskTotals.map((row) => [row.goalId, row.total]))
+
   return goalRows.map((goal) => {
     const items = milestoneRows.filter((m) => m.goalId === goal.id)
+    const linked = taskRows.filter((t) => t.goalId === goal.id)
+    const linkedTaskTotal = totals.get(goal.id) ?? 0
     return {
       ...goal,
       milestones: items,
       // The goal carries the numeric columns; milestones still take precedence.
       progress: goalProgress(items, goal),
-      linkedTasks: taskRows.filter((t) => t.goalId === goal.id),
+      linkedTasks: linked,
+      linkedTaskTotal,
+      momentum: goalMomentum({
+        completedAt: [
+          ...linked.map((t) => t.completedAt),
+          ...items.map((m) => m.completedAt),
+        ],
+        // Counts every linked task, not just the loaded ones — a goal whose work is all
+        // ancient still has something to be stalled about.
+        trackableCount: linkedTaskTotal + items.length,
+        windowDays: momentumDays,
+        today,
+        timeZone,
+      }),
+      nextAction: linked.find((t) => t.status === "open") ?? null,
     }
   })
 }

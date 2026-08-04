@@ -30,7 +30,7 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 26 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 27 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
@@ -54,7 +54,7 @@ Decided with the user, so do not re-litigate:
 
 - Build on the laptop (`docker build --platform linux/amd64`), `docker save` to a `.tar`,
   carry it over. A private GHCR package is the tidier long-term option.
-- **The PC needs the repo checked out regardless of the image** — 26 migrations against an
+- **The PC needs the repo checked out regardless of the image** — 27 migrations against an
   empty database, `scripts/seed-user.ts` for the account, and `backup.sh` runs from the
   deploy directory. Shipping the image saves the _build_, not the checkout.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
@@ -96,7 +96,7 @@ once the host is real rather than guessing at it.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **614 unit tests, 92 e2e, 0 lint errors.**
+Current green baseline: **625 unit tests, 95 e2e, 0 lint errors.**
 
 ## 4. Traps that have already been paid for
 
@@ -241,6 +241,10 @@ still the old indigo.**
   top-level route needs a More sheet or a scroller first.
 - **The export file contains a live credential** — the calendar feed token rides along
   deliberately, so a restore keeps an existing subscription working (ADR-0008).
+- **A goal measured only numerically gets no momentum reading**, and never will without a
+  progress-log table. `goals.currentValue` is overwritten in place, so there is no history
+  to read; showing "stalled" there would be a lie. Milestones or linked tasks give a goal
+  something to measure. See ADR-0010.
 - **The meal quick-add parser reads digits-then-`p`/`c`/`f` anywhere in the string**, not
   just as a standalone token, so a food named `abc278c` logs 278 carbs and loses that part
   of the name. Over 100000 the action rejects the whole entry with "Please fix the errors
@@ -252,7 +256,7 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0008) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0010) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
 implementing" list at the top that is worth two minutes.

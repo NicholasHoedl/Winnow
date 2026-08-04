@@ -3,7 +3,7 @@
 // shareable and reloadable.
 
 import Link from "next/link"
-import { ArrowLeft, ArrowRight } from "lucide-react"
+import { ArrowLeft, ArrowRight, Flag, ListTodo } from "lucide-react"
 
 import { addDays } from "@/lib/date"
 import { formatCents } from "@/modules/budget/service"
@@ -212,19 +212,40 @@ export function ReviewView({
             <CardTitle className="text-base">Goals</CardTitle>
           </CardHeader>
           <CardContent>
-            {review.milestones.length === 0 ? (
+            {review.milestones.length === 0 && review.goalTasks.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                No milestones ticked this week. Anything completed before this
-                page existed has no timestamp, so it can&apos;t appear here.
+                Nothing finished toward a goal this week. Anything completed
+                before this page existed has no timestamp, so it can&apos;t
+                appear here.
               </p>
             ) : (
+              /* Milestones first, then the tasks that fed a goal. Both are "goal
+                 movement", and showing only the first made this card read as dead most
+                 weeks — a milestone gets ticked every few weeks at best, while the work
+                 underneath it happens daily. The tasks here also appear in the tasks
+                 count above; that is the point, not a double-count. */
               <ul className="space-y-1 text-sm">
                 {review.milestones.map((milestone) => (
-                  <li key={milestone.id} className="truncate">
-                    {milestone.title}
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · {milestone.goalTitle}
+                  <li key={milestone.id} className="flex items-center gap-2">
+                    <Flag className="text-muted-foreground size-3.5 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {milestone.title}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {milestone.goalTitle}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+                {review.goalTasks.map((task) => (
+                  <li key={task.id} className="flex items-center gap-2">
+                    <ListTodo className="text-muted-foreground size-3.5 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {task.title}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        · {task.goalTitle}
+                      </span>
                     </span>
                   </li>
                 ))}

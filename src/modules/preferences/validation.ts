@@ -23,6 +23,7 @@ export const userPreferencesSchema = z.object({
   currency: z.enum(CURRENCY_CODES as [string, ...string[]]),
   use24HourTime: z.boolean(),
   defaultTaskPriority: z.enum(["low", "medium", "high"]),
+  goalMomentumDays: z.union([z.literal(7), z.literal(14), z.literal(30)]),
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 

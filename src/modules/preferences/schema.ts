@@ -42,6 +42,15 @@ export const userPreferences = pgTable("user_preferences", {
     .default("medium"),
   // Show the once-a-day digest banner on the first load of a new local day (T2).
   digestEnabled: boolean("digest_enabled").notNull().default(true),
+  /**
+   * How many days of no movement before a goal reads as stalled — and the same window
+   * the "moved N times" count is taken over.
+   *
+   * Deliberately ONE number doing both jobs. Two (a count window and a longer stall
+   * threshold) would be more expressive and considerably harder to reason about later,
+   * and the whole point of the reading is that you can trust it at a glance.
+   */
+  goalMomentumDays: integer("goal_momentum_days").notNull().default(14),
   // "light" | "dark" | "system" — next-themes' own vocabulary, stored as text so the
   // set can change without a migration. Validated by Zod on the way in.
   theme: text("theme").notNull().default("system"),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { goalProgress } from "./service"
+import { goalMomentum, goalProgress } from "./service"
 
 // The signature changed in T5a: `goalProgress(milestones)` became
 // `goalProgress(milestones, goal)` returning a DISCRIMINATED result. The old shape had no
@@ -103,6 +103,79 @@ describe("goalProgress", () => {
       expect(
         goalProgress([], { targetValue: null, currentValue: 5, unit: "books" }),
       ).toEqual({ kind: "none" })
+    })
+  })
+})
+
+// America/Chicago is UTC-5 in August, which is what makes the wall-date cases below
+// meaningful: an instant can sit on one side of a boundary in UTC and the other side
+// locally, and the window has to be in the user's days.
+const TZ = "America/Chicago"
+const TODAY = "2026-08-04"
+
+// windowDays 7 → the window opens on 2026-07-29 (today plus the six days before it).
+function momentum(
+  completedAt: (Date | null)[],
+  trackableCount = completedAt.length,
+) {
+  return goalMomentum({
+    completedAt,
+    trackableCount,
+    windowDays: 7,
+    today: TODAY,
+    timeZone: TZ,
+  })
+}
+
+describe("goalMomentum", () => {
+  it("is null when there is nothing to track", () => {
+    // A numeric goal: currentValue is overwritten in place, so there is no history to
+    // read. It must not render as stalled — see the doc comment on goalMomentum.
+    expect(momentum([], 0)).toBeNull()
+  })
+
+  it("counts work finished inside the window", () => {
+    const result = momentum([
+      new Date("2026-08-04T14:00:00Z"),
+      new Date("2026-08-01T14:00:00Z"),
+    ])
+    expect(result).toEqual({ moved: 2, stalled: false, windowDays: 7 })
+  })
+
+  it("reports stalled when the goal has work but none of it moved", () => {
+    const result = momentum([new Date("2026-06-01T14:00:00Z")])
+    expect(result).toEqual({ moved: 0, stalled: true, windowDays: 7 })
+  })
+
+  it("ignores milestones ticked before completedAt existed", () => {
+    // T7d added the column; anything ticked earlier has no timestamp and can never get
+    // an honest one. Counting those as movement would invent history.
+    const result = momentum([null, null, new Date("2026-08-03T14:00:00Z")])
+    expect(result?.moved).toBe(1)
+  })
+
+  it("uses the local wall date, not the UTC one, at the window's edge", () => {
+    // 04:00Z is 23:00 the previous day in Chicago. Its UTC date is inside the window and
+    // its local date is not — the local one wins.
+    expect(momentum([new Date("2026-07-29T04:00:00Z")])?.moved).toBe(0)
+    // One hour later is local midnight on the opening day, so it counts.
+    expect(momentum([new Date("2026-07-29T05:00:00Z")])?.moved).toBe(1)
+  })
+
+  it("counts today itself", () => {
+    expect(momentum([new Date("2026-08-04T23:00:00Z")])?.moved).toBe(1)
+  })
+
+  it("ignores a future-dated completion", () => {
+    // Impossible from the UI, reachable through account import.
+    expect(momentum([new Date("2026-09-01T14:00:00Z")])?.moved).toBe(0)
+  })
+
+  it("is stalled, not null, when work exists but every timestamp is missing", () => {
+    expect(momentum([null, null])).toEqual({
+      moved: 0,
+      stalled: true,
+      windowDays: 7,
     })
   })
 })

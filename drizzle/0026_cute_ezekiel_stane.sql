@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "goal_momentum_days" integer DEFAULT 14 NOT NULL;

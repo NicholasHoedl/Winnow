@@ -42,7 +42,7 @@ export default async function DashboardPage({
   // and no localStorage read during render. Anything unrecognised falls back to the month.
   const calendarView: DashboardCalendarView =
     (await searchParams).calendar === "week" ? "week" : "month"
-  const { timeZone, weekStartsOn, currency, use24HourTime } =
+  const { timeZone, weekStartsOn, currency, use24HourTime, goalMomentumDays } =
     await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
@@ -69,7 +69,7 @@ export default async function DashboardPage({
     getDayEvents(today, timeZone),
     getDayEvents(nextDate, timeZone),
     getMonthEvents(month, timeZone, weekStartsOn),
-    getGoals(),
+    getGoals(timeZone, goalMomentumDays),
     getCalendars(),
     getJournalEntry(today),
   ])

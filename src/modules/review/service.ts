@@ -14,6 +14,22 @@ export type ReviewMilestone = {
   completedOn: string
 }
 
+/**
+ * A completed task that was linked to a goal.
+ *
+ * These are a SUBSET of `tasks.items`, not an addition to it — the same task appears in
+ * both, once as work done and once as work done *toward something*. They exist because
+ * the Goals card reported milestones alone, and a milestone is ticked every few weeks at
+ * best, so the section that was meant to show goal progress read as dead most weeks while
+ * the goals themselves were being actively worked.
+ */
+export type ReviewGoalTask = {
+  id: string
+  title: string
+  goalTitle: string
+  completedOn: string
+}
+
 /** One day's eating, already summed and paired with the target in force THAT day. */
 export type ReviewMacroDay = {
   date: string
@@ -48,6 +64,8 @@ export type WeeklyReview = {
   }
   macros: MacroWeek
   milestones: ReviewMilestone[]
+  /** Completed tasks that fed a goal — a subset of `tasks.items`. */
+  goalTasks: ReviewGoalTask[]
   money: ReviewMoney
   /** True when the week holds nothing at all — the page says so rather than showing zeros. */
   isEmpty: boolean
@@ -103,6 +121,7 @@ export function buildWeeklyReview(input: {
   weekEnd: string
   tasksCompleted: readonly ReviewTask[]
   milestones: readonly ReviewMilestone[]
+  goalTasks: readonly ReviewGoalTask[]
   macroDays: readonly ReviewMacroDay[]
   money: ReviewMoney
 }): WeeklyReview {
@@ -124,6 +143,9 @@ export function buildWeeklyReview(input: {
     },
     macros,
     milestones: [...input.milestones],
+    // Deliberately absent from `isEmpty` above: every goal task is already counted in
+    // `tasksCompleted`, so testing it there would be testing the same thing twice.
+    goalTasks: [...input.goalTasks],
     money: input.money,
     isEmpty,
   }

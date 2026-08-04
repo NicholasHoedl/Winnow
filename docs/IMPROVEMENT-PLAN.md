@@ -24,8 +24,14 @@ picked up — it is **not** code-level detail yet.
 | T7b — Net-new: Routines / templates           | ✅ shipped    |
 | T7c — Net-new: Habits / streaks               | ✅ shipped    |
 | T7d — Net-new: Weekly review                  | ✅ shipped    |
+| T8 — Goal momentum from linked tasks          | ✅ shipped    |
 
 **T7 is complete**, so the remaining work is Checkpoint 0.4 (hosting) and then T5c-b.
+
+**T8** was not on this roadmap. It came out of a question about associating tasks with
+goals — an association that already existed (`tasks.goalId`, T2) but measured nothing.
+Goals now carry a second reading, movement, alongside the untouched progress figure:
+see ADR-0010 for why the two are kept separate rather than blended.
 
 T5c-b moved behind T7 deliberately: it is the one remaining item that cannot be verified
 without a deployed, installed PWA (iOS only permits Web Push from a home-screen app), and

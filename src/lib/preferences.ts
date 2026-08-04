@@ -11,7 +11,15 @@ export type WeekStart = 0 | 1
 export type Priority = "low" | "medium" | "high"
 export type Theme = "light" | "dark" | "system"
 
+/**
+ * The goal momentum window, in days. A closed set rather than a free integer: it drives a
+ * segmented control, and "how long before I call a goal stalled" is a question with three
+ * honest answers, not 365.
+ */
+export type MomentumDays = 7 | 14 | 30
+
 export const THEMES: Theme[] = ["light", "dark", "system"]
+export const MOMENTUM_DAYS: MomentumDays[] = [7, 14, 30]
 
 export type UserPreferences = {
   timeZone: string
@@ -20,6 +28,7 @@ export type UserPreferences = {
   use24HourTime: boolean
   defaultTaskPriority: Priority
   digestEnabled: boolean
+  goalMomentumDays: MomentumDays
   theme: Theme
 }
 
@@ -32,6 +41,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   use24HourTime: false,
   defaultTaskPriority: "medium",
   digestEnabled: true,
+  goalMomentumDays: 14,
   theme: "system",
 }
 
@@ -63,6 +73,13 @@ export const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
+]
+
+// Labelled in the units people actually think in — nobody plans in "14 days".
+export const MOMENTUM_OPTIONS: { value: MomentumDays; label: string }[] = [
+  { value: 7, label: "1 week" },
+  { value: 14, label: "2 weeks" },
+  { value: 30, label: "1 month" },
 ]
 
 // The runtime's full IANA zone list when available (server Node + modern

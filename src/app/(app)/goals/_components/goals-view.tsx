@@ -2,7 +2,15 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ListTodo, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react"
+import {
+  ListTodo,
+  MoreVertical,
+  Pause,
+  Pencil,
+  Plus,
+  Trash2,
+  TrendingUp,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { dueStatus } from "@/lib/date"
@@ -15,6 +23,11 @@ import {
   restoreMilestone,
   toggleMilestone,
 } from "@/modules/goals/actions"
+// Cross-module, and deliberately so: the next-action checkbox completes a TASK. Reusing
+// the existing action means one code path for "a task got done" — its recurring-instance
+// guard, its revalidation of /todos, /goals and the hubs — rather than a second one here
+// that would drift.
+import { toggleTaskStatus } from "@/modules/todos/actions"
 import type {
   GoalRow,
   GoalWithProgress,
@@ -35,6 +48,14 @@ import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 
 import { GoalDialog } from "./goal-dialog"
+
+// Reads inside a sentence, unlike the settings label ("2 weeks"), which reads as a
+// heading. Same number, different grammar.
+function windowLabel(days: number): string {
+  if (days === 7) return "the last week"
+  if (days === 30) return "the last month"
+  return `the last ${days} days`
+}
 
 function formatDate(date: string): string {
   const [y, m, d] = date.split("-").map(Number)
@@ -190,6 +211,36 @@ function GoalCard({
         </div>
       )}
 
+      {/* Movement, which is a different question from the bar above it.
+          `goalProgress` says how far along the goal is; this says whether it is still
+          being worked. A goal three-quarters done that you abandoned last month and one
+          three-quarters done that you touched yesterday report the same percentage, and
+          that gap is the whole reason this exists. Null means there is nothing to measure
+          — a numeric or empty goal — and rendering "stalled" there would be a lie. */}
+      {goal.momentum && (
+        <div
+          className={cn(
+            "flex items-center gap-1.5 text-xs",
+            // Attention, not alarm. `--destructive` is spoken for by overdue and
+            // over-budget, which are failures; a stalled goal is a nudge.
+            goal.momentum.stalled
+              ? "text-brand-accent"
+              : "text-muted-foreground",
+          )}
+        >
+          {goal.momentum.stalled ? (
+            <Pause className="size-3.5 shrink-0" />
+          ) : (
+            <TrendingUp className="size-3.5 shrink-0" />
+          )}
+          <span>
+            {goal.momentum.stalled
+              ? `Nothing finished in ${windowLabel(goal.momentum.windowDays)}`
+              : `${goal.momentum.moved} finished in ${windowLabel(goal.momentum.windowDays)}`}
+          </span>
+        </div>
+      )}
+
       {goal.milestones.length > 0 && (
         <ul className="flex flex-col gap-1">
           {goal.milestones.map((milestone) => (
@@ -245,10 +296,16 @@ function GoalCard({
         </ul>
       )}
 
-      {/* Tasks linked to this goal (T2). Still READ-ONLY — /todos is where you act on
-          them, and duplicating the checkbox here would mean two places to keep in step.
-          T5a adds what was missing to make it useful at a glance: how many are left, when
-          they are due, and a way through to them. */}
+      {/* Tasks linked to this goal (T2). T5a made the list useful at a glance — how many
+          are left, when they are due, a way through to them — on the stated principle that
+          it stayed READ-ONLY, because duplicating the checkbox would mean two places to
+          keep in step.
+          That principle is now NARROWED rather than dropped: exactly one row is
+          actionable, the next one due. Telling you a goal has stalled and then sending you
+          to another page to do something about it is the shape of advice nobody takes. The
+          rest of the list is still context, and /todos is still where you work.
+          The list itself is bounded now — open tasks plus recently finished ones — so the
+          count below comes from `linkedTaskTotal`, which is the real total. */}
       {goal.linkedTasks.length > 0 && (
         <div className="flex flex-col gap-1">
           <div className="flex items-baseline justify-between gap-2">
@@ -257,7 +314,7 @@ function GoalCard({
               <span className="ml-1.5 font-normal tabular-nums">
                 {openLinked === 0
                   ? "all done"
-                  : `${openLinked} open of ${goal.linkedTasks.length}`}
+                  : `${openLinked} open of ${goal.linkedTaskTotal}`}
               </span>
             </p>
             <Link
@@ -271,9 +328,21 @@ function GoalCard({
             {goal.linkedTasks.map((task) => {
               const taskDue = dueStatus(task.dueDate, new Date(), timeZone)
               const done = task.status === "done"
+              const isNext = task.id === goal.nextAction?.id
               return (
                 <li key={task.id} className="flex items-center gap-2 text-sm">
-                  <ListTodo className="text-muted-foreground size-3.5 shrink-0" />
+                  {isNext ? (
+                    <Checkbox
+                      checked={false}
+                      aria-label={`Complete ${task.title}`}
+                      onCheckedChange={() =>
+                        run(() => toggleTaskStatus(task.id))
+                      }
+                      className="shrink-0"
+                    />
+                  ) : (
+                    <ListTodo className="text-muted-foreground size-3.5 shrink-0" />
+                  )}
                   <span
                     className={cn(
                       "min-w-0 flex-1 truncate",

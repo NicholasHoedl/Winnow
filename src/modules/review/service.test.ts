@@ -30,6 +30,7 @@ const base = {
   weekEnd: "2026-07-25",
   tasksCompleted: [],
   milestones: [],
+  goalTasks: [],
   macroDays: [],
   money: NO_MONEY,
 }
@@ -193,5 +194,38 @@ describe("reviewHeadline", () => {
 
   it("says something honest about a week with nothing in it", () => {
     expect(headline(base)).toBe("A quiet week")
+  })
+})
+
+describe("buildWeeklyReview goal tasks", () => {
+  const goalTask = {
+    id: "t1",
+    title: "Draft the outline",
+    goalTitle: "Write the book",
+    completedOn: "2026-07-21",
+  }
+
+  it("carries goal-linked tasks through", () => {
+    const review = buildWeeklyReview({ ...base, goalTasks: [goalTask] })
+    expect(review.goalTasks).toEqual([goalTask])
+  })
+
+  // They are a SUBSET of tasksCompleted, so counting them toward emptiness would test the
+  // same fact twice — and a week whose only goal task somehow arrived without its parent
+  // completion should still read as quiet rather than inventing activity.
+  it("does not make a week non-empty on its own", () => {
+    expect(buildWeeklyReview({ ...base, goalTasks: [goalTask] }).isEmpty).toBe(
+      true,
+    )
+  })
+
+  it("does not double-count into the task total", () => {
+    const review = buildWeeklyReview({
+      ...base,
+      tasksCompleted: [task("t1", "2026-07-21")],
+      goalTasks: [goalTask],
+    })
+    expect(review.tasks.completed).toBe(1)
+    expect(review.goalTasks).toHaveLength(1)
   })
 })
