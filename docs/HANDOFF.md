@@ -1,12 +1,13 @@
 # Handoff
 
-Last updated: **2026-08-04**, on branch `feat/t7-notes-routines-habits`.
+Last updated: **2026-08-04**.
 
-`main` is still at `edd4838` and every earlier tranche went straight to it, so this branch
-is a deviation waiting on a fast-forward — and it is where all recent work lives, so read
-it rather than `main`. Run `git log --oneline main..HEAD` for what it carries and
-`git log --oneline origin/HEAD..HEAD` for what is unpushed; both were enumerated here
-once and went stale within a day, which is the argument for asking git instead.
+**`main` is the truth and it is pushed.** T7, T8, the recolour and the deploy runbook were
+built on `feat/t7-notes-routines-habits`, which has since been fast-forwarded into `main`
+and carries nothing `main` does not — the branch can be deleted whenever you like.
+
+This header does not track commits. It named the tip and listed what was outstanding, and
+went stale three times in one day; `git log` cannot be wrong and this can, so ask it.
 
 Read `SPEC.md` for what Winnow is and `ARCHITECTURE.md` for how it is built. This file
 covers only what those two can't tell you: where the project actually stands, the working
