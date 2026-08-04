@@ -188,6 +188,9 @@ export function TimeGrid({
   onSelectDay,
   onEditEvent,
   onReschedule,
+  fill = false,
+  maxHeight = "65svh",
+  hourHeight = "3rem",
 }: {
   dates: string[]
   byDay: Record<string, EventOccurrence[]>
@@ -198,6 +201,23 @@ export function TimeGrid({
   onEditEvent?: (occ: EventOccurrence) => void
   /** Omit to render the grid read-only — blocks are then not draggable at all. */
   onReschedule?: (occ: EventOccurrence, to: Reschedule) => void
+  /**
+   * Lay the root out as a flex column so the scroller can take the leftover height.
+   *
+   * On its own this does NOT cap anything, and that is worth stating because it looks
+   * like it should: `h-full` needs a definite height to resolve against, and the
+   * dashboard's column chain is built from `min-h`, which is a floor rather than a
+   * height. `flex-1` then grows to fit all 24 hour rows and the card runs ~300px past
+   * its column. Pair it with `maxHeight`.
+   */
+  fill?: boolean
+  /**
+   * The scroller's max-height. The default is right for a page that owns its own
+   * scroll; a height-budgeted column needs to say what it can actually spare.
+   */
+  maxHeight?: string
+  /** Height of one hour row. Lower it where vertical space is tight. */
+  hourHeight?: string
 }) {
   const { use24HourTime } = usePreferences()
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -343,7 +363,20 @@ export function TimeGrid({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border [--gutter:3.5rem] [--hour-h:3rem]">
+    <div
+      // No semantic role fits a time grid, and two specs need to tell it apart from the
+      // month grid — which is also seven columns of days.
+      data-testid="time-grid"
+      className={cn(
+        "overflow-hidden rounded-xl border [--gutter:3.5rem]",
+        // A flex column so the scroller below can take the leftover height. The header
+        // and all-day gutter stay at their natural size as siblings; DndContext renders
+        // no DOM of its own, so the scroller really is a direct child here.
+        fill && "flex h-full flex-col",
+      )}
+      // Inline because the value is a prop — an arbitrary Tailwind class can't carry it.
+      style={{ "--hour-h": hourHeight } as React.CSSProperties}
+    >
       {/* Column headers. */}
       <div className="bg-muted/40 flex border-b">
         <div className="w-(--gutter) shrink-0" />
@@ -424,7 +457,13 @@ export function TimeGrid({
         <div role="status" aria-live="polite" className="sr-only">
           {liveMessage}
         </div>
-        <div ref={scrollRef} className="max-h-[65vh] overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className={cn("overflow-y-auto", fill && "min-h-0 flex-1")}
+          // svh throughout, not vh: every other height on the dashboard is svh, and on
+          // mobile the two differ by the browser chrome.
+          style={{ maxHeight }}
+        >
           <div className="flex h-[calc(24*var(--hour-h))]">
             {/* The gutter is decoration: its labels sit beside absolutely positioned
               blocks and cannot be associated with them, so every event carries its own

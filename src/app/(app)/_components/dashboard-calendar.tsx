@@ -11,6 +11,7 @@ import { formatTime } from "@/lib/format"
 import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import { weekDates } from "@/modules/calendar/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
+import { TimeGrid } from "@/components/calendar/time-grid"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 // Sunday-indexed absolute day names (the week view looks these up by getUTCDay).
@@ -87,87 +88,6 @@ function EventChip({
         {withTime ? occ.event.title : chipLabel(occ, use24Hour)}
       </span>
     </button>
-  )
-}
-
-/**
- * The week containing today: seven day columns, each listing that day's events in time
- * order.
- *
- * A summary rather than a timed layout — no hour axis, so it answers "what is on each
- * day" and not "where are the gaps". `/calendar?view=week` is the real time grid and the
- * "Open" link goes there.
- *
- * No cap on chips. The month grid caps at two because six rows multiply every pixel;
- * here there is one row taking the full height of the column, so a day with eight events
- * can simply show them and scroll if it somehow runs out of room.
- */
-function WeekStrip({
-  dates,
-  byDay,
-  today,
-  headers,
-  calendars,
-  use24Hour,
-  onDay,
-  onEvent,
-}: {
-  dates: string[]
-  byDay: Record<string, EventOccurrence[]>
-  today: string
-  headers: string[]
-  calendars: Calendar[]
-  use24Hour: boolean
-  onDay: (date: string) => void
-  onEvent: (e: React.MouseEvent) => void
-}) {
-  return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border">
-      <div className="bg-muted/40 grid shrink-0 grid-cols-7 border-b">
-        {headers.map((d) => (
-          <div
-            key={d}
-            className="text-muted-foreground p-1.5 text-center text-[0.7rem] font-medium"
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-      <div className="grid flex-1 grid-cols-7">
-        {dates.map((date) => {
-          const dayEvents = byDay[date] ?? []
-          const isToday = date === today
-          return (
-            <div
-              key={date}
-              onClick={() => onDay(date)}
-              className="hover:bg-accent/40 flex min-h-0 cursor-pointer flex-col gap-1 border-r p-1.5 last:border-r-0"
-            >
-              <span
-                className={cn(
-                  "shrink-0 self-center text-xs font-medium tabular-nums",
-                  isToday &&
-                    "bg-brand-accent text-brand-accent-foreground flex size-5 items-center justify-center rounded-full",
-                )}
-              >
-                {Number(date.slice(8))}
-              </span>
-              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                {dayEvents.map((occ, i) => (
-                  <EventChip
-                    key={`${occ.event.id}-${i}`}
-                    occ={occ}
-                    onOpen={onEvent}
-                    calendars={calendars}
-                    use24Hour={use24Hour}
-                  />
-                ))}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
   )
 }
 
@@ -267,7 +187,7 @@ export function DashboardCalendar({
   view: DashboardCalendarView
 }) {
   const router = useRouter()
-  const { weekStartsOn, use24HourTime } = usePreferences()
+  const { weekStartsOn, use24HourTime, timeZone } = usePreferences()
   const headers = [
     ...ABSOLUTE_WEEKDAYS.slice(weekStartsOn),
     ...ABSOLUTE_WEEKDAYS.slice(0, weekStartsOn),
@@ -333,15 +253,37 @@ export function DashboardCalendar({
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col">
         {view === "week" ? (
-          <WeekStrip
+          /*
+            The same grid /calendar?view=week renders, not a lookalike — so "where are the
+            gaps" reads identically on both surfaces. `fill` is what makes it safe here:
+            by default it sizes itself to 65svh, which on this height-budgeted column
+            would push the whole page into scrolling. The shorter hour rows fit a useful
+            slice of the day into the space the column actually has.
+
+            Read-only: no `onReschedule`, so blocks are not draggable at all and clicking
+            anything lands you on /calendar — which is what the chips did before.
+          */
+          <TimeGrid
             dates={week}
             byDay={byDay}
             today={today}
-            headers={headers}
+            timeZone={timeZone}
             calendars={calendars}
-            use24Hour={use24HourTime}
-            onDay={onDay}
-            onEvent={onEvent}
+            onSelectDay={(date) =>
+              router.push(`/calendar?view=week&date=${date}`)
+            }
+            onEditEvent={(occ) =>
+              router.push(`/calendar?view=week&date=${occ.date}`)
+            }
+            fill
+            /*
+              What this column can actually spare, measured rather than guessed: the
+              month view sits at 0px page overflow, and matching its card height means
+              the viewport minus the page header, the quick-capture bar and this card's
+              own chrome. `fill` alone does not cap anything here — see its doc.
+            */
+            maxHeight="calc(100svh - 21rem)"
+            hourHeight="2.25rem"
           />
         ) : (
           <MonthView
