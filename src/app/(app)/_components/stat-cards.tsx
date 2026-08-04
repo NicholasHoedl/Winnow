@@ -26,7 +26,7 @@ function StatShell({
   return (
     <Link
       href={href}
-      className="group bg-card hover:ring-foreground/20 flex flex-col gap-3 rounded-xl p-4 shadow-sm ring-1 ring-foreground/10 transition-[box-shadow,--tw-ring-color]"
+      className="group bg-card hover:ring-foreground/20 ring-foreground/10 flex flex-col gap-3 rounded-xl p-4 shadow-sm ring-1 transition-[box-shadow,--tw-ring-color]"
     >
       <div className="flex items-center justify-between">
         <div className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
@@ -67,12 +67,18 @@ export function StatCards({
     budget.totalBudgetedCents > 0
       ? Math.round((budget.expenseCents / budget.totalBudgetedCents) * 100)
       : 0
-  const overBudget = budget.totalBudgetedCents > 0 && budget.expenseCents > budget.totalBudgetedCents
+  const overBudget =
+    budget.totalBudgetedCents > 0 &&
+    budget.expenseCents > budget.totalBudgetedCents
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {/* Macros */}
-      <StatShell href="/meals" icon={<Utensils className="size-4" />} label="Macros">
+      <StatShell
+        href="/meals"
+        icon={<Utensils className="size-4" />}
+        label="Macros"
+      >
         {nothingLogged ? (
           <p className="text-muted-foreground flex flex-1 items-center text-sm">
             Nothing logged today.
@@ -85,7 +91,9 @@ export function StatCards({
                 <div key={key}>
                   <div className="flex items-baseline justify-between text-xs">
                     <span className="text-muted-foreground">{label}</span>
-                    <span className="tabular-nums">{Math.round(m.consumed)}</span>
+                    <span className="tabular-nums">
+                      {Math.round(m.consumed)}
+                    </span>
                   </div>
                   <div className="mt-1">
                     <Bar percent={m.percent ?? 0} accent={accent} />
@@ -98,7 +106,11 @@ export function StatCards({
       </StatShell>
 
       {/* Budget */}
-      <StatShell href="/budget" icon={<Wallet className="size-4" />} label="Budget">
+      <StatShell
+        href="/budget"
+        icon={<Wallet className="size-4" />}
+        label="Budget"
+      >
         {budget.expenseCents === 0 && budget.totalBudgetedCents === 0 ? (
           <p className="text-muted-foreground flex flex-1 items-center text-sm">
             No activity yet this month.
@@ -122,7 +134,10 @@ export function StatCards({
               <span
                 className={cn(
                   "font-medium tabular-nums",
-                  budget.netCents < 0 ? "text-destructive" : "text-cat-5",
+                  // --success, not cat-5: "money went the right way" is a semantic
+                  // signal, and expressing it with a category accent here while the
+                  // budget module used emerald meant one idea had two colours.
+                  budget.netCents < 0 ? "text-destructive" : "text-success",
                 )}
               >
                 {formatCents(budget.netCents, currency)}

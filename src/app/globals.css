@@ -3,177 +3,113 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Winnow — "calm editorial utility": indigo dominant + one sharp amber accent,
-   over an indigo-tinted neutral system. emerald=income / red=over-budget stay
-   as semantic signals elsewhere. */
+/* Winnow — a warm, muted scheme: deep teal on linen, with one terracotta accent.
+   Values are the supplied palette's hex codes verbatim rather than converted to
+   oklch, so every token is checkable against the source. Tailwind v4's alpha
+   modifiers (bg-cat-1/12, border-cat-1/30) still work — they compile to color-mix().
+
+   Two colours deliberately sit OUTSIDE the palette, because they carry meaning
+   rather than brand: --destructive (over budget, overdue, over target, delete) and
+   --success (money in, positive net). The palette's only warm red, dusty_rose
+   #a67272, is far too muted to read as an error, and its greens are the two teals —
+   one of which is now the primary, so income would stop standing out. Both are tuned
+   to sit with the neutrals without being drawn from them. */
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.994 0.003 275);
-  --foreground: oklch(0.21 0.02 275);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 275);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 275);
-  --primary: oklch(0.505 0.19 273);
-  --primary-foreground: oklch(0.985 0.002 275);
-  --secondary: oklch(0.965 0.008 275);
-  --secondary-foreground: oklch(0.31 0.04 273);
-  --muted: oklch(0.968 0.006 275);
-  --muted-foreground: oklch(0.516 0.024 274);
-  --accent: oklch(0.95 0.016 275);
-  --accent-foreground: oklch(0.36 0.07 273);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.914 0.008 275);
-  --input: oklch(0.914 0.008 275);
-  --ring: oklch(0.505 0.19 273);
-  /* single sharp accent — amber; used sparingly for highlights */
-  --brand-accent: oklch(0.79 0.15 76);
-  --brand-accent-foreground: oklch(0.28 0.06 74);
-  /* Distinct category-accent palette — used only as accents (dots, bars, tags). */
-  --cat-1: oklch(0.55 0.17 273);
-  --cat-2: oklch(0.6 0.12 195);
-  --cat-3: oklch(0.7 0.15 68);
-  --cat-4: oklch(0.62 0.19 18);
-  --cat-5: oklch(0.6 0.14 155);
-  --cat-6: oklch(0.56 0.19 305);
-  /* Persistent dark sidebar chrome — dark in BOTH themes (the reference's anchor). */
-  --sidebar: oklch(0.205 0.018 275);
-  --sidebar-foreground: oklch(0.92 0.01 275);
-  --sidebar-primary: oklch(0.65 0.17 273);
-  --sidebar-primary-foreground: oklch(0.99 0.003 275);
-  --sidebar-accent: oklch(0.28 0.028 275);
-  --sidebar-accent-foreground: oklch(0.98 0.005 275);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.65 0.17 273);
+  --background: #fbf6f3; /* linen-800 */
+  --foreground: #1c1d1f; /* graphite-300 */
+  --card: #fdfaf9; /* linen-900 */
+  --card-foreground: #1c1d1f;
+  --popover: #fdfaf9;
+  --popover-foreground: #1c1d1f;
+  /* deep_teal-400, not the #577f67 default: `text-primary` is used on small text
+     (the repeating-task badge, links), and the lighter shade measured 4.22:1 on this
+     background — under AA. This clears it at 5.3:1 and reads the same as a fill. */
+  --primary: #456652;
+  --primary-foreground: #fdfaf9;
+  --secondary: #f2f1ed; /* dust_grey-800 */
+  --secondary-foreground: #344c3e; /* deep_teal-300 */
+  --muted: #f2f1ed;
+  --muted-foreground: #594b3a; /* pale_oak-200 */
+  --accent: #f9eae2; /* desert_sand-800 */
+  --accent-foreground: #8e431b; /* desert_sand-200 */
+  --destructive: #b1452f;
+  --destructive-foreground: #fdfaf9;
+  --success: #2e7d4f;
+  --success-foreground: #fdfaf9;
+  --border: #ddd5cb; /* pale_oak-700 */
+  --input: #ddd5cb;
+  --ring: #456652;
+  /* Single sharp accent — terracotta, used sparingly for highlights.
+     Deeper than the palette's mid tone on purpose: this is read as TEXT (the
+     dashboard's date eyebrow) as well as painted behind the calendar's today-pill,
+     and the lighter shade cleared barely 2:1 as text on the linen background. Dark
+     on light here, light on dark below — the polarity flips with the theme. */
+  --brand-accent: #b4551f;
+  --brand-accent-foreground: #fcf5f0;
+  /* Distinct category accents — calendars, budget categories, chart series. The
+     palette is deliberately low-contrast and warm, so caramel, brown and rust sit
+     closer together than the scheme this replaced. See the note in lib/colors.ts. */
+  --cat-1: #577f67; /* deep_teal — sage */
+  --cat-2: #a67272; /* dusty_rose */
+  --cat-3: #c17f58; /* linen-300 — caramel */
+  --cat-4: #7d8489; /* graphite-700 — slate */
+  --cat-5: #5b7756; /* muted_teal-300 — forest */
+  --cat-6: #8e431b; /* desert_sand-200 — rust */
+  /* Persistent dark sidebar chrome — dark in BOTH themes (the design's anchor). */
+  --sidebar: #1c1d1f; /* graphite-300 */
+  --sidebar-foreground: #dedbd1; /* dust_grey */
+  --sidebar-primary: #a0b89c; /* muted_teal */
+  --sidebar-primary-foreground: #121414;
+  --sidebar-accent: #2d3032; /* graphite-500 */
+  --sidebar-accent-foreground: #f9f8f6;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: #a0b89c;
 }
 
 .dark {
-  --background: oklch(0.172 0.012 275);
-  --foreground: oklch(0.966 0.005 275);
-  --card: oklch(0.212 0.016 275);
-  --card-foreground: oklch(0.966 0.005 275);
-  --popover: oklch(0.212 0.016 275);
-  --popover-foreground: oklch(0.966 0.005 275);
-  --primary: oklch(0.552 0.196 273);
-  --primary-foreground: oklch(0.99 0.003 275);
-  --secondary: oklch(0.27 0.02 275);
-  --secondary-foreground: oklch(0.966 0.005 275);
-  --muted: oklch(0.262 0.016 275);
-  --muted-foreground: oklch(0.724 0.02 275);
-  --accent: oklch(0.3 0.03 275);
-  --accent-foreground: oklch(0.966 0.005 275);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.598 0.184 273);
-  --brand-accent: oklch(0.82 0.15 78);
-  --brand-accent-foreground: oklch(0.22 0.05 76);
-  --cat-1: oklch(0.67 0.16 273);
-  --cat-2: oklch(0.7 0.11 195);
-  --cat-3: oklch(0.78 0.14 70);
-  --cat-4: oklch(0.7 0.17 18);
-  --cat-5: oklch(0.7 0.13 155);
-  --cat-6: oklch(0.68 0.17 305);
-  --sidebar: oklch(0.2 0.015 275);
-  --sidebar-foreground: oklch(0.966 0.005 275);
-  --sidebar-primary: oklch(0.552 0.196 273);
-  --sidebar-primary-foreground: oklch(0.99 0.003 275);
-  --sidebar-accent: oklch(0.28 0.025 275);
-  --sidebar-accent-foreground: oklch(0.966 0.005 275);
-  --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.598 0.184 273);
-}
-
-/* --- Colour palettes (second axis via [data-palette] on <html>) ---
-   Each palette redefines only the brand tokens (primary + accent + rings);
-   neutrals and the --cat-* rainbow stay fixed. Light block then dark block so
-   equal-specificity attribute selectors resolve by source order. The default
-   "indigo" palette needs no block — it IS the base :root / .dark above. */
-
-:root[data-palette="emerald"] {
-  --primary: oklch(0.52 0.14 158);
-  --primary-foreground: oklch(0.985 0.01 158);
-  --ring: oklch(0.52 0.14 158);
-  --brand-accent: oklch(0.72 0.16 28);
-  --brand-accent-foreground: oklch(0.27 0.08 28);
-  --sidebar-primary: oklch(0.62 0.15 158);
-  --sidebar-primary-foreground: oklch(0.99 0.01 158);
-  --sidebar-ring: oklch(0.62 0.15 158);
-}
-.dark[data-palette="emerald"] {
-  --primary: oklch(0.53 0.15 158);
-  --primary-foreground: oklch(0.985 0.01 158);
-  --ring: oklch(0.66 0.13 158);
-  --brand-accent: oklch(0.76 0.16 32);
-  --brand-accent-foreground: oklch(0.24 0.07 32);
-  --sidebar-primary: oklch(0.62 0.14 158);
-  --sidebar-primary-foreground: oklch(0.99 0.01 158);
-  --sidebar-ring: oklch(0.66 0.13 158);
-}
-
-:root[data-palette="rose"] {
-  --primary: oklch(0.55 0.2 12);
-  --primary-foreground: oklch(0.985 0.008 12);
-  --ring: oklch(0.55 0.2 12);
-  --brand-accent: oklch(0.8 0.13 88);
-  --brand-accent-foreground: oklch(0.3 0.06 88);
-  --sidebar-primary: oklch(0.64 0.19 12);
-  --sidebar-primary-foreground: oklch(0.99 0.008 12);
-  --sidebar-ring: oklch(0.64 0.19 12);
-}
-.dark[data-palette="rose"] {
-  --primary: oklch(0.56 0.21 12);
-  --primary-foreground: oklch(0.985 0.008 12);
-  --ring: oklch(0.66 0.19 12);
-  --brand-accent: oklch(0.82 0.13 88);
-  --brand-accent-foreground: oklch(0.24 0.06 88);
-  --sidebar-primary: oklch(0.63 0.2 12);
-  --sidebar-primary-foreground: oklch(0.99 0.008 12);
-  --sidebar-ring: oklch(0.66 0.19 12);
-}
-
-:root[data-palette="teal"] {
-  --primary: oklch(0.51 0.13 210);
-  --primary-foreground: oklch(0.985 0.008 210);
-  --ring: oklch(0.51 0.13 210);
-  --brand-accent: oklch(0.75 0.16 55);
-  --brand-accent-foreground: oklch(0.29 0.07 55);
-  --sidebar-primary: oklch(0.64 0.12 210);
-  --sidebar-primary-foreground: oklch(0.99 0.008 210);
-  --sidebar-ring: oklch(0.64 0.12 210);
-}
-.dark[data-palette="teal"] {
-  --primary: oklch(0.53 0.13 210);
-  --primary-foreground: oklch(0.985 0.008 210);
-  --ring: oklch(0.68 0.11 210);
-  --brand-accent: oklch(0.78 0.16 58);
-  --brand-accent-foreground: oklch(0.24 0.07 58);
-  --sidebar-primary: oklch(0.64 0.12 210);
-  --sidebar-primary-foreground: oklch(0.99 0.008 210);
-  --sidebar-ring: oklch(0.68 0.11 210);
-}
-
-:root[data-palette="violet"] {
-  --primary: oklch(0.52 0.2 300);
-  --primary-foreground: oklch(0.985 0.008 300);
-  --ring: oklch(0.52 0.2 300);
-  --brand-accent: oklch(0.8 0.17 128);
-  --brand-accent-foreground: oklch(0.3 0.08 128);
-  --sidebar-primary: oklch(0.62 0.2 300);
-  --sidebar-primary-foreground: oklch(0.99 0.008 300);
-  --sidebar-ring: oklch(0.62 0.2 300);
-}
-.dark[data-palette="violet"] {
-  --primary: oklch(0.56 0.21 300);
-  --primary-foreground: oklch(0.985 0.008 300);
-  --ring: oklch(0.64 0.19 300);
-  --brand-accent: oklch(0.83 0.17 128);
-  --brand-accent-foreground: oklch(0.24 0.08 128);
-  --sidebar-primary: oklch(0.6 0.2 300);
-  --sidebar-primary-foreground: oklch(0.99 0.008 300);
-  --sidebar-ring: oklch(0.64 0.19 300);
+  --background: #1c1d1f; /* graphite-300 */
+  --foreground: #f2f1ed; /* dust_grey-800 */
+  --card: #252729; /* graphite-400 */
+  --card-foreground: #f2f1ed;
+  --popover: #252729;
+  --popover-foreground: #f2f1ed;
+  /* The palette's own lighter teal — deep_teal is too dark to carry text on this
+     background. */
+  --primary: #a0b89c; /* muted_teal */
+  --primary-foreground: #121414;
+  --secondary: #2d3032; /* graphite-500 */
+  --secondary-foreground: #f2f1ed;
+  --muted: #2d3032;
+  --muted-foreground: #bab4a0; /* dust_grey-400 */
+  --accent: #35393b;
+  --accent-foreground: #f2f1ed;
+  --destructive: #e08267;
+  --destructive-foreground: #121414;
+  --success: #6ba97f;
+  --success-foreground: #121414;
+  /* Translucent rather than a flat colour, so borders read against both the page and
+     the raised card without a second token. */
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #a0b89c;
+  --brand-accent: #e4986f; /* desert_sand-400 */
+  --brand-accent-foreground: #47220e; /* desert_sand-100 */
+  --cat-1: #729f84; /* deep_teal-600 */
+  --cat-2: #b88e8e; /* dusty_rose-600 */
+  --cat-3: #dbb39d; /* linen-400 */
+  --cat-4: #a8adb1; /* graphite-800 */
+  --cat-5: #7b9c76; /* muted_teal-400 */
+  --cat-6: #d56529; /* desert_sand-300 */
+  /* A step lighter than the page, so the rail still separates from it. */
+  --sidebar: #252729; /* graphite-400 */
+  --sidebar-foreground: #dedbd1;
+  --sidebar-primary: #a0b89c;
+  --sidebar-primary-foreground: #121414;
+  --sidebar-accent: #2d3032;
+  --sidebar-accent-foreground: #f9f8f6;
+  --sidebar-border: rgb(255 255 255 / 9%);
+  --sidebar-ring: #a0b89c;
 }
 
 @theme inline {
@@ -193,6 +129,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

@@ -2,10 +2,10 @@
 // (No server-only / DB imports — this is imported by both the settings UI and
 // the server validation/query layer.)
 //
-// Appearance (theme + palette) is here as of T6a, but read differently from the rest:
-// next-themes and the palette script apply it from localStorage before first paint,
-// so these values are the account's saved copy — what a new device adopts and what the
-// export carries — not what the current device renders from.
+// Appearance (theme) is here as of T6a, but read differently from the rest: next-themes
+// applies it from localStorage before first paint, so this value is the account's saved
+// copy — what a new device adopts and what the export carries — not what the current
+// device renders from.
 
 export type WeekStart = 0 | 1
 export type Priority = "low" | "medium" | "high"
@@ -21,7 +21,6 @@ export type UserPreferences = {
   defaultTaskPriority: Priority
   digestEnabled: boolean
   theme: Theme
-  palette: string
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -34,7 +33,6 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   defaultTaskPriority: "medium",
   digestEnabled: true,
   theme: "system",
-  palette: "indigo",
 }
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).

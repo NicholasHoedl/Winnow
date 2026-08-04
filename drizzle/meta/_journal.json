@@ -176,6 +176,13 @@
       "when": 1785859320181,
       "tag": "0024_narrow_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785863285932,
+      "tag": "0025_wild_toxin",
+      "breakpoints": true
     }
   ]
 }

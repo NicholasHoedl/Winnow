@@ -47,9 +47,7 @@ export default async function AppLayout({
     <CreateIntentProvider>
       <PreferencesProvider value={preferences}>
         {/* Renders nothing; reconciles this device's appearance with the account's. */}
-        <AppearanceSync
-          saved={{ theme: preferences.theme, palette: preferences.palette }}
-        />
+        <AppearanceSync saved={{ theme: preferences.theme }} />
         <div className="flex min-h-svh flex-col md:flex-row">
           {/* Keyboard/screen-reader users can jump past the nav straight to the page. */}
           <a

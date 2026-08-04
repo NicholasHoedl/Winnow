@@ -37,31 +37,21 @@ async function provision(page: Page) {
   await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
 
   // And wait for the appearance mirror to land. `AppearanceSync` (T6a) writes this
-  // device's saved palette/theme into the account on load, fire-and-forget — there is
-  // nothing to await from out here, and the storage state this suite logs in with can
-  // legitimately hold a different palette than the database does. Capture the baseline
-  // mid-write and the very next render "changes the data" by flipping `palette` and
-  // `updatedAt`, which is a false alarm on the one assertion that must never cry wolf.
-  const saved = await page.evaluate(() => ({
-    palette: localStorage.getItem("winnow-palette"),
-    theme: localStorage.getItem("theme"),
-  }))
-  if (saved.palette || saved.theme) {
+  // device's saved theme into the account on load, fire-and-forget — there is nothing to
+  // await from out here, and the storage state this suite logs in with can legitimately
+  // hold a different theme than the database does. Capture the baseline mid-write and the
+  // very next render "changes the data" by flipping `theme` and `updatedAt`, which is a
+  // false alarm on the one assertion that must never cry wolf.
+  const savedTheme = await page.evaluate(() => localStorage.getItem("theme"))
+  if (savedTheme) {
     await expect
       .poll(async () => {
         const preferences = (await exportPayload(page)).preferences as {
-          palette?: string
           theme?: string
         } | null
-        return {
-          palette: saved.palette ? preferences?.palette : null,
-          theme: saved.theme ? preferences?.theme : null,
-        }
+        return preferences?.theme
       })
-      .toEqual({
-        palette: saved.palette ?? null,
-        theme: saved.theme ?? null,
-      })
+      .toBe(savedTheme)
   }
 }
 

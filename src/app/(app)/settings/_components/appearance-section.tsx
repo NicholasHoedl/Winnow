@@ -4,8 +4,7 @@ import { useTheme } from "next-themes"
 import { Monitor, Moon, Sun } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { PALETTES } from "@/lib/palettes"
-import { usePalette } from "@/components/theme/use-palette"
+import { useHydrated } from "@/components/shared/use-hydrated"
 
 import { SettingsSection } from "./settings-section"
 
@@ -17,9 +16,22 @@ const THEMES = [
 
 function ThemeControl() {
   const { theme, setTheme } = useTheme()
-  // `theme` is undefined until next-themes mounts; default the highlight to
-  // "system" (matches SSR + first client render, so no hydration mismatch).
-  const active = theme ?? "system"
+  /**
+   * Gated on hydration, not just on `theme` being undefined.
+   *
+   * The old `theme ?? "system"` assumed next-themes reports undefined until an effect
+   * runs, so server and first client render would agree. It doesn't — it reads storage
+   * synchronously, so a device set to dark rendered `aria-pressed="true"` on Dark while
+   * the server had said System. React reported the mismatch and, in its words, would
+   * not patch it up: the pressed state then stayed frozen at the server's answer
+   * forever, and a later click added a SECOND pressed button rather than moving it.
+   *
+   * Reading `theme` only after hydration makes the first client render match the server
+   * by construction, and the correction lands as an ordinary update. `useHydrated`
+   * already exists for `ModeToggle`, which has the same problem.
+   */
+  const hydrated = useHydrated()
+  const active = hydrated ? (theme ?? "system") : "system"
 
   return (
     <div>
@@ -47,57 +59,13 @@ function ThemeControl() {
   )
 }
 
-function PaletteControl() {
-  const { palette, setPalette } = usePalette()
-
-  return (
-    <div>
-      <p className="mb-2 text-sm font-medium">Colour palette</p>
-      <div className="flex flex-wrap gap-2">
-        {PALETTES.map((p) => {
-          const selected = palette === p.id
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPalette(p.id)}
-              aria-pressed={selected}
-              className={cn(
-                "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                selected
-                  ? "border-primary ring-primary/30 ring-2"
-                  : "border-border hover:bg-accent",
-              )}
-            >
-              <span className="flex items-center">
-                <span
-                  className="ring-foreground/15 size-4 rounded-full ring-1 ring-inset"
-                  style={{ background: p.swatch.primary }}
-                />
-                <span
-                  className="ring-foreground/15 -ml-1.5 size-4 rounded-full ring-1 ring-inset"
-                  style={{ background: p.swatch.accent }}
-                />
-              </span>
-              {p.label}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 export function AppearanceSection() {
   return (
     <SettingsSection
       title="Appearance"
-      description="Theme and accent colours. Saved to your account, so a new device picks them up."
+      description="Saved to your account, so a new device picks it up."
     >
-      <div className="flex flex-col gap-6">
-        <ThemeControl />
-        <PaletteControl />
-      </div>
+      <ThemeControl />
     </SettingsSection>
   )
 }

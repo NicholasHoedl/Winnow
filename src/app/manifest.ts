@@ -11,8 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    background_color: "#fbfbfe",
-    theme_color: "#4f46e5",
+    // Must track --background and --primary in globals.css. The OS reads these to
+    // paint the splash screen and task-switcher chrome, and cannot see a CSS variable.
+    background_color: "#fbf6f3",
+    theme_color: "#577f67",
     icons: [
       {
         src: "/icons/icon-192.png",

@@ -45,6 +45,5 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     theme: THEMES.includes(row.theme as Theme)
       ? (row.theme as Theme)
       : "system",
-    palette: row.palette,
   }
 }

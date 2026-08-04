@@ -43,9 +43,7 @@ export function IncomeSavingsSection({
             <div
               className={cn(
                 "text-2xl font-semibold tabular-nums",
-                summary.netCents < 0
-                  ? "text-destructive"
-                  : "text-emerald-600 dark:text-emerald-400",
+                summary.netCents < 0 ? "text-destructive" : "text-success",
               )}
             >
               {money(summary.netCents)}

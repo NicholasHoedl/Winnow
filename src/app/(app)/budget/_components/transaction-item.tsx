@@ -76,9 +76,7 @@ export function TransactionItem({
       <span
         className={cn(
           "text-sm font-semibold tabular-nums",
-          isIncome
-            ? "text-emerald-600 dark:text-emerald-400"
-            : "text-foreground",
+          isIncome ? "text-success" : "text-foreground",
         )}
       >
         {isIncome ? "+" : "-"}

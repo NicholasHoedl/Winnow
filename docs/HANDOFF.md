@@ -29,7 +29,7 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 25 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 26 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
@@ -53,7 +53,7 @@ Decided with the user, so do not re-litigate:
 
 - Build on the laptop (`docker build --platform linux/amd64`), `docker save` to a `.tar`,
   carry it over. A private GHCR package is the tidier long-term option.
-- **The PC needs the repo checked out regardless of the image** — 25 migrations against an
+- **The PC needs the repo checked out regardless of the image** — 26 migrations against an
   empty database, `scripts/seed-user.ts` for the account, and `backup.sh` runs from the
   deploy directory. Shipping the image saves the _build_, not the checkout.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
@@ -110,14 +110,26 @@ reproduces against a production build, so it is not a dev-server artifact. `e2e/
 waits it out on `goto`/`reload`; anything that reads after a _client-side_ mutation needs
 scoping to `#content` (the staging div sits at body level).
 
-**The palette store's server snapshot.** `usePalette` returns `DEFAULT_PALETTE` as its
-server snapshot, so the first client render reports indigo whatever the device holds.
-Anything that believes it before hydration acts on a lie — `AppearanceSync` wrote the
-default into the account on **every** page load because of this. Read `localStorage`
-directly inside an effect; it is already correct there. **Do not** reach for a
-`useSyncExternalStore` hydration flag in a component that sits above `{children}` in the
-`(app)` layout: the re-render it forces re-triggers the Suspense boundary around every
-page. `useHydrated()` exists for `ModeToggle`, where that is not a concern.
+**Anything read from localStorage during render will mismatch on hydration.** The server
+has no localStorage, so it renders the default; the client reads the real value on its
+FIRST render, not in an effect. React reports the mismatch and — in its own words —
+"won't be patched up", leaving those attributes frozen at the server's answer for the
+life of the page.
+
+It is worse than it sounds, because later state updates still re-render: the settings
+theme control ended up showing **two** buttons with `aria-pressed="true"` at once, the
+stale server one and the freshly clicked one. It had a comment claiming `theme ?? "system"`
+matched SSR and the first client render. It does not — next-themes reads storage
+synchronously. Gate on `useHydrated()` (`src/components/shared/use-hydrated.ts`) so the
+first client render matches the server by construction and the correction lands as an
+ordinary update.
+
+**Do not** reach for a hydration flag in a component sitting above `{children}` in the
+`(app)` layout, though: the re-render it forces re-triggers the Suspense boundary around
+every page. That constraint is why `AppearanceSync` reads storage inside an effect
+instead. The retired palette store had the same bug in a nastier form — its server
+snapshot reported the default, so it wrote that default into the account on every
+authenticated page load.
 
 **`git checkout <file>` on uncommitted work discards it.** Used it to undo a deliberate
 sabotage and lost the real edit underneath. Prefer re-applying the inverse edit.
@@ -159,10 +171,44 @@ Do not reopen these without new information:
   have been reversed at implementation time on this basis — `@serwist/next` and an iCal
   library. A plan naming a library does not settle it.
 
+### The colour scheme (post-T7)
+
+One warm scheme — deep teal on linen, one terracotta accent, graphite chrome — and **no
+palette picker**. The five `[data-palette]` blocks, `lib/palettes.ts`, `use-palette.ts`
+and the `user_preferences.palette` column are all gone (migration `0025`). Theme
+(light/dark/system) is the whole of "appearance" now.
+
+Two things carry meaning rather than brand and are deliberately NOT drawn from the
+palette: `--destructive` (over budget, overdue, over target, delete) and `--success`
+(money in, positive net). The palette's only red is too muted to read as an error, and
+its greens are the two teals — one of which is the primary. `--success` also replaced the
+split where the dashboard used `cat-5` and the budget module used `emerald-600` for the
+same idea; there are now **no** stock Tailwind colour utilities anywhere in `src/`.
+
+Colour is duplicated by hand in five places that cannot import `globals.css`, and nothing
+enforces them: `manifest.ts`, `layout.tsx`'s `viewport.themeColor`, `public/offline.html`
+(five tokens × four blocks), `global-error.tsx` (five inline hexes), and
+`scripts/generate-icons.mjs`. Re-run that script after changing `--primary`.
+**`src/app/favicon.ico` is generated by nothing and has to be replaced by hand — it is
+still the old indigo.**
+
 ## 6. Known caveats worth stating before someone finds them
 
 - The dashboard **opens on the month view each visit** — the month/week toggle keeps its
   state in the URL. Making it stick means a `user_preferences` column.
+- **The dashboard's week view is the real `TimeGrid`**, the same component `/calendar`
+  renders, but read-only: no `onReschedule`, so nothing drags, and clicks navigate. It
+  needs BOTH `fill` and `maxHeight` — `fill` alone caps nothing, because `h-full` needs a
+  definite height and the dashboard's column chain is built from `min-h`. Measured: with
+  `maxHeight` the week view's page overflow matches the month view's exactly (0px at
+  1440×900, 12px at 1366×768); without it the week ran 293px over.
+- **Day columns on that grid are ~58px wide**, so event titles truncate to a few
+  characters. It answers "where are the gaps"; `Open ↗` goes to the full view.
+- **The six category accents are less mutually distinguishable than the old scheme's.**
+  The palette is deliberately low-contrast and warm, so caramel, brown and rust sit close
+  together. Inherent to the palette, not a mapping error — if a calendar with several
+  coloured calendars becomes unreadable, the honest fixes are fewer categories or one
+  admitted out-of-palette hue.
 - On the one visit a day the **digest banner** appears it adds ~180px and the dashboard
   scrolls that once.
 - **The dashboard overflows below ~1400px wide.** Measured on the current dev account

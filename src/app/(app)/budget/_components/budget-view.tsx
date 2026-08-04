@@ -248,17 +248,13 @@ export function BudgetView({
         <Stat
           label="Income"
           value={money(summary.incomeCents)}
-          className="text-emerald-600 dark:text-emerald-400"
+          className="text-success"
         />
         <Stat label="Expenses" value={money(summary.expenseCents)} />
         <Stat
           label="Net"
           value={money(summary.netCents)}
-          className={
-            summary.netCents < 0
-              ? "text-destructive"
-              : "text-emerald-600 dark:text-emerald-400"
-          }
+          className={summary.netCents < 0 ? "text-destructive" : "text-success"}
         />
       </div>
 

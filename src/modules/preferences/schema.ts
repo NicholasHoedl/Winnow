@@ -45,8 +45,6 @@ export const userPreferences = pgTable("user_preferences", {
   // "light" | "dark" | "system" — next-themes' own vocabulary, stored as text so the
   // set can change without a migration. Validated by Zod on the way in.
   theme: text("theme").notNull().default("system"),
-  // A palette id from `@/lib/palettes`; the colour values themselves live in CSS.
-  palette: text("palette").notNull().default("indigo"),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

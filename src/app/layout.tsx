@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next"
-import Script from "next/script"
 import { Bricolage_Grotesque, Fraunces, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
-import { PALETTE_SCRIPT } from "@/lib/palettes"
 import { RegisterServiceWorker } from "@/components/pwa/register-service-worker"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
@@ -43,9 +41,11 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   viewportFit: "cover",
+  // Must track --background in globals.css; these are read by the OS chrome, which
+  // cannot see a CSS variable.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfbfe" },
-    { media: "(prefers-color-scheme: dark)", color: "#17171f" },
+    { media: "(prefers-color-scheme: light)", color: "#fbf6f3" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1d1f" },
   ],
 }
 
@@ -61,10 +61,6 @@ export default function RootLayout({
       className={`${bricolage.variable} ${fraunces.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
-        {/* Apply the saved colour palette before hydration (no flash). */}
-        <Script id="winnow-palette" strategy="beforeInteractive">
-          {PALETTE_SCRIPT}
-        </Script>
         <RegisterServiceWorker />
         <ThemeProvider
           attribute="class"

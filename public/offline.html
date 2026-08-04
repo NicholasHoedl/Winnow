@@ -68,41 +68,42 @@
       /*
         Lifted from src/app/globals.css so this matches the app. Only light/dark
         is honoured, not the chosen palette: the palette accent would mean
-        duplicating the table in src/lib/palettes.ts into a file that cannot
-        import it, and a stale copy is worse than a default indigo on an error
-        page. Light vs dark is a single boolean and genuinely matters — a white
-        flash on a dark-themed phone at night is the jarring part.
+        import it. Light vs dark is a single boolean and genuinely matters — a
+        white flash on a dark-themed phone at night is the jarring part.
+
+        This is a hand-copied duplicate and nothing enforces it. If globals.css
+        moves, this moves with it or silently goes stale.
       */
       :root {
-        --background: oklch(0.994 0.003 275);
-        --foreground: oklch(0.21 0.02 275);
-        --muted-foreground: oklch(0.516 0.024 274);
-        --primary: oklch(0.505 0.19 273);
-        --border: oklch(0.914 0.008 275);
+        --background: #fbf6f3;
+        --foreground: #1c1d1f;
+        --muted-foreground: #594b3a;
+        --primary: #577f67;
+        --border: #ddd5cb;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --background: oklch(0.172 0.012 275);
-          --foreground: oklch(0.966 0.005 275);
-          --muted-foreground: oklch(0.724 0.02 275);
-          --primary: oklch(0.552 0.196 273);
-          --border: oklch(1 0 0 / 12%);
+          --background: #1c1d1f;
+          --foreground: #f2f1ed;
+          --muted-foreground: #bab4a0;
+          --primary: #a0b89c;
+          --border: rgb(255 255 255 / 12%);
         }
       }
       /* An explicit choice in next-themes' `theme` key overrides the OS. */
       :root[data-theme="light"] {
-        --background: oklch(0.994 0.003 275);
-        --foreground: oklch(0.21 0.02 275);
-        --muted-foreground: oklch(0.516 0.024 274);
-        --primary: oklch(0.505 0.19 273);
-        --border: oklch(0.914 0.008 275);
+        --background: #fbf6f3;
+        --foreground: #1c1d1f;
+        --muted-foreground: #594b3a;
+        --primary: #577f67;
+        --border: #ddd5cb;
       }
       :root[data-theme="dark"] {
-        --background: oklch(0.172 0.012 275);
-        --foreground: oklch(0.966 0.005 275);
-        --muted-foreground: oklch(0.724 0.02 275);
-        --primary: oklch(0.552 0.196 273);
-        --border: oklch(1 0 0 / 12%);
+        --background: #1c1d1f;
+        --foreground: #f2f1ed;
+        --muted-foreground: #bab4a0;
+        --primary: #a0b89c;
+        --border: rgb(255 255 255 / 12%);
       }
 
       * {

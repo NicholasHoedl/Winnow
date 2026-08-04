@@ -1,10 +1,13 @@
 // Generates the PWA/app icon set from an inline SVG "winnowing" mark
-// (a funnel of narrowing bars + a falling grain) in Winnow indigo.
+// (a funnel of narrowing bars + a falling grain) in Winnow deep teal.
 // Run: node scripts/generate-icons.mjs
 import { mkdir, writeFile } from "node:fs/promises"
 import sharp from "sharp"
 
-const INDIGO = "#4f46e5"
+// Must track --primary in globals.css. Re-run this script after changing it — nothing
+// regenerates the icons automatically, and src/app/favicon.ico is not produced here at
+// all and has to be replaced by hand.
+const BRAND = "#577f67"
 
 // Mark paths, centered ~ (256, 256).
 const mark = `
@@ -17,13 +20,13 @@ const mark = `
 
 // Rounded tile — favicon + "any" icons.
 const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="${INDIGO}"/>${mark}
+  <rect width="512" height="512" rx="112" fill="${BRAND}"/>${mark}
 </svg>`
 
 // Full-bleed square with the mark inside the maskable safe zone (~72%) — for
 // maskable + iOS (which applies its own rounding).
 const fullBleed = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="${INDIGO}"/>
+  <rect width="512" height="512" fill="${BRAND}"/>
   <g transform="translate(256 256) scale(0.72) translate(-256 -256)">${mark}</g>
 </svg>`
 
