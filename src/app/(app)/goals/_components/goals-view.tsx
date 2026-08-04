@@ -196,6 +196,14 @@ function GoalCard({
             <li key={milestone.id} className="flex items-center gap-2 text-sm">
               <Checkbox
                 checked={milestone.done}
+                // Every other checkbox in the app names what it acts on; this one didn't,
+                // so it announced as a bare "checkbox" with the title only reachable as
+                // separate text. Same phrasing as the task checkboxes.
+                aria-label={
+                  milestone.done
+                    ? `Reopen ${milestone.title}`
+                    : `Complete ${milestone.title}`
+                }
                 onCheckedChange={(checked) =>
                   run(() => toggleMilestone(milestone.id, checked === true))
                 }

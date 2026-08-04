@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, desc, eq, gte, isNotNull, ne } from "drizzle-orm"
+import { and, asc, desc, eq, gte, isNotNull, lt, ne } from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
@@ -328,4 +328,41 @@ export async function getTaskSummary(timeZone: string) {
     columns: { id: true, title: true, dueDate: true, status: true },
   })
   return summarizeTasks(rows, new Date(), timeZone)
+}
+
+export type CompletedTask = { id: string; title: string; completedOn: string }
+
+/**
+ * Tasks completed on a local date within [start, end], inclusive.
+ *
+ * `completedAt` is a timestamptz — the one date in this module that is an INSTANT rather
+ * than a wall-date. Which local day it belongs to depends on the user's zone, so it
+ * cannot be expressed in the where clause at all. The query bounds it generously in UTC
+ * and the exact membership test happens in JS through the same `todayInZone` every other
+ * surface uses, rather than a hand-rolled offset.
+ */
+export async function getCompletedInRange(
+  start: string,
+  end: string,
+  timeZone: string,
+): Promise<CompletedTask[]> {
+  const userId = await requireUserId()
+  // A day of slack on each side covers every UTC offset; the real test is below.
+  const rows = await db.query.tasks.findMany({
+    where: and(
+      eq(tasks.userId, userId),
+      eq(tasks.status, "done"),
+      isNotNull(tasks.completedAt),
+      gte(tasks.completedAt, new Date(`${addDays(start, -1)}T00:00:00Z`)),
+      lt(tasks.completedAt, new Date(`${addDays(end, 2)}T00:00:00Z`)),
+    ),
+    columns: { id: true, title: true, completedAt: true },
+    orderBy: [asc(tasks.completedAt)],
+  })
+  return rows.flatMap((row) => {
+    if (!row.completedAt) return []
+    const completedOn = todayInZone(row.completedAt, timeZone)
+    if (completedOn < start || completedOn > end) return []
+    return [{ id: row.id, title: row.title, completedOn }]
+  })
 }

@@ -12,6 +12,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarDays,
+  ClipboardList,
   Flame,
   ListChecks,
   ListTodo,
@@ -88,6 +89,7 @@ const NAV_COMMANDS: NavCommand[] = [
   ...navItems,
   { href: "/todos/habits", label: "Habits", icon: Flame },
   { href: "/todos/routines", label: "Routines", icon: ListChecks },
+  { href: "/review", label: "Weekly review", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 

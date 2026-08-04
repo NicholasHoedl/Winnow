@@ -7,23 +7,25 @@ picked up — it is **not** code-level detail yet.
 
 ## Status
 
-| Tranche                                       | State      |
-| --------------------------------------------- | ---------- |
-| T0 — Foundations, cohesion & safety           | ✅ shipped |
-| T1 — Frictionless capture & navigation        | ✅ shipped |
-| T2 — One product: links, Today hub, reminders | ✅ shipped |
-| T3 — Depth: Budget                            | ✅ shipped |
-| T4 — Depth: Meals                             | ✅ shipped |
-| T5a — Depth: to-dos + goals                   | ✅ shipped |
-| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped |
-| T5c-a — Calendar: iCal export + feed          | ✅ shipped |
-| T5c-b — Calendar: event reminders (Web Push)  | after T7   |
-| T6a — Robustness: data durability             | ✅ shipped |
-| T6b — Robustness: offline fallback            | ✅ shipped |
-| T7a — Net-new: Notes / Journal                | ✅ shipped |
-| T7b — Net-new: Routines / templates           | ✅ shipped |
-| T7c — Net-new: Habits / streaks               | ✅ shipped |
-| T7d — Net-new: Weekly review                  | next       |
+| Tranche                                       | State         |
+| --------------------------------------------- | ------------- |
+| T0 — Foundations, cohesion & safety           | ✅ shipped    |
+| T1 — Frictionless capture & navigation        | ✅ shipped    |
+| T2 — One product: links, Today hub, reminders | ✅ shipped    |
+| T3 — Depth: Budget                            | ✅ shipped    |
+| T4 — Depth: Meals                             | ✅ shipped    |
+| T5a — Depth: to-dos + goals                   | ✅ shipped    |
+| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped    |
+| T5c-a — Calendar: iCal export + feed          | ✅ shipped    |
+| T5c-b — Calendar: event reminders (Web Push)  | after hosting |
+| T6a — Robustness: data durability             | ✅ shipped    |
+| T6b — Robustness: offline fallback            | ✅ shipped    |
+| T7a — Net-new: Notes / Journal                | ✅ shipped    |
+| T7b — Net-new: Routines / templates           | ✅ shipped    |
+| T7c — Net-new: Habits / streaks               | ✅ shipped    |
+| T7d — Net-new: Weekly review                  | ✅ shipped    |
+
+**T7 is complete**, so the remaining work is Checkpoint 0.4 (hosting) and then T5c-b.
 
 T5c-b moved behind T7 deliberately: it is the one remaining item that cannot be verified
 without a deployed, installed PWA (iOS only permits Web Push from a home-screen app), and
@@ -636,6 +638,35 @@ entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT 
 - Known and left alone: deleting a rule orphans its completed rows (`seriesId` is
   `onDelete: "set null"`), so the habit disappears from the view. Defensible — you deleted
   the habit — and recorded in ADR-0009 rather than discovered later.
+
+**T7d — shipped**, migration `0024` (`milestones.completed_at`):
+
+- **`src/modules/review/` owns no tables**, copying `digest/`: a pure `service.ts`, an
+  orchestrating `queries.ts`, and nothing else. No `actions.ts` — the page only reads, and
+  an unused server action is dead code, so the plan's "thin actions.ts" was dropped.
+- **The prerequisite was real.** "Goal movement" had no temporal data at all: `done` was a
+  bare boolean and `goals.currentValue` is overwritten in place, so nothing could say what
+  changed in a week rather than what is true now. `completed_at` is **forward-only** —
+  anything ticked before the migration has no timestamp and can never honestly get one, and
+  the Goals card says so instead of showing a zero.
+- **`summarizeMonth` was reused verbatim** for the week, as scoped — despite the name it
+  takes rows and never reads a date. But `getRangeSummary` passes **no budgets**: they are
+  stored per calendar month, and a seven-day slice of a monthly grocery budget is a number
+  nobody set. The review shows the month it belongs to alongside, which is a figure that
+  actually exists.
+- **`targetsForDate` was extracted** so each day is scored against the target in force
+  **that day**. Resolving once for the week would score a week straddling a target change
+  entirely against whichever end happened to be asked for — the specific bug the plan
+  flagged, now covered by a test that walks a week across a change.
+- **`completedAt` is an instant, not a wall-date** — the only such date in todos and goals.
+  Which local day it belongs to depends on the user's zone and cannot go in a where clause,
+  so both range queries bound generously in UTC and do the exact membership test in JS
+  through `todayInZone`.
+- Week stepping is **`?week=`, a link rather than client state**, which is what makes a
+  given week reloadable and shareable. `revalidateHubs()` gained `/review` — the second hub
+  the indirection was kept for, exactly as its comment predicted.
+- Incidental fix: the milestone checkbox had **no accessible label**, announcing as a bare
+  "checkbox" while every other checkbox in the app names what it acts on.
 
 ---
 

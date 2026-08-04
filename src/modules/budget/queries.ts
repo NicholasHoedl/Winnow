@@ -261,3 +261,29 @@ export async function getBudgetSummary(month: string) {
   ])
   return summarizeMonth(txns, budgetRows)
 }
+
+/**
+ * Income, expense and per-category spend over an arbitrary half-open range.
+ *
+ * Reuses `summarizeMonth` unchanged — despite the name it takes rows and never reads a
+ * date, so a week's transactions summarize exactly like a month's.
+ *
+ * Deliberately passes NO budgets. They are stored per calendar month
+ * (`budgets.period_month`), and there is no honest way to slice one into a week: a
+ * seven-day share of a monthly grocery budget is a number nobody set. The weekly review
+ * shows this alongside month-to-date-vs-budget from `getBudgetSummary` instead, which is
+ * a figure that actually exists.
+ */
+export async function getRangeSummary(start: string, nextStart: string) {
+  const userId = await requireUserId()
+  await ensureRecurringTransactions(userId)
+  const txns = await db.query.transactions.findMany({
+    where: and(
+      eq(transactions.userId, userId),
+      gte(transactions.date, start),
+      lt(transactions.date, nextStart),
+    ),
+    columns: { categoryId: true, amountCents: true, type: true },
+  })
+  return summarizeMonth(txns, [])
+}

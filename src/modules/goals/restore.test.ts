@@ -14,6 +14,7 @@ const milestone = {
   done: true,
   dueDate: "2026-08-15",
   sortOrder: 3,
+  completedAt: new Date("2026-07-22T09:15:00Z"),
   createdAt: new Date("2026-07-20T10:00:00Z"),
 }
 
@@ -38,5 +39,13 @@ describe("restorableMilestone", () => {
     expect(payload.done).toBe(true)
     expect(payload.createdAt).toEqual(milestone.createdAt)
     expect(payload.userId).toBe("me")
+  })
+
+  it("carries the completion timestamp, not just the done flag", () => {
+    // Dropping this restores the milestone as done with no date, which removes it from
+    // the weekly review it had already been counted in.
+    expect(restorableMilestone(milestone, "me").completedAt).toEqual(
+      milestone.completedAt,
+    )
   })
 })

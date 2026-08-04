@@ -142,3 +142,23 @@ export async function getMacroSummary(date: string) {
   const totals = sumMacros(entries)
   return { totals, progress: macroProgress(totals, targets ?? null) }
 }
+
+/** Every logged entry in [start, end] with its date, for a multi-day rollup. */
+export async function getMealEntriesRange(start: string, end: string) {
+  const userId = await requireUserId()
+  return db.query.mealEntries.findMany({
+    where: and(
+      eq(mealEntries.userId, userId),
+      gte(mealEntries.date, start),
+      lte(mealEntries.date, end),
+    ),
+    columns: {
+      date: true,
+      servings: true,
+      calories: true,
+      proteinG: true,
+      carbsG: true,
+      fatG: true,
+    },
+  })
+}

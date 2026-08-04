@@ -143,7 +143,12 @@ export async function toggleMilestone(
 
   await db
     .update(milestones)
-    .set({ done: parsedDone.data })
+    .set({
+      done: parsedDone.data,
+      // Stamped and cleared in step with `done`, exactly as `toggleTaskStatus` does —
+      // un-ticking has to drop the timestamp or the weekly review keeps counting it.
+      completedAt: parsedDone.data ? new Date() : null,
+    })
     .where(and(eq(milestones.id, parsedId.data), eq(milestones.userId, userId)))
   revalidateGoals()
   return { ok: true }

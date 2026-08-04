@@ -1,7 +1,8 @@
 import "server-only"
-import { and, asc, eq, isNotNull } from "drizzle-orm"
+import { and, asc, eq, gte, isNotNull, lt } from "drizzle-orm"
 
 import { db } from "@/db"
+import { addDays, todayInZone } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 import { tasks } from "@/modules/todos/schema"
 
@@ -73,5 +74,67 @@ export async function getGoalOptions(): Promise<GoalOption[]> {
     where: eq(goals.userId, userId),
     columns: { id: true, title: true },
     orderBy: [asc(goals.createdAt)],
+  })
+}
+
+export type CompletedMilestone = {
+  id: string
+  title: string
+  goalTitle: string
+  completedOn: string
+}
+
+/**
+ * Milestones ticked on a local date within [start, end] — the only "goal movement" the
+ * schema can actually evidence.
+ *
+ * `goals.currentValue` is overwritten in place and `milestones.done` was a bare boolean
+ * until T7d, so nothing else here can say what changed during a week rather than what is
+ * true now. `completed_at` is forward-only: anything ticked before that migration has no
+ * timestamp and is invisible to this, which the weekly review says out loud rather than
+ * quietly reporting a zero.
+ *
+ * Same instant-vs-wall-date handling as `getCompletedInRange` in todos.
+ */
+export async function getMilestonesCompletedInRange(
+  start: string,
+  end: string,
+  timeZone: string,
+): Promise<CompletedMilestone[]> {
+  const userId = await requireUserId()
+  const [rows, goalRows] = await Promise.all([
+    db.query.milestones.findMany({
+      where: and(
+        eq(milestones.userId, userId),
+        eq(milestones.done, true),
+        isNotNull(milestones.completedAt),
+        gte(
+          milestones.completedAt,
+          new Date(`${addDays(start, -1)}T00:00:00Z`),
+        ),
+        lt(milestones.completedAt, new Date(`${addDays(end, 2)}T00:00:00Z`)),
+      ),
+      columns: { id: true, title: true, goalId: true, completedAt: true },
+      orderBy: [asc(milestones.completedAt)],
+    }),
+    db.query.goals.findMany({
+      where: eq(goals.userId, userId),
+      columns: { id: true, title: true },
+    }),
+  ])
+
+  const goalTitles = new Map(goalRows.map((goal) => [goal.id, goal.title]))
+  return rows.flatMap((row) => {
+    if (!row.completedAt) return []
+    const completedOn = todayInZone(row.completedAt, timeZone)
+    if (completedOn < start || completedOn > end) return []
+    return [
+      {
+        id: row.id,
+        title: row.title,
+        goalTitle: goalTitles.get(row.goalId) ?? "",
+        completedOn,
+      },
+    ]
   })
 }

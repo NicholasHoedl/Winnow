@@ -21,4 +21,8 @@ import { revalidatePath } from "next/cache"
  */
 export function revalidateHubs(): void {
   revalidatePath("/")
+  // The second hub arrived in T7d, which is what this indirection was kept for: the
+  // weekly review composes tasks, money, meals and goals, so any of their mutations
+  // changes it. One edit here rather than six across the module revalidators.
+  revalidatePath("/review")
 }

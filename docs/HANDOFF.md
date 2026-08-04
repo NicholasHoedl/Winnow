@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-08-04**, at commit `edd4838` plus **uncommitted T7a–T7c work**.
+Last updated: **2026-08-04**, at commit `9426bb5` on branch
+`feat/t7-notes-routines-habits` (T7a–T7c), plus **uncommitted T7d work**. `main` is still
+at `edd4838` — every earlier tranche went straight to `main`, so that branch is a
+deviation and is waiting on a fast-forward.
 
 Read `SPEC.md` for what Winnow is and `ARCHITECTURE.md` for how it is built. This file
 covers only what those two can't tell you: where the project actually stands, the working
@@ -26,22 +29,23 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 22 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 25 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
-Tranches T0–T6b are shipped except **T5c-b**, plus **T7a** (Notes / Journal), **T7b**
-(Routines) and **T7c** (Habits). `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its
-status table is current.
+**Every tranche is shipped except T5c-b.** T0–T6b, and all of T7 — which was split into
+T7a Notes → T7b Routines → T7c Habits → T7d Weekly review, and finished in that order at
+the user's choosing before returning to hosting. `docs/IMPROVEMENT-PLAN.md` is the master
+roadmap and its status table is current.
 
-T7 was split into **T7a Notes → T7b Routines → T7c Habits → T7d Weekly review**, and the
-user chose to finish T7 before returning to hosting and T5c-b.
+So the roadmap has run out of code that can be written without a deployment. **Hosting is
+now the only thing standing between this app and being used.**
 
-| Next up                                   | Why                                                                                                                                                                                                                                                          |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **T7d** — weekly review                   | The last of T7. Needs `milestones.completed_at` and four new range queries. Copy `src/modules/digest/` — pure builder, orchestrating query, owns no tables. `summarizeMonth` is misleadingly named and already takes rows, so it works for a week unchanged. |
-| **Hosting / Checkpoint 0.4**              | Host is a **Windows home PC, amd64**; they want to **build the image elsewhere and ship it**, since they are usually on a laptop.                                                                                                                            |
-| **T5c-b** — event reminders over Web Push | Deliberately behind hosting: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy.                                                                                             |
+| Next up                                   | Why                                                                                                                                                                                                                         |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**; they want to **build the image elsewhere and ship it**, since they are usually on a laptop. Three unresolved gaps are listed below. |
+| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
+| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
 
 ### Hosting: what is already known
 
@@ -49,7 +53,7 @@ Decided with the user, so do not re-litigate:
 
 - Build on the laptop (`docker build --platform linux/amd64`), `docker save` to a `.tar`,
   carry it over. A private GHCR package is the tidier long-term option.
-- **The PC needs the repo checked out regardless of the image** — 22 migrations against an
+- **The PC needs the repo checked out regardless of the image** — 25 migrations against an
   empty database, `scripts/seed-user.ts` for the account, and `backup.sh` runs from the
   deploy directory. Shipping the image saves the _build_, not the checkout.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
@@ -91,7 +95,7 @@ once the host is real rather than guessing at it.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **584 unit tests, 86 e2e, 0 lint errors.**
+Current green baseline: **608 unit tests, 88 e2e, 0 lint errors.**
 
 ## 4. Traps that have already been paid for
 

@@ -509,3 +509,26 @@ export function weeklyWeightSeries(
 export function isLikelyBarcode(value: string): boolean {
   return /^\d{8,14}$/.test(value.trim())
 }
+
+/**
+ * The target period in force on `date` — the latest one that had started by then.
+ *
+ * `getMacroTargets(date)` already answers this, but in SQL and one date at a time. A
+ * week-long report needs it seven times, and resolving it once for the whole week is the
+ * bug this exists to prevent: targets are effective-dated, so a week that straddles a
+ * change would be scored entirely against whichever end happened to be asked for.
+ *
+ * Generic in the row so callers can pass whole `macro_targets` rows and keep every column.
+ */
+export function targetsForDate<T extends { effectiveFrom: string }>(
+  targets: readonly T[],
+  date: string,
+): T | null {
+  let best: T | null = null
+  for (const target of targets) {
+    // Date strings compare lexicographically == chronologically.
+    if (target.effectiveFrom > date) continue
+    if (!best || target.effectiveFrom > best.effectiveFrom) best = target
+  }
+  return best
+}

@@ -62,6 +62,16 @@ export const milestones = pgTable("milestones", {
   // Nullable: most milestones are just "the next thing", not a dated commitment.
   dueDate: date("due_date", { mode: "string" }),
   sortOrder: integer("sort_order").notNull().default(0),
+  /**
+   * When it was ticked. Mirrors `tasks.completed_at`, and added in T7d because "goal
+   * movement" had no temporal data at all: `done` is a bare boolean and `goals.
+   * currentValue` is overwritten in place, so nothing could say what changed in a week.
+   *
+   * Forward-only by construction. Milestones ticked before this column existed have no
+   * timestamp and can never get an honest one, so the weekly review under-reports its
+   * first week rather than inventing dates for them.
+   */
+  completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

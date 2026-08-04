@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CalendarPlus } from "lucide-react"
+import { CalendarPlus, ClipboardList } from "lucide-react"
 
 import { auth } from "@/lib/auth"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
@@ -122,6 +122,15 @@ export default async function DashboardPage({
             </p>
           </div>
           <div className="flex gap-2">
+            {/* No nav tab — the bottom bar is full at seven — so the dashboard and the
+                palette are the only ways to find this. */}
+            <Link
+              href="/review"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <ClipboardList className="size-4" />
+              Review
+            </Link>
             <Link
               href="/calendar"
               className={buttonVariants({ variant: "outline", size: "sm" })}

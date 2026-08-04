@@ -37,6 +37,9 @@ export function restorableMilestone(
     // Carried so undo puts the milestone back where it was in the list rather than at
     // position 0 — which, before T5a gave addMilestone a real writer, was every row.
     sortOrder: milestone.sortOrder,
+    // Restoring a ticked milestone without its timestamp would silently drop it out of
+    // the weekly review it had already appeared in.
+    completedAt: milestone.completedAt,
     createdAt: milestone.createdAt,
   }
 }

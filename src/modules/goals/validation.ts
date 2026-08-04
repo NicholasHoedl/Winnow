@@ -58,5 +58,6 @@ export const restoreMilestoneSchema = z.object({
   done: z.boolean(),
   dueDate: dayOrNull,
   sortOrder: z.number().int().min(0).max(1_000_000),
+  completedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
 })

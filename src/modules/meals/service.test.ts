@@ -11,6 +11,7 @@ import {
   recentFrequentFoods,
   sumMacros,
   sumMicros,
+  targetsForDate,
   weeklyWeightSeries,
   type MealType,
 } from "./service"
@@ -474,5 +475,33 @@ describe("weeklyWeightSeries", () => {
 
   it("returns empty for no measurements", () => {
     expect(weeklyWeightSeries([], END)).toEqual([])
+  })
+})
+
+describe("targetsForDate", () => {
+  const older = { effectiveFrom: "2026-01-01", calories: 2000 }
+  const newer = { effectiveFrom: "2026-07-20", calories: 2400 }
+  const periods = [newer, older] // deliberately not in order
+
+  it("picks the latest period that had already started", () => {
+    expect(targetsForDate(periods, "2026-07-25")).toBe(newer)
+    expect(targetsForDate(periods, "2026-03-01")).toBe(older)
+  })
+
+  it("counts the effective date itself as in force", () => {
+    expect(targetsForDate(periods, "2026-07-20")).toBe(newer)
+  })
+
+  it("returns null before any period started", () => {
+    expect(targetsForDate(periods, "2025-12-31")).toBeNull()
+    expect(targetsForDate([], "2026-07-25")).toBeNull()
+  })
+
+  // The reason this function exists rather than one lookup for the whole week.
+  it("resolves each day of a week that straddles a change", () => {
+    const week = ["2026-07-18", "2026-07-19", "2026-07-20", "2026-07-21"]
+    expect(week.map((d) => targetsForDate(periods, d)?.calories)).toEqual([
+      2000, 2000, 2400, 2400,
+    ])
   })
 })
