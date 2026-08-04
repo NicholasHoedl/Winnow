@@ -112,15 +112,19 @@ HTTPS, where before it needed none.
   screen's mobile and desktop states together, not desktop-then-squish.
 - **Light and dark themes.** System-following by default with a manual
   toggle, via shadcn/ui's CSS-variable theming. The theme tokens are
-  established in Phase 0 so nothing needs re-plumbing later; the detailed
-  palette itself is still a Phase 5 design concern — only the mechanism is
-  wired early.
+  established in Phase 0 so nothing needs re-plumbing later.
+  **Settled after T7:** the colour scheme is no longer an open Phase 5
+  question. It is one warm, muted palette — deep teal on linen, a single
+  terracotta accent, graphite chrome — with every value living in
+  `app/globals.css` and measured to clear WCAG AA in both themes. The
+  five-scheme picker that briefly existed was removed with it; theme
+  (light/dark/system) is now the whole of "appearance".
 - **Design references.** Visual references for building the UI (shell layout,
   calendar grid, event cards, popovers, category bars) live in
   [`docs/design/ui-reference.md`](docs/design/ui-reference.md) — consult them
   for the 0.3 shell, the Phase 4 Calendar module, and the Phase 5 visual pass.
-  They guide layout and interaction patterns; the exact palette is reconciled
-  with the "one dominant color + accent" rule in Phase 5.
+  They guide layout and interaction patterns. Their colours predate the warm
+  scheme above and should be read for structure, not for hue.
 
 ---
 
@@ -243,30 +247,36 @@ not `numeric` used carelessly) — this is a correctness requirement for the
 budgeting module, called out explicitly because float-based money math is
 a classic, easy-to-introduce bug.
 
-> **Some sections below are current, others are the v1 plan.** §3.2 (to-dos and
-> goals), §3.3 (calendar) and §3.5 (meals) were rewritten against the real schema
-> when those modules were reworked, and are accurate. §3.4 (budgeting) still
-> describes the original plan — later work added `transaction_recurrences` and
-> `user_preferences`, and never built the planned `accounts` table.
+> **Read this before trusting anything below it.** This document was written against
+> the v1 plan and has been revised unevenly since.
 >
-> `user_preferences` has no section of its own: one row per user, holding the
-> settings the server must read (zone, week start, currency, time format, default
-> priority, digest) plus — since T6a — the account's saved `theme` and `palette`.
-> Those two are **mirrored, not moved**: they are applied before first paint from
-> localStorage by blocking scripts in the root layout, above any session lookup,
-> so the server cannot supply them in time. The columns exist so a new device
-> adopts them and so they appear in the export, where they were missing.
+> **Accurate**, rewritten against the real schema: §3.2 (to-dos and goals), §3.3
+> (calendar), §3.5 (meals).
 >
-> The mirror (`components/theme/appearance-sync.tsx`) must not act before hydration,
-> and this is easy to get wrong: `theme` announces its own readiness by being
-> `undefined`, but the palette store returns `DEFAULT_PALETTE` as its server snapshot,
-> so the first client render reports indigo whatever the device holds. Believing it
-> wrote the default into the account on **every** authenticated page load and corrected
-> it a tick later — two writes a navigation, and a window where a second device would
-> read the wrong palette. It reads the palette straight from localStorage in the
-> effect now, which is already correct there. A hydration flag fixes the write too,
-> but this component sits above `{children}` in the (app) layout, so the re-render it
-> forces re-triggers the Suspense boundary around every page.
+> **Still the original plan**: §3.4 (budgeting) — later work added
+> `transaction_recurrences` and `user_preferences`, and the planned `accounts` table
+> was never built.
+>
+> **Absent entirely.** Four modules shipped after this document was last revised and
+> have no section here at all: **notes** (T7a, journal + free notes), **routines**
+> (T7b, `routines` + `routine_items`), **habits** (T7c — no tables of its own; it is
+> derived from the existing recurrence engine, see ADR-0009) and **review** (T7d —
+> also no tables; a pure projection of four other modules). There are 24 user-owned
+> tables across 12 modules, at 27 migrations (`0000`–`0026`). Do not infer from
+> silence here that something does not exist.
+>
+> `user_preferences` has no section of its own: one row per user, holding the settings
+> the server must read — zone, week start, currency, time format, default task
+> priority, digest, the goal momentum window (T8), and the account's saved `theme`.
+> `theme` is **mirrored, not moved**: it is applied before first paint from
+> localStorage by a blocking script in the root layout, above any session lookup, so
+> the server cannot supply it in time. The column exists so a new device adopts it and
+> so it reaches the export.
+>
+> A `palette` column lived here too, between T6a and the post-T7 recolour, backing a
+> five-scheme picker. Both are gone (migration 0025). The neutrals were shared across
+> all five schemes, so recolouring the app changed the ground every one of them stood
+> on — and rather than restyle five schemes nobody asked for, there is now one look.
 >
 > `drizzle/` and each module's `schema.ts` are always the source of truth; the
 > ADRs in `docs/adr/` record why the shape changed. What is worth reading here

@@ -17,7 +17,7 @@ shadcn/ui, Auth.js (single account, JWT), Vitest + Playwright.
 docker compose -f docker/docker-compose.yml up -d   # postgres on :5432
 pnpm install
 cp .env.example .env                                # fill AUTH_SECRET + SEED_USER_*
-pnpm db:migrate                                     # 22 migrations
+pnpm db:migrate                                     # 27 migrations
 pnpm db:seed                                        # creates the single account
 pnpm dev
 ```
@@ -52,6 +52,6 @@ Two things that bite otherwise:
 | `SPEC.md` | What the product is, and what is deliberately out of scope |
 | `ARCHITECTURE.md` | Stack rationale, data model, deployment, PWA and auth approach |
 | `ROADMAP.md` | The original phased build and its checkpoints |
-| `docs/IMPROVEMENT-PLAN.md` | The master roadmap since the MVP - tranches T0-T7, plus a corrections list worth two minutes |
-| `docs/adr/` | Why the non-obvious calls were made (0001-0008) |
-| `docs/runbooks/` | Backup and restore, drilled rather than theoretical |
+| `docs/IMPROVEMENT-PLAN.md` | The master roadmap since the MVP - tranches T0-T8, plus a corrections list worth two minutes |
+| `docs/adr/` | Why the non-obvious calls were made (0001-0010) |
+| `docs/runbooks/` | `deploy.md` for standing the app up on the home server; `backup-restore.md`, drilled rather than theoretical |

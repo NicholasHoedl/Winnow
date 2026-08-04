@@ -14,6 +14,36 @@ conventions that are not guessable, and the traps that have already cost real ti
 
 ---
 
+> ### If you are Claude Code running on the Windows desktop
+>
+> You have been cloned onto the deploy target. **Your job is Checkpoint 0.4: get this
+> stack running and reachable over Tailscale.** It has never been done, on any machine.
+>
+> 1. Read **§1 below** — the one thing most likely to be assumed wrong — then
+>    **`docs/runbooks/deploy.md`**, which is the actual procedure.
+> 2. Settle the Docker-Desktop-login question in §2 **before** you build. If the answer
+>    turns out to be "run it under WSL2 as a service", that changes the first step rather
+>    than being something to patch later.
+> 3. Work through the runbook. It marks which steps only the user can do.
+>
+> Four things to have straight before you start:
+>
+> - **You will not type any secret.** `POSTGRES_PASSWORD`, `AUTH_SECRET` and
+>   `SEED_USER_PASSWORD` are the user's to enter. Scaffold the file, leave them blank, say
+>   so.
+> - **`pnpm test:e2e` must not run on this machine.** It is written against the dev server
+>   and writes rows into whatever database it can reach. Verification here is the three
+>   checks in the runbook, not the suite.
+> - **`docs/runbooks/deploy.md` is a first draft that has never been executed.** It was
+>   assembled from the compose file, the Dockerfile and ADR-0002. Where reality disagrees
+>   with it, reality is right — fix the runbook as you go, and commit that.
+> - **The repo on this machine is the deploy directory**, not a scratch checkout. Migrations,
+>   the seed script and `backup.sh` all run from it, and it stays.
+
+---
+
+---
+
 ## 1. The one thing most likely to be assumed wrong
 
 **Winnow has never been deployed. There is no home server running it.**
@@ -36,45 +66,70 @@ runs all 27 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
-**Every tranche is shipped except T5c-b.** T0–T6b, and all of T7 — which was split into
-T7a Notes → T7b Routines → T7c Habits → T7d Weekly review, and finished in that order at
-the user's choosing before returning to hosting. `docs/IMPROVEMENT-PLAN.md` is the master
-roadmap and its status table is current.
+**Every tranche is shipped except T5c-b.** T0–T6b; all of T7, split into T7a Notes → T7b
+Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
+choosing; then T8 (goal momentum), which was not on the roadmap and came out of a question
+about linking tasks to goals. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its
+status table is current.
 
 So the roadmap has run out of code that can be written without a deployment. **Hosting is
 now the only thing standing between this app and being used.**
 
 | Next up                                   | Why                                                                                                                                                                                                                         |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**; they want to **build the image elsewhere and ship it**, since they are usually on a laptop. Three unresolved gaps are listed below. |
+| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (12GB+ VRAM). Procedure: **`docs/runbooks/deploy.md`**. |
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
+| **The AI companion**                      | Scoped, not built, and deliberately behind hosting — it runs a local model on the host's GPU, so it cannot be tested until the stack is up. Locked decisions are in §5.                                                     |
 
 ### Hosting: what is already known
 
+**The full procedure is `docs/runbooks/deploy.md`.** What follows is only the context that
+runbook assumes.
+
 Decided with the user, so do not re-litigate:
 
-- Build on the laptop (`docker build --platform linux/amd64`), `docker save` to a `.tar`,
-  carry it over. A private GHCR package is the tidier long-term option.
-- **The PC needs the repo checked out regardless of the image** — 27 migrations against an
-  empty database, `scripts/seed-user.ts` for the account, and `backup.sh` runs from the
-  deploy directory. Shipping the image saves the _build_, not the checkout.
+- **Clone the repo on the desktop and build there.** This replaced an earlier plan to build
+  on the laptop, `docker save` to a `.tar` and carry it over. The change is not cosmetic:
+  the PC needed the checkout regardless — 27 migrations, `scripts/seed-user.ts`, and
+  `backup.sh` all run from the deploy directory — so shipping a tar only ever saved the
+  build, at the cost of a manual transfer.
+- One consequence: **`docker-compose.prod.yml`'s `up -d --build` usage line is now
+  correct.** It was listed here as a gap under the tar plan, because rebuilding on the PC
+  defeated the transfer. Under the clone plan that is exactly what you want. If you find a
+  note elsewhere calling it a mistake, that note predates this decision.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
   Tailscale renews the certificate itself, so there is no renewal cron.
+- **Sequencing: hosting before the AI companion.** The companion is designed to run a local
+  model on that machine's GPU, so it cannot be honestly tested until the stack is up.
+  Building it first would stack a GPU-passthrough container onto a deploy that has never
+  been done once.
 
-Three gaps flagged to the user and not yet resolved:
+Two gaps still unresolved:
 
 1. **Docker Desktop on Windows is tied to a login session.** After a Windows Update reboot
-   the stack stays down until someone logs in. ADR-0002 assumed an always-on machine.
+   the stack stays down until someone logs in. ADR-0002 assumed an always-on machine, so
+   this is a broken assumption rather than a config detail. Settle it before building — if
+   the answer is "run under WSL2 as a service" it changes the first step, not a later one.
 2. **Postgres is not published** in `docker-compose.prod.yml` (correct for security), so
    `pnpm db:migrate` from the host cannot reach it. Needs a temporary port publish for the
-   first migrate + seed, then removal.
-3. **`docker-compose.prod.yml`'s own usage line says `up -d --build`** — which would
-   rebuild from source on the PC and defeat the point. Use plain `up -d` with a loaded image.
+   first migrate + seed, then removal. The runbook spells this out.
+
+Two repo-side traps the runbook exists to defuse, both found while writing it:
+
+- **`.env.example` was missing `POSTGRES_PASSWORD`**, which `docker-compose.prod.yml`
+  requires — so following the example file verbatim produced a stack that would not start.
+  Fixed, along with an explanation of the next item.
+- **`DATABASE_URL` means two different things.** The app container never reads the one in
+  `.env` (compose builds its own, pointing at hostname `postgres`); your shell does, for
+  `db:migrate` and `db:seed`, and needs `localhost` plus the **production** password — not
+  the `winnow:winnow` dev value the example ships with.
 
 Also: `docs/runbooks/backup-restore.md` schedules with cron/systemd, and `backup.sh` is a
 bash script. On Windows that means Task Scheduler and Git Bash/WSL. Rewrite that section
-once the host is real rather than guessing at it.
+once the host is real rather than guessing at it. Note too that `backup.sh` defaults its
+container name to `winnow-postgres`, which is the **dev** name; under the prod compose file
+it is `winnow-postgres-1`.
 
 ## 3. Working conventions that are not guessable
 
@@ -192,6 +247,46 @@ Do not reopen these without new information:
 - **Dependencies need an argument, not a preference** (ADR-0006). Two named dependencies
   have been reversed at implementation time on this basis — `@serwist/next` and an iCal
   library. A plan naming a library does not settle it.
+
+### The AI companion (scoped, not built)
+
+A large feature scoped in conversation and deliberately parked **behind hosting**. Nothing
+is implemented; no ADR yet, because the design stopped at an agreed understanding rather
+than a chosen architecture. Four decisions are locked and should not be reopened without
+new information:
+
+- **A local model, not a hosted API.** ADR-0002 says no public internet exposure at any
+  point, and the data is a personal journal, body weight and a complete financial ledger.
+  Privacy is the one irreversible constraint here — every other consideration (quality,
+  latency, cost) is a config change. The host has a discrete NVIDIA GPU with 12GB+ VRAM,
+  which makes a 14B-class model viable, so the trade-off is affordable.
+- **Behind an OpenAI-compatible seam**, configured exactly like the `OFF_*` keys in
+  `src/lib/config.ts` — `AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL`. Ollama, llama.cpp and
+  the hosted providers all speak it, so the provider stays a config change.
+- **Propose-only.** The model never writes to the database. It emits a proposal, that
+  proposal is validated by the module's existing Zod schemas, the user edits and approves,
+  and the write goes through the actions the UI already calls. This is what makes a weak
+  local model safe: a bad generation is a rejected suggestion, never corrupted data.
+- **Task-shaped, not a chat.** A "Plan this goal" button producing a proposal — no message
+  history, no context-window management, no intent detection. Those three are what local
+  models are worst at and what is hardest to test.
+
+First slice is **goal planning**: the thinnest cut through every layer, and everything
+after it reuses the same spine. Later slices, in rough value order: an LLM fallback when a
+quick-add parser returns `null` (invisible, and it would have caught the `abc278c` →
+278-carbs trap in §6); journal-aware retrospectives, which are the one thing a query
+genuinely cannot do; and cross-module questions the UI has no page for.
+
+Two limits that are structural rather than temporary, and worth knowing before planning
+around them:
+
+- **There is no scheduler** (§2), so an AI review that arrives unprompted on a Sunday is
+  blocked on the same thing T5c-b is. Running it when `/review` is opened is not.
+- **A Server Action is the wrong shape for a 30-second call.** ADR-0005 documented the
+  500ms version of this: an outbound call inside a Server Action blocks the React
+  transition it is in. Streaming from a route handler is the honest answer and it
+  contradicts ADR-0005's reasoning for choosing a Server Action, so it needs an ADR that
+  supersedes rather than a quiet exception.
 
 ### The colour scheme (post-T7)
 

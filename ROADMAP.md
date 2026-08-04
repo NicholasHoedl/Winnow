@@ -3,6 +3,22 @@
 Status: Draft v1 (pre-implementation)
 Last updated: 2026-07-21
 
+> **Historical. Preserved as written, not maintained.** This is the plan the project
+> started from; it is kept because the _reasoning_ about sequencing is still worth
+> reading, and it is deliberately not edited to match what happened.
+>
+> Two things it says are no longer true, and both matter:
+>
+> - **"At the end of every phase, the app runs on the home server."** It never has.
+>   Winnow has never been deployed to hardware. Checkpoint 0.4 is still open, and it is
+>   now the only thing standing between this app and being used — see
+>   `docs/HANDOFF.md` §1 and `docs/runbooks/deploy.md`.
+> - **The visual palette is no longer "a Phase 5 concern".** It was settled after T7:
+>   one warm scheme, no picker. See ARCHITECTURE.md §1.3.
+>
+> For where the project actually stands, read `docs/HANDOFF.md`. For what was built
+> after the MVP, read `docs/IMPROVEMENT-PLAN.md`.
+
 This roadmap assumes SPEC.md and ARCHITECTURE.md. Each phase is scoped to
 be **independently shippable**: at the end of every phase, the app runs on
 the home server, is reachable over Tailscale, and does something real —
