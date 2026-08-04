@@ -2,7 +2,8 @@
 // (no Date objects) so it crosses the server-action boundary and renders directly in the
 // ⌘K palette. `href` is where selecting the result navigates.
 
-export type SearchResultType = "task" | "event" | "food" | "transaction" | "goal"
+export type SearchResultType =
+  "task" | "event" | "food" | "transaction" | "goal" | "note"
 
 export type SearchResult = {
   type: SearchResultType

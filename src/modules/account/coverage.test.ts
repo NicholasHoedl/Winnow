@@ -9,7 +9,9 @@ import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
 import * as goalsSchema from "@/modules/goals/schema"
 import * as mealsSchema from "@/modules/meals/schema"
+import * as notesSchema from "@/modules/notes/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
+import * as routinesSchema from "@/modules/routines/schema"
 import * as todosSchema from "@/modules/todos/schema"
 
 import { exportKeyFor } from "./payload"
@@ -43,7 +45,9 @@ const SCHEMAS = {
   calendar: calendarSchema,
   goals: goalsSchema,
   meals: mealsSchema,
+  notes: notesSchema,
   preferences: preferencesSchema,
+  routines: routinesSchema,
   todos: todosSchema,
 } satisfies Record<string, Record<string, unknown>>
 
@@ -107,7 +111,7 @@ describe("account data tools cover every user-owned table", () => {
     const tables = userOwnedTables()
     // A sanity floor: if discovery silently broke, every assertion below would pass
     // vacuously and the guard would be worse than useless.
-    expect(tables.length).toBeGreaterThanOrEqual(21)
+    expect(tables.length).toBeGreaterThanOrEqual(24)
     expect(tables.map(([, table]) => table)).toContain("water_logs")
   })
 

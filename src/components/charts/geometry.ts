@@ -131,3 +131,41 @@ export function areaPath(points: Point[], baselineY: number): string {
 function round(value: number): number {
   return Math.round(value * 100) / 100
 }
+
+export type Ring = {
+  /** Square viewBox side that fits the ring including its stroke. */
+  size: number
+  /** Centre of that box, on both axes. */
+  center: number
+  /** Radius of the stroke's centre line. */
+  radius: number
+  circumference: number
+  /** `stroke-dashoffset` for the filled arc — the rest of the ring stays as track. */
+  dashOffset: number
+}
+
+/**
+ * A progress ring, expressed as a dash offset rather than an arc path.
+ *
+ * A stroked `<circle>` with `stroke-dasharray: circumference` draws the whole ring; the
+ * offset hides the unfilled part. That beats generating an arc `d` because it needs no
+ * large-arc/sweep flag handling, degenerates cleanly at 0% and 100% (an arc path for a
+ * full circle collapses to a point), and animates by interpolating one number.
+ *
+ * The caller still has to rotate the circle -90° for the fill to start at twelve o'clock;
+ * that is a render concern, not a geometric one.
+ */
+export function ringArc(percent: number, radius = 28, strokeWidth = 6): Ring {
+  // Clamped rather than trusted: a rate of 0 makes an empty ring, and anything past 100
+  // would wrap the dash back around and read as a partial fill.
+  const clamped = Math.min(100, Math.max(0, percent))
+  const circumference = 2 * Math.PI * radius
+  const size = (radius + strokeWidth / 2) * 2
+  return {
+    size: round(size),
+    center: round(size / 2),
+    radius: round(radius),
+    circumference: round(circumference),
+    dashOffset: round(circumference * (1 - clamped / 100)),
+  }
+}

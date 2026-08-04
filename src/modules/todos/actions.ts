@@ -9,10 +9,12 @@ import { events } from "@/modules/calendar/schema"
 import { goals } from "@/modules/goals/schema"
 import { type ActionResult, invalid, nullify } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
+import { currentCycle } from "@/lib/recurrence"
 import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
+import { reopenWouldDestroy } from "./habits"
 import { syncRuleInstances, type Task } from "./queries"
 import { restorableTask } from "./restore"
 import {
@@ -194,11 +196,57 @@ export async function toggleTaskStatus(id: unknown): Promise<ActionResult> {
 
   const task = await db.query.tasks.findFirst({
     where: and(eq(tasks.id, parsed.data), eq(tasks.userId, userId)),
-    columns: { status: true },
+    columns: { status: true, seriesId: true, occurrenceDate: true },
   })
   if (!task) return { ok: false, error: "Task not found." }
 
   const nextStatus = task.status === "open" ? "done" : "open"
+
+  // Re-opening a completed instance of a recurring task is only safe while it is still
+  // the CURRENT cycle. Off-cycle it becomes an open row that `syncRuleInstances` retires
+  // on the next render of /todos, the dashboard or the digest — the completion vanishes
+  // with nothing left to show it happened, and the habit history changes underneath it.
+  // Refuse rather than destroy it. The extra reads only run when a recurring instance is
+  // actually being re-opened.
+  if (nextStatus === "open" && task.seriesId && task.occurrenceDate) {
+    const [rule] = await db
+      .select({
+        freq: taskRecurrences.freq,
+        recurrenceInterval: taskRecurrences.recurrenceInterval,
+        weekdays: taskRecurrences.weekdays,
+        monthlyMode: taskRecurrences.monthlyMode,
+        flexible: taskRecurrences.flexible,
+        startDate: taskRecurrences.startDate,
+        endDate: taskRecurrences.endDate,
+      })
+      .from(taskRecurrences)
+      .where(
+        and(
+          eq(taskRecurrences.id, task.seriesId),
+          eq(taskRecurrences.userId, userId),
+        ),
+      )
+      .limit(1)
+
+    // No rule means the FK already nulled `seriesId` on delete, so nothing retires this
+    // row and it is safe — the `if` above simply can't be reached in that state.
+    if (rule) {
+      const { timeZone, weekStartsOn } = await getUserPreferences()
+      const cycle = currentCycle(
+        rule,
+        todayInZone(new Date(), timeZone),
+        weekStartsOn,
+      )
+      if (reopenWouldDestroy(task, cycle)) {
+        return {
+          ok: false,
+          error:
+            "That's from an earlier cycle. Reopening it would delete it for good.",
+        }
+      }
+    }
+  }
+
   await db
     .update(tasks)
     .set({

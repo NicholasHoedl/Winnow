@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Repeat, Settings2 } from "lucide-react"
+import Link from "next/link"
+import { Flame, ListChecks, Plus, Repeat, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
@@ -20,7 +21,7 @@ import { bucketTasks } from "@/modules/todos/service"
 
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 
 import { ListManager } from "./list-manager"
 import { QuickAdd } from "./quick-add"
@@ -231,6 +232,22 @@ export function TodosView({
           >
             <Repeat className="size-4" />
           </Button>
+          {/* A sub-route rather than a nav entry: the bottom tab bar is full at seven,
+              and `isNavActive` keeps To-dos highlighted while you're in here. */}
+          <Link
+            href="/todos/routines"
+            aria-label="Routines"
+            className={buttonVariants({ variant: "outline", size: "icon" })}
+          >
+            <ListChecks className="size-4" />
+          </Link>
+          <Link
+            href="/todos/habits"
+            aria-label="Habits"
+            className={buttonVariants({ variant: "outline", size: "icon" })}
+          >
+            <Flame className="size-4" />
+          </Link>
           <Button
             variant="outline"
             size="icon"

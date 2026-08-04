@@ -2,6 +2,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   ListTodo,
+  NotebookPen,
   Target,
   Utensils,
   Wallet,
@@ -23,6 +24,7 @@ export const navItems: NavItem[] = [
   { href: "/goals", label: "Goals", icon: Target },
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/meals", label: "Meals", icon: Utensils },
+  { href: "/notes", label: "Notes", icon: NotebookPen },
 ]
 
 export function isNavActive(pathname: string, href: string): boolean {

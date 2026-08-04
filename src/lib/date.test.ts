@@ -13,6 +13,7 @@ import {
   monthSeries,
   shiftMonth,
   todayInZone,
+  weekRange,
 } from "./date"
 
 const TZ = "America/Chicago"
@@ -80,6 +81,49 @@ describe("date-string primitives", () => {
   it("fmt zero-pads month + day", () => {
     expect(fmt(2026, 7, 5)).toBe("2026-07-05")
     expect(fmt(2026, 12, 25)).toBe("2026-12-25")
+  })
+})
+
+describe("weekRange", () => {
+  // 2026-07-19 is a Sunday, so 07-22 is the Wednesday of that week.
+  it("brackets a midweek date, Sunday-start", () => {
+    expect(weekRange("2026-07-22", 0)).toEqual({
+      start: "2026-07-19",
+      end: "2026-07-25",
+    })
+  })
+
+  it("shifts the whole window for Monday-start", () => {
+    expect(weekRange("2026-07-22", 1)).toEqual({
+      start: "2026-07-20",
+      end: "2026-07-26",
+    })
+  })
+
+  it("defaults to Sunday-start", () => {
+    expect(weekRange("2026-07-22")).toEqual(weekRange("2026-07-22", 0))
+  })
+
+  it("includes the first and last day of the week itself", () => {
+    expect(weekRange("2026-07-19", 0).start).toBe("2026-07-19") // Sunday
+    expect(weekRange("2026-07-25", 0).end).toBe("2026-07-25") // Saturday
+  })
+
+  // The case the +7 in the modulo exists for: a Sunday under Monday-start belongs to
+  // the week that began the PREVIOUS Monday, not the one starting the next day.
+  it("puts a Sunday in the preceding week when weeks start Monday", () => {
+    expect(weekRange("2026-07-19", 1)).toEqual({
+      start: "2026-07-13",
+      end: "2026-07-19",
+    })
+  })
+
+  it("crosses the year boundary", () => {
+    // 2026-01-01 is a Thursday.
+    expect(weekRange("2026-01-01", 0)).toEqual({
+      start: "2025-12-28",
+      end: "2026-01-03",
+    })
   })
 })
 

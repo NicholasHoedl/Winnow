@@ -9,11 +9,11 @@ import { EXPORT_KEYS, INSERT_ORDER, USER_TABLES } from "./tables"
 
 describe("USER_TABLES", () => {
   it("finds every user-owned table exactly once", () => {
-    // 21 as of T5c-a, which added `calendar_feed_tokens`. An exact count rather than a
-    // floor on purpose: it should be a deliberate edit to add a table to everyone's
+    // 24 as of T7b, which added `routines` + `routine_items`. An exact count rather than
+    // a floor on purpose: it should be a deliberate edit to add a table to everyone's
     // backup, and this is the line that makes someone notice they did.
-    expect(USER_TABLES.length).toBe(21)
-    expect(new Set(EXPORT_KEYS).size).toBe(21)
+    expect(USER_TABLES.length).toBe(24)
+    expect(new Set(EXPORT_KEYS).size).toBe(24)
   })
 
   it("uses the export's key for the one table whose name differs", () => {

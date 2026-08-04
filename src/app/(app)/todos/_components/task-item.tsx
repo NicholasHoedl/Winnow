@@ -15,7 +15,8 @@ import { dueStatus } from "@/lib/date"
 
 import { cn } from "@/lib/utils"
 
-import type { TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
+import type { TaskWithSeries } from "@/modules/todos/queries"
+import { repeatLabel } from "@/modules/todos/service"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -35,17 +36,6 @@ function formatDue(dueDate: string): string {
     day: "numeric",
     timeZone: "UTC",
   })
-}
-
-const UNIT = { daily: "day", weekly: "week", monthly: "month" } as const
-
-/** "Daily" / "Weekly" / "Every 2 weeks" for a repeat badge. */
-function repeatLabel(series: TaskSeries): string {
-  const unit = UNIT[series.freq]
-  if (series.recurrenceInterval > 1) {
-    return `Every ${series.recurrenceInterval} ${unit}s`
-  }
-  return { daily: "Daily", weekly: "Weekly", monthly: "Monthly" }[series.freq]
 }
 
 export function TaskItem({

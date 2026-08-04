@@ -42,6 +42,31 @@ export function dowOf(dateStr: string): number {
   return new Date(`${dateStr}T00:00:00Z`).getUTCDay()
 }
 
+// --- week bounds ---
+
+/**
+ * The inclusive bounds of the week containing `dateStr`, respecting the user's
+ * `weekStartsOn` preference (0 = Sunday, 1 = Monday).
+ *
+ * `calendar/service.ts` already has `weekDates`, which returns the seven dates for a
+ * grid to render. This returns just the endpoints, which is what a range query wants —
+ * expanding to seven strings only to read the first and last would be the long way
+ * round. Both agree on where a week begins; this one is here rather than in the
+ * calendar module because habits and the weekly review need it and neither should be
+ * importing another module's service.
+ */
+export function weekRange(
+  dateStr: string,
+  weekStartsOn = 0,
+): { start: string; end: string } {
+  // Days elapsed since the week's start. The +7 keeps the modulo non-negative when
+  // weekStartsOn is ahead of the date's weekday — a Sunday with weekStartsOn=1 belongs
+  // to the week that began the PREVIOUS Monday, not the one starting tomorrow.
+  const offset = (dowOf(dateStr) - weekStartsOn + 7) % 7
+  const start = addDays(dateStr, -offset)
+  return { start, end: addDays(start, 6) }
+}
+
 // --- month strings (YYYY-MM) ---
 
 /** Shift a 'YYYY-MM' by whole months; negative goes back. Rolls the year over. */

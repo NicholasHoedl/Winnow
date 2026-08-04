@@ -7,20 +7,28 @@ picked up — it is **not** code-level detail yet.
 
 ## Status
 
-| Tranche                                       | State       |
-| --------------------------------------------- | ----------- |
-| T0 — Foundations, cohesion & safety           | ✅ shipped  |
-| T1 — Frictionless capture & navigation        | ✅ shipped  |
-| T2 — One product: links, Today hub, reminders | ✅ shipped  |
-| T3 — Depth: Budget                            | ✅ shipped  |
-| T4 — Depth: Meals                             | ✅ shipped  |
-| T5a — Depth: to-dos + goals                   | ✅ shipped  |
-| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped  |
-| T5c-a — Calendar: iCal export + feed          | ✅ shipped  |
-| T5c-b — Calendar: event reminders (Web Push)  | next        |
-| T6a — Robustness: data durability             | ✅ shipped  |
-| T6b — Robustness: offline fallback            | ✅ shipped  |
-| T7 — Net-new modules                          | not started |
+| Tranche                                       | State      |
+| --------------------------------------------- | ---------- |
+| T0 — Foundations, cohesion & safety           | ✅ shipped |
+| T1 — Frictionless capture & navigation        | ✅ shipped |
+| T2 — One product: links, Today hub, reminders | ✅ shipped |
+| T3 — Depth: Budget                            | ✅ shipped |
+| T4 — Depth: Meals                             | ✅ shipped |
+| T5a — Depth: to-dos + goals                   | ✅ shipped |
+| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped |
+| T5c-a — Calendar: iCal export + feed          | ✅ shipped |
+| T5c-b — Calendar: event reminders (Web Push)  | after T7   |
+| T6a — Robustness: data durability             | ✅ shipped |
+| T6b — Robustness: offline fallback            | ✅ shipped |
+| T7a — Net-new: Notes / Journal                | ✅ shipped |
+| T7b — Net-new: Routines / templates           | ✅ shipped |
+| T7c — Net-new: Habits / streaks               | ✅ shipped |
+| T7d — Net-new: Weekly review                  | next       |
+
+T5c-b moved behind T7 deliberately: it is the one remaining item that cannot be verified
+without a deployed, installed PWA (iOS only permits Web Push from a home-screen app), and
+it needs a scheduler, which this app does not have — page rendering IS the scheduler. Both
+are hosting decisions. T7 needs none of that.
 
 Corrections found while implementing, which this document's later tranches should not
 repeat:
@@ -66,12 +74,20 @@ repeat:
   - Module shape: `schema.ts` / `service.ts` (+ `*.test.ts`, pure) / `queries.ts`
     (`server-only`) / `actions.ts` (`"use server"` + `requireUserId` + Zod + `revalidatePath`)
     / `validation.ts`; pages consume only `queries.ts`.
-  - Recurrence: the closed-form generator in `src/modules/todos/recurrence.ts` +
-    `syncRuleInstances`/`ensureRecurringTasks` (lazy-on-read materialization), and the
-    calendar `event_exceptions` read-time overlay (`applyExceptions`).
+  - Recurrence: the closed-form generator in **`src/lib/recurrence.ts`** (moved out of
+    `todos/` once budget's recurring transactions needed it too — a `todos/recurrence.ts`
+    survives only inside an abandoned worktree) + `syncRuleInstances`/`ensureRecurringTasks`
+    in `todos/queries.ts` (lazy-on-read materialization), and the calendar
+    `event_exceptions` read-time overlay (`applyExceptions`).
   - Undo: `useOptimistic` + a `restoreX` action surfaced via a Sonner toast action.
-  - Auto-discovery: new module schemas are picked up via `db/index.ts` spread +
-    `drizzle.config.ts` glob — no wiring needed.
+  - **There is no auto-discovery.** Corrected in T7a: `db/index.ts` and `drizzle.config.ts`
+    are both hand-maintained lists, not globs, and a new module is ~23 touch points. The
+    ones that fail _silently_ are the `drizzle.config.ts` entry (without it `db:generate`
+    cannot see the table and may emit a destructive diff) and the `search/queries.ts`
+    fan-out (compiles clean, module is simply never searchable). The `account/` block —
+    `tables.ts`, `clear.ts`, `queries.ts` — fails loudly, because `coverage.test.ts` scans
+    `src/modules/` on disk and goes red the moment a new `schema.ts` exists;
+    `tables.test.ts` additionally pins an exact table count that must be bumped.
 
 ## Guiding principles
 
@@ -546,6 +562,80 @@ data layer, not an extension of this worker — SPEC §6 keeps deferring it, cor
 
 **Deps:** T2 (digest/links), T3/T4 (trends for the review). **Verify:** per-module standard suite;
 routine spin-up idempotency; streak math unit tests.
+
+**Split into T7a–T7d**, for the same reason T5 was split: as written this is four full
+modules, and the per-module wiring alone is ~23 touch points. The order is dependency-led —
+Notes and Routines stand alone, Habits needs work in the recurrence engine, and the Weekly
+review aggregates everything including the modules above it.
+
+**T7a — shipped**, migration `0022`:
+
+- **Notes and journal entries are one table**, not two. `entry_date` nullable is the only
+  difference between them, and one-per-day falls out of a plain `unique(user_id,
+entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT in a
+  unique constraint, so free-form notes never collide. `transactions_series_occurrence`
+  already leans on the same property for one-off transactions.
+- `/notes` is the **seventh and last** nav entry. `bottom-nav.tsx` is a plain flex with
+  `flex-1` and no overflow handling; seven items fit on a 375px phone, eight would not.
+  T7b–T7d therefore live at sub-routes and in the palette, not in the tab bar.
+- Search fans out over title **and** body. Search still does not import another module's
+  service — the display title is built from its own `snippet` helper.
+- The dashboard's Journal card sits in the **left** column. In the right rail it was the
+  sixth card and fell below the fold, which would have undone the "every column caps
+  itself, the page does not scroll" property the dashboard was tuned for.
+- `weekRange()` was added to `src/lib/date.ts` here rather than in T7c, since habits and
+  the weekly review both need it and `lib/date.ts` had no week helper at all.
+
+**T7b — shipped**, migration `0023` (`routines` + `routine_items`):
+
+- **Tasks only; events deferred.** The scope line above says "tasks (+ events)", and event
+  items would need start/end, all-day and a calendar — roughly doubling both the item
+  schema and the spin-up. Additive later, so nothing here blocks it.
+- **`due_offset_days` is signed and nullable**, and the two mean different things: null is
+  "no due date", 0 is "due the day you run it", and negative is the point of the column —
+  "book the kennel" is a week before the trip, so the anchor is the departure date.
+- **No run history and no idempotency guard.** Running "Trip prep" twice for two trips is
+  legitimate, so nothing records a run. The misclick case — which is what a guard would
+  really have been for — is covered by the undo on the success toast, which deletes
+  exactly the ids that run created.
+- The **run dialog is the confirmation step**; it previews every task and its resolved
+  date from the same `previewRun` the action uses, so it cannot promise something other
+  than what lands. A separate `ConfirmDialog` on top would have said strictly less.
+- Lives at **`/todos/routines`**, reached from an icon button on `/todos` and from the
+  palette. No nav entry — see T7a on why seven is the ceiling. `isNavActive` keeps To-dos
+  highlighted on the sub-route with no extra work.
+- **No search fan-out.** Deliberate: routines are few and named, and you reach them from
+  the page you were already on. Recorded here rather than left as an oversight.
+
+**T7c — shipped**, no migration:
+
+- **No new table was needed**, as scoped. `syncRuleInstances` deletes only rows matching
+  `eq(tasks.status, "open")` and the lazy path inserts with `onConflictDoNothing`, so a
+  completed cycle is never retired or re-created. Skips live separately in
+  `task_recurrence_exceptions`, keyed on the same `occurrenceDate`, which makes the whole
+  calculation a set intersection rather than date arithmetic.
+- **Streaks count CYCLES, the heatmap counts DAYS, and the two never mix.** This is the
+  load-bearing decision. A weekly habit's streak is consecutive weeks, and for a `flexible`
+  rule `occurrenceDate` is the period START — so a day grid drawn from it would put every
+  completion on a Sunday. Days come from `completedAt` through `todayInZone`, and only feed
+  the heatmap. Separating the two dissolved the flexible-rule trap instead of handling it.
+- **A skip is neutral and a trailing miss is forgiven once.** The first is why skip-once is
+  its own table; the second is because the final cycle is usually the current one, still in
+  progress, and counting it would report a broken streak every morning. Both are in
+  **ADR-0009** with the alternatives that were rejected.
+- **Fixed a real destruction path:** `toggleTaskStatus` re-opening an off-cycle completed
+  instance turned it into an open row that the next render deleted — silent history loss.
+  The action now refuses, via the pure `reopenWouldDestroy`.
+- **`repeatLabel` was hoisted into `todos/service.ts`.** It existed character-for-character
+  in `task-item.tsx` and `recurrence-manager.tsx`, and the habit cards would have made three.
+- `ringArc` went into `charts/geometry.ts`; **`heatmapLayout` did not.** Everything in that
+  file is unit-agnostic coordinate maths, and a heatmap grid is calendar structure — putting
+  it there would have handed every budget and meals chart a date dependency for one
+  consumer. It lives in `todos/habits.ts`; `charts/heatmap.tsx` only positions squares and
+  takes the colour as a class, the same division bar-chart and line-chart use.
+- Known and left alone: deleting a rule orphans its completed rows (`seriesId` is
+  `onDelete: "set null"`), so the habit disappears from the view. Defensible — you deleted
+  the habit — and recorded in ADR-0009 rather than discovered later.
 
 ---
 

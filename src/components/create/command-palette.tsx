@@ -3,14 +3,19 @@
 // The ⌘K command palette: jump to any page or search across every module. Mounted once
 // in the app shell. Owns its open state and the global keyboard shortcuts:
 //   • ⌘K / Ctrl+K       toggle the palette (works even while typing)
-//   • g then t/c/g/b/m/d go to todos / calendar / goals / budget / meals / dashboard
+//   • g then t/c/g/b/m/n/d  go to todos / calendar / goals / budget / meals / notes /
+//                           dashboard. `g n` is unambiguous with the bare `n` below:
+//                           the pending-g branch returns before it.
 // Create commands + the `n` shortcut are added in T1-S4 (they produce create-intents).
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarDays,
+  Flame,
+  ListChecks,
   ListTodo,
+  NotebookPen,
   Search,
   Settings,
   Target,
@@ -53,6 +58,7 @@ const NAV_SHORTCUTS: Record<string, string> = {
   g: "/goals",
   b: "/budget",
   m: "/meals",
+  n: "/notes",
 }
 
 const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
@@ -61,6 +67,7 @@ const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
   food: Utensils,
   transaction: Wallet,
   goal: Target,
+  note: NotebookPen,
 }
 
 const RESULT_LABEL: Record<SearchResultType, string> = {
@@ -69,12 +76,18 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
   food: "Food",
   transaction: "Transaction",
   goal: "Goal",
+  note: "Note",
 }
 
 type NavCommand = { href: string; label: string; icon: LucideIcon }
 
+// The sub-routes are listed by hand for the same reason /settings is: they are real
+// destinations that deliberately don't get a nav tab (the bottom bar is full at seven),
+// so the palette is the only place they're discoverable without being on /todos already.
 const NAV_COMMANDS: NavCommand[] = [
   ...navItems,
+  { href: "/todos/habits", label: "Habits", icon: Flame },
+  { href: "/todos/routines", label: "Routines", icon: ListChecks },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
@@ -90,6 +103,8 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New transaction", icon: Wallet, href: "/budget" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
   { label: "New goal", icon: Target, href: "/goals" },
+  { label: "New note", icon: NotebookPen, href: "/notes" },
+  { label: "New routine", icon: ListChecks, href: "/todos/routines" },
 ]
 
 function isTypingTarget(el: EventTarget | null): boolean {

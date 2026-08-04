@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { deleteTaskRecurrence } from "@/modules/todos/actions"
 import type { TaskSeries } from "@/modules/todos/queries"
+import { repeatLabel } from "@/modules/todos/service"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,17 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-
-const UNIT = { daily: "day", weekly: "week", monthly: "month" } as const
-
-/** "Daily" / "Every 2 weeks" — same wording as the badge on a task row. */
-function repeatLabel(series: TaskSeries): string {
-  const unit = UNIT[series.freq]
-  if (series.recurrenceInterval > 1) {
-    return `Every ${series.recurrenceInterval} ${unit}s`
-  }
-  return { daily: "Daily", weekly: "Weekly", monthly: "Monthly" }[series.freq]
-}
 
 /**
  * Every repeating task, listed from the RULES rather than from their generated instances.

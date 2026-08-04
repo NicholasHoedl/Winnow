@@ -9,6 +9,7 @@ import {
   getMonthEvents,
 } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
+import { getJournalEntry } from "@/modules/notes/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
@@ -24,6 +25,7 @@ import {
 } from "./_components/dashboard-calendar"
 import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
+import { JournalCard } from "./_components/journal-card"
 import { StatCards } from "./_components/stat-cards"
 import { TodayAgenda } from "./_components/today-agenda"
 import { Tomorrow } from "./_components/tomorrow"
@@ -57,6 +59,7 @@ export default async function DashboardPage({
     monthData,
     goals,
     calendars,
+    journalEntry,
   ] = await Promise.all([
     auth(),
     getTasks(),
@@ -68,6 +71,7 @@ export default async function DashboardPage({
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(),
     getCalendars(),
+    getJournalEntry(today),
   ])
 
   const name = session?.user?.name ?? "there"
@@ -158,6 +162,13 @@ export default async function DashboardPage({
           </Reveal>
           <Reveal delay={0.08}>
             <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
+          </Reveal>
+          {/* In this column rather than the right one for two reasons: the journal is a
+              today thing, like everything else here — and the right rail already runs
+              five cards deep, where a sixth pushed past the fold and undid the "each
+              column caps itself, the page doesn't scroll" property below. */}
+          <Reveal delay={0.11}>
+            <JournalCard entry={journalEntry} />
           </Reveal>
         </div>
 

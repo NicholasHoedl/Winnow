@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { bucketTasks, summarizeTasks } from "./service"
+import { bucketTasks, repeatLabel, summarizeTasks } from "./service"
 
 const TZ = "America/Chicago"
 
@@ -120,5 +120,29 @@ describe("bucketTasks", () => {
     )
     expect(ids(after.today)).toEqual(["nov"])
     expect(ids(after.overdue)).toEqual(["halloween"])
+  })
+})
+
+describe("repeatLabel", () => {
+  it("names a plain interval of one", () => {
+    expect(repeatLabel({ freq: "daily", recurrenceInterval: 1 })).toBe("Daily")
+    expect(repeatLabel({ freq: "weekly", recurrenceInterval: 1 })).toBe(
+      "Weekly",
+    )
+    expect(repeatLabel({ freq: "monthly", recurrenceInterval: 1 })).toBe(
+      "Monthly",
+    )
+  })
+
+  it("pluralises a longer interval", () => {
+    expect(repeatLabel({ freq: "weekly", recurrenceInterval: 2 })).toBe(
+      "Every 2 weeks",
+    )
+    expect(repeatLabel({ freq: "monthly", recurrenceInterval: 3 })).toBe(
+      "Every 3 months",
+    )
+    expect(repeatLabel({ freq: "daily", recurrenceInterval: 10 })).toBe(
+      "Every 10 days",
+    )
   })
 })

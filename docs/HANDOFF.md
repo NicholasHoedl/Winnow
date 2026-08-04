@@ -1,6 +1,6 @@
 # Handoff
 
-Last updated: **2026-08-03**, at commit `b931ae5` (pushed; working tree clean).
+Last updated: **2026-08-04**, at commit `edd4838` plus **uncommitted T7a–T7c work**.
 
 Read `SPEC.md` for what Winnow is and `ARCHITECTURE.md` for how it is built. This file
 covers only what those two can't tell you: where the project actually stands, the working
@@ -30,14 +30,18 @@ runs all 22 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
-Tranches T0–T6b are shipped except **T5c-b**. `docs/IMPROVEMENT-PLAN.md` is the master
-roadmap and its status table is current.
+Tranches T0–T6b are shipped except **T5c-b**, plus **T7a** (Notes / Journal), **T7b**
+(Routines) and **T7c** (Habits). `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its
+status table is current.
 
-| Next up                                   | Why                                                                                                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hosting / Checkpoint 0.4**              | The user's stated priority. Host is a **Windows home PC, amd64**; they want to **build the image elsewhere and ship it**, since they are usually on a laptop. |
-| **T5c-b** — event reminders over Web Push | The last of T5. Decided: Web Push, not email or in-app.                                                                                                       |
-| **T7** — net-new modules                  | Breadth.                                                                                                                                                      |
+T7 was split into **T7a Notes → T7b Routines → T7c Habits → T7d Weekly review**, and the
+user chose to finish T7 before returning to hosting and T5c-b.
+
+| Next up                                   | Why                                                                                                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **T7d** — weekly review                   | The last of T7. Needs `milestones.completed_at` and four new range queries. Copy `src/modules/digest/` — pure builder, orchestrating query, owns no tables. `summarizeMonth` is misleadingly named and already takes rows, so it works for a week unchanged. |
+| **Hosting / Checkpoint 0.4**              | Host is a **Windows home PC, amd64**; they want to **build the image elsewhere and ship it**, since they are usually on a laptop.                                                                                                                            |
+| **T5c-b** — event reminders over Web Push | Deliberately behind hosting: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy.                                                                                             |
 
 ### Hosting: what is already known
 
@@ -87,7 +91,7 @@ once the host is real rather than guessing at it.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **488 unit tests, 78 e2e, 0 lint errors.**
+Current green baseline: **584 unit tests, 86 e2e, 0 lint errors.**
 
 ## 4. Traps that have already been paid for
 
@@ -114,8 +118,20 @@ page. `useHydrated()` exists for `ModeToggle`, where that is not a concern.
 **`git checkout <file>` on uncommitted work discards it.** Used it to undo a deliberate
 sabotage and lost the real edit underneath. Prefer re-applying the inverse edit.
 
-**`.next` goes stale after a route is deleted.** `next build` fails on a generated
-`validator.ts` still importing the removed page. `rm -rf .next/types .next/dev/types`.
+**`.next` goes stale after a route is deleted** — and after one is ADDED, if the dev
+server is killed mid-compile. `tsc` fails on a generated `validator.ts`, and Turbopack
+fails to write an endpoint for a route that no longer exists at all.
+
+`rm -rf .next/types .next/dev/types` clears the first symptom but **not** the second, and
+in T7b it made things worse: typecheck went clean while the build cache stayed
+inconsistent, and the next e2e run spent 22 minutes producing three failures and an
+aborted spec. When the server was killed mid-compile, delete the whole of `.next`.
+
+Budget for what that costs: the first run against a cold `.next` compiles every route on
+first visit and takes ~10.5 minutes instead of ~7, which is long enough to reopen the
+streaming race below — a cold run in T7b produced two calendar failures that both passed
+when re-run on their own, and the full suite then went 84/84 on a warm re-run. Judge a red
+run against a cold cache accordingly, and re-run before believing it.
 
 **A dev server left running for hours degrades.** One full e2e run took 1.7 hours versus
 5.5 minutes and failed specs that pass on a fresh server. If timings look absurd, restart
@@ -145,7 +161,14 @@ Do not reopen these without new information:
   state in the URL. Making it stick means a `user_preferences` column.
 - On the one visit a day the **digest banner** appears it adds ~180px and the dashboard
   scrolls that once.
-- **1280×800 overflows by ~19px.** Every size from 1366×768 up fits.
+- **The dashboard overflows below ~1400px wide.** Measured on the current dev account
+  (August 2026, a full month of recurring events): 231px at 1280×800, 12px at 1366×768, 0
+  at 1440×900 and up. The ~19px figure recorded here previously was against less data, so
+  this number tracks what is in the database rather than being fixed. T7a's Journal card
+  is **not** a contributor — hiding it leaves both numbers identical.
+- **Nav is full at seven items.** `bottom-nav.tsx` is a plain flex with `flex-1` and no
+  overflow handling; seven labels fit a 375px phone with nothing to spare. An eighth
+  top-level route needs a More sheet or a scroller first.
 - **The export file contains a live credential** — the calendar feed token rides along
   deliberately, so a restore keeps an existing subscription working (ADR-0008).
 - **`getEventOptions()` is unbounded.** Every event's id, title and start date ships in the

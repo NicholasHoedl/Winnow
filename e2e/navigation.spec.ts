@@ -22,6 +22,7 @@ test("primary nav reaches every module", async ({ page }) => {
     { label: "Calendar", path: "/calendar" },
     { label: "Budget", path: "/budget" },
     { label: "Meals", path: "/meals" },
+    { label: "Notes", path: "/notes" },
   ]
   for (const { label, path } of routes) {
     await page.getByRole("link", { name: label, exact: true }).first().click()

@@ -22,7 +22,9 @@ import {
   mealEntries,
   waterLogs,
 } from "@/modules/meals/schema"
+import { notes } from "@/modules/notes/schema"
 import { userPreferences } from "@/modules/preferences/schema"
+import { routineItems, routines } from "@/modules/routines/schema"
 import {
   lists,
   subtasks,
@@ -70,6 +72,10 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   // behind, and they immediately regenerated tasks (and would now post bills) into the
   // supposedly empty account on the next page load.
   await tx.delete(taskRecurrences).where(eq(taskRecurrences.userId, userId))
+  // Before `lists`: a routine item's list_id is `set null`, so the order is not strictly
+  // forced — but the rule here is children first, stated rather than relied on.
+  await tx.delete(routineItems).where(eq(routineItems.userId, userId))
+  await tx.delete(routines).where(eq(routines.userId, userId))
   await tx.delete(lists).where(eq(lists.userId, userId))
   // Calendars were genuinely leaking — nothing deleted them, so "clear all data" wiped
   // every event and left the calendar list fully populated.
@@ -79,5 +85,8 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   await tx
     .delete(calendarFeedTokens)
     .where(eq(calendarFeedTokens.userId, userId))
+  // No user-owned parent, so position here is free — grouped with preferences rather
+  // than threaded into the FK-ordered block above, where it would imply a dependency.
+  await tx.delete(notes).where(eq(notes.userId, userId))
   await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))
 }

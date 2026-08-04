@@ -1,11 +1,13 @@
 import "server-only"
-import { and, asc, desc, eq, ne } from "drizzle-orm"
+import { and, asc, desc, eq, gte, isNotNull, ne } from "drizzle-orm"
 
 import { db } from "@/db"
-import { todayInZone } from "@/lib/date"
-import { currentCycle } from "@/lib/recurrence"
+import { addDays, todayInZone } from "@/lib/date"
+import { currentCycle, cyclesInRange } from "@/lib/recurrence"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
+
+import { type HabitCycle, habitCycles } from "./habits"
 
 import {
   lists,
@@ -210,6 +212,106 @@ export async function getTaskRecurrences(): Promise<TaskSeries[]> {
     columns: { userId: false },
     orderBy: [asc(taskRecurrences.title)],
   })
+}
+
+export type Habit = {
+  rule: TaskSeries
+  /** Every cycle the rule owed in the window, classified. Streaks are counted on these. */
+  cycles: HabitCycle[]
+  /** Local dates something was actually ticked off — the heatmap's input, not the streak's. */
+  completedDays: string[]
+}
+
+export type HabitsView = {
+  habits: Habit[]
+  from: string
+  to: string
+  weekStartsOn: number
+}
+
+/** How far back the habits page looks. Well inside the engine's 400-day catch-up clamp. */
+export const HABIT_WINDOW_DAYS = 90
+
+/**
+ * Every recurrence rule with its completion history over the trailing window.
+ *
+ * Reads only. Unlike `getTasks` and `getTaskSummary` this deliberately does NOT call
+ * `ensureRecurringTasks`: materializing today's instance is a write, and it would change
+ * nothing here — an unmaterialized current cycle reads as "not done yet", which is what it
+ * is, and `currentStreak` already forgives a trailing miss for exactly that reason.
+ *
+ * Two things the shape is protecting against:
+ *
+ * - `completedDays` comes from `completedAt`, not from `occurrenceDate`. For a `flexible`
+ *   rule the occurrence key is the period START, so drawing a day grid from it would put
+ *   every completion on a Sunday.
+ * - `cyclesInRange` takes an EXCLUSIVE lower bound, so the window start is passed as the
+ *   day before `from` — otherwise the oldest column silently loses its cycle.
+ */
+export async function getHabits(days = HABIT_WINDOW_DAYS): Promise<HabitsView> {
+  const userId = await requireUserId()
+  const { timeZone, weekStartsOn } = await getUserPreferences()
+  const to = todayInZone(new Date(), timeZone)
+  const from = addDays(to, -(days - 1))
+
+  const [rules, doneRows, exceptionRows] = await Promise.all([
+    db.query.taskRecurrences.findMany({
+      where: eq(taskRecurrences.userId, userId),
+      columns: { userId: false },
+      orderBy: [asc(taskRecurrences.title)],
+    }),
+    db.query.tasks.findMany({
+      where: and(
+        eq(tasks.userId, userId),
+        eq(tasks.status, "done"),
+        isNotNull(tasks.seriesId),
+        gte(tasks.occurrenceDate, from),
+      ),
+      columns: { seriesId: true, occurrenceDate: true, completedAt: true },
+    }),
+    db.query.taskRecurrenceExceptions.findMany({
+      where: and(
+        eq(taskRecurrenceExceptions.userId, userId),
+        gte(taskRecurrenceExceptions.occurrenceDate, from),
+      ),
+      columns: { ruleId: true, occurrenceDate: true },
+    }),
+  ])
+
+  const completedByRule = new Map<string, Set<string>>()
+  const daysByRule = new Map<string, Set<string>>()
+  for (const row of doneRows) {
+    if (!row.seriesId || !row.occurrenceDate) continue
+    const cycles = completedByRule.get(row.seriesId) ?? new Set()
+    cycles.add(row.occurrenceDate)
+    completedByRule.set(row.seriesId, cycles)
+
+    // The instant it was ticked, in the user's own day — never the cycle key.
+    if (row.completedAt) {
+      const dates = daysByRule.get(row.seriesId) ?? new Set()
+      dates.add(todayInZone(row.completedAt, timeZone))
+      daysByRule.set(row.seriesId, dates)
+    }
+  }
+
+  const skippedByRule = new Map<string, Set<string>>()
+  for (const row of exceptionRows) {
+    const cycles = skippedByRule.get(row.ruleId) ?? new Set()
+    cycles.add(row.occurrenceDate)
+    skippedByRule.set(row.ruleId, cycles)
+  }
+
+  const habits = rules.map((rule) => ({
+    rule,
+    cycles: habitCycles(
+      cyclesInRange(rule, addDays(from, -1), to, weekStartsOn),
+      completedByRule.get(rule.id) ?? new Set<string>(),
+      skippedByRule.get(rule.id) ?? new Set<string>(),
+    ),
+    completedDays: [...(daysByRule.get(rule.id) ?? [])],
+  }))
+
+  return { habits, from, to, weekStartsOn }
 }
 
 export async function getTaskSummary(timeZone: string) {

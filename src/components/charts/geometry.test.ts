@@ -5,6 +5,7 @@ import {
   barLayout,
   linePath,
   niceScale,
+  ringArc,
   scaleY,
   slotCenter,
 } from "./geometry"
@@ -151,5 +152,37 @@ describe("paths", () => {
   it("both return empty for no points", () => {
     expect(linePath([])).toBe("")
     expect(areaPath([], 40)).toBe("")
+  })
+})
+
+describe("ringArc", () => {
+  it("hides the whole ring at 0% and none of it at 100%", () => {
+    const empty = ringArc(0)
+    const full = ringArc(100)
+    expect(empty.dashOffset).toBeCloseTo(empty.circumference, 1)
+    expect(full.dashOffset).toBe(0)
+  })
+
+  it("offsets by the unfilled share", () => {
+    const ring = ringArc(25)
+    expect(ring.dashOffset).toBeCloseTo(ring.circumference * 0.75, 1)
+  })
+
+  // A rate can only reach 100 today, but the ring is a general primitive and a dash
+  // offset past the circumference wraps around and reads as a small partial fill.
+  it("clamps out-of-range percentages instead of wrapping", () => {
+    expect(ringArc(140).dashOffset).toBe(0)
+    expect(ringArc(-20).dashOffset).toBeCloseTo(ringArc(0).circumference, 1)
+  })
+
+  it("sizes the box to fit the stroke, not just the radius", () => {
+    const ring = ringArc(50, 28, 6)
+    // Radius plus half the stroke on each side, or the ring clips at the edges.
+    expect(ring.size).toBe(62)
+    expect(ring.center).toBe(31)
+  })
+
+  it("derives the circumference from the radius", () => {
+    expect(ringArc(50, 10).circumference).toBeCloseTo(2 * Math.PI * 10, 1)
   })
 })

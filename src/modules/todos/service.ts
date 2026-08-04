@@ -80,3 +80,26 @@ export function summarizeTasks<T extends TaskSummaryInput>(
   }
   return { overdueCount, dueTodayCount: dueToday.length, dueToday }
 }
+
+/** Only the schedule fields the label reads; the Drizzle row satisfies it structurally. */
+export type RepeatShape = {
+  freq: "daily" | "weekly" | "monthly"
+  recurrenceInterval: number
+}
+
+const REPEAT_UNIT = { daily: "day", weekly: "week", monthly: "month" } as const
+
+/**
+ * "Daily" / "Weekly" / "Every 2 weeks" — the badge wording for a repeating task.
+ *
+ * Hoisted here in T7c. It existed character-for-character twice, in `task-item.tsx` and
+ * `recurrence-manager.tsx`, and the habit cards would have made three. One phrasing, so
+ * the same rule can't read differently depending on where you look at it.
+ */
+export function repeatLabel(series: RepeatShape): string {
+  const unit = REPEAT_UNIT[series.freq]
+  if (series.recurrenceInterval > 1) {
+    return `Every ${series.recurrenceInterval} ${unit}s`
+  }
+  return { daily: "Daily", weekly: "Weekly", monthly: "Monthly" }[series.freq]
+}
