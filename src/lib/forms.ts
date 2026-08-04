@@ -27,3 +27,24 @@ export const optionalNumberField = {
     return text === "" ? null : Number(text)
   },
 }
+
+/**
+ * Put a submitted value back only if the field is still empty.
+ *
+ * Quick-capture clears itself SYNCHRONOUSLY on submit, before the server action is
+ * awaited, for two reasons: a second Enter then has nothing to resubmit, so mashing the
+ * key cannot double-post; and the field is free for the next entry immediately, which is
+ * the whole point of a capture box.
+ *
+ * That leaves only the failure path to undo, and its write lands late — after the await —
+ * so it must not overwrite whatever has been typed since. Functional rather than a plain
+ * value because that is the mechanism: it reads the LATEST state at commit time.
+ *
+ * (These fields used to disable their submit button while the action was pending. A form
+ * whose submit button is disabled does no implicit submission, so Enter was dead for the
+ * duration and a second entry typed inside that window vanished with no row, no toast and
+ * no error — measured at roughly 300ms, which is well inside a fast typist's reach.)
+ */
+export function restoreIfEmpty(submitted: string) {
+  return (current: string) => (current === "" ? submitted : current)
+}

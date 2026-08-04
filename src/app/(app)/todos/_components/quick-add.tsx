@@ -5,6 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
+import { restoreIfEmpty } from "@/lib/forms"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -17,6 +18,9 @@ export function QuickAdd() {
     const trimmed = title.trim()
     if (!trimmed) return
 
+    // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
+    setTitle("")
+
     startTransition(async () => {
       // NO due date. Quick-add is capture — get it out of your head now, decide when
       // later — so it lands in Someday. The full task dialog still prefills today,
@@ -24,10 +28,9 @@ export function QuickAdd() {
       // paths defaulted to today, which made "no due date" a state you had to go out of
       // your way to produce, and left the Someday bucket permanently empty.
       const result = await createTask({ title: trimmed })
-      if (result.ok) {
-        setTitle("")
-      } else {
+      if (!result.ok) {
         toast.error(result.error)
+        setTitle(restoreIfEmpty(trimmed))
       }
     })
   }
@@ -43,7 +46,10 @@ export function QuickAdd() {
       <Button
         type="submit"
         size="icon"
-        disabled={pending}
+        // Never `disabled`: a form whose submit button is disabled does no implicit
+        // submission, so Enter would be dead while the previous entry was in flight and
+        // anything typed in that window would vanish silently. Busy, not blocked.
+        aria-busy={pending}
         aria-label="Add task"
       >
         <Plus className="size-4" />

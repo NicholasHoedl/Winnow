@@ -5,6 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTransaction } from "@/modules/budget/actions"
+import { restoreIfEmpty } from "@/lib/forms"
 import type { Category } from "@/modules/budget/queries"
 import { parseTransactionQuickAdd } from "@/modules/budget/service"
 import { Button } from "@/components/ui/button"
@@ -33,18 +34,23 @@ export function BudgetQuickAdd({
     // Category[] is structurally assignable to CategoryOption[].
     const parsed = parseTransactionQuickAdd(trimmed, categories)
     if (!parsed) {
-      toast.error("Couldn’t parse that — try “coffee $4” or “rent -1200 #housing”.")
+      toast.error(
+        "Couldn’t parse that — try “coffee $4” or “rent -1200 #housing”.",
+      )
       return
     }
+
+    // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
+    setText("")
 
     startTransition(async () => {
       const result = await createTransaction({ ...parsed, date })
       if (!result.ok) {
         toast.error(result.error)
+        setText(restoreIfEmpty(trimmed))
         return
       }
       toast.success(`Added ${parsed.description || "transaction"}`)
-      setText("")
     })
   }
 
@@ -59,7 +65,10 @@ export function BudgetQuickAdd({
       <Button
         type="submit"
         size="icon"
-        disabled={pending}
+        // Never `disabled`: a form whose submit button is disabled does no implicit
+        // submission, so Enter would be dead while the previous entry was in flight and
+        // anything typed in that window would vanish silently. Busy, not blocked.
+        aria-busy={pending}
         aria-label="Add transaction"
       >
         <Plus className="size-4" />

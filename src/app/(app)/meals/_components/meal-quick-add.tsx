@@ -5,6 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { logMeal } from "@/modules/meals/actions"
+import { restoreIfEmpty } from "@/lib/forms"
 import type { Food } from "@/modules/meals/queries"
 import { parseMealQuickAdd } from "@/modules/meals/service"
 import { Button } from "@/components/ui/button"
@@ -32,14 +33,17 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
       return
     }
 
+    // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
+    setText("")
+
     startTransition(async () => {
       const result = await logMeal({ ...parsed, date })
       if (!result.ok) {
         toast.error(result.error)
+        setText(restoreIfEmpty(trimmed))
         return
       }
       toast.success(`Logged ${parsed.name}`)
-      setText("")
     })
   }
 
@@ -51,7 +55,15 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
         placeholder="Quick add — “banana x2” or “lunch 600cal 40p”…"
         aria-label="Quick add meal"
       />
-      <Button type="submit" size="icon" disabled={pending} aria-label="Add meal">
+      <Button
+        type="submit"
+        size="icon"
+        // Never `disabled`: a form whose submit button is disabled does no implicit
+        // submission, so Enter would be dead while the previous entry was in flight and
+        // anything typed in that window would vanish silently. Busy, not blocked.
+        aria-busy={pending}
+        aria-label="Add meal"
+      >
         <Plus className="size-4" />
       </Button>
     </form>

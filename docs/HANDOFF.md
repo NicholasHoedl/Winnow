@@ -95,7 +95,7 @@ once the host is real rather than guessing at it.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **608 unit tests, 88 e2e, 0 lint errors.**
+Current green baseline: **614 unit tests, 92 e2e, 0 lint errors.**
 
 ## 4. Traps that have already been paid for
 
@@ -109,6 +109,25 @@ race, so the failing spec **moves around the suite**, which reads as flakiness. 
 reproduces against a production build, so it is not a dev-server artifact. `e2e/_test.ts`
 waits it out on `goto`/`reload`; anything that reads after a _client-side_ mutation needs
 scoping to `#content` (the staging div sits at body level).
+
+**A disabled submit button silently kills Enter.** A form whose submit button is
+`disabled` performs no *implicit submission*, so while an action is in flight the keyboard
+path into the form is simply gone. Every text quick-add did this. Type a second entry
+inside that ~300ms window and it vanished — no row, no toast, no error, with the text
+still visibly sitting in the box. Measured: 0ms and 150ms gaps lost the entry, 300ms and
+up survived, which is well inside a fast typist's reach on the one surface built for
+typing fast.
+
+The fix is `aria-busy={pending}`, never `disabled`, plus clearing the field
+**synchronously on submit** rather than after the await — so a second Enter has nothing
+left to resubmit, and the failure path restores the text only if the field is still empty
+(`restoreIfEmpty` in `src/lib/forms.ts`). `e2e/quick-add-burst.spec.ts` covers all four
+bars and must **not** wait between entries; a wait reopens the gap and the spec stops
+testing anything.
+
+The first diagnosis was wrong — a late `setText("")` clobbering newer typing — and the fix
+built on it changed nothing. What settled it was a submit-event listener proving only
+**one** submit event fired for two Enters. Reach for that probe early.
 
 **Anything read from localStorage during render will mismatch on hydration.** The server
 has no localStorage, so it renders the default; the client reads the real value on its
@@ -221,6 +240,11 @@ still the old indigo.**
   top-level route needs a More sheet or a scroller first.
 - **The export file contains a live credential** — the calendar feed token rides along
   deliberately, so a restore keeps an existing subscription working (ADR-0008).
+- **The meal quick-add parser reads digits-then-`p`/`c`/`f` anywhere in the string**, not
+  just as a standalone token, so a food named `abc278c` logs 278 carbs and loses that part
+  of the name. Over 100000 the action rejects the whole entry with "Please fix the errors
+  below." — which looks exactly like a dropped entry. Cost real time to tell apart from a
+  genuine capture bug; a word-boundary guard would fix it if it ever bites a real name.
 - **`getEventOptions()` is unbounded.** Every event's id, title and start date ships in the
   RSC payload of every authenticated page, for a picker usually closed. It grows forever
   and nothing caps it. Not a problem at current data size; it will be.

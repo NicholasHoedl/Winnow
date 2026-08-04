@@ -5,6 +5,7 @@ import { Plus, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
+import { restoreIfEmpty } from "@/lib/forms"
 import { parseNaturalDate } from "@/lib/nl-date"
 import { todayInZone } from "@/lib/date"
 import { usePreferences } from "@/components/preferences/preferences-provider"
@@ -42,15 +43,19 @@ export function QuickCapture() {
     const title = cleaned || trimmed
     const dueDate = date ?? today
 
+    // Cleared here, synchronously, not after the await: the field is free for the next
+    // entry immediately, and a second Enter has nothing left to resubmit.
+    setText("")
+
     startTransition(async () => {
       const result = await createTask({ title, dueDate })
       if (result.ok) {
-        setText("")
         toast.success(`Added “${title}”`, {
           description: `Due ${formatDue(dueDate)}`,
         })
       } else {
         toast.error(result.error)
+        setText(restoreIfEmpty(trimmed))
       }
     })
   }
@@ -68,7 +73,14 @@ export function QuickCapture() {
         aria-label="Quick add a task"
         className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
       />
-      <Button type="submit" size="sm" disabled={pending}>
+      <Button
+        type="submit"
+        size="sm"
+        // Never `disabled`: a form whose submit button is disabled does no implicit
+        // submission, so Enter would be dead while the previous entry was in flight and
+        // anything typed in that window would vanish silently. Busy, not blocked.
+        aria-busy={pending}
+      >
         <Plus className="size-4" />
         Add
       </Button>
