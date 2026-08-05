@@ -78,10 +78,10 @@ now the only thing standing between this app and being used.**
 
 | Next up                                   | Why                                                                                                                                                                                                                         |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (12GB+ VRAM). Procedure: **`docs/runbooks/deploy.md`**. |
+| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**. |
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
-| **The AI companion**                      | Scoped, not built, and deliberately behind hosting — it runs a local model on the host's GPU, so it cannot be tested until the stack is up. Locked decisions are in §5.                                                     |
+| **The AI companion**                      | Scoped, not built. Still behind hosting, but now by choice rather than dependency — see §5 and ADR-0011.                                                                                                                    |
 
 ### Hosting: what is already known
 
@@ -101,10 +101,15 @@ Decided with the user, so do not re-litigate:
   note elsewhere calling it a mistake, that note predates this decision.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
   Tailscale renews the certificate itself, so there is no renewal cron.
-- **Sequencing: hosting before the AI companion.** The companion is designed to run a local
-  model on that machine's GPU, so it cannot be honestly tested until the stack is up.
-  Building it first would stack a GPU-passthrough container onto a deploy that has never
-  been done once.
+- **Sequencing: hosting before the AI companion**, but understand *why*, because the
+  original reason expired. It used to be a hard dependency — the companion ran a local
+  model on this machine's GPU, so it could not be tested until the stack was up. ADR-0011
+  moved it to a hosted API, and that dependency is gone: it could now be built and tested
+  from the laptop.
+  It stays second anyway, on judgment rather than blocking. Hosting is the only thing
+  between this app and being used, and a week of real use is what would tell you what the
+  companion should actually help with. Building it first delays the thing that matters and
+  guesses at the thing that doesn't.
 
 Two gaps still unresolved:
 
@@ -252,31 +257,38 @@ Do not reopen these without new information:
 ### The AI companion (scoped, not built)
 
 A large feature scoped in conversation and deliberately parked **behind hosting**. Nothing
-is implemented; no ADR yet, because the design stopped at an agreed understanding rather
-than a chosen architecture. Four decisions are locked and should not be reopened without
-new information:
+is implemented. **ADR-0011 is the authority** on the provider and the data boundary; this
+is the short version.
 
-- **A local model, not a hosted API.** ADR-0002 says no public internet exposure at any
-  point, and the data is a personal journal, body weight and a complete financial ledger.
-  Privacy is the one irreversible constraint here — every other consideration (quality,
-  latency, cost) is a config change. The host has a discrete NVIDIA GPU with 12GB+ VRAM,
-  which makes a 14B-class model viable, so the trade-off is affordable.
+- **A hosted API, not a local model** (ADR-0011). This reverses an earlier decision that
+  was made on wrong hardware information — the host has **6GB** of VRAM, not the 12GB+
+  recorded here previously, which caps a local model at 7–8B and costs exactly the
+  judgment the feature exists for.
+- **Journal and note content never leaves the machine.** Not a preference — a hard
+  boundary, and one that has to be *enforced* rather than intended. Prompt payloads are
+  built from named fields, never spread from raw rows, and the notes module must be
+  unreachable from the prompt-building path. Journal-aware retrospectives are deferred,
+  not cancelled: they are the one feature that would justify a local model later.
 - **Behind an OpenAI-compatible seam**, configured exactly like the `OFF_*` keys in
-  `src/lib/config.ts` — `AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL`. Ollama, llama.cpp and
-  the hosted providers all speak it, so the provider stays a config change.
+  `src/lib/config.ts` — `AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY`. Kept
+  precisely *because* the provider is remote: it leaves a local endpoint one env var away.
 - **Propose-only.** The model never writes to the database. It emits a proposal, that
   proposal is validated by the module's existing Zod schemas, the user edits and approves,
-  and the write goes through the actions the UI already calls. This is what makes a weak
-  local model safe: a bad generation is a rejected suggestion, never corrupted data.
+  and the write goes through the actions the UI already calls. A bad generation is a
+  rejected suggestion, never corrupted data.
 - **Task-shaped, not a chat.** A "Plan this goal" button producing a proposal — no message
-  history, no context-window management, no intent detection. Those three are what local
-  models are worst at and what is hardest to test.
+  history, no context-window management, no intent detection.
 
-First slice is **goal planning**: the thinnest cut through every layer, and everything
-after it reuses the same spine. Later slices, in rough value order: an LLM fallback when a
-quick-add parser returns `null` (invisible, and it would have caught the `abc278c` →
-278-carbs trap in §6); journal-aware retrospectives, which are the one thing a query
-genuinely cannot do; and cross-module questions the UI has no page for.
+First slice is **goal planning**: the thinnest cut through every layer, everything after it
+reuses the same spine, and it is also the least sensitive thing in the app to send anywhere
+— a goal title and its milestones. Later slices, in rough value order: an LLM fallback when
+a quick-add parser returns `null` (invisible, and it would have caught the `abc278c` →
+278-carbs trap in §6); cross-module questions the UI has no page for; and — only behind a
+local model — journal-aware retrospectives.
+
+`AI_API_KEY` will be a new secret in `.env` alongside `POSTGRES_PASSWORD` and
+`AUTH_SECRET`. It is deliberately **not** in `.env.example` until the feature exists: a key
+with no reader is the same anti-pattern as a column with no writer.
 
 Two limits that are structural rather than temporary, and worth knowing before planning
 around them:
@@ -354,7 +366,9 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0010) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0011) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
-touching those areas. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
+touching those areas, and **0011 before writing a single line of the AI companion**: it
+sets a hard boundary on what may leave the machine, and that is far easier to violate by
+accident than to notice afterwards. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
 implementing" list at the top that is worth two minutes.

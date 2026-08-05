@@ -53,5 +53,5 @@ Two things that bite otherwise:
 | `ARCHITECTURE.md` | Stack rationale, data model, deployment, PWA and auth approach |
 | `ROADMAP.md` | The original phased build and its checkpoints |
 | `docs/IMPROVEMENT-PLAN.md` | The master roadmap since the MVP - tranches T0-T8, plus a corrections list worth two minutes |
-| `docs/adr/` | Why the non-obvious calls were made (0001-0010) |
+| `docs/adr/` | Why the non-obvious calls were made (0001-0011) |
 | `docs/runbooks/` | `deploy.md` for standing the app up on the home server; `backup-restore.md`, drilled rather than theoretical |
