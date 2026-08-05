@@ -43,18 +43,34 @@ function revalidateRunEffects() {
 
 // --- Routines ---
 
-export async function createRoutine(input: unknown): Promise<ActionResult> {
+/**
+ * Carries the new routine's id, because one caller needs it: the companion applies a
+ * generated routine by creating it and then appending its items, and `addRoutineItem`
+ * takes a routine id. A wider success branch rather than a second insert path — the same
+ * shape `DeleteTaskResult` uses to carry an undo payload, and existing callers that only
+ * read `.ok` are unaffected.
+ */
+export type CreateRoutineResult =
+  | { ok: true; id: string }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> }
+
+export async function createRoutine(
+  input: unknown,
+): Promise<CreateRoutineResult> {
   const userId = await requireUserId()
   const parsed = routineInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db.insert(routines).values({
-    userId,
-    name: parsed.data.name,
-    description: nullify(parsed.data.description),
-  })
+  const [created] = await db
+    .insert(routines)
+    .values({
+      userId,
+      name: parsed.data.name,
+      description: nullify(parsed.data.description),
+    })
+    .returning({ id: routines.id })
   revalidateRoutines()
-  return { ok: true }
+  return { ok: true, id: created.id }
 }
 
 export async function updateRoutine(

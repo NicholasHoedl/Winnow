@@ -19,6 +19,7 @@ import {
   NotebookPen,
   Search,
   Settings,
+  Sparkles,
   Target,
   Utensils,
   Wallet,
@@ -93,6 +94,15 @@ const NAV_COMMANDS: NavCommand[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
+// Listed separately because it is conditional: the companion route only exists when
+// AI_ENABLED is set with a provider configured (ADR-0011). Offering it otherwise would
+// route someone to a 404 for a feature they never turned on.
+const COMPANION_COMMAND: NavCommand = {
+  href: "/companion",
+  label: "Companion",
+  icon: Sparkles,
+}
+
 // Create actions. Tasks open a create-in-place dialog via the create-intent bus; the
 // other kinds navigate to their module for now (T1-S4 scope).
 type CreateCommand = { label: string; icon: LucideIcon } & (
@@ -120,7 +130,12 @@ function isTypingTarget(el: EventTarget | null): boolean {
   )
 }
 
-export function CommandPalette() {
+export function CommandPalette({
+  companionEnabled = false,
+}: {
+  /** Passed from the (app) layout, which can read AI_READY; this component cannot. */
+  companionEnabled?: boolean
+}) {
   const router = useRouter()
   const requestCreate = useCreateIntent()
   const [open, setOpen] = React.useState(false)
@@ -245,9 +260,12 @@ export function CommandPalette() {
   }
 
   const q = query.trim().toLowerCase()
-  const navMatches = q
-    ? NAV_COMMANDS.filter((c) => c.label.toLowerCase().includes(q))
+  const navCommands = companionEnabled
+    ? [...NAV_COMMANDS, COMPANION_COMMAND]
     : NAV_COMMANDS
+  const navMatches = q
+    ? navCommands.filter((c) => c.label.toLowerCase().includes(q))
+    : navCommands
   const createMatches = q
     ? CREATE_COMMANDS.filter((c) => c.label.toLowerCase().includes(q))
     : CREATE_COMMANDS

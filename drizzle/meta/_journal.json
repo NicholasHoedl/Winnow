@@ -190,6 +190,34 @@
       "when": 1785874588550,
       "tag": "0026_cute_ezekiel_stane",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1785946496731,
+      "tag": "0027_parallel_steel_serpent",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785950777877,
+      "tag": "0028_amazing_maestro",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1785952770672,
+      "tag": "0029_new_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785955055071,
+      "tag": "0030_chilly_talos",
+      "breakpoints": true
     }
   ]
 }

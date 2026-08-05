@@ -43,8 +43,6 @@ conventions that are not guessable, and the traps that have already cost real ti
 
 ---
 
----
-
 ## 1. The one thing most likely to be assumed wrong
 
 **Winnow has never been deployed. There is no home server running it.**
@@ -63,7 +61,7 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 27 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 31 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
@@ -81,7 +79,7 @@ now the only thing standing between this app and being used.**
 | **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**. |
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
-| **The AI companion**                      | Scoped, not built. Still behind hosting, but now by choice rather than dependency — see §5 and ADR-0011.                                                                                                                    |
+| **The AI companion — complete**           | **T9a–T9d all shipped**: `/companion`, with goal planning, routine building, a narrated week and transaction import. See §5, ADR-0011 and ADR-0012.                                                                        |
 
 ### Hosting: what is already known
 
@@ -92,7 +90,7 @@ Decided with the user, so do not re-litigate:
 
 - **Clone the repo on the desktop and build there.** This replaced an earlier plan to build
   on the laptop, `docker save` to a `.tar` and carry it over. The change is not cosmetic:
-  the PC needed the checkout regardless — 27 migrations, `scripts/seed-user.ts`, and
+  the PC needed the checkout regardless — 31 migrations, `scripts/seed-user.ts`, and
   `backup.sh` all run from the deploy directory — so shipping a tar only ever saved the
   build, at the cost of a manual transfer.
 - One consequence: **`docker-compose.prod.yml`'s `up -d --build` usage line is now
@@ -101,15 +99,10 @@ Decided with the user, so do not re-litigate:
   note elsewhere calling it a mistake, that note predates this decision.
 - `tailscale serve https / http://127.0.0.1:3000` is the chosen path (ARCHITECTURE §4.3):
   Tailscale renews the certificate itself, so there is no renewal cron.
-- **Sequencing: hosting before the AI companion**, but understand *why*, because the
-  original reason expired. It used to be a hard dependency — the companion ran a local
-  model on this machine's GPU, so it could not be tested until the stack was up. ADR-0011
-  moved it to a hosted API, and that dependency is gone: it could now be built and tested
-  from the laptop.
-  It stays second anyway, on judgment rather than blocking. Hosting is the only thing
-  between this app and being used, and a week of real use is what would tell you what the
-  companion should actually help with. Building it first delays the thing that matters and
-  guesses at the thing that doesn't.
+- **The companion no longer waits on hosting, and T9a was built first.** It used to be a
+  hard dependency — a local model on this machine's GPU could not be tested until the stack
+  was up — and ADR-0011 removed it by moving to a hosted API. The user chose to build
+  before deploying; hosting is still the only thing between this app and being used.
 
 Two gaps still unresolved:
 
@@ -159,7 +152,14 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **625 unit tests, 95 e2e, 0 lint errors.**
+Current green baseline: **672 unit tests, 103 e2e, 0 lint errors.**
+
+The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
+Playwright starts alongside the app. `AI_BASE_URL` in `.env` points at it. A real model
+cannot be tested (its output is non-deterministic by design), so what is under test is
+everything around it: the route handler, the Zod parse, the renderer, the renumbering, and
+the writes. Model **quality** is permanently unverified in CI, and ADR-0011 accepts that
+rather than pretending otherwise.
 
 ## 4. Traps that have already been paid for
 
@@ -254,11 +254,98 @@ Do not reopen these without new information:
   have been reversed at implementation time on this basis — `@serwist/next` and an iCal
   library. A plan naming a library does not settle it.
 
-### The AI companion (scoped, not built)
+### The AI companion (T9a–T9d, complete)
 
-A large feature scoped in conversation and deliberately parked **behind hosting**. Nothing
-is implemented. **ADR-0011 is the authority** on the provider and the data boundary; this
-is the short version.
+**ADR-0011 is the authority** on the provider and the data boundary, **ADR-0012** on why
+generation runs in a route handler. This is the short version.
+
+**What exists.** `/companion` — a two-pane page: job buttons plus a refinement box on the
+left, the proposal renderer above the pending queue on the right. Two jobs, each end to
+end — generate → prune → edit inline → Apply, which writes through the modules' own
+actions and lands you on the result:
+
+- **Plan a goal** → milestones and tasks, via `addMilestone` and `createTask`, then
+  `/goals`.
+- **Build a routine** → a routine and its items, via `createRoutine` and `addRoutineItem`,
+  then `/todos/routines`.
+- **Read my week** → a narrated summary. **The odd one out: nothing to apply.** A paragraph
+  is not a row, so there are no checkboxes, no Apply, and no arm in `applyProposalSchema` —
+  one Done button, which discards it.
+- **Read transactions** → rows pulled out of pasted text, via `createTransaction`, then
+  `/budget`. A dense row list rather than the spine: forty transactions are a table you
+  scan, not a sequence you read.
+
+Off by default; `AI_ENABLED` unset means the route 404s and nothing hints it exists.
+
+**The one prompt that sends your own detail.** Every other job sends titles, descriptions
+or already-summed figures; transaction import sends the text you paste, because that is
+the feature. The UI says so above the box rather than leaving it to be discovered. ADR-0011
+described the weekly review as sending "rollups, not rows" — T9d deliberately widens that,
+and the journal boundary is untouched.
+
+**The rule the whole thing hangs off**, and the one to preserve when adding T9b/c/d: **the
+app does the arithmetic, the model does the language.** `planWarnings` in
+`companion/service.ts` judges the model's dates against `goals.targetDate` using `dayDiff`
+— the model is never asked to assess its own output, because it would sometimes be wrong
+and confident and there would be no way to tell.
+
+Five things worth knowing before touching it:
+
+- **`milestoneIndex` is presentational.** `tasks` has `goalId` and no `milestoneId`, so the
+  grouping under milestones is a planning aid that does not survive Apply. Tasks link to
+  the goal, which is what makes them count toward momentum (T8).
+- **`finalizePlan` renumbers.** Dropping a milestone shifts every index after it; that is
+  the one piece of index arithmetic here and it is unit-tested for exactly that reason.
+- **The renderer's exclusion state is keyed on a version counter** so a refinement remounts
+  it. Without that, rows pruned from the old plan arrive pre-pruned in the new one.
+- **A routine's `dueOffsetDays` has three distinct meanings** and nothing may collapse
+  them: `null` is no due date, `0` is the day you run it, negative is preparation
+  beforehand. `offsetLabel` renders them in words for that reason, and the e2e asserts all
+  three separately.
+- **Routines get no date warnings, and that is deliberate.** A routine has no dates until
+  it is run, so there is no deadline for anything to be late against — inventing a warning
+  there would be inventing a judgment. The plan's warnings exist because a goal has a
+  `targetDate` to measure against.
+- **`summaryReadiness` refuses a thin week before spending a call.** A model handed three
+  data points writes a confident paragraph about your habits and never volunteers that
+  there was not much there, so the app decides. Consequence for tests: a summary spec has
+  to seed its own week — `e2e/companion.spec.ts` completes three tasks first.
+- **Money reaches the summary prompt pre-formatted** by `formatCents`. The model never
+  sees integer cents and is never asked to divide by a hundred. Import runs the same rule
+  the other way: the model emits a positive major-unit `amount` with `type` carrying the
+  direction, and `createTransaction` converts with `amountToMinor`.
+- **An unmatched category lands uncategorised, never on the nearest name.** A wrong
+  category is harder to spot than a missing one. `resolveCategory` matches case- and
+  space-insensitively and returns null otherwise; the footer counts how many that is.
+
+**Adding a fifth kind** means: a payload schema in `validation.ts`, a prompt in
+`service.ts`, a renderer body, an arm in the route handler, an arm in `applyProposal`, a
+job button, a stub branch, and a value on the `proposal_kind` enum. The transport, the
+proposal table, the pending queue and the test harness are already there — none of T9b,
+T9c or T9d rebuilt any of them.
+
+**Three traps in the e2e harness**, all of which cost time and all of which will recur:
+
+- **Editing `e2e/_ai-stub.mjs` is not enough — kill the process.** Playwright's
+  `reuseExistingServer` reuses a stub already listening on 3100, so a change has no effect
+  until the old one stops. The symptom is misleading: the tests fail as though the app is
+  broken.
+- **The companion spec clears the pending queue in `beforeEach`, by reloading.** `/companion`
+  opens the oldest pending proposal, so a proposal left behind by a failed test hijacks the
+  next test's starting state. The reload matters: asserting against local state after a
+  dismiss passes whether or not the write landed, which is precisely how the optimistic
+  discard bug hid.
+- **Never run a second Playwright invocation while a suite is going**, and understand how
+  far the damage travels. The config is `workers: 1` and serial because both runs share one
+  dev server and one database. Doing it produced four failures in unrelated specs and a
+  16.6-minute run against a normal ~9.7 — which reads convincingly as four regressions and
+  is not.
+  Worse, the wreckage outlives the run: a spec that dies mid-test leaves its rows behind,
+  and the NEXT clean run fails on them. That is exactly what happened to
+  `calendar-following.spec.ts` — one abandoned `E2E split keep …` event in September 2027
+  broke all three of its tests on a subsequent untainted run, and they passed the moment it
+  was deleted. **When a clean run fails in a spec you did not touch, look for that spec's
+  own leftovers before believing you broke something.**
 
 - **A hosted API, not a local model** (ADR-0011). This reverses an earlier decision that
   was made on wrong hardware information — the host has **6GB** of VRAM, not the 12GB+
@@ -366,7 +453,7 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0011) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0012) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by

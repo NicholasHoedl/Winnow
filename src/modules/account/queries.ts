@@ -17,6 +17,7 @@ import {
   eventExceptions,
   events,
 } from "@/modules/calendar/schema"
+import { aiProposals } from "@/modules/companion/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import {
   bodyWeights,
@@ -70,6 +71,7 @@ export async function exportUserData() {
     noteRows,
     routineRows,
     routineItemRows,
+    aiProposalRows,
   ] = await Promise.all([
     db.query.lists.findMany({
       where: eq(lists.userId, userId),
@@ -175,6 +177,10 @@ export async function exportUserData() {
       where: eq(routineItems.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
+    db.query.aiProposals.findMany({
+      where: eq(aiProposals.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
   ])
 
   return {
@@ -202,6 +208,7 @@ export async function exportUserData() {
     notes: noteRows,
     routines: routineRows,
     routineItems: routineItemRows,
+    aiProposals: aiProposalRows,
     preferences: preferenceRows[0] ?? null,
   }
 }

@@ -14,6 +14,7 @@ import {
   eventExceptions,
   events,
 } from "@/modules/calendar/schema"
+import { aiProposals } from "@/modules/companion/schema"
 import { goals, milestones } from "@/modules/goals/schema"
 import {
   bodyWeights,
@@ -50,6 +51,9 @@ type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0]
  * deleted first, the child silently leaks.
  */
 export async function deleteAllUserRows(tx: Executor, userId: string) {
+  // First: a proposal's `targetId` points at a goal without a foreign key, so nothing in
+  // the database would stop these outliving the rows they describe.
+  await tx.delete(aiProposals).where(eq(aiProposals.userId, userId))
   await tx.delete(milestones).where(eq(milestones.userId, userId))
   await tx.delete(goals).where(eq(goals.userId, userId))
   await tx.delete(mealEntries).where(eq(mealEntries.userId, userId))

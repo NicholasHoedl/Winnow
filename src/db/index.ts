@@ -7,6 +7,7 @@ import * as todosSchema from "@/modules/todos/schema"
 import * as mealsSchema from "@/modules/meals/schema"
 import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
+import * as companionSchema from "@/modules/companion/schema"
 import * as goalsSchema from "@/modules/goals/schema"
 import * as notesSchema from "@/modules/notes/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
@@ -20,6 +21,7 @@ const schema = {
   ...mealsSchema,
   ...budgetSchema,
   ...calendarSchema,
+  ...companionSchema,
   ...goalsSchema,
   ...notesSchema,
   ...preferencesSchema,

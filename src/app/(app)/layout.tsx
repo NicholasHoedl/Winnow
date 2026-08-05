@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Search, Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { AI_READY } from "@/lib/config"
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
@@ -100,7 +101,7 @@ export default async function AppLayout({
           </div>
 
           <BottomNav />
-          <CommandPalette />
+          <CommandPalette companionEnabled={AI_READY} />
           <GlobalCreateDialogs lists={lists} goals={goals} events={events} />
         </div>
       </PreferencesProvider>

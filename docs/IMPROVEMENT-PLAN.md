@@ -25,6 +25,10 @@ picked up — it is **not** code-level detail yet.
 | T7c — Net-new: Habits / streaks               | ✅ shipped    |
 | T7d — Net-new: Weekly review                  | ✅ shipped    |
 | T8 — Goal momentum from linked tasks          | ✅ shipped    |
+| T9a — AI companion: shell + goal planning     | ✅ shipped    |
+| T9b — companion: routines                     | ✅ shipped    |
+| T9c — companion: weekly synthesis             | ✅ shipped    |
+| T9d — companion: transaction import           | ✅ shipped    |
 
 **T7 is complete**, so the remaining work is Checkpoint 0.4 (hosting) and then T5c-b.
 
@@ -32,6 +36,11 @@ picked up — it is **not** code-level detail yet.
 goals — an association that already existed (`tasks.goalId`, T2) but measured nothing.
 Goals now carry a second reading, movement, alongside the untouched progress figure:
 see ADR-0010 for why the two are kept separate rather than blended.
+
+**T9** was not on this roadmap either, and it is the first work built ahead of hosting
+rather than behind it. An AI companion that proposes structured work you approve — never
+writes on its own, never sees the journal (ADR-0011). T9a shipped the spine and one job;
+T9b routines, T9c synthesis and T9d interpretation each reuse it and ship alone.
 
 T5c-b moved behind T7 deliberately: it is the one remaining item that cannot be verified
 without a deployed, installed PWA (iOS only permits Web Push from a home-screen app), and

@@ -17,3 +17,26 @@ export const OFF_API_URL =
   process.env.OFF_API_URL ?? "https://world.openfoodfacts.org"
 export const OFF_SEARCH_URL =
   process.env.OFF_SEARCH_URL ?? "https://search.openfoodfacts.org"
+
+// --- AI companion (ADR-0011) ---
+//
+// Opt-IN, unlike OFF above, and the asymmetry is deliberate: this one needs an API key,
+// costs money per call, and sends your data to a third party. A fresh install should do
+// none of those until someone says so. With it off, /companion 404s and nothing in the
+// app hints the feature exists.
+export const AI_ENABLED = process.env.AI_ENABLED === "true"
+
+// Any OpenAI-compatible chat-completions endpoint. Kept configurable precisely because
+// ADR-0011 chose a hosted provider: a local endpoint is one env var away, which is what
+// the deferred journal-aware features would need.
+export const AI_BASE_URL = process.env.AI_BASE_URL ?? ""
+export const AI_MODEL = process.env.AI_MODEL ?? ""
+export const AI_API_KEY = process.env.AI_API_KEY ?? ""
+
+/**
+ * Enabled AND configured. `AI_ENABLED=true` with no base URL or model is a
+ * misconfiguration, not a feature — treat it as off rather than failing at call time,
+ * so a half-filled `.env` degrades to "the feature isn't there" instead of an error
+ * every time you press a button.
+ */
+export const AI_READY = AI_ENABLED && AI_BASE_URL !== "" && AI_MODEL !== ""

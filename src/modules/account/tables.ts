@@ -14,6 +14,7 @@ import { PgTable, getTableConfig } from "drizzle-orm/pg-core"
 
 import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
+import * as companionSchema from "@/modules/companion/schema"
 import * as goalsSchema from "@/modules/goals/schema"
 import * as mealsSchema from "@/modules/meals/schema"
 import * as notesSchema from "@/modules/notes/schema"
@@ -26,6 +27,7 @@ import { exportKeyFor } from "./payload"
 const SCHEMAS = [
   budgetSchema,
   calendarSchema,
+  companionSchema,
   goalsSchema,
   mealsSchema,
   notesSchema,
