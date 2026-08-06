@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { CalendarPlus, ClipboardList } from "lucide-react"
+import { CalendarPlus, ClipboardList, Sparkles } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { AI_READY } from "@/lib/config"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getCalendars,
@@ -122,8 +123,17 @@ export default async function DashboardPage({
             </p>
           </div>
           <div className="flex gap-2">
-            {/* No nav tab — the bottom bar is full at seven — so the dashboard and the
-                palette are the only ways to find this. */}
+            {/* Neither of these gets a nav tab — the bottom bar is full at seven — so the
+                dashboard and the palette are the only ways to find them. */}
+            {AI_READY && (
+              <Link
+                href="/companion"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                <Sparkles className="size-4" />
+                Companion
+              </Link>
+            )}
             <Link
               href="/review"
               className={buttonVariants({ variant: "outline", size: "sm" })}

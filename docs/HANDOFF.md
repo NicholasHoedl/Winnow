@@ -260,9 +260,9 @@ Do not reopen these without new information:
 generation runs in a route handler. This is the short version.
 
 **What exists.** `/companion` — a two-pane page: job buttons plus a refinement box on the
-left, the proposal renderer above the pending queue on the right. Two jobs, each end to
-end — generate → prune → edit inline → Apply, which writes through the modules' own
-actions and lands you on the result:
+left, the proposal renderer above the pending queue on the right. Four jobs. Three of them
+run end to end — generate → prune → edit inline → Apply, which writes through the modules'
+own actions and lands you on the result:
 
 - **Plan a goal** → milestones and tasks, via `addMilestone` and `createTask`, then
   `/goals`.
@@ -277,14 +277,19 @@ actions and lands you on the result:
 
 Off by default; `AI_ENABLED` unset means the route 404s and nothing hints it exists.
 
+**It has no nav tab, and that is deliberate** — the bottom bar is full at seven (§6), and
+`/review` set the precedent. The two ways in are the ⌘K palette and a Companion button in
+the dashboard header, both gated on `AI_READY`. Worth knowing because "I can't find it" is
+the first thing anyone says; the answer is that it is where `/review` is.
+
 **The one prompt that sends your own detail.** Every other job sends titles, descriptions
 or already-summed figures; transaction import sends the text you paste, because that is
 the feature. The UI says so above the box rather than leaving it to be discovered. ADR-0011
 described the weekly review as sending "rollups, not rows" — T9d deliberately widens that,
 and the journal boundary is untouched.
 
-**The rule the whole thing hangs off**, and the one to preserve when adding T9b/c/d: **the
-app does the arithmetic, the model does the language.** `planWarnings` in
+**The rule the whole thing hangs off**, and the one to preserve in anything added next:
+**the app does the arithmetic, the model does the language.** `planWarnings` in
 `companion/service.ts` judges the model's dates against `goals.targetDate` using `dayDiff`
 — the model is never asked to assess its own output, because it would sometimes be wrong
 and confident and there would be no way to tell.

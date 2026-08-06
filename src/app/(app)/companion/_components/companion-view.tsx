@@ -80,6 +80,29 @@ function readPayload(proposal: ProposalRow): ActivePayload | null {
   return parsed.success ? { kind: "summary", payload: parsed.data } : null
 }
 
+/**
+ * Per-kind copy, as lookups rather than nested ternaries.
+ *
+ * The ternaries these replace stopped at `routine` and let `import` fall through to the
+ * summary's wording — and the same fall-through in the request builder below meant
+ * refining an extraction asked the server for a WEEKLY SUMMARY. A `Record` keyed on the
+ * union fails to compile when a fifth kind arrives; a ternary chain silently picks the
+ * last branch.
+ */
+const KIND_NOUN: Record<ActivePayload["kind"], string> = {
+  goal_plan: "plan",
+  routine: "routine",
+  summary: "summary",
+  import: "extraction",
+}
+
+const REFINE_PLACEHOLDER: Record<ActivePayload["kind"], string> = {
+  goal_plan: "Make it three months — drop anything before March…",
+  routine: "Add a walk — move the prep to two days before…",
+  summary: "Be blunter — say more about the money…",
+  import: "Drop the refunds — put the coffees under Food…",
+}
+
 /** "Jul 27 – Aug 2" from the two dates the review was built for. */
 function weekLabel(createdAt: Date): string {
   return createdAt.toLocaleDateString("en-US", {
@@ -182,6 +205,43 @@ export function CompanionView({
     toast.success("Marked as read")
   }
 
+  /**
+   * The request a refinement sends, per kind — everything but the instruction itself.
+   *
+   * Each kind re-sends its own inputs, because the route validates a whole request per
+   * kind rather than a partial one — a plan still names its goal, a routine its brief, an
+   * extraction its source text. A `switch` over the union rather than a ternary chain: the
+   * chain that was here let `import` fall through and ask for a summary instead.
+   *
+   * Null means "cannot refine this right now", which only happens for an extraction whose
+   * source text has been cleared out of the box. The text is deliberately NOT stored on
+   * the proposal — a pasted bank statement is not something to keep a second copy of.
+   * Returning null rather than a boolean keeps that rule in ONE place: the render disables
+   * the box on the same call that would have built the request.
+   */
+  function refinementBody(
+    current: ActivePayload,
+  ): Record<string, unknown> | null {
+    if (!active) return null
+    const common = { proposalId: active.id }
+    switch (current.kind) {
+      case "goal_plan":
+        return {
+          kind: "goal_plan",
+          goalId: active.targetId ?? goalId,
+          ...common,
+        }
+      case "routine":
+        return { kind: "routine", brief: current.payload.name, ...common }
+      case "summary":
+        return { kind: "summary", ...common }
+      case "import": {
+        const text = paste.trim()
+        return text ? { kind: "import", text, ...common } : null
+      }
+    }
+  }
+
   function onApply(finalized: Exclude<ActivePayload, { kind: "summary" }>) {
     if (!active) return
     setBusy(true)
@@ -241,6 +301,9 @@ export function CompanionView({
   }
 
   const stillPending = pending.filter((p) => p.id !== active?.id)
+  // Null when the proposal on screen cannot be refined — see `refinementBody`. Computed
+  // once here because the refine box asks the same question three times.
+  const refineBody = payload ? refinementBody(payload) : null
 
   return (
     // Height is pinned only where the side-by-side layout exists. On a phone the panes
@@ -409,55 +472,31 @@ export function CompanionView({
               onSubmit={(event) => {
                 event.preventDefault()
                 const trimmed = instruction.trim()
-                if (!trimmed) return
+                if (!trimmed || !refineBody) return
                 setInstruction("")
-                // The refinement re-sends the job's own inputs alongside the instruction,
-                // because the route validates a whole request per kind rather than a
-                // partial one — a plan still names its goal, a routine still its brief.
-                void generate(
-                  payload.kind === "goal_plan"
-                    ? {
-                        kind: "goal_plan",
-                        goalId: active.targetId ?? goalId,
-                        proposalId: active.id,
-                        instruction: trimmed,
-                      }
-                    : payload.kind === "routine"
-                      ? {
-                          kind: "routine",
-                          brief: payload.payload.name,
-                          proposalId: active.id,
-                          instruction: trimmed,
-                        }
-                      : {
-                          kind: "summary",
-                          proposalId: active.id,
-                          instruction: trimmed,
-                        },
-                )
+                void generate({ ...refineBody, instruction: trimmed })
               }}
             >
               <label
                 htmlFor="refine"
                 className="text-muted-foreground text-xs font-medium"
               >
-                {payload.kind === "goal_plan"
-                  ? "Change this plan"
-                  : payload.kind === "routine"
-                    ? "Change this routine"
-                    : "Change this summary"}
+                Change this {KIND_NOUN[payload.kind]}
               </label>
               <div className="flex gap-2">
                 <Input
                   id="refine"
                   value={instruction}
                   onChange={(event) => setInstruction(event.target.value)}
+                  // Off when there is nothing to build a request from — an extraction
+                  // whose source text is gone, which is every extraction after a reload.
+                  // Said here rather than on submit: a box that takes a sentence and then
+                  // refuses it is worse than one that explains itself while empty.
+                  disabled={!refineBody}
                   placeholder={
-                    payload.kind === "goal_plan"
-                      ? "Make it three months — drop anything before March…"
-                      : payload.kind === "routine"
-                        ? "Add a walk — move the prep to two days before…"
-                        : "Be blunter — say more about the money…"
+                    refineBody
+                      ? REFINE_PLACEHOLDER[payload.kind]
+                      : "Put the transactions back in the box above to change this"
                   }
                 />
                 <Button
@@ -466,6 +505,7 @@ export function CompanionView({
                   size="icon"
                   aria-label="Revise the proposal"
                   aria-busy={busy}
+                  disabled={!refineBody}
                 >
                   <Wand2 className="size-4" />
                 </Button>

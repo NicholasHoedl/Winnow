@@ -366,3 +366,29 @@ test("pasted transactions are extracted, pruned and applied", async ({
     await expect(visibleCard(page, payee)).toHaveCount(0)
   }
 })
+
+test("an import refinement asks for an extraction, not a summary", async ({
+  page,
+}) => {
+  // Regression cover for a fall-through nobody would have caught from behaviour: the
+  // refinement request was built by a ternary chain that stopped at `routine`, so
+  // refining an extraction asked the server for a WEEKLY SUMMARY — and the panel labelled
+  // itself "Change this summary" while showing a table of transactions.
+  await page.goto("/companion")
+  await page.getByLabel("Transactions to read").fill("2026-07-14,TESCO,-42.10")
+  await page.getByRole("button", { name: "Read them" }).click()
+  await expect(page.getByText("Transactions found")).toBeVisible()
+  await expect(page.getByText("Change this extraction")).toBeVisible()
+
+  await page.getByLabel("Change this extraction").fill("drop the refunds")
+  await page.getByRole("button", { name: "Revise the proposal" }).click()
+
+  // Still an extraction. The stub answers a one-row table to a revision request; if the
+  // request had gone out as `summary` this would be prose instead.
+  await expect(page.getByText("Transactions found")).toBeVisible()
+  await expect(page.getByText("STUB refined payee")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Apply" })).toBeVisible()
+
+  await page.getByRole("button", { name: "Discard" }).click()
+  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+})

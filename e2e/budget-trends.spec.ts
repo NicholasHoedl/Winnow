@@ -6,7 +6,18 @@ import { test, expect } from "./_test"
 test("the budget page renders labelled trend charts", async ({ page }) => {
   await page.goto("/budget")
 
-  const charts = page.locator("svg[role=img]")
+  // Scoped to the Trends section, not the page.
+  //
+  // `page.locator("svg[role=img]")` used to be page-wide, which quietly assumed nothing
+  // else above the charts was an accessible icon. A repeating transaction breaks that: its
+  // "Repeating" badge is a lucide <svg role="img"> with no <title>, it sits in the
+  // transaction list ABOVE Trends, and `.first()` therefore resolved to the badge — so
+  // `.locator("title")` waited 30s for a child that a badge never has. The charts were
+  // fine the whole time. Any icon added anywhere above this section would do it again.
+  const trends = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Trends" }) })
+  const charts = trends.locator("svg[role=img]")
   await expect(charts.first()).toBeVisible()
 
   // Each chart names itself for screen readers.
