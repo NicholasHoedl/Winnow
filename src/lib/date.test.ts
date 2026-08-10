@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   addDays,
+  dateRange,
   dayDiff,
   daysInMonth,
   dowOf,
@@ -209,5 +210,34 @@ describe("dueStatus", () => {
     const newYear = new Date("2027-01-01T12:00:00Z") // Chicago 2027-01-01
     expect(dueStatus("2026-12-31", newYear, TZ)).toBe("overdue")
     expect(dueStatus("2027-01-01", newYear, TZ)).toBe("due-today")
+  })
+})
+
+// Moved here from `todos/habits.test.ts` in T12a, unchanged, when the habits module
+// stopped being derived from the recurrence engine and `dateRange` came with it.
+describe("dateRange", () => {
+  it("includes both ends", () => {
+    expect(dateRange("2026-07-01", "2026-07-04")).toEqual([
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03",
+      "2026-07-04",
+    ])
+  })
+
+  it("returns a single day for an equal range", () => {
+    expect(dateRange("2026-07-01", "2026-07-01")).toEqual(["2026-07-01"])
+  })
+
+  it("crosses a month boundary", () => {
+    expect(dateRange("2026-07-30", "2026-08-01")).toEqual([
+      "2026-07-30",
+      "2026-07-31",
+      "2026-08-01",
+    ])
+  })
+
+  it("is empty when the range runs backwards", () => {
+    expect(dateRange("2026-07-04", "2026-07-01")).toEqual([])
   })
 })

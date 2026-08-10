@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { bucketTasks, repeatLabel, summarizeTasks } from "./service"
+import {
+  bucketTasks,
+  reopenWouldDestroy,
+  repeatLabel,
+  summarizeTasks,
+} from "./service"
 
 const TZ = "America/Chicago"
 
@@ -144,5 +149,53 @@ describe("repeatLabel", () => {
     expect(repeatLabel({ freq: "daily", recurrenceInterval: 10 })).toBe(
       "Every 10 days",
     )
+  })
+})
+
+// Moved here from `todos/habits.test.ts` in T12a, unchanged. The guard was never habit
+// maths — it protects `toggleTaskStatus` from turning a durable completion into an open
+// row that the next render deletes — so it outlived the habits view it shipped beside.
+describe("reopenWouldDestroy", () => {
+  const cycle = { occurrenceDate: "2026-07-22", date: "2026-07-22" }
+
+  it("leaves a one-off task alone — nothing retires it", () => {
+    expect(
+      reopenWouldDestroy({ seriesId: null, occurrenceDate: null }, cycle),
+    ).toBe(false)
+  })
+
+  it("allows re-opening the current cycle", () => {
+    expect(
+      reopenWouldDestroy(
+        { seriesId: "rule", occurrenceDate: "2026-07-22" },
+        cycle,
+      ),
+    ).toBe(false)
+  })
+
+  it("blocks re-opening an earlier cycle", () => {
+    expect(
+      reopenWouldDestroy(
+        { seriesId: "rule", occurrenceDate: "2026-07-15" },
+        cycle,
+      ),
+    ).toBe(true)
+  })
+
+  // A rule past its end date has no current cycle, so syncRuleInstances deletes every
+  // open instance under it — re-opening any of them destroys it.
+  it("blocks re-opening anything under an ended rule", () => {
+    expect(
+      reopenWouldDestroy(
+        { seriesId: "rule", occurrenceDate: "2026-07-22" },
+        null,
+      ),
+    ).toBe(true)
+  })
+
+  it("treats a series row with no occurrence key as a one-off", () => {
+    expect(
+      reopenWouldDestroy({ seriesId: "rule", occurrenceDate: null }, cycle),
+    ).toBe(false)
   })
 })

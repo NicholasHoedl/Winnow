@@ -14,9 +14,9 @@ import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
-import { reopenWouldDestroy } from "./habits"
 import { syncRuleInstances, type Task } from "./queries"
 import { restorableTask } from "./restore"
+import { reopenWouldDestroy } from "./service"
 import {
   lists,
   subtasks,

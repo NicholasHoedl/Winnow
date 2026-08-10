@@ -3,6 +3,7 @@
 // `now` and IANA `timeZone` for determinism.
 
 import { dueStatus } from "@/lib/date"
+import type { Cycle } from "@/lib/recurrence"
 
 export type TaskSummaryInput = {
   dueDate: string | null
@@ -102,4 +103,27 @@ export function repeatLabel(series: RepeatShape): string {
     return `Every ${series.recurrenceInterval} ${unit}s`
   }
   return { daily: "Daily", weekly: "Weekly", monthly: "Monthly" }[series.freq]
+}
+
+/**
+ * Whether re-opening this completed task would silently destroy it.
+ *
+ * `syncRuleInstances` retires every OPEN instance of a rule that isn't the current cycle,
+ * and it runs on each render of /activity, the dashboard and the digest. So un-completing an
+ * off-cycle instance turns a durable history row into an open one that the very next page
+ * load deletes — the completion disappears with nothing to show it ever existed.
+ *
+ * A one-off task has no rule to retire it and is always safe. A rule that has ended has no
+ * current cycle at all, so nothing can be re-opened under it.
+ *
+ * Lived in `todos/habits.ts` until T12a retired that file. It never was habit maths: it
+ * reads a task against a recurrence cycle and guards `toggleTaskStatus`, which is this
+ * module's business and survives the habits rewrite untouched.
+ */
+export function reopenWouldDestroy(
+  task: { seriesId: string | null; occurrenceDate: string | null },
+  cycle: Cycle | null,
+): boolean {
+  if (!task.seriesId || !task.occurrenceDate) return false
+  return cycle === null || cycle.occurrenceDate !== task.occurrenceDate
 }

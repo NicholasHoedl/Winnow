@@ -42,6 +42,21 @@ export function dowOf(dateStr: string): number {
   return new Date(`${dateStr}T00:00:00Z`).getUTCDay()
 }
 
+/**
+ * Every date from `from` to `to` inclusive. Empty when `to` precedes `from`.
+ *
+ * The day-string counterpart to `monthSeries` below — both are "the consecutive units
+ * spanning this range", which is what an axis or a grid wants. Lived in `todos/habits.ts`
+ * until T12a retired that file; it is a plain composition of `dayDiff` and `addDays` with
+ * nothing habit-specific in it, so it belongs here rather than in whichever module happens
+ * to draw the next calendar.
+ */
+export function dateRange(from: string, to: string): string[] {
+  const span = dayDiff(from, to)
+  if (span < 0) return []
+  return Array.from({ length: span + 1 }, (_, i) => addDays(from, i))
+}
+
 // --- week bounds ---
 
 /**
