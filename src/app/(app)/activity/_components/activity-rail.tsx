@@ -2,14 +2,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Flame, ListChecks, Play } from "lucide-react"
+import { ArrowRight, Flame, ListChecks, Play, Plus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { GoalWithProgress } from "@/modules/goals/queries"
+import type { HabitCard } from "@/modules/habits/queries"
 import type { RoutineWithItems } from "@/modules/routines/queries"
-import { currentStreak } from "@/modules/todos/habits"
-import type { Habit } from "@/modules/todos/queries"
 import { Button } from "@/components/ui/button"
+import { Progress } from "@/components/ui/progress"
 
 import { GoalsBlock, HANDLE_GUTTER } from "./goal-rail"
 
@@ -26,35 +26,19 @@ import { GoalsBlock, HANDLE_GUTTER } from "./goal-rail"
  *   **the rail never offers an action the task list beside it already offers.**
  *
  * So a routine gets a Run button — running a routine CREATES tasks, which the list cannot
- * do — and a habit gets no tick at all, because today's habit instance is already a
- * checkable row in that list. A second checkbox would be a second place to keep in step,
- * which is exactly what T10a spent its effort removing.
+ * do — and a habit gets a `+1`, because a habit is not a task and has no row in that list
+ * at all. Nothing else can log it.
+ *
+ * That last part changed in T12a and the rule did not: it got STRONGER. Until then a habit
+ * was any repeating task, so its instance already sat in the list with a checkbox, and the
+ * rule said "no tick here". A habit is now a quota with a log — three classes a week,
+ * counted — and it generates no tasks whatever. The `+1` is not an exception to the rule,
+ * it is the rule applied to a thing the list does not carry.
+ *
+ * The guard that follows from this, for whoever reads it next: **a habit still gets no
+ * checkbox.** A quota is not done or not-done, and the moment one appears here it is either
+ * duplicating the `+1` or lying about what "done" means for a rate.
  */
-
-const SPARK = 7
-
-/** The most recent cycles, oldest first, as a fixed-width run of marks. */
-function StreakSpark({ habit }: { habit: Habit }) {
-  const recent = habit.cycles.slice(-SPARK)
-  if (recent.length === 0) return null
-  return (
-    <div aria-hidden className="flex items-center gap-0.5">
-      {recent.map((cycle) => (
-        <span
-          key={cycle.occurrenceDate}
-          className={cn(
-            "h-2.5 w-1.5 rounded-[1px]",
-            cycle.status === "completed" && "bg-primary",
-            // A skipped cycle is a decision, not a failure — it must not read like a miss.
-            // Same distinction the habits page draws, compressed to one shade.
-            cycle.status === "skipped" && "bg-muted-foreground/40",
-            cycle.status === "missed" && "bg-muted",
-          )}
-        />
-      ))}
-    </div>
-  )
-}
 
 function BlockHeading({
   label,
@@ -134,7 +118,15 @@ function RoutinesBlock({
   )
 }
 
-function HabitsBlock({ habits }: { habits: Habit[] }) {
+function HabitsBlock({
+  habits,
+  pending,
+  onLog,
+}: {
+  habits: HabitCard[]
+  pending: boolean
+  onLog: (card: HabitCard) => void
+}) {
   return (
     <section aria-label="Habits" className="flex flex-col gap-2">
       <BlockHeading
@@ -145,32 +137,47 @@ function HabitsBlock({ habits }: { habits: Habit[] }) {
       <div className={cn("flex flex-col gap-1.5", HANDLE_GUTTER)}>
         {habits.length === 0 ? (
           <p className="text-muted-foreground text-[0.6875rem]">
-            None yet. Any repeating task counts as one.
+            None yet. A habit is a rate you keep — three classes a week.
           </p>
         ) : (
-          habits.map((habit) => {
-            const streak = currentStreak(habit.cycles)
-            return (
-              <div
-                key={habit.rule.id}
-                data-testid="rail-habit"
-                data-rail=""
-                className="bg-card flex items-center gap-2 rounded-lg border px-2.5 py-1.5"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {habit.rule.title}
-                  </p>
-                  <StreakSpark habit={habit} />
+          habits.map((card) => (
+            <div
+              key={card.habit.id}
+              data-testid="rail-habit"
+              // Excludes this from `visibleCard` in the e2e helpers. Without it a habit
+              // and a task sharing a title collide and the spec hangs on a "Task actions"
+              // button this row does not have. It has bitten twice.
+              data-rail=""
+              className="bg-card flex items-center gap-2 rounded-lg border px-2.5 py-1.5"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">
+                  {card.habit.title}
+                </p>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <Progress
+                    value={card.now.percent}
+                    aria-hidden
+                    className="h-1 flex-1"
+                  />
+                  <span className="text-muted-foreground shrink-0 text-[0.6875rem] tabular-nums">
+                    {card.now.done}/{card.now.target}
+                  </span>
                 </div>
-                {/* Read-only on purpose — today's instance is a row in the list beside
-                    this, with the only checkbox that should exist for it. */}
-                <span className="text-muted-foreground shrink-0 text-[0.6875rem] tabular-nums">
-                  {streak === 0 ? "—" : `${streak}d`}
-                </span>
               </div>
-            )
-          })
+              {/* The one action nothing else on this screen offers. Disabled in flight:
+                  there is no unique constraint behind it, so a double-click is two rows. */}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={pending}
+                aria-label={`Log ${card.habit.title}`}
+                onClick={() => onLog(card)}
+              >
+                <Plus className="size-3.5" />
+              </Button>
+            </div>
+          ))
         )}
       </div>
     </section>
@@ -187,6 +194,8 @@ export function ActivityRail({
   routines,
   habits,
   onRunRoutine,
+  onLogHabit,
+  habitPending,
 }: {
   goals: GoalWithProgress[]
   selectedGoalId: string | null
@@ -195,8 +204,10 @@ export function ActivityRail({
   onCreate: () => void
   onReorder: (ids: string[]) => void
   routines: RoutineWithItems[]
-  habits: Habit[]
+  habits: HabitCard[]
   onRunRoutine: (routine: RoutineWithItems) => void
+  onLogHabit: (card: HabitCard) => void
+  habitPending: boolean
 }) {
   return (
     // `top-4` and `h-fit` keep the whole rail in view while the task list scrolls past it;
@@ -212,7 +223,7 @@ export function ActivityRail({
         onReorder={onReorder}
       />
       <RoutinesBlock routines={routines} onRun={onRunRoutine} />
-      <HabitsBlock habits={habits} />
+      <HabitsBlock habits={habits} pending={habitPending} onLog={onLogHabit} />
     </aside>
   )
 }

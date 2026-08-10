@@ -137,20 +137,28 @@ test("on a phone the rail becomes a chip scroller that still filters", async ({
 })
 
 /**
- * T10b: routines and habits in the rail.
+ * T10b, amended by T12a: routines and habits in the rail.
  *
- * The split being asserted here is the rule the rail is built on — **it never offers an
- * action the task list beside it already offers.** Running a routine CREATES tasks, so it
- * gets a button; a habit's tick already exists as a row in that list, so the rail shows the
- * streak and nothing clickable. A future change that "helpfully" adds a checkbox to the
- * habit row should fail here.
+ * The rule the rail is built on has not changed — **it never offers an action the task list
+ * beside it already offers** — but what that implies for a habit inverted, so it is worth
+ * restating rather than quietly patching.
+ *
+ * Running a routine CREATES tasks, so it gets a button. A habit used to BE a repeating
+ * task, whose tick was already a row in the list, so the rail showed a streak and nothing
+ * clickable. A habit is now a quota with a log: it generates no tasks at all, it has no row
+ * anywhere else, and the rail is the only place on this screen it can be logged from. The
+ * `+1` is the rule applied, not an exception to it.
+ *
+ * Two assertions keep that honest. The habit row still has **no checkbox** — a quota is not
+ * done-or-not-done, and a checkbox here would be lying about what "done" means for a rate.
+ * And the habit creates **no task**, which is what pins the two primitives apart.
  */
 
 const ROUTINE = `E2E rail routine ${STAMP}`
 const RITEM = `E2E rail step ${STAMP}`
 const HABIT = `E2E rail habit ${STAMP}`
 
-test("a routine can be run from the rail, and habits are read-only there", async ({
+test("a routine can be run from the rail, and a habit can be logged there", async ({
   page,
 }) => {
   // --- A routine with one step, built on its own page.
@@ -187,56 +195,53 @@ test("a routine can be run from the rail, and habits are read-only there", async
   // The task the run created is on the board beside the rail that created it.
   await expect(visibleCard(page, RITEM)).toHaveCount(1)
 
-  // --- A repeating task is a habit, and the rail reports its streak WITHOUT a second
-  // checkbox. The only tick for today is the task row.
-  await page.getByRole("button", { name: "New task" }).click()
-  const taskDialog = page.getByRole("dialog")
-  await taskDialog.getByLabel("Title", { exact: true }).fill(HABIT)
-  // Same handle habits.spec uses — the recurrence select has no label, only its
-  // current value ("Off").
-  await taskDialog.getByRole("combobox").filter({ hasText: "Off" }).click()
-  await page.getByRole("option", { name: "Daily" }).click()
-  await taskDialog.getByRole("button", { name: "Create" }).click()
-  await expect(taskDialog).toBeHidden()
+  // --- A habit, built on its own page and logged from the rail. Default cadence, which
+  // the dialog opens on: 3 × a week.
+  await page.goto("/activity/habits")
+  await page.getByRole("button", { name: "New habit", exact: true }).click()
+  const habitDialog = page.getByRole("dialog")
+  await habitDialog.getByLabel("Title", { exact: true }).fill(HABIT)
+  await habitDialog.getByRole("button", { name: "Add", exact: true }).click()
+  await expect(visibleCard(page, HABIT)).toHaveCount(1)
 
   await page.goto("/activity")
   const railHabit = page.getByTestId("rail-habit").filter({ hasText: HABIT })
   await expect(railHabit).toHaveCount(1)
+  // Still no checkbox, and still for a reason — see the block comment above.
   await expect(railHabit.getByRole("checkbox")).toHaveCount(0)
-  await expect(railHabit.getByRole("button")).toHaveCount(0)
-  // The tick that does exist is the task row's, in the list.
-  await expect(visibleCard(page, HABIT).getByLabel("Mark as done")).toHaveCount(
-    1,
-  )
+  // Exactly one button now: the `+1`. It was zero before T12a, when the tick lived on a
+  // task row instead.
+  await expect(railHabit.getByRole("button")).toHaveCount(1)
+  await railHabit.getByRole("button", { name: `Log ${HABIT}` }).click()
+  await expect(railHabit).toContainText("1/3")
 
-  // --- Cleanup. The RULE goes first, through the repeating-tasks manager: deleting a
-  // repeating instance from the list is a different operation with its own confirm, and a
-  // leaked rule generates a task every day forever. Same order habits.spec.ts uses.
-  await page.getByRole("button", { name: "Repeating tasks" }).click()
-  const rules = page
-    .getByRole("dialog")
-    .getByRole("button", { name: new RegExp(`^Stop repeating ${HABIT}`) })
-  if (await rules.count()) {
-    await rules.first().click()
-    await page
-      .getByRole("button", { name: "Stop repeating", exact: true })
-      .click()
-  }
-  await page.keyboard.press("Escape")
+  // The load-bearing negative: a habit creates NO task. Before T12a this same title would
+  // have been a row in the list beside the rail.
+  await expect(visibleCard(page, HABIT)).toHaveCount(0)
+
+  // --- Cleanup. No rule to stop and no orphaned instances to sweep: the habit owns its own
+  // row and its entries cascade with it. That is a property of the design rather than luck
+  // — T7c's teardown here had to do both, in a specific order, or it leaked a rule that
+  // generated a task every day forever.
+  await page.goto("/activity/habits")
+  await visibleCard(page, HABIT)
+    .getByRole("button", { name: `${HABIT} actions` })
+    .click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await page.getByRole("button", { name: "Delete habit", exact: true }).click()
+  await expect(visibleCard(page, HABIT)).toHaveCount(0)
 
   await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  for (const title of [RITEM, HABIT]) {
-    const rows = visibleCard(page, title)
-    for (let i = 0; i < 5; i++) {
-      const before = await rows.count()
-      if (before === 0) break
-      await rows.first().getByRole("button", { name: "Task actions" }).click()
-      await page.getByRole("menuitem", { name: "Delete" }).click()
-      await expect(rows).toHaveCount(before - 1)
-    }
-    await expect(rows).toHaveCount(0)
+  const rows = visibleCard(page, RITEM)
+  for (let i = 0; i < 5; i++) {
+    const before = await rows.count()
+    if (before === 0) break
+    await rows.first().getByRole("button", { name: "Task actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+    await expect(rows).toHaveCount(before - 1)
   }
+  await expect(rows).toHaveCount(0)
 
   await page.goto("/activity/routines")
   await visibleCard(page, ROUTINE)

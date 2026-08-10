@@ -1,14 +1,10 @@
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
+import { getHabitsView } from "@/modules/habits/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getRoutines } from "@/modules/routines/queries"
-import {
-  getHabits,
-  getLists,
-  getTaskRecurrences,
-  getTasks,
-} from "@/modules/todos/queries"
+import { getLists, getTaskRecurrences, getTasks } from "@/modules/todos/queries"
 
 import { ActivityView } from "./_components/activity-view"
 
@@ -30,10 +26,10 @@ export default async function ActivityPage({
       getEventOptions(),
       getGoals(timeZone, goalMomentumDays),
       getRoutines(),
-      // Default window, deliberately — the same one `/activity/habits` uses. A shorter one
-      // would make the rail cheaper and make its streak number DISAGREE with the page it
-      // links to, which is a worse bug than a slower query on a single-user app.
-      getHabits(),
+      // The same window `/activity/habits` uses, deliberately. A cheaper one here would
+      // make the rail's numbers DISAGREE with the page it links to, which is a worse bug
+      // than a slower query on a single-user app.
+      getHabitsView(),
       searchParams,
     ])
 
@@ -53,7 +49,7 @@ export default async function ActivityPage({
       events={events}
       goals={goals}
       routines={routines}
-      habits={habits.habits}
+      habits={habits.cards}
       // Resolved server-side so the run dialog's default anchor matches what the rest of
       // the app calls "today", rather than whatever the device clock says.
       today={todayInZone(new Date(), timeZone)}

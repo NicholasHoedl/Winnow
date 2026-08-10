@@ -6,8 +6,10 @@ import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
+import type { HabitCard } from "@/modules/habits/queries"
 import type { RoutineWithItems } from "@/modules/routines/queries"
 import { reorderGoals } from "@/modules/goals/actions"
+import { deleteEntry, logEntry } from "@/modules/habits/actions"
 import {
   clearTaskRecurrenceException,
   deleteTask,
@@ -17,12 +19,7 @@ import {
   skipTaskOccurrence,
   toggleTaskStatus,
 } from "@/modules/todos/actions"
-import type {
-  Habit,
-  List,
-  TaskSeries,
-  TaskWithSeries,
-} from "@/modules/todos/queries"
+import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
 import { bucketTasks } from "@/modules/todos/service"
 
 import { SortableList } from "@/components/shared/sortable-list"
@@ -80,8 +77,8 @@ export function ActivityView({
   goals: GoalWithProgress[]
   events: EventOption[]
   routines: RoutineWithItems[]
-  /** Every repeating task with its completion history — the rail's streaks. */
-  habits: Habit[]
+  /** Every live habit with its readings — the rail's quota bars. */
+  habits: HabitCard[]
   /** The user's own today, for the run dialog's default anchor. */
   today: string
   selectedGoalId: string | null
@@ -97,6 +94,37 @@ export function ActivityView({
   const [confirmSeries, setConfirmSeries] =
     React.useState<TaskWithSeries | null>(null)
   const [, startTransition] = React.useTransition()
+  // Its own transition rather than the shared one above: the rail's `+1` disables while it
+  // is pending, and borrowing the list's would grey every habit out each time a task was
+  // ticked.
+  const [habitPending, startHabitTransition] = React.useTransition()
+
+  /**
+   * Log one completion against a habit, from the rail.
+   *
+   * The undo deletes exactly the row the action returned. "Today's entry for this habit"
+   * would be ambiguous — `habit_entries` has no unique constraint on (habit, date) on
+   * purpose, so there can legitimately be three of them.
+   */
+  function handleLogHabit(card: HabitCard) {
+    startHabitTransition(async () => {
+      const result = await logEntry(card.habit.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast(`Logged ${card.habit.title}`, {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            startHabitTransition(async () => {
+              const undone = await deleteEntry(result.entryId)
+              if (!undone.ok) toast.error(undone.error)
+            }),
+        },
+      })
+    })
+  }
 
   // Goal state: which one scopes the list, which one is open in a dialog, which is being
   // edited or created.
@@ -413,6 +441,8 @@ export function ActivityView({
           routines={routines}
           habits={habits}
           onRunRoutine={(routine) => setRunRoutineId(routine.id)}
+          onLogHabit={handleLogHabit}
+          habitPending={habitPending}
         />
 
         <div className="min-w-0">
