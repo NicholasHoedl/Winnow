@@ -122,9 +122,15 @@ export default async function DashboardPage({
               Here&apos;s your day at a glance.
             </p>
           </div>
-          <div className="flex gap-2">
-            {/* Neither of these gets a nav tab — the bottom bar is full at seven — so the
-                dashboard and the palette are the only ways to find them. */}
+          {/* `flex-wrap` is load-bearing, not tidying. The header above wraps, but this
+              inner row did not, so a fourth button ran to 440px on a 375px phone and made
+              the whole PAGE scroll sideways — which T10a introduced by adding Companion
+              here and did not catch, because only /activity was checked at that width. */}
+          <div className="flex flex-wrap gap-2">
+            {/* `/review` has no nav tab — the bar is at its seven-item ceiling again — so
+                the dashboard and the palette are the only ways to reach it. Companion DOES
+                have a tab now; this button is kept as a second door from the surface you
+                land on, not because it is the only one. */}
             {AI_READY && (
               <Link
                 href="/companion"

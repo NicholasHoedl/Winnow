@@ -57,7 +57,7 @@ export default async function AppLayout({
           >
             Skip to content
           </a>
-          <AppSidebar userName={userName} />
+          <AppSidebar userName={userName} companionEnabled={AI_READY} />
 
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Mobile top bar (desktop puts the brand + toggle in the sidebar) */}
@@ -100,7 +100,7 @@ export default async function AppLayout({
             </main>
           </div>
 
-          <BottomNav />
+          <BottomNav companionEnabled={AI_READY} />
           <CommandPalette companionEnabled={AI_READY} />
           <GlobalCreateDialogs lists={lists} goals={goals} events={events} />
         </div>

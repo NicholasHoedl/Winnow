@@ -9,11 +9,18 @@ import { Button } from "@/components/ui/button"
 import { CommandPaletteTrigger } from "@/components/create/command-palette"
 import { signOutAction } from "@/app/(app)/actions"
 
-import { isNavActive, navItems } from "./nav-items"
+import { isNavActive, navItemsFor } from "./nav-items"
 import { ModeToggle } from "./mode-toggle"
 
-export function AppSidebar({ userName }: { userName: string }) {
+export function AppSidebar({
+  userName,
+  companionEnabled,
+}: {
+  userName: string
+  companionEnabled: boolean
+}) {
   const pathname = usePathname()
+  const items = navItemsFor(companionEnabled)
   const initial = userName.charAt(0).toUpperCase() || "?"
   const settingsActive = isNavActive(pathname, "/settings")
 
@@ -58,7 +65,7 @@ export function AppSidebar({ userName }: { userName: string }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active = isNavActive(pathname, item.href)
           return (
             <Link

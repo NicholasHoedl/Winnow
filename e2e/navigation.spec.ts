@@ -54,3 +54,57 @@ test("the merged routes redirect, and their nav entries are gone", async ({
   await expect(nav.getByRole("link", { name: "Goals" })).toHaveCount(0)
   await expect(nav.getByRole("link", { name: "Activity" })).toBeVisible()
 })
+
+test("the companion has a nav tab, directly after Activity", async ({
+  page,
+}) => {
+  // The tab is CONDITIONAL — `/companion` 404s unless AI_ENABLED is set with a provider
+  // (ADR-0011), so it is spliced in at render rather than living in the static list. The
+  // e2e environment configures the stub provider, so it is expected here.
+  await page.goto("/")
+  const nav = page.getByRole("navigation").first()
+  const labels = await nav.getByRole("link").allInnerTexts()
+  expect(labels).toEqual([
+    "Dashboard",
+    "Activity",
+    "Companion",
+    "Calendar",
+    "Budget",
+    "Meals",
+    "Notes",
+  ])
+
+  await nav.getByRole("link", { name: "Companion", exact: true }).click()
+  await expect(page).toHaveURL(/\/companion$/)
+})
+
+test("seven tabs still fit a 375px phone without overflowing", async ({
+  page,
+}) => {
+  // The bar is a plain flex with `flex-1` and no overflow handling, so "it fits" is a
+  // measurement, not a style. T10 freed a slot and the Companion tab spends it — this is
+  // the check that says the ceiling is still seven and not six.
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto("/")
+  const bar = page.locator("nav").filter({ hasText: "Dashboard" }).last()
+  await expect(bar.getByRole("link")).toHaveCount(7)
+
+  const overflows = await bar.evaluate(
+    (el) => el.scrollWidth > el.clientWidth + 1,
+  )
+  expect(overflows).toBe(false)
+
+  // And no label has been squeezed into wrapping onto a second line, which is how this
+  // fails before it starts clipping.
+  const heights = await bar
+    .getByRole("link")
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))
+  expect(new Set(heights.map(Math.round)).size).toBe(1)
+
+  const pageOverflows = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth >
+      document.documentElement.clientWidth,
+  )
+  expect(pageOverflows).toBe(false)
+})

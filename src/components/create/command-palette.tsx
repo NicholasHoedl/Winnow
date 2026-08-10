@@ -3,9 +3,10 @@
 // The ⌘K command palette: jump to any page or search across every module. Mounted once
 // in the app shell. Owns its open state and the global keyboard shortcuts:
 //   • ⌘K / Ctrl+K       toggle the palette (works even while typing)
-//   • g then t/c/g/b/m/n/d  go to todos / calendar / goals / budget / meals / notes /
-//                           dashboard. `g n` is unambiguous with the bare `n` below:
-//                           the pending-g branch returns before it.
+//   • g then a/c/b/m/n/d  go to activity / calendar / budget / meals / notes / dashboard.
+//                          `t` and `g` are kept as aliases for activity (T10). `g n` is
+//                          unambiguous with the bare `n` below: the pending-g branch
+//                          returns before it.
 // Create commands + the `n` shortcut are added in T1-S4 (they produce create-intents).
 
 import * as React from "react"
@@ -19,7 +20,6 @@ import {
   NotebookPen,
   Search,
   Settings,
-  Sparkles,
   Target,
   Utensils,
   Wallet,
@@ -36,7 +36,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
-import { navItems } from "@/components/shared/nav-items"
+import { COMPANION_NAV_ITEM, navItems } from "@/components/shared/nav-items"
 import { search } from "@/modules/search/actions"
 import { MIN_QUERY_LENGTH } from "@/modules/search/service"
 import type { SearchResult, SearchResultType } from "@/modules/search/types"
@@ -99,15 +99,6 @@ const NAV_COMMANDS: NavCommand[] = [
   { href: "/review", label: "Weekly review", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
-
-// Listed separately because it is conditional: the companion route only exists when
-// AI_ENABLED is set with a provider configured (ADR-0011). Offering it otherwise would
-// route someone to a 404 for a feature they never turned on.
-const COMPANION_COMMAND: NavCommand = {
-  href: "/companion",
-  label: "Companion",
-  icon: Sparkles,
-}
 
 // Create actions. Tasks open a create-in-place dialog via the create-intent bus; the
 // other kinds navigate to their module for now (T1-S4 scope).
@@ -267,7 +258,7 @@ export function CommandPalette({
 
   const q = query.trim().toLowerCase()
   const navCommands = companionEnabled
-    ? [...NAV_COMMANDS, COMPANION_COMMAND]
+    ? [...NAV_COMMANDS, COMPANION_NAV_ITEM]
     : NAV_COMMANDS
   const navMatches = q
     ? navCommands.filter((c) => c.label.toLowerCase().includes(q))

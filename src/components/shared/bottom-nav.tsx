@@ -5,14 +5,15 @@ import { usePathname } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 
-import { isNavActive, navItems } from "./nav-items"
+import { isNavActive, navItemsFor } from "./nav-items"
 
-export function BottomNav() {
+export function BottomNav({ companionEnabled }: { companionEnabled: boolean }) {
   const pathname = usePathname()
+  const items = navItemsFor(companionEnabled)
 
   return (
     <nav className="bg-background fixed inset-x-0 bottom-0 z-40 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden">
-      {navItems.map((item) => {
+      {items.map((item) => {
         const active = isNavActive(pathname, item.href)
         return (
           <Link
