@@ -19,7 +19,7 @@ const section = (page: import("@playwright/test").Page, name: string) =>
 // aborts the test, which is how the same mistake has now happened three times in this
 // tranche. The prefix is per-spec so it can't remove another spec's in-flight rows.
 test.afterEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const strays = visibleCard(page, /E2E (someday|todayish|donesec) \d+/)
   for (let i = 0; i < 12; i++) {
@@ -43,7 +43,7 @@ test("quick-add captures into Someday, the dialog schedules for today", async ({
   const scheduled = `E2E todayish ${stamp}`
   const row = (title: string) => visibleCard(page, title)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
 
   // --- Quick-add: capture now, decide when later.
   const input = page.getByLabel("Quick add task")
@@ -84,7 +84,7 @@ test("a completed task leaves the date sections for Done", async ({ page }) => {
   const title = `E2E donesec ${Date.now()}`
   const row = () => visibleCard(page, title)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const input = page.getByLabel("Quick add task")
   await input.fill(title)
   await input.press("Enter")

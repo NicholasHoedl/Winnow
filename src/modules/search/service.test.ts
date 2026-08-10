@@ -64,7 +64,7 @@ describe("rankAndCap", () => {
       type: "task",
       id: title,
       title,
-      href: "/todos",
+      href: "/activity",
       score,
     })
     const out = rankAndCap(

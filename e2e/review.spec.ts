@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "./_test"
 import { visibleCard } from "./_card"
+import { deleteGoalsMatching, openGoalDetail } from "./_goals"
 
 // Browser coverage for T7d. The review reads from four modules; these seed two of them
 // and check the work lands in the right card, plus that the week boundary actually bounds.
@@ -12,21 +13,12 @@ function card(page: Page, title: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/goals")
-  const goals = visibleCard(page, new RegExp(PREFIX))
-  for (let i = 0; i < 10; i++) {
-    const before = await goals.count()
-    if (before === 0) break
-    await goals.first().getByRole("button", { name: "Goal actions" }).click()
-    await page.getByRole("menuitem", { name: "Delete" }).click()
-    // "Delete goal", not "Delete" — deleting a goal cascades its milestones, so the
-    // confirm names what it takes with it.
-    await page.getByRole("button", { name: "Delete goal" }).click()
-    await expect(goals).toHaveCount(before - 1)
-  }
-  await expect(goals).toHaveCount(0)
+  await page.goto("/activity")
+  // "Delete goal", not "Delete" — deleting a goal cascades its milestones, so the confirm
+  // names what it takes with it. That, and the dialog it now lives behind, are in _goals.
+  await deleteGoalsMatching(page, new RegExp(PREFIX))
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const tasks = visibleCard(page, new RegExp(PREFIX))
   for (let i = 0; i < 10; i++) {
@@ -48,27 +40,28 @@ test("this week's completed work lands in the right cards", async ({
   const milestoneTitle = `${PREFIX} milestone ${stamp}`
 
   // --- A completed task.
-  await page.goto("/todos")
+  await page.goto("/activity")
   const quickAdd = page.getByLabel("Quick add task")
   await quickAdd.fill(taskTitle)
   await quickAdd.press("Enter")
   await visibleCard(page, taskTitle).getByLabel("Mark as done").click()
 
   // --- A ticked milestone under a goal.
-  await page.goto("/goals")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "Add goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(goalTitle)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(visibleCard(page, goalTitle)).toHaveCount(1)
-
-  const goalCard = visibleCard(page, goalTitle)
-  await goalCard.getByPlaceholder("Add a milestone").fill(milestoneTitle)
-  await goalCard.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(goalCard.getByText(milestoneTitle)).toBeVisible()
-  await goalCard
+  // Milestones moved into the goal's detail dialog in T10; the rail card is a summary.
+  await openGoalDetail(page, goalTitle)
+  const detail = page.getByRole("dialog")
+  await detail.getByPlaceholder("Add a milestone").fill(milestoneTitle)
+  await detail.getByRole("button", { name: "Add", exact: true }).click()
+  await expect(detail.getByText(milestoneTitle)).toBeVisible()
+  await detail
     .getByRole("checkbox", { name: `Complete ${milestoneTitle}` })
     .click()
+  await page.keyboard.press("Escape")
 
   // --- Both surface in the review, each in its own card.
   await page.goto("/review")
@@ -86,7 +79,7 @@ test("stepping back a week leaves this week's work behind", async ({
 }) => {
   const taskTitle = `${PREFIX} task ${Date.now()}`
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const quickAdd = page.getByLabel("Quick add task")
   await quickAdd.fill(taskTitle)
   await quickAdd.press("Enter")

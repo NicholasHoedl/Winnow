@@ -53,11 +53,17 @@ export function openCommandPalette(): void {
 }
 
 // `g`-then-letter navigation, matching the sidebar's routes.
+//
+// `t` and `g` both survive T10's merge as aliases for `/activity`. They addressed To-dos
+// and Goals for the whole life of the app, and the muscle memory is in fingers this repo
+// cannot update; sending them somewhere sensible costs one map entry, and breaking them
+// would be a daily papercut for no gain.
 const NAV_SHORTCUTS: Record<string, string> = {
   d: "/",
-  t: "/todos",
+  a: "/activity",
+  t: "/activity",
+  g: "/activity",
   c: "/calendar",
-  g: "/goals",
   b: "/budget",
   m: "/meals",
   n: "/notes",
@@ -84,12 +90,12 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
 type NavCommand = { href: string; label: string; icon: LucideIcon }
 
 // The sub-routes are listed by hand for the same reason /settings is: they are real
-// destinations that deliberately don't get a nav tab (the bottom bar is full at seven),
-// so the palette is the only place they're discoverable without being on /todos already.
+// destinations that deliberately don't get a nav tab, so the palette is the only place
+// they're discoverable without being on /activity already.
 const NAV_COMMANDS: NavCommand[] = [
   ...navItems,
-  { href: "/todos/habits", label: "Habits", icon: Flame },
-  { href: "/todos/routines", label: "Routines", icon: ListChecks },
+  { href: "/activity/habits", label: "Habits", icon: Flame },
+  { href: "/activity/routines", label: "Routines", icon: ListChecks },
   { href: "/review", label: "Weekly review", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
@@ -114,9 +120,9 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New event", icon: CalendarDays, href: "/calendar" },
   { label: "New transaction", icon: Wallet, href: "/budget" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
-  { label: "New goal", icon: Target, href: "/goals" },
+  { label: "New goal", icon: Target, href: "/activity" },
   { label: "New note", icon: NotebookPen, href: "/notes" },
-  { label: "New routine", icon: ListChecks, href: "/todos/routines" },
+  { label: "New routine", icon: ListChecks, href: "/activity/routines" },
 ]
 
 function isTypingTarget(el: EventTarget | null): boolean {

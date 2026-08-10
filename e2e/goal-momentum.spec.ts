@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "./_test"
 
-import { visibleCard } from "./_card"
+import { goalCard, visibleCard } from "./_card"
 
 /**
  * Browser coverage for goal momentum: the reading that says whether a goal is still being
@@ -12,19 +12,23 @@ import { visibleCard } from "./_card"
  * finishing one linked task flips it — with the progress bar unchanged either way.
  *
  * Default window is 14 days (`goalMomentumDays`), which is what the copy asserts.
+ *
+ * T10 split where that reading is shown. The rail says only "Stalled", because a 280px
+ * column cannot spare a sentence for every goal that is fine; the sentence with the window
+ * in it lives in the detail dialog, which is where you go when the badge makes you ask why.
  */
 
 async function createGoal(page: Page, title: string) {
-  await page.goto("/goals")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "Add goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title").fill(title)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(visibleCard(page, title)).toBeVisible()
+  await expect(goalCard(page, title)).toBeVisible()
 }
 
 async function createLinkedTask(page: Page, title: string, goalTitle: string) {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title").fill(title)
@@ -35,17 +39,23 @@ async function createLinkedTask(page: Page, title: string, goalTitle: string) {
   await expect(dialog).toBeHidden()
 }
 
+async function openDetail(page: Page, title: string) {
+  await goalCard(page, title)
+    .getByRole("button", { name: `Open ${title}` })
+    .click()
+  await expect(page.getByRole("dialog")).toBeVisible()
+}
+
 async function deleteGoal(page: Page, title: string) {
-  await page.goto("/goals")
-  const card = visibleCard(page, title)
-  await card.getByRole("button", { name: "Goal actions" }).click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await page.goto("/activity")
+  await openDetail(page, title)
+  await page.getByRole("button", { name: "Delete", exact: true }).click()
   await page.getByRole("button", { name: "Delete goal" }).click()
-  await expect(visibleCard(page, title)).toHaveCount(0)
+  await expect(goalCard(page, title)).toHaveCount(0)
 }
 
 async function deleteTask(page: Page, title: string) {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const row = visibleCard(page, title)
   await row.getByRole("button", { name: "Task actions" }).click()
@@ -61,22 +71,37 @@ test("finishing a linked task moves a stalled goal", async ({ page }) => {
   await createGoal(page, goalTitle)
   await createLinkedTask(page, taskTitle, goalTitle)
 
-  await page.goto("/goals")
-  const card = visibleCard(page, goalTitle)
+  await page.goto("/activity")
+  const card = goalCard(page, goalTitle)
 
   // A brand-new goal with one open task has something to track and nothing finished.
+  await expect(card.getByText("Stalled")).toBeVisible()
+  await expect(card.getByText("1 open")).toBeVisible()
+
+  // The window and the count are in the detail, not the rail.
+  await openDetail(page, goalTitle)
   await expect(
-    card.getByText(/Nothing finished in the last 14 days/),
+    page.getByRole("dialog").getByText(/Nothing finished in the last 14 days/),
   ).toBeVisible()
-  await expect(card.getByText("1 open of 1")).toBeVisible()
+  await page.keyboard.press("Escape")
 
-  // Tick it from the goal card itself — the next-action affordance. Completing it here
-  // rather than on /todos is the point: a card that reports a stall should also be where
-  // you can do something about it.
-  await card.getByRole("checkbox", { name: `Complete ${taskTitle}` }).click()
+  // Tick it off in the task list beside the rail. Before T10 this was a special
+  // "next action" checkbox inside the goal card, because the goals page had no task list
+  // of its own — the merge makes that compromise unnecessary: select the goal and its work
+  // IS the list.
+  await card
+    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
+    .click()
+  await visibleCard(page, taskTitle).getByLabel("Mark as done").click()
+  await page.reload()
 
-  await expect(card.getByText(/1 finished in the last 14 days/)).toBeVisible()
-  await expect(card.getByText("all done")).toBeVisible()
+  await expect(card.getByLabel(`${goalTitle} is moving`)).toBeVisible()
+  await expect(card.getByText("No open tasks")).toBeVisible()
+  await openDetail(page, goalTitle)
+  await expect(
+    page.getByRole("dialog").getByText(/1 finished in the last 14 days/),
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
 
   // The work also lands in the week's review, in the Goals card rather than only in Tasks.
   await page.goto("/review")
@@ -95,9 +120,12 @@ test("a goal with nothing to track gets no momentum reading at all", async ({
   const goalTitle = `E2E untracked ${Date.now()}`
   await createGoal(page, goalTitle)
 
-  const card = visibleCard(page, goalTitle)
-  await expect(card.getByText("No milestones or target yet.")).toBeVisible()
-  await expect(card.getByText(/finished in the last/)).toHaveCount(0)
+  await expect(goalCard(page, goalTitle).getByText("Stalled")).toHaveCount(0)
+  await openDetail(page, goalTitle)
+  const detail = page.getByRole("dialog")
+  await expect(detail.getByText("No milestones or target yet.")).toBeVisible()
+  await expect(detail.getByText(/finished in the last/)).toHaveCount(0)
+  await page.keyboard.press("Escape")
 
   await deleteGoal(page, goalTitle)
 })
@@ -113,10 +141,12 @@ test("the momentum window follows the setting", async ({ page }) => {
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
 
-  await page.goto("/goals")
+  await page.goto("/activity")
+  await openDetail(page, goalTitle)
   await expect(
-    visibleCard(page, goalTitle).getByText(/in the last week/),
+    page.getByRole("dialog").getByText(/in the last week/),
   ).toBeVisible()
+  await page.keyboard.press("Escape")
 
   // Put it back — the suite runs serially against a persistent database, so a changed
   // setting would silently retune every later assertion about the copy.

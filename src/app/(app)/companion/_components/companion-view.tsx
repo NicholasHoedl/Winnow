@@ -182,7 +182,7 @@ export function CompanionView({
         { ok: true; proposal: ProposalRow } | { ok: false; error: string }
       if (!data.ok) {
         // Typed failure from the provider, rendered here rather than thrown. Nothing was
-        // created, and the manual path — /goals — is untouched.
+        // created, and the manual path — /activity — is untouched.
         toast.error(data.error)
         return
       }
@@ -258,10 +258,10 @@ export function CompanionView({
         // than it looked.
         if (finalized.kind === "goal_plan") {
           toast.success("Plan added to your goal")
-          router.push("/goals")
+          router.push("/activity")
         } else if (finalized.kind === "routine") {
           toast.success("Routine created")
-          router.push("/todos/routines")
+          router.push("/activity/routines")
         } else {
           toast.success(
             `${finalized.payload.rows.length} transaction${

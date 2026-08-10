@@ -9,7 +9,7 @@ import * as React from "react"
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption } from "@/modules/goals/queries"
 import type { List } from "@/modules/todos/queries"
-import { TaskDialog } from "@/app/(app)/todos/_components/task-dialog"
+import { TaskDialog } from "@/app/(app)/activity/_components/task-dialog"
 
 import { useCreateIntentListener } from "./create-intent"
 

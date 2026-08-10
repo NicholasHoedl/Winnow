@@ -55,9 +55,9 @@ test("dashboard quick-capture keeps every entry in a burst", async ({
     titles.map((title) => `${title} today`),
   )
 
-  // Asserted on /todos rather than the dashboard: quick-capture stamps today, and the
+  // Asserted on /activity rather than the dashboard: quick-capture stamps today, and the
   // dashboard shows only a slice of the day's tasks.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   for (const title of titles) {
     await expect(visibleCard(page, title)).toBeVisible()
@@ -75,7 +75,7 @@ test("todos quick-add keeps every entry in a burst", async ({ page }) => {
   const tag = `e2ebursttodo${Date.now()}`
   const titles = [`${tag}a`, `${tag}b`, `${tag}c`]
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   await burst(page.getByLabel("Quick add task"), titles)
 
   // Quick-add deliberately sets no due date, so these land in Someday — visible under All.

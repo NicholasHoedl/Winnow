@@ -31,13 +31,13 @@ const idSchema = z.string().uuid()
 
 // Editing a routine only changes the manager page.
 function revalidateRoutines() {
-  revalidatePath("/todos/routines")
+  revalidatePath("/activity/routines")
 }
 
 // Running one creates real tasks, so the list and the hubs change too.
 function revalidateRunEffects() {
-  revalidatePath("/todos/routines")
-  revalidatePath("/todos")
+  revalidatePath("/activity/routines")
+  revalidatePath("/activity")
   revalidateHubs()
 }
 

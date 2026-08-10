@@ -29,7 +29,7 @@ const idSchema = z.string().uuid()
 
 // Goals live on their own page, and the hubs show a summary — refresh both.
 function revalidateGoals() {
-  revalidatePath("/goals")
+  revalidatePath("/activity")
   revalidateHubs()
 }
 

@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
-import { visibleCard } from "./_card"
+import { goalCard, visibleCard } from "./_card"
+import { deleteGoal } from "./_goals"
 
 // Browser coverage for T2-S2: linking a task to a goal from the task dialog, seeing it
 // on the goal card, and confirming a goal delete DETACHES its tasks instead of removing
@@ -14,17 +15,17 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   const taskTitle = `E2E linked task ${stamp}`
 
   // A goal to link to.
-  await page.goto("/goals")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "Add goal" }).click()
   const goalDialog = page.getByRole("dialog")
   await goalDialog.getByLabel("Title").fill(goalTitle)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()
 
-  const card = visibleCard(page, goalTitle)
+  const card = goalCard(page, goalTitle)
   await expect(card).toBeVisible()
 
   // A task pointing at it.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const taskDialog = page.getByRole("dialog")
   await taskDialog.getByLabel("Title").fill(taskTitle)
@@ -35,17 +36,18 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   // the write (and its revalidation) against the next render.
   await expect(taskDialog).toBeHidden()
 
-  // The goal card surfaces it.
-  await page.goto("/goals")
-  await expect(card.getByText(taskTitle)).toBeVisible()
+  // Selecting the goal scopes the list to it — which is how a goal surfaces its work since
+  // T10, in place of the read-only list that used to sit inside the card.
+  await page.goto("/activity")
+  await card
+    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
+    .click()
+  await expect(visibleCard(page, taskTitle)).toBeVisible()
 
   // Deleting the goal detaches the task rather than deleting it.
-  await card.getByRole("button", { name: "Goal actions" }).click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
-  await page.getByRole("button", { name: "Delete goal" }).click()
-  await expect(visibleCard(page, goalTitle)).toHaveCount(0)
+  await deleteGoal(page, goalTitle)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const row = visibleCard(page, taskTitle)
   await expect(row).toBeVisible()
 
@@ -56,7 +58,7 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
 })
 
 test("the link pickers are hidden for a repeating task", async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByLabel("Goal")).toBeVisible()

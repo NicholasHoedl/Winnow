@@ -31,7 +31,7 @@ async function somedayOrder(page: import("@playwright/test").Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   for (const name of NAMES) {
     const input = page.getByLabel("Quick add task")
     await input.fill(name)
@@ -41,7 +41,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const strays = visibleCard(page, `E2E order `)
   for (let i = 0; i < 12; i++) {

@@ -52,7 +52,7 @@ function TaskRow({
         />
       </Gutter>
       <Link
-        href="/todos"
+        href="/activity"
         className={cn(
           "min-w-0 flex-1 truncate text-sm",
           done && "text-muted-foreground line-through",

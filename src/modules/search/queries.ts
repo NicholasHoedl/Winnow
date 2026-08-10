@@ -103,7 +103,7 @@ export async function searchEverything(
       id: r.id,
       title: r.title,
       date: r.dueDate,
-      href: "/todos",
+      href: "/activity",
       score: scoreResult(q, r.title, r.notes),
       ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
     })),
@@ -141,7 +141,10 @@ export async function searchEverything(
       id: r.id,
       title: r.title,
       date: r.targetDate,
-      href: "/goals",
+      // The one result type that got MORE specific in T10. `/goals` could only drop you on
+      // a page of every goal and leave you to find this one; `/activity?goal=` opens with
+      // the list already scoped to its tasks.
+      href: `/activity?goal=${r.id}`,
       score: scoreResult(q, r.title, r.notes),
       ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
     })),

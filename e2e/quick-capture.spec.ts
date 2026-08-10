@@ -23,7 +23,7 @@ test("dashboard quick-capture creates a task, parsing the date out of the text",
   await expect(page.getByText(label).first()).toBeVisible()
 
   // The saved task's title has the "tomorrow" phrase removed.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const row = visibleCard(page, label)
   await expect(row).toBeVisible()

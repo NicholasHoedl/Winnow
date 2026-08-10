@@ -7,7 +7,7 @@ import { test, expect, type Page } from "./_test"
 // a frame after the mouse comes up whether or not anything was written. Only a reload
 // reads the database back.
 //
-// The keyboard path is tested for the same reason it is in e2e/todos-reorder.spec.ts:
+// The keyboard path is tested for the same reason it is in e2e/activity-reorder.spec.ts:
 // it is half of why @dnd-kit is a dependency at all (ADR-0006), and it is the half that
 // silently rots, because nothing else in the suite would notice it break.
 

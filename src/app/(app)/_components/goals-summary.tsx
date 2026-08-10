@@ -14,7 +14,7 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
         <CardTitle className="flex items-center justify-between text-base">
           <span>Goals</span>
           <Link
-            href="/goals"
+            href="/activity"
             className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
           >
             All →
@@ -26,9 +26,9 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
           {rows.map((goal) => {
             // A goal with no milestones has nothing to measure. This used to render a
             // literal "0/0" and a 2%-wide bar — a number that means nothing beside a
-            // sliver of progress that doesn't exist. T0's polish item fixed the /goals
-            // page and missed this one. Since T5a the discriminated `kind` carries that
-            // distinction, so the two call sites can't drift apart again.
+            // sliver of progress that doesn't exist. T0's polish item fixed the goals page
+            // (now the rail on /activity) and missed this one. Since T5a the discriminated
+            // `kind` carries that distinction, so the two call sites can't drift apart.
             const progress = goal.progress
             const measurable = progress.kind !== "none"
             return (
@@ -39,9 +39,9 @@ export function GoalsSummary({ goals }: { goals: GoalWithProgress[] }) {
                       {goal.title}
                     </span>
                     {/* Stalled is the one thing worth saying about a goal on a surface
-                        you see every day — the count and the window belong on /goals,
-                        where there is room to explain them. The dashboard already runs
-                        tight below 1400px, so this is an icon, not a row. */}
+                        you see every day — the count and the window belong in the goal's
+                        detail on /activity, where there is room to explain them. The
+                        dashboard already runs tight below 1400px, so this is an icon. */}
                     {goal.momentum?.stalled && (
                       <>
                         <Pause

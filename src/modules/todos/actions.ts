@@ -42,11 +42,12 @@ import {
  */
 const idSchema = z.string().uuid()
 
-// Every surface that renders task data: the todos page, the two hubs, and — since a
-// task can be linked to a goal (T2) — the goals page, which lists a goal's tasks.
+// Every surface that renders task data: `/activity` and the two hubs.
+//
+// This named the to-dos page AND the goals page until T10 merged them — a task linked to a
+// goal (T2) changed both. One path now, because they are one page.
 function revalidateTaskViews(): void {
-  revalidatePath("/todos")
-  revalidatePath("/goals")
+  revalidatePath("/activity")
   revalidateHubs()
 }
 
@@ -204,7 +205,7 @@ export async function toggleTaskStatus(id: unknown): Promise<ActionResult> {
 
   // Re-opening a completed instance of a recurring task is only safe while it is still
   // the CURRENT cycle. Off-cycle it becomes an open row that `syncRuleInstances` retires
-  // on the next render of /todos, the dashboard or the digest — the completion vanishes
+  // on the next render of /activity, the dashboard or the digest — the completion vanishes
   // with nothing left to show it happened, and the habit history changes underneath it.
   // Refuse rather than destroy it. The extra reads only run when a recurring instance is
   // actually being re-opened.
@@ -375,7 +376,7 @@ export async function createList(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return invalid(parsed.error)
 
   await db.insert(lists).values({ userId, name: parsed.data.name })
-  revalidatePath("/todos")
+  revalidatePath("/activity")
   return { ok: true }
 }
 
@@ -393,7 +394,7 @@ export async function renameList(
     .update(lists)
     .set({ name: parsed.data.name })
     .where(and(eq(lists.id, parsedId.data), eq(lists.userId, userId)))
-  revalidatePath("/todos")
+  revalidatePath("/activity")
   return { ok: true }
 }
 
@@ -406,7 +407,7 @@ export async function deleteList(id: unknown): Promise<ActionResult> {
   await db
     .delete(lists)
     .where(and(eq(lists.id, parsed.data), eq(lists.userId, userId)))
-  revalidatePath("/todos")
+  revalidatePath("/activity")
   return { ok: true }
 }
 
@@ -415,7 +416,7 @@ export async function deleteList(id: unknown): Promise<ActionResult> {
 /**
  * Skip the current cycle of a recurring task.
  *
- * Not a delete: the generator re-materializes an instance on every render of /todos,
+ * Not a delete: the generator re-materializes an instance on every render of /activity,
  * the dashboard and the digest, so removing the row alone would put it straight
  * back. The exception row is what suppresses the next insert; `syncRuleInstances` then
  * removes the open instance on the same pass.

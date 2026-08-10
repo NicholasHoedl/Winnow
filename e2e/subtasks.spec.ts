@@ -10,7 +10,7 @@ import { visibleCard } from "./_card"
 // and starting from a task with an empty checklist is what proves it.
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const strays = visibleCard(page, "E2E subtask ")
   for (let i = 0; i < 10; i++) {
@@ -31,7 +31,7 @@ test("a checklist can be started, ticked off, and counted", async ({
   const title = `E2E subtask ${Date.now()}`
   const row = () => visibleCard(page, title)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const input = page.getByLabel("Quick add task")
   await input.fill(title)
   await input.press("Enter")
@@ -82,7 +82,7 @@ test("deleting a task takes its checklist with it", async ({ page }) => {
   const title = `E2E subtask cascade ${Date.now()}`
   const row = () => visibleCard(page, title)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const input = page.getByLabel("Quick add task")
   await input.fill(title)
   await input.press("Enter")

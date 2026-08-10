@@ -132,7 +132,7 @@ export function DigestBanner({
 
             {/* Pointed at /today until that page's agenda was folded into the
                 dashboard. The banner renders on every authenticated route, so the link
-                still earns its place from /todos or /meals — it is only redundant on the
+                still earns its place from /activity or /meals — it is only redundant on the
                 dashboard itself, where the agenda it promises is already on screen. */}
             <Link
               href="/"

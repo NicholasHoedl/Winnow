@@ -5,7 +5,7 @@ import { visibleCard } from "./_card"
 // Full write-path through a real browser: quick-add → complete → delete (cleanup).
 test("add, complete, and delete a to-do", async ({ page }) => {
   const title = `E2E todo ${Date.now()}`
-  await page.goto("/todos")
+  await page.goto("/activity")
 
   const input = page.getByLabel("Quick add task")
   await input.fill(title)

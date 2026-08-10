@@ -2,11 +2,11 @@ import { test, expect, type Page } from "./_test"
 import { visibleCard } from "./_card"
 
 // Two prefixes, because the sweep runs over two pages: routine cards live on
-// /todos/routines and the tasks a run creates live on /todos.
+// /activity/routines and the tasks a run creates live on /activity.
 const ROUTINE_PREFIX = "E2E routine"
 const TASK_PREFIX = "E2E rtask"
 
-/** A `<section>` on /todos, picked out by its heading. */
+/** A `<section>` on /activity, picked out by its heading. */
 function section(page: Page, label: string) {
   return page
     .locator("section")
@@ -58,7 +58,7 @@ async function runRoutine(page: Page, routineName: string, count: number) {
 
 test.afterEach(async ({ page }) => {
   // Routines first — deleting one cascades its items but never its spun-up tasks.
-  await page.goto("/todos/routines")
+  await page.goto("/activity/routines")
   const routineCards = visibleCard(page, new RegExp(ROUTINE_PREFIX))
   for (let i = 0; i < 10; i++) {
     const count = await routineCards.count()
@@ -74,7 +74,7 @@ test.afterEach(async ({ page }) => {
   await expect(routineCards).toHaveCount(0)
 
   // Then the tasks any run left behind.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const taskRows = visibleCard(page, new RegExp(TASK_PREFIX))
   for (let i = 0; i < 15; i++) {
@@ -96,13 +96,13 @@ test("a routine's offsets become real due dates when it runs", async ({
   const sameDay = `${TASK_PREFIX} leave ${stamp}`
   const after = `${TASK_PREFIX} unpack ${stamp}`
 
-  // Establishes that none of these exist yet — and incidentally compiles /todos, which
+  // Establishes that none of these exist yet — and incidentally compiles /activity, which
   // otherwise lands on the far side of three dialogs and eats the test's whole budget
   // when this spec runs on its own.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await expect(visibleCard(page, new RegExp(TASK_PREFIX))).toHaveCount(0)
 
-  await page.goto("/todos/routines")
+  await page.goto("/activity/routines")
   await addRoutine(page, name)
   await addItem(page, name, before, -7)
   await addItem(page, name, sameDay, 0)
@@ -113,7 +113,7 @@ test("a routine's offsets become real due dates when it runs", async ({
   // Which SECTION each task lands in is computed from the stored due date by
   // `bucketTasks`, not by the preview — so this checks the offsets actually reached
   // the database rather than re-reading the same calculation the dialog showed.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await expect(section(page, "Overdue").getByText(before)).toBeVisible()
   await expect(section(page, "Today").getByText(sameDay)).toBeVisible()
   await expect(section(page, "Upcoming").getByText(after)).toBeVisible()
@@ -127,13 +127,13 @@ test("undo removes exactly the tasks a run created", async ({ page }) => {
   // A task that exists BEFORE the run, so undo removing everything would be caught.
   const bystander = `${TASK_PREFIX} bystander ${stamp}`
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const quickAdd = page.getByLabel("Quick add task")
   await quickAdd.fill(bystander)
   await quickAdd.press("Enter")
   await expect(visibleCard(page, bystander)).toHaveCount(1)
 
-  await page.goto("/todos/routines")
+  await page.goto("/activity/routines")
   await addRoutine(page, name)
   await addItem(page, name, first, 0)
   await addItem(page, name, second, 0)
@@ -143,7 +143,7 @@ test("undo removes exactly the tasks a run created", async ({ page }) => {
   // navigating anywhere.
   await page.getByRole("button", { name: "Undo", exact: true }).click()
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   await expect(visibleCard(page, first)).toHaveCount(0)
   await expect(visibleCard(page, second)).toHaveCount(0)
   await expect(visibleCard(page, bystander)).toHaveCount(1)

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
-import { visibleCard } from "./_card"
+import { goalCard, visibleCard } from "./_card"
+import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
 
 /**
  * Browser coverage for T9a: generating a plan, pruning and editing it, and applying it.
@@ -52,26 +53,18 @@ test.beforeEach(async ({ page }) => {
 })
 
 async function createGoal(page: Page, title: string) {
-  await page.goto("/goals")
-  await page.getByRole("button", { name: "Add goal" }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(visibleCard(page, title)).toBeVisible()
+  await page.goto("/activity")
+  await addGoal(page, { title })
 }
 
-async function deleteGoal(page: Page, title: string) {
-  await page.goto("/goals")
-  const card = visibleCard(page, title)
-  await card.getByRole("button", { name: "Goal actions" }).click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
-  await page.getByRole("button", { name: "Delete goal" }).click()
-  await expect(visibleCard(page, title)).toHaveCount(0)
+async function removeGoal(page: Page, title: string) {
+  await page.goto("/activity")
+  await deleteGoal(page, title)
 }
 
 /** Tasks survive their goal's deletion (ON DELETE set null), so clean them separately. */
 async function deleteTasksMatching(page: Page, fragment: string) {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   for (;;) {
     const rows = visibleCard(page, fragment)
@@ -119,15 +112,23 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await page.getByRole("button", { name: "Apply" }).click()
 
   // Applying navigates to the result, which is also the fastest way to see it landed.
-  await expect(page).toHaveURL(/\/goals/)
-  const card = visibleCard(page, goalTitle)
-  await expect(card.getByText(renamed)).toBeVisible()
+  await expect(page).toHaveURL(/\/activity/)
+  // Milestones are in the goal's detail dialog; its TASKS are the list beside the rail,
+  // which is what selecting the goal scopes. Two surfaces, so two checks.
+  await openGoalDetail(page, goalTitle)
+  const detail = page.getByRole("dialog")
+  await expect(detail.getByText(renamed)).toBeVisible()
   // The excluded milestone was never created.
-  await expect(card.getByText("STUB second milestone")).toHaveCount(0)
-  // The surviving task is linked to the goal, so it counts toward momentum (T8).
-  await expect(card.getByText("STUB task one")).toBeVisible()
+  await expect(detail.getByText("STUB second milestone")).toHaveCount(0)
+  await page.keyboard.press("Escape")
 
-  await deleteGoal(page, goalTitle)
+  // The surviving task is linked to the goal, so it counts toward momentum (T8).
+  await goalCard(page, goalTitle)
+    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
+    .click()
+  await expect(visibleCard(page, "STUB task one")).toBeVisible()
+
+  await removeGoal(page, goalTitle)
   await deleteTasksMatching(page, "STUB task one")
 })
 
@@ -160,7 +161,7 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   await page.getByRole("button", { name: "Discard" }).click()
   await expect(page.getByText("Nothing proposed yet")).toBeVisible()
 
-  await deleteGoal(page, goalTitle)
+  await removeGoal(page, goalTitle)
 })
 
 test("a discarded proposal creates nothing and leaves the queue empty", async ({
@@ -173,17 +174,19 @@ test("a discarded proposal creates nothing and leaves the queue empty", async ({
   await page.getByRole("button", { name: "Discard" }).click()
   await expect(page.getByText("Nothing proposed yet")).toBeVisible()
 
-  await page.goto("/goals")
-  const card = visibleCard(page, goalTitle)
-  await expect(card.getByText("STUB first milestone")).toHaveCount(0)
-  await expect(card.getByText("No milestones or target yet.")).toBeVisible()
+  await page.goto("/activity")
+  await openGoalDetail(page, goalTitle)
+  const detail = page.getByRole("dialog")
+  await expect(detail.getByText("STUB first milestone")).toHaveCount(0)
+  await expect(detail.getByText("No milestones or target yet.")).toBeVisible()
+  await page.keyboard.press("Escape")
 
-  await deleteGoal(page, goalTitle)
+  await removeGoal(page, goalTitle)
 })
 
-/** Routine cards live on /todos/routines and delete behind a confirm. */
+/** Routine cards live on /activity/routines and delete behind a confirm. */
 async function deleteRoutines(page: Page, fragment: RegExp) {
-  await page.goto("/todos/routines")
+  await page.goto("/activity/routines")
   const cards = visibleCard(page, fragment)
   for (let i = 0; i < 10; i++) {
     const count = await cards.count()
@@ -222,8 +225,8 @@ test("a generated routine can be pruned and applied", async ({ page }) => {
 
   await page.getByRole("button", { name: "Apply" }).click()
 
-  // Applying a routine lands on the routines page, not /goals.
-  await expect(page).toHaveURL(/\/todos\/routines/)
+  // Applying a routine lands on the routines page, not /activity.
+  await expect(page).toHaveURL(/\/activity\/routines/)
   const card = visibleCard(page, "STUB morning routine")
   await expect(card).toBeVisible()
   await expect(card.getByText("STUB make coffee")).toBeVisible()
@@ -261,7 +264,7 @@ test("a routine refinement replaces the proposal in place", async ({
  * the wiring above it.
  */
 async function seedCompletedTasks(page: Page, prefix: string, count: number) {
-  await page.goto("/todos")
+  await page.goto("/activity")
   const input = page.getByLabel("Quick add task")
   for (let i = 0; i < count; i++) {
     await input.fill(`${prefix} ${i}`)

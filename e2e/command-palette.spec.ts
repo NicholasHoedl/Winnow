@@ -51,7 +51,7 @@ test("searches across modules and opens a result", async ({ page }) => {
   const title = `E2E palette ${Date.now()}`
 
   // Seed a task to find.
-  await page.goto("/todos")
+  await page.goto("/activity")
   const quickAdd = page.getByLabel("Quick add task")
   await quickAdd.fill(title)
   await quickAdd.press("Enter")
@@ -65,7 +65,7 @@ test("searches across modules and opens a result", async ({ page }) => {
   await expect(result).toBeVisible()
   await page.screenshot({ path: "test-results/command-palette.png" })
   await result.click()
-  await expect(page).toHaveURL(/\/todos$/)
+  await expect(page).toHaveURL(/\/activity$/)
 
   // Cleanup: delete the seeded task ("All" shows every row regardless of status).
   await page.getByRole("button", { name: "All", exact: true }).click()

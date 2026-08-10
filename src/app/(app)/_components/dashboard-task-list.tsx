@@ -74,7 +74,7 @@ export function DashboardTaskList({
         <CardTitle className="flex items-center justify-between text-base">
           <span>Coming up</span>
           <Link
-            href="/todos"
+            href="/activity"
             className="text-muted-foreground hover:text-foreground text-xs font-medium"
           >
             All →
@@ -103,7 +103,7 @@ export function DashboardTaskList({
                       }
                     />
                     <Link
-                      href="/todos"
+                      href="/activity"
                       className={cn(
                         "min-w-0 flex-1 truncate text-sm",
                         done && "text-muted-foreground line-through",
@@ -136,7 +136,7 @@ export function DashboardTaskList({
             {optimistic.length > MAX_SHOWN && (
               <li className="pt-1 pl-1.5">
                 <Link
-                  href="/todos"
+                  href="/activity"
                   className="text-muted-foreground hover:text-foreground text-xs"
                 >
                   +{optimistic.length - MAX_SHOWN} more

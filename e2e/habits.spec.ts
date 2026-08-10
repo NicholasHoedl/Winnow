@@ -8,7 +8,7 @@ const PREFIX = "E2E habit"
 
 /** A daily repeating task, whose instance the generator materializes on this render. */
 async function addDailyRule(page: Page, title: string) {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
@@ -22,7 +22,7 @@ async function addDailyRule(page: Page, title: string) {
 // instances it left behind, which survive the rule by design (`seriesId` is set null, so
 // history outlives the habit) and would otherwise pile up run after run.
 test.afterEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "Repeating tasks" }).click()
   const dialog = page.getByRole("dialog")
   const rules = dialog.getByRole("button", {
@@ -40,7 +40,7 @@ test.afterEach(async ({ page }) => {
   await expect(rules).toHaveCount(0)
   await page.keyboard.press("Escape")
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const strays = visibleCard(page, new RegExp(PREFIX))
   for (let i = 0; i < 10; i++) {
@@ -62,15 +62,15 @@ test("completing today's cycle fills the ring and starts the streak", async ({
   // Nothing done yet. The streak is 0 rather than broken, and the one cycle the rule owes
   // is counted — this is what proves the trailing cycle is being forgiven rather than
   // ignored, since a forgiven miss still belongs in the denominator.
-  await page.goto("/todos/habits")
+  await page.goto("/activity/habits")
   const card = visibleCard(page, title)
   await expect(card).toContainText("Streak 0")
   await expect(card).toContainText("0/1 done")
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   await visibleCard(page, title).getByLabel("Mark as done").click()
 
-  await page.goto("/todos/habits")
+  await page.goto("/activity/habits")
   await expect(visibleCard(page, title)).toContainText("Streak 1")
   await expect(visibleCard(page, title)).toContainText("1/1 done")
 })
@@ -87,7 +87,7 @@ test("a skipped cycle counts as neither a win nor a miss", async ({ page }) => {
 
   // The assertion that carries this spec. If a skip were treated as a miss the card would
   // read "0/1 done"; excluding it from the denominator leaves nothing to score at all.
-  await page.goto("/todos/habits")
+  await page.goto("/activity/habits")
   const card = visibleCard(page, title)
   await expect(card).toContainText("nothing due yet")
   await expect(card).not.toContainText("0/1 done")

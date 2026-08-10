@@ -153,7 +153,7 @@ async function precachedPaths(): Promise<string[]> {
 describe("service worker — what it refuses to touch", () => {
   it("ignores non-GET requests, so Server Actions are never intercepted", async () => {
     const worker = loadWorker()
-    const event = await worker.fire(request("/todos", { method: "POST" }))
+    const event = await worker.fire(request("/activity", { method: "POST" }))
     expect(event.responded).toBeNull()
   })
 
@@ -167,7 +167,7 @@ describe("service worker — what it refuses to touch", () => {
 
   it("passes RSC and other same-origin GETs straight through, uncached", async () => {
     const worker = loadWorker()
-    const event = await worker.fire(request("/todos?_rsc=abc123"))
+    const event = await worker.fire(request("/activity?_rsc=abc123"))
     expect(event.responded).toBeNull()
   })
 })
@@ -213,7 +213,7 @@ describe("service worker — navigation fallback", () => {
     })
     await worker.lifecycle("install")
 
-    const event = await worker.fire(request("/todos", { mode: "navigate" }))
+    const event = await worker.fire(request("/activity", { mode: "navigate" }))
     const response = await event.settle()
 
     expect(await response!.text()).toBe("cached:/offline.html")
@@ -228,7 +228,7 @@ describe("service worker — navigation fallback", () => {
     })
     await worker.lifecycle("install")
 
-    const event = await worker.fire(request("/todos?_rsc=abc123"))
+    const event = await worker.fire(request("/activity?_rsc=abc123"))
 
     expect(event.responded).toBeNull()
   })
@@ -243,7 +243,7 @@ describe("service worker — navigation fallback", () => {
     )
     await worker.lifecycle("install")
 
-    const event = await worker.fire(request("/todos", { mode: "navigate" }))
+    const event = await worker.fire(request("/activity", { mode: "navigate" }))
     const response = await event.settle()
 
     expect(response!.status).toBe(307)
@@ -254,7 +254,7 @@ describe("service worker — navigation fallback", () => {
     const worker = loadWorker(async () => new Response("boom", { status: 500 }))
     await worker.lifecycle("install")
 
-    const event = await worker.fire(request("/todos", { mode: "navigate" }))
+    const event = await worker.fire(request("/activity", { mode: "navigate" }))
     const response = await event.settle()
 
     expect(response!.status).toBe(500)
@@ -265,7 +265,7 @@ describe("service worker — navigation fallback", () => {
       throw new TypeError("Failed to fetch")
     })
     // Note: no install, so nothing is precached.
-    const event = await worker.fire(request("/todos", { mode: "navigate" }))
+    const event = await worker.fire(request("/activity", { mode: "navigate" }))
     const response = await event.settle()
 
     expect(response!.status).toBe(503)

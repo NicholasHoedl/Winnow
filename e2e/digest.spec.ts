@@ -21,7 +21,7 @@ test("the daily digest appears once a day and stays dismissed", async ({
   // Give the digest something worth reporting: a task due TODAY.
   // The dialog prefills today's date; quick-add deliberately does not (T5a-S6 made it
   // capture-into-Someday), and this spec needs a task that is actually due today.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
@@ -47,7 +47,7 @@ test("the daily digest appears once a day and stays dismissed", async ({
   await expect(page.getByText("Daily digest")).toHaveCount(0)
 
   // Cleanup.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const row = visibleCard(page, title)
   await row.getByRole("button", { name: "Task actions" }).click()

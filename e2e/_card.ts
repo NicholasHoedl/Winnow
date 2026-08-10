@@ -20,8 +20,27 @@ import { type Locator, type Page } from "@playwright/test"
  * the row genuinely renders twice.
  */
 export function visibleCard(page: Page, text: string | RegExp): Locator {
+  // Goal rail cards are excluded, and that exclusion is load-bearing. They carry `bg-card`
+  // like every other card, so a locator built from a shared prefix — a spec cleaning up
+  // "E2E link " tasks while an "E2E link goal …" sits in the rail — matched the goal too,
+  // then hung waiting for a "Task actions" button a goal card does not have.
   return page
-    .locator("div.bg-card")
+    .locator('div.bg-card:not([data-testid="goal-card"])')
+    .filter({ hasText: text })
+    .filter({ visible: true })
+}
+
+/**
+ * One goal in the `/activity` rail (T10), by title.
+ *
+ * Not `visibleCard`: a rail card sets a different background when it is SELECTED, and
+ * `cn`'s tailwind-merge drops `bg-card` when it does — so the utility-class locator would
+ * silently stop matching exactly the goal a test just clicked. Hence the explicit testid.
+ * Same visibility filter, for the same streaming-SSR reason.
+ */
+export function goalCard(page: Page, text: string | RegExp): Locator {
+  return page
+    .getByTestId("goal-card")
     .filter({ hasText: text })
     .filter({ visible: true })
 }

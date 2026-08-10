@@ -5,7 +5,7 @@ import { visibleCard } from "./_card"
 // Browser coverage for T5a-S5: skipping ONE cycle of a repeating task.
 //
 // The assertion that carries this spec is the RELOAD. `ensureRecurringTasks` re-materializes
-// an instance on every render of /todos, the dashboard and the digest, so a skip
+// an instance on every render of /activity, the dashboard and the digest, so a skip
 // that only removes the row looks correct right up until the next page load. Asserting the
 // row is gone without reloading would pass against a plain delete — the very bug this
 // feature exists to fix.
@@ -15,7 +15,7 @@ import { visibleCard } from "./_card"
 // cleaned up inline and leaked three rules before anyone noticed — the same lesson T4-S12
 // learned about water logs, with a longer tail.
 test.afterEach(async ({ page }) => {
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "Repeating tasks" }).click()
   const dialog = page.getByRole("dialog")
   const strays = dialog.getByRole("button", { name: /^Stop repeating E2E / })
@@ -42,7 +42,7 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   const row = () => visibleCard(page, title)
 
   // --- A daily repeating task. The generator materializes today's instance.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
@@ -77,7 +77,7 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   // whose current cycle is skipped: both "Stop repeating" and the series editor hang off a
   // task row, and there is no row. An earlier version of this spec tried the row menu,
   // found nothing to click, and silently left the rule behind on every run.
-  await page.goto("/todos")
+  await page.goto("/activity")
   await stopRepeating(page, title)
 })
 
@@ -103,7 +103,7 @@ test("a one-off task is not offered a skip", async ({ page }) => {
   const title = `E2E noskip ${Date.now()}`
   const row = () => visibleCard(page, title)
 
-  await page.goto("/todos")
+  await page.goto("/activity")
   const input = page.getByLabel("Quick add task")
   await input.fill(title)
   await input.press("Enter")

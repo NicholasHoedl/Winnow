@@ -14,6 +14,22 @@ const nextConfig: NextConfig = {
       // app is installed to a home screen and the digest banner linked here, so a bare
       // 404 would be a dead icon on a device this repo can't reach to fix.
       { source: "/today", destination: "/", permanent: true },
+      // `/todos` and `/goals` merged into `/activity` (ADR-0013). Same reasoning as
+      // `/today`, and more of it: both were TOP-LEVEL NAV entries for the whole life of
+      // the app, so they are the two most likely things to be bookmarked, pinned, or
+      // sitting in an installed shell's history on a phone this repo cannot reach.
+      { source: "/todos", destination: "/activity", permanent: true },
+      { source: "/goals", destination: "/activity", permanent: true },
+      {
+        source: "/todos/routines",
+        destination: "/activity/routines",
+        permanent: true,
+      },
+      {
+        source: "/todos/habits",
+        destination: "/activity/habits",
+        permanent: true,
+      },
     ]
   },
   experimental: {
