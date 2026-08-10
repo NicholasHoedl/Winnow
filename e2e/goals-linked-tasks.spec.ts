@@ -72,6 +72,20 @@ async function complete(page: import("@playwright/test").Page, title: string) {
 }
 
 test("selecting a goal scopes the task list to its work", async ({ page }) => {
+  /**
+   * Longer than the 30s default because this test genuinely takes longer, not because it
+   * is flaky. Proving a filter EXCLUDES needs a goal, three tasks and two completions —
+   * roughly ten full page loads and four dialogs — and each completion reloads on purpose,
+   * to beat the optimistic update and read what the server actually stored.
+   *
+   * Measured at 40–50s; it sat just under the default and tipped over under full-suite
+   * load, which reads as a regression every time. The assertions are unchanged: this
+   * corrects a budget that was wrong for this test, rather than lowering the bar.
+   *
+   * If it grows again, split it rather than raising this further.
+   */
+  test.setTimeout(90_000)
+
   // --- A goal to link against.
   await page.goto("/activity")
   await page.getByRole("button", { name: "Add goal" }).click()

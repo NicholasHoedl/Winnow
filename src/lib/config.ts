@@ -20,39 +20,13 @@ export const OFF_SEARCH_URL =
 
 // --- AI companion (ADR-0011) ---
 //
-// Opt-IN, unlike OFF above, and the asymmetry is deliberate: this one needs an API key,
-// costs money per call, and sends your data to a third party. A fresh install should do
-// none of those until someone says so. With it off, /companion 404s and nothing in the
-// app hints the feature exists.
-export const AI_ENABLED = process.env.AI_ENABLED === "true"
-
-/**
- * Which wire protocol the endpoint speaks.
- *
- * `openai` is the default and covers every OpenAI-compatible endpoint, including local
- * ones. `anthropic` is a genuinely different protocol - a different path, different auth
- * header, `system` hoisted out of the messages, structured output via tool-use, and a
- * required `max_tokens` - not a dialect that can be papered over with a base URL.
- *
- * Anything unrecognised falls back to `openai` rather than erroring, matching how
- * `AI_READY` treats a half-filled `.env`: a typo degrades to the common case instead of
- * taking the app down at import time.
- */
-export const AI_PROVIDER: "openai" | "anthropic" =
-  process.env.AI_PROVIDER === "anthropic" ? "anthropic" : "openai"
-
-// The endpoint's base, without a trailing slash and without the per-provider path - the
-// request builder appends `/chat/completions` or `/messages` as appropriate. Kept
-// configurable precisely because ADR-0011 chose a hosted provider: a local endpoint is one
-// env var away, which is what the deferred journal-aware features would need.
-export const AI_BASE_URL = process.env.AI_BASE_URL ?? ""
-export const AI_MODEL = process.env.AI_MODEL ?? ""
-export const AI_API_KEY = process.env.AI_API_KEY ?? ""
-
-/**
- * Enabled AND configured. `AI_ENABLED=true` with no base URL or model is a
- * misconfiguration, not a feature - treat it as off rather than failing at call time,
- * so a half-filled `.env` degrades to "the feature isn't there" instead of an error
- * every time you press a button.
- */
-export const AI_READY = AI_ENABLED && AI_BASE_URL !== "" && AI_MODEL !== ""
+// Nothing lives here any more. T11 moved the companion's configuration out of the
+// environment and into the settings page: `user_preferences.ai_*`, read at request time by
+// `getAiSettings` / `getAiConfig` in `modules/preferences/queries.ts`, with `aiReady` in
+// `modules/companion/ai-settings.ts` deciding whether it is usable.
+//
+// The env vars were REMOVED rather than kept as a fallback. Two sources for one setting
+// needs a precedence rule, and a precedence rule produces a settings page that sometimes
+// silently does nothing. The opt-in property ADR-0011 asked for survives the move: the
+// columns default to off, so a fresh install and a restored backup both have no companion
+// until someone fills the form in.

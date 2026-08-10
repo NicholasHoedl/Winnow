@@ -209,6 +209,12 @@ export async function exportUserData() {
     routines: routineRows,
     routineItems: routineItemRows,
     aiProposals: aiProposalRows,
-    preferences: preferenceRows[0] ?? null,
+    // The API key is stripped, deliberately (T11). Everything else in this row round-trips,
+    // but a backup file that can spend money is a different kind of object from a backup
+    // file — it gets emailed to yourself, dropped in cloud storage, and kept for years.
+    // The import says what it skipped, so a restore does not silently look complete.
+    preferences: preferenceRows[0]
+      ? { ...preferenceRows[0], aiApiKey: "" }
+      : null,
   }
 }

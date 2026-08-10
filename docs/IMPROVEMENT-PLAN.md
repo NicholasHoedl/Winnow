@@ -29,8 +29,18 @@ picked up — it is **not** code-level detail yet.
 | T9b — companion: routines                     | ✅ shipped    |
 | T9c — companion: weekly synthesis             | ✅ shipped    |
 | T9d — companion: transaction import           | ✅ shipped    |
+| T10a — Activity: /todos and /goals merged     | ✅ shipped    |
+| T10b — Activity: routines and habits in rail  | ✅ shipped    |
+| T11 — AI configured from Settings, not env    | ✅ shipped    |
 
 **T7 is complete**, so the remaining work is Checkpoint 0.4 (hosting) and then T5c-b.
+
+**T10** was not on this roadmap either. `/todos` and `/goals` had been describing the same
+rows from opposite ends since T2 gave tasks a `goalId`, and each had grown a compromise to
+cover for the split — a read-only task list inside the goal card, with exactly one row made
+actionable in T5a. `/activity` puts the goals in a rail beside the real task list and
+retires the compromise. It also freed the first nav slot since the bar filled at seven.
+ADR-0013 has the reasoning, including the three shapes that were rejected.
 
 **T8** was not on this roadmap. It came out of a question about associating tasks with
 goals — an association that already existed (`tasks.goalId`, T2) but measured nothing.

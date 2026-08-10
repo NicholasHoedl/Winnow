@@ -67,9 +67,9 @@ runs all 31 migrations from scratch plus `scripts/seed-user.ts`.
 
 **Every tranche is shipped except T5c-b.** T0–T6b; all of T7, split into T7a Notes → T7b
 Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
-choosing; then T8 (goal momentum), which was not on the roadmap and came out of a question
-about linking tasks to goals. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its
-status table is current.
+choosing; then T8 (goal momentum), T9a–T9d (the AI companion) and T10a–T10b, none of which
+were on the roadmap. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its status table
+is current.
 
 So the roadmap has run out of code that can be written without a deployment. **Hosting is
 now the only thing standing between this app and being used.**
@@ -80,6 +80,7 @@ now the only thing standing between this app and being used.**
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
 | **The AI companion — complete**           | **T9a–T9d all shipped**: `/companion`, with goal planning, routine building, a narrated week and transaction import. See §5, ADR-0011 and ADR-0012.                                                                        |
+| **The Activity page — complete**           | **T10a–T10b both shipped**: `/todos` and `/goals` merged into `/activity`, with goals, routines and habits in one rail beside the task list. See §5 and ADR-0013.                                                        |
 
 ### Hosting: what is already known
 
@@ -254,6 +255,42 @@ Do not reopen these without new information:
   have been reversed at implementation time on this basis — `@serwist/next` and an iCal
   library. A plan naming a library does not settle it.
 
+### The Activity page (T10a–T10b, complete)
+
+**ADR-0013 is the authority.** The short version, and the parts that bite:
+
+**`/todos` and `/goals` do not exist.** Both redirect permanently to **`/activity`**, one
+page: the task list, with goals as a rail beside it. Selecting a goal filters the list to
+that goal's work. `/activity/routines` and `/activity/habits` moved with their parent.
+
+Four things worth knowing before touching it:
+
+- **Selection is `?goal=<id>`, written with `history.replaceState`, not `router.replace`.**
+  Every route here is dynamic, so a router navigation would refetch on every filter click
+  for data that did not change. If you "fix" this to a proper navigation you will add a
+  server round-trip to a click that needs none.
+- **The rail is two components** — `GoalRail` (desktop column) and `GoalChips` (mobile
+  scroller) — not one responsive one. They render the same state and are therefore the pair
+  most likely to drift; `e2e/activity.spec.ts` exercises both.
+- **A goal's milestones live in a dialog**, not on the card. There is no goal page. The
+  linked-task list that used to sit inside the goal card is **gone**, deliberately: the
+  filtered list beside the rail is that list, and every row in it is actionable.
+- **Goals have their own e2e locator, `goalCard`** — a rail card changes background when
+  selected, and `cn` drops `bg-card` when it does, so the utility-class locator would stop
+  matching exactly the goal a test just clicked.
+
+**T10b put routines and habits in the rail too**, under one rule worth keeping: *the rail
+never offers an action the task list beside it already offers.* A routine gets a Run button
+(running one creates tasks); a habit gets no tick, because today's instance is already a
+checkable row in the list. On mobile the two become links, not content. The Activity header
+lost its Routines and Habits icons — the rail and the mobile shortcuts both reach them.
+
+**The e2e suite's `visibleCard` excludes `[data-rail]`.** Every rail entry carries that
+attribute. Without it a spec cleaning up by title prefix matches the rail card as well as
+the row and hangs on a "Task actions" button the rail does not have — which happened once in
+T10a with goals and again in T10b with habits. A new rail block is excluded by construction;
+do not go back to listing testids.
+
 ### The AI companion (T9a–T9d, complete)
 
 **ADR-0011 is the authority** on the provider and the data boundary, **ADR-0012** on why
@@ -265,9 +302,9 @@ run end to end — generate → prune → edit inline → Apply, which writes th
 own actions and lands you on the result:
 
 - **Plan a goal** → milestones and tasks, via `addMilestone` and `createTask`, then
-  `/goals`.
+  `/activity`.
 - **Build a routine** → a routine and its items, via `createRoutine` and `addRoutineItem`,
-  then `/todos/routines`.
+  then `/activity/routines`.
 - **Read my week** → a narrated summary. **The odd one out: nothing to apply.** A paragraph
   is not a row, so there are no checkboxes, no Apply, and no arm in `applyProposalSchema` —
   one Done button, which discards it.
@@ -275,12 +312,14 @@ own actions and lands you on the result:
   `/budget`. A dense row list rather than the spine: forty transactions are a table you
   scan, not a sequence you read.
 
-Off by default; `AI_ENABLED` unset means the route 404s and nothing hints it exists.
+Off by default. With the companion switched off in Settings the route renders no content
+and nothing in the app hints the feature exists. (It answers 200, not 404 — `(app)/loading.tsx`
+streams the shell before `notFound()` can set a status. Observable behaviour is the same.)
 
-**It has no nav tab, and that is deliberate** — the bottom bar is full at seven (§6), and
-`/review` set the precedent. The two ways in are the ⌘K palette and a Companion button in
-the dashboard header, both gated on `AI_READY`. Worth knowing because "I can't find it" is
-the first thing anyone says; the answer is that it is where `/review` is.
+**It has a nav tab now**, directly after Activity, spending the slot T10 freed (§6). It is
+gated on the same `aiReady(...)` reading as everything else about the feature, so it simply
+is not there when the companion is off. The ⌘K palette and the dashboard button still reach it too — the dashboard
+button is now a second door rather than the only one, and is kept deliberately.
 
 **The one prompt that sends your own detail.** Every other job sends titles, descriptions
 or already-summed figures; transaction import sends the text you paste, because that is
@@ -361,9 +400,17 @@ T9c or T9d rebuilt any of them.
   built from named fields, never spread from raw rows, and the notes module must be
   unreachable from the prompt-building path. Journal-aware retrospectives are deferred,
   not cancelled: they are the one feature that would justify a local model later.
-- **Behind an OpenAI-compatible seam**, configured exactly like the `OFF_*` keys in
-  `src/lib/config.ts` — `AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY`. Kept
-  precisely *because* the provider is remote: it leaves a local endpoint one env var away.
+- **Behind a two-protocol seam, configured in Settings** (T11) — `user_preferences.ai_*`,
+  not the environment. `src/lib/config.ts` holds nothing about AI any more; `getAiSettings`
+  / `getAiConfig` read it per request and `aiReady` decides whether it is usable. A local
+  endpoint is one settings field away.
+  **The provider is `openai` or `anthropic`, and they are not interchangeable by URL** —
+  different path, `x-api-key` vs bearer, a required version header, `system` outside the
+  messages, a required `max_tokens`, and tool-use instead of `response_format`. Both
+  protocols are unit-tested in `companion/ai-request.test.ts`; the e2e stub speaks OpenAI
+  only, so that file is the ONLY coverage the Anthropic path has.
+  Nothing is forwarded through `docker-compose.prod.yml` any more: the configuration is in
+  the database, so it survives a redeploy and is set once, from the app.
 - **Propose-only.** The model never writes to the database. It emits a proposal, that
   proposal is validated by the module's existing Zod schemas, the user edits and approves,
   and the write goes through the actions the UI already calls. A bad generation is a
@@ -378,9 +425,10 @@ a quick-add parser returns `null` (invisible, and it would have caught the `abc2
 278-carbs trap in §6); cross-module questions the UI has no page for; and — only behind a
 local model — journal-aware retrospectives.
 
-`AI_API_KEY` will be a new secret in `.env` alongside `POSTGRES_PASSWORD` and
-`AUTH_SECRET`. It is deliberately **not** in `.env.example` until the feature exists: a key
-with no reader is the same anti-pattern as a column with no writer.
+The API key is **not** an environment secret. T11 moved it into the app: it lives in
+`user_preferences.ai_api_key`, entered on the Settings page, and there is nothing to add to
+`.env` or to the compose file. It is excluded from the account export, and a restore
+carries the existing key across rather than clearing it.
 
 Two limits that are structural rather than temporary, and worth knowing before planning
 around them:
@@ -438,9 +486,16 @@ still the old indigo.**
   at 1440×900 and up. The ~19px figure recorded here previously was against less data, so
   this number tracks what is in the database rather than being fixed. T7a's Journal card
   is **not** a contributor — hiding it leaves both numbers identical.
-- **Nav is full at seven items.** `bottom-nav.tsx` is a plain flex with `flex-1` and no
-  overflow handling; seven labels fit a 375px phone with nothing to spare. An eighth
-  top-level route needs a More sheet or a scroller first.
+- **Nav is back at seven items, the measured ceiling.** `bottom-nav.tsx` is a plain flex
+  with `flex-1` and no overflow handling; seven labels fit a 375px phone with nothing to
+  spare, and an eighth needs a More sheet or a scroller first. T10 merged To-dos and Goals
+  into Activity, freeing the first slot since T7a, and the Companion tab immediately spent
+  it. `e2e/navigation.spec.ts` measures the fit rather than trusting it.
+- **The Companion tab is conditional and is NOT in `navItems`.** `/companion` renders
+  nothing unless the companion is configured in Settings, so `navItemsFor(companionEnabled)`
+  splices the tab in at render. The `(app)` layout resolves `aiReady(await getAiSettings())`
+  once and passes it to the sidebar, the bottom nav and the palette — those three must
+  agree, which is why they share one `COMPANION_NAV_ITEM`.
 - **The export file contains a live credential** — the calendar feed token rides along
   deliberately, so a restore keeps an existing subscription working (ADR-0008).
 - **A goal measured only numerically gets no momentum reading**, and never will without a
@@ -458,9 +513,10 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0012) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0013) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by
-accident than to notice afterwards. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
+accident than to notice afterwards. **0013** explains why `/todos` and `/goals` no longer
+exist, which is the first question anyone asks after a `git pull`. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
 implementing" list at the top that is worth two minutes.

@@ -16,13 +16,25 @@ export default defineConfig({
   use: { baseURL, trace: "on-first-retry" },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
+    // A second setup pass, after auth because it needs the session: the companion's
+    // configuration lives in the database now (T11), so the suite writes the stub's
+    // details through the settings page before any spec runs.
+    {
+      name: "ai-setup",
+      testMatch: /ai\.setup\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/user.json",
+      },
+      dependencies: ["setup"],
+    },
     {
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/user.json",
       },
-      dependencies: ["setup"],
+      dependencies: ["setup", "ai-setup"],
     },
   ],
   // Two servers: the app, and a stand-in AI provider.
@@ -32,9 +44,11 @@ export default defineConfig({
   // AI_BASE_URL exactly as it would reach a real provider, so the whole path including the
   // Zod parse is under test.
   //
-  // `reuseExistingServer` means the dev server may already be running, and Playwright's
-  // `env` here would not reach it. So the AI_* values live in `.env` instead, which both
-  // this and `pnpm dev` read. See e2e/_ai-stub.mjs.
+  // The app reaches the stub using whatever `user_preferences` says, which `ai.setup.ts`
+  // writes before the specs run. This used to come from `.env` — that mattered because
+  // `reuseExistingServer` means the dev server may already be running and Playwright's
+  // `env` here would not reach it. Settings in the database sidestep that entirely: they
+  // are read per request, so an already-running server picks them up. See e2e/_ai-stub.mjs.
   webServer: [
     {
       command: "node e2e/_ai-stub.mjs",

@@ -4,6 +4,12 @@ import { eq } from "drizzle-orm"
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 import {
+  maskApiKey,
+  toProvider,
+  type AiConfig,
+  type AiSettings,
+} from "@/modules/companion/ai-settings"
+import {
   DEFAULT_PREFERENCES,
   MOMENTUM_DAYS,
   type MomentumDays,
@@ -56,4 +62,84 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
       ? (row.theme as Theme)
       : "system",
   }
+}
+
+/**
+ * The companion's settings, WITHOUT the key.
+ *
+ * Deliberately not folded into `UserPreferences`. That shape is handed to
+ * `PreferencesProvider` in the app layout, which is a client component — so everything in
+ * it is serialised into the RSC payload and reaches the browser. These four are harmless
+ * there, but keeping them in a separate function means the key has no path into that shape
+ * even by accident, and the field-by-field list above stays the only thing standing between
+ * a new column and the client.
+ */
+export async function getAiSettings(): Promise<AiSettings> {
+  return aiSettingsFor(await requireUserId())
+}
+
+export async function aiSettingsFor(userId: string): Promise<AiSettings> {
+  const row = await db.query.userPreferences.findFirst({
+    where: eq(userPreferences.userId, userId),
+    columns: {
+      aiEnabled: true,
+      aiProvider: true,
+      aiBaseUrl: true,
+      aiModel: true,
+    },
+  })
+  if (!row) return DEFAULT_AI_SETTINGS
+  return {
+    enabled: row.aiEnabled,
+    provider: toProvider(row.aiProvider),
+    baseUrl: row.aiBaseUrl,
+    model: row.aiModel,
+  }
+}
+
+const DEFAULT_AI_SETTINGS: AiSettings = {
+  enabled: false,
+  provider: "openai",
+  baseUrl: "",
+  model: "",
+}
+
+/**
+ * The settings PLUS the key, for the one caller that puts it on the wire.
+ *
+ * Separate from `getAiSettings` so the key is fetched only where it is used. Grep for this
+ * function to enumerate everything that can see it — the answer should stay "ai-client.ts".
+ */
+export async function getAiConfig(): Promise<AiConfig> {
+  const userId = await requireUserId()
+  const row = await db.query.userPreferences.findFirst({
+    where: eq(userPreferences.userId, userId),
+    columns: {
+      aiEnabled: true,
+      aiProvider: true,
+      aiBaseUrl: true,
+      aiModel: true,
+      aiApiKey: true,
+    },
+  })
+  if (!row) return { ...DEFAULT_AI_SETTINGS, apiKey: "" }
+  return {
+    enabled: row.aiEnabled,
+    provider: toProvider(row.aiProvider),
+    baseUrl: row.aiBaseUrl,
+    model: row.aiModel,
+    apiKey: row.aiApiKey,
+  }
+}
+
+/**
+ * What the settings form needs: the settings, and a HINT about the key rather than the key.
+ * `hasKey` drives the copy; `keyHint` identifies which key is saved without disclosing it.
+ */
+export async function getAiSettingsView(): Promise<
+  AiSettings & { hasKey: boolean; keyHint: string | null }
+> {
+  const config = await getAiConfig()
+  const { apiKey, ...settings } = config
+  return { ...settings, hasKey: apiKey !== "", keyHint: maskApiKey(apiKey) }
 }

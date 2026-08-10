@@ -47,8 +47,8 @@ The seam is kept precisely *because* the provider is now remote: it leaves a loc
 one env var away, which is what the next decision depends on.
 
 > **Amended 2026-08-06.** The seam now carries **two** protocols — `openai` by default, or
-> `anthropic` — selected by `AI_PROVIDER`. The user's key is Anthropic's, and that API is
-> not an OpenAI dialect: different path, `x-api-key` instead of a bearer token, a
+> `anthropic` — selected by a provider setting (`AI_PROVIDER` at the time, a Settings field
+> from T11 below). The user's key is Anthropic's, and that API is not an OpenAI dialect: different path, `x-api-key` instead of a bearer token, a
 > required version header, `system` hoisted out of the message list, a required
 > `max_tokens`, and structured output via forced tool-use rather than `response_format`.
 >

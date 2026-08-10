@@ -130,7 +130,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
 export function CommandPalette({
   companionEnabled = false,
 }: {
-  /** Passed from the (app) layout, which can read AI_READY; this component cannot. */
+  /** Passed from the (app) layout, which can read the AI settings; this component cannot. */
   companionEnabled?: boolean
 }) {
   const router = useRouter()

@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs"
 
 import { db } from "@/db"
 import { users } from "@/db/schema"
+import { userPreferences } from "@/modules/preferences/schema"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { unstable_update as updateSession } from "@/lib/auth"
@@ -82,6 +83,17 @@ export async function importUserData(payload: unknown): Promise<ActionResult> {
   const parsed = parseImport(payload)
   if (!parsed.ok) return { ok: false, error: parsed.error }
 
+  // Carried across the wipe (T11). The API key is excluded from the export, and excluded
+  // has to mean UNTOUCHED in both directions — a backup that cannot contain your key must
+  // not be able to delete it either. Without this, restoring any backup silently signs you
+  // out of the AI provider, which would read as the companion breaking for no reason.
+  const existingKey = (
+    await db.query.userPreferences.findFirst({
+      where: eq(userPreferences.userId, userId),
+      columns: { aiApiKey: true },
+    })
+  )?.aiApiKey
+
   try {
     await db.transaction(async (tx) => {
       await deleteAllUserRows(tx, userId)
@@ -91,6 +103,15 @@ export async function importUserData(payload: unknown): Promise<ActionResult> {
         await tx
           .insert(table.table)
           .values(rows.map((row) => toInsertRow(table, row, userId)))
+      }
+      if (existingKey) {
+        await tx
+          .insert(userPreferences)
+          .values({ userId, aiApiKey: existingKey })
+          .onConflictDoUpdate({
+            target: userPreferences.userId,
+            set: { aiApiKey: existingKey },
+          })
       }
     })
   } catch {

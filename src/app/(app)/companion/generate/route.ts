@@ -3,10 +3,11 @@ import { NextResponse } from "next/server"
 import type { z } from "zod"
 
 import { db } from "@/db"
-import { AI_READY } from "@/lib/config"
 import { todayInZone } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 import { currentModel, generatePayload } from "@/modules/companion/ai-client"
+import { aiReady } from "@/modules/companion/ai-settings"
+import { getAiSettings } from "@/modules/preferences/queries"
 import {
   describeAiFailure,
   type AiResult,
@@ -77,7 +78,9 @@ export async function POST(request: Request): Promise<Response> {
 
   // Belt and braces: the page is not rendered when the companion is off, but a route
   // handler is reachable regardless of what the UI chose to show.
-  if (!AI_READY) return bad(describeAiFailure({ kind: "disabled" }), 503)
+  // Settings, not environment (T11) — so this is a read, not a constant.
+  if (!aiReady(await getAiSettings()))
+    return bad(describeAiFailure({ kind: "disabled" }), 503)
 
   let body: unknown
   try {
@@ -205,7 +208,7 @@ export async function POST(request: Request): Promise<Response> {
   if (input.proposalId && input.instruction) {
     const [updated] = await db
       .update(aiProposals)
-      .set({ payload: result.data, model: currentModel() })
+      .set({ payload: result.data, model: await currentModel() })
       .where(
         and(
           eq(aiProposals.id, input.proposalId),
@@ -224,7 +227,7 @@ export async function POST(request: Request): Promise<Response> {
       kind: input.kind,
       targetId,
       payload: result.data,
-      model: currentModel(),
+      model: await currentModel(),
     })
     .returning()
 

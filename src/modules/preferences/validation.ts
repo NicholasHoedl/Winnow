@@ -50,3 +50,33 @@ export const appearancePreferencesSchema = z.object({
 export type AppearancePreferencesInput = z.infer<
   typeof appearancePreferencesSchema
 >
+
+/**
+ * The AI companion's settings — owned by the AI section alone, same as the three above.
+ *
+ * The API KEY IS NOT IN THIS SCHEMA, and that is the point. It is write-only and travels
+ * on its own action: a saved key must survive someone changing the model, and if it rode
+ * along in the section's form it would be cleared every time that form submitted with an
+ * empty field — which is exactly what a write-only field always looks like.
+ */
+export const aiSettingsSchema = z.object({
+  enabled: z.boolean(),
+  provider: z.enum(["openai", "anthropic"]),
+  // Trimmed because it is pasted, and a trailing space produces a DNS failure reported as
+  // "can't reach the AI provider" with nothing pointing at the real cause.
+  baseUrl: z.string().trim().max(500),
+  model: z.string().trim().max(120),
+})
+export type AiSettingsInput = z.infer<typeof aiSettingsSchema>
+
+/**
+ * Setting or clearing the key, on its own.
+ *
+ * An empty string is the explicit "remove it" case rather than a validation error: the
+ * Remove button and a cleared field are the same intent, and treating one as an error
+ * would leave no way to un-set a key from the UI.
+ */
+export const aiApiKeySchema = z.object({
+  apiKey: z.string().trim().max(500),
+})
+export type AiApiKeyInput = z.infer<typeof aiApiKeySchema>

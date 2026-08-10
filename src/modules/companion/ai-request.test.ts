@@ -219,13 +219,15 @@ describe("extractPayload", () => {
 })
 
 describe("describeAiFailure", () => {
-  it("points at the key for an auth rejection", () => {
-    expect(describeAiFailure({ kind: "http", status: 401 })).toContain(
-      "AI_API_KEY",
-    )
-    expect(describeAiFailure({ kind: "http", status: 403 })).toContain(
-      "AI_API_KEY",
-    )
+  it("points at the key for an auth rejection, and says where to fix it", () => {
+    // "Settings", not an env var name: T11 moved the key into the app, and a message
+    // naming a variable that no longer exists sends someone to edit the wrong thing.
+    for (const status of [401, 403]) {
+      const copy = describeAiFailure({ kind: "http", status })
+      expect(copy).toContain("API key")
+      expect(copy).toContain("Settings")
+      expect(copy).not.toContain("AI_API_KEY")
+    }
   })
 
   it("says nothing was created, for every failure that reached the provider", () => {

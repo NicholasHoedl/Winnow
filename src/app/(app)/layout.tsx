@@ -3,11 +3,14 @@ import { redirect } from "next/navigation"
 import { Search, Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { AI_READY } from "@/lib/config"
+import { aiReady } from "@/modules/companion/ai-settings"
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
-import { getUserPreferences } from "@/modules/preferences/queries"
+import {
+  getAiSettings,
+  getUserPreferences,
+} from "@/modules/preferences/queries"
 import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
 import { BottomNav } from "@/components/shared/bottom-nav"
@@ -37,12 +40,18 @@ export default async function AppLayout({
   }
 
   const userName = session.user.name ?? "Account"
-  const [preferences, lists, goals, events] = await Promise.all([
+  const [preferences, aiSettings, lists, goals, events] = await Promise.all([
     getUserPreferences(),
+    getAiSettings(),
     getLists(),
     getGoalOptions(),
     getEventOptions(),
   ])
+
+  // Whether the Companion gets a nav tab at all. Read here rather than in each nav
+  // component because the sidebar, the bottom bar and the palette must agree, and only a
+  // server component can reach the settings.
+  const companionEnabled = aiReady(aiSettings)
 
   return (
     <CreateIntentProvider>
@@ -57,7 +66,7 @@ export default async function AppLayout({
           >
             Skip to content
           </a>
-          <AppSidebar userName={userName} companionEnabled={AI_READY} />
+          <AppSidebar userName={userName} companionEnabled={companionEnabled} />
 
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Mobile top bar (desktop puts the brand + toggle in the sidebar) */}
@@ -100,8 +109,8 @@ export default async function AppLayout({
             </main>
           </div>
 
-          <BottomNav companionEnabled={AI_READY} />
-          <CommandPalette companionEnabled={AI_READY} />
+          <BottomNav companionEnabled={companionEnabled} />
+          <CommandPalette companionEnabled={companionEnabled} />
           <GlobalCreateDialogs lists={lists} goals={goals} events={events} />
         </div>
       </PreferencesProvider>

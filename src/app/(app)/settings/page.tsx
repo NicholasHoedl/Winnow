@@ -3,7 +3,10 @@ import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
 import { getFeedToken } from "@/modules/calendar/queries"
-import { getUserPreferences } from "@/modules/preferences/queries"
+import {
+  getAiSettingsView,
+  getUserPreferences,
+} from "@/modules/preferences/queries"
 
 import { SettingsView } from "./_components/settings-view"
 
@@ -11,8 +14,9 @@ export default async function SettingsPage() {
   const session = await auth()
   if (!session?.user) redirect("/login")
 
-  const [preferences, feedToken, headerList] = await Promise.all([
+  const [preferences, ai, feedToken, headerList] = await Promise.all([
     getUserPreferences(),
+    getAiSettingsView(),
     getFeedToken(),
     headers(),
   ])
@@ -32,6 +36,7 @@ export default async function SettingsPage() {
         email: session.user.email ?? "",
       }}
       preferences={preferences}
+      ai={ai}
       feedUrl={feedUrl}
     />
   )

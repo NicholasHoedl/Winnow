@@ -54,6 +54,36 @@ export const userPreferences = pgTable("user_preferences", {
   // "light" | "dark" | "system" — next-themes' own vocabulary, stored as text so the
   // set can change without a migration. Validated by Zod on the way in.
   theme: text("theme").notNull().default("system"),
+
+  /**
+   * The AI companion's whole configuration (T11). Settings, not environment.
+   *
+   * These replaced `AI_*` env vars outright rather than layering over them: two sources
+   * for one setting means a precedence rule, and a precedence rule means a settings page
+   * that sometimes silently does nothing. One home, one answer.
+   *
+   * Defaults keep the feature OFF on a fresh install and after a restore, which is what
+   * the env vars were doing before — ADR-0011's opt-in property survives the move.
+   */
+  aiEnabled: boolean("ai_enabled").notNull().default(false),
+  // "openai" | "anthropic" — two genuinely different wire protocols, not a dialect.
+  // Text rather than an enum so a third can be added without a migration, narrowed by Zod.
+  aiProvider: text("ai_provider").notNull().default("openai"),
+  aiBaseUrl: text("ai_base_url").notNull().default(""),
+  aiModel: text("ai_model").notNull().default(""),
+  /**
+   * **The one secret in this table.** Plaintext, deliberately: on a single-user box
+   * whoever can read this row can generally read the machine, and encrypting it would add
+   * an AUTH_SECRET-rotation failure mode that surfaces as a puzzling 401.
+   *
+   * Two rules it depends on, both enforced elsewhere and both easy to break by accident:
+   *   1. `preferencesFor` lists its fields BY NAME and must never spread the row — that
+   *      list is what keeps this column out of the client-side PreferencesProvider.
+   *   2. `account/queries.ts` strips it from the JSON export, so a backup file cannot
+   *      spend money.
+   */
+  aiApiKey: text("ai_api_key").notNull().default(""),
+
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow()

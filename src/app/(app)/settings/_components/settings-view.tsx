@@ -1,8 +1,10 @@
 "use client"
 
 import type { UserPreferences } from "@/lib/preferences"
+import type { AiSettings } from "@/modules/companion/ai-settings"
 
 import { AccountSection } from "./account-section"
+import { AiSection } from "./ai-section"
 import { AppearanceSection } from "./appearance-section"
 import { CalendarSection } from "./calendar-section"
 import { DataSection } from "./data-section"
@@ -12,10 +14,13 @@ import { PreferencesSection } from "./preferences-section"
 export function SettingsView({
   user,
   preferences,
+  ai,
   feedUrl,
 }: {
   user: { name: string; email: string }
   preferences: UserPreferences
+  /** The companion's settings plus a hint about the key — never the key itself. */
+  ai: AiSettings & { hasKey: boolean; keyHint: string | null }
   feedUrl: string
 }) {
   return (
@@ -34,6 +39,7 @@ export function SettingsView({
         <AppearanceSection />
         <PreferencesSection preferences={preferences} />
         <NotificationsSection preferences={preferences} />
+        <AiSection settings={ai} hasKey={ai.hasKey} keyHint={ai.keyHint} />
         <CalendarSection feedUrl={feedUrl} />
         <DataSection />
       </div>

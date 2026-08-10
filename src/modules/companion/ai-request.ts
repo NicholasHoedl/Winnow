@@ -11,7 +11,7 @@ import type { ChatMessage } from "./service"
 
 /** Why a generation didn't produce a proposal. Never an exception — see ADR-0011. */
 export type AiFailure =
-  /** AI_ENABLED is off, or the base URL / model is unset. The UI hides the feature. */
+  /** Switched off in Settings, or the base URL / model is unset. The UI hides the feature. */
   | { kind: "disabled" }
   /** DNS/connect failed. The home connection is down, or the provider is unreachable. */
   | { kind: "offline" }
@@ -265,7 +265,7 @@ export function describeAiFailure(failure: AiFailure): string {
       return "The provider didn't answer in time. Nothing was created — try again."
     case "http":
       return failure.status === 401 || failure.status === 403
-        ? "The provider rejected the API key. Check AI_API_KEY."
+        ? "The provider rejected the API key. Check it in Settings."
         : `The provider answered ${failure.status}. Nothing was created.`
     case "malformed":
       return "The provider answered with something this app couldn't read as a plan."

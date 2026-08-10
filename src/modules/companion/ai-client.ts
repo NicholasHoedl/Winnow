@@ -1,13 +1,7 @@
 import "server-only"
 import { z } from "zod"
 
-import {
-  AI_API_KEY,
-  AI_BASE_URL,
-  AI_MODEL,
-  AI_PROVIDER,
-  AI_READY,
-} from "@/lib/config"
+import { getAiConfig } from "@/modules/preferences/queries"
 
 import {
   buildRequestBody,
@@ -18,6 +12,7 @@ import {
   GENERATE_TIMEOUT_MS,
   type AiResult,
 } from "./ai-request"
+import { aiReady } from "./ai-settings"
 import type { ChatMessage } from "./service"
 
 // The second outbound call in the codebase, after Open Food Facts. Same rule, for the
@@ -44,19 +39,23 @@ export async function generatePayload<T>(
   schema: z.ZodType<T>,
   messages: ChatMessage[],
 ): Promise<AiResult<T>> {
-  if (!AI_READY) return { ok: false, failure: { kind: "disabled" } }
+  // Read per request, not per process: the settings page can change any of this between
+  // one generation and the next, and a module constant would serve the value the server
+  // booted with until it was restarted.
+  const config = await getAiConfig()
+  if (!aiReady(config)) return { ok: false, failure: { kind: "disabled" } }
 
   let response: Response
   try {
-    response = await fetch(buildRequestUrl(AI_PROVIDER, AI_BASE_URL), {
+    response = await fetch(buildRequestUrl(config.provider, config.baseUrl), {
       method: "POST",
       // URL, headers and body all vary by provider — see `AiProvider` in ai-request.ts for
       // why Anthropic is a second protocol rather than a base-URL swap.
-      headers: buildRequestHeaders(AI_PROVIDER, AI_API_KEY),
+      headers: buildRequestHeaders(config.provider, config.apiKey),
       body: JSON.stringify(
         buildRequestBody(
-          AI_PROVIDER,
-          AI_MODEL,
+          config.provider,
+          config.model,
           messages,
           z.toJSONSchema(schema),
         ),
@@ -81,7 +80,7 @@ export async function generatePayload<T>(
 
   // Already a value, not text: the OpenAI path parses the JSON string inside
   // `extractPayload`, the Anthropic path reads the forced tool call's input directly.
-  const parsed = extractPayload(AI_PROVIDER, body)
+  const parsed = extractPayload(config.provider, body)
   if (parsed === null) return { ok: false, failure: { kind: "malformed" } }
 
   const result = schema.safeParse(parsed)
@@ -91,6 +90,6 @@ export async function generatePayload<T>(
 }
 
 /** Which model produced a proposal, recorded on the row so a bad run can be traced. */
-export function currentModel(): string {
-  return AI_MODEL
+export async function currentModel(): Promise<string> {
+  return (await getAiConfig()).model
 }

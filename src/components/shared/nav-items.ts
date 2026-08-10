@@ -35,10 +35,11 @@ export const navItems: NavItem[] = [
 /**
  * The Companion tab, kept out of `navItems` because it is **conditional**.
  *
- * `/companion` only exists when `AI_ENABLED` is set with a provider configured (ADR-0011);
- * with it off the route 404s. A tab in the static list would therefore be a permanent dead
- * link for anyone who never turned the feature on — the same reason the command palette has
- * always listed it separately rather than spreading it into `navItems`.
+ * `/companion` only exists when the companion is configured in Settings (ADR-0011, moved
+ * out of the environment in T11); with it off the route renders nothing. A tab in the static
+ * list would therefore be a permanent dead link for anyone who never turned the feature on —
+ * the same reason the command palette has always listed it separately rather than spreading
+ * it into `navItems`.
  */
 export const COMPANION_NAV_ITEM: NavItem = {
   href: "/companion",

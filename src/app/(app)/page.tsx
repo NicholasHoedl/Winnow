@@ -2,7 +2,7 @@ import Link from "next/link"
 import { CalendarPlus, ClipboardList, Sparkles } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { AI_READY } from "@/lib/config"
+import { aiReady } from "@/modules/companion/ai-settings"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getCalendars,
@@ -12,7 +12,10 @@ import {
 import { getGoals } from "@/modules/goals/queries"
 import { getJournalEntry } from "@/modules/notes/queries"
 import { addDays, todayInZone } from "@/lib/date"
-import { getUserPreferences } from "@/modules/preferences/queries"
+import {
+  getAiSettings,
+  getUserPreferences,
+} from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { formatLongDate } from "@/lib/format"
@@ -61,6 +64,7 @@ export default async function DashboardPage({
     goals,
     calendars,
     journalEntry,
+    aiSettings,
   ] = await Promise.all([
     auth(),
     getTasks(),
@@ -73,6 +77,7 @@ export default async function DashboardPage({
     getGoals(timeZone, goalMomentumDays),
     getCalendars(),
     getJournalEntry(today),
+    getAiSettings(),
   ])
 
   const name = session?.user?.name ?? "there"
@@ -131,7 +136,7 @@ export default async function DashboardPage({
                 the dashboard and the palette are the only ways to reach it. Companion DOES
                 have a tab now; this button is kept as a second door from the surface you
                 land on, not because it is the only one. */}
-            {AI_READY && (
+            {aiReady(aiSettings) && (
               <Link
                 href="/companion"
                 className={buttonVariants({ variant: "outline", size: "sm" })}
