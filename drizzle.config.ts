@@ -10,6 +10,7 @@ export default defineConfig({
     "./src/modules/calendar/schema.ts",
     "./src/modules/companion/schema.ts",
     "./src/modules/goals/schema.ts",
+    "./src/modules/habits/schema.ts",
     "./src/modules/notes/schema.ts",
     "./src/modules/preferences/schema.ts",
     "./src/modules/routines/schema.ts",

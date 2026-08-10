@@ -9,6 +9,7 @@ import * as budgetSchema from "@/modules/budget/schema"
 import * as calendarSchema from "@/modules/calendar/schema"
 import * as companionSchema from "@/modules/companion/schema"
 import * as goalsSchema from "@/modules/goals/schema"
+import * as habitsSchema from "@/modules/habits/schema"
 import * as mealsSchema from "@/modules/meals/schema"
 import * as notesSchema from "@/modules/notes/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
@@ -46,6 +47,7 @@ const SCHEMAS = {
   calendar: calendarSchema,
   companion: companionSchema,
   goals: goalsSchema,
+  habits: habitsSchema,
   meals: mealsSchema,
   notes: notesSchema,
   preferences: preferencesSchema,

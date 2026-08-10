@@ -19,6 +19,7 @@ import {
 } from "@/modules/calendar/schema"
 import { aiProposals } from "@/modules/companion/schema"
 import { goals, milestones } from "@/modules/goals/schema"
+import { habitEntries, habits } from "@/modules/habits/schema"
 import {
   bodyWeights,
   foods,
@@ -71,6 +72,8 @@ export async function exportUserData() {
     noteRows,
     routineRows,
     routineItemRows,
+    habitRows,
+    habitEntryRows,
     aiProposalRows,
   ] = await Promise.all([
     db.query.lists.findMany({
@@ -177,6 +180,14 @@ export async function exportUserData() {
       where: eq(routineItems.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
+    db.query.habits.findMany({
+      where: eq(habits.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
+    db.query.habitEntries.findMany({
+      where: eq(habitEntries.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
     db.query.aiProposals.findMany({
       where: eq(aiProposals.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
@@ -208,6 +219,8 @@ export async function exportUserData() {
     notes: noteRows,
     routines: routineRows,
     routineItems: routineItemRows,
+    habits: habitRows,
+    habitEntries: habitEntryRows,
     aiProposals: aiProposalRows,
     // The API key is stripped, deliberately (T11). Everything else in this row round-trips,
     // but a backup file that can spend money is a different kind of object from a backup

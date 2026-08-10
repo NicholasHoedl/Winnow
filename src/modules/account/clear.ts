@@ -16,6 +16,7 @@ import {
 } from "@/modules/calendar/schema"
 import { aiProposals } from "@/modules/companion/schema"
 import { goals, milestones } from "@/modules/goals/schema"
+import { habitEntries, habits } from "@/modules/habits/schema"
 import {
   bodyWeights,
   foods,
@@ -54,6 +55,11 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   // First: a proposal's `targetId` points at a goal without a foreign key, so nothing in
   // the database would stop these outliving the rows they describe.
   await tx.delete(aiProposals).where(eq(aiProposals.userId, userId))
+  // Before `goals`: `habits.goal_id` is `set null`, so the order is not strictly forced —
+  // but the rule here is children first, stated rather than relied on. Entries before
+  // habits for the same reason, even though the cascade would cover them.
+  await tx.delete(habitEntries).where(eq(habitEntries.userId, userId))
+  await tx.delete(habits).where(eq(habits.userId, userId))
   await tx.delete(milestones).where(eq(milestones.userId, userId))
   await tx.delete(goals).where(eq(goals.userId, userId))
   await tx.delete(mealEntries).where(eq(mealEntries.userId, userId))
