@@ -132,6 +132,11 @@ const EMIT_TOOL = "emit_payload"
  *    specific tool FORCES the call, which makes the schema binding real rather than a
  *    request the provider may ignore — the weakness the OpenAI path documents above.
  * 3. **`max_tokens` is required.** See MAX_OUTPUT_TOKENS.
+ * 4. **`temperature` must NOT be sent.** The OpenAI body sets it deliberately — a
+ *    regenerate that returns byte-identical output is a wasted call — but current Claude
+ *    models reject the parameter outright: `400 invalid_request_error`, "`temperature` is
+ *    deprecated for this model". Found on the first real request; the unit tests below
+ *    could only ever assert the body this app INTENDS to send, never what the API accepts.
  *
  * `$schema` is stripped: Zod 4 emits it, Anthropic has no use for it, and an unexpected
  * meta key in `input_schema` is a cheap 400 to avoid.
@@ -161,7 +166,6 @@ export function buildAnthropicBody(
   return {
     model,
     max_tokens: MAX_OUTPUT_TOKENS,
-    temperature: 0.4,
     ...(system ? { system } : {}),
     messages: rest,
     tools: [

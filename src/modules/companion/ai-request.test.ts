@@ -118,6 +118,14 @@ describe("buildAnthropicBody", () => {
     expect(body.max_tokens).toBe(MAX_OUTPUT_TOKENS)
   })
 
+  it("never sends temperature, which current Claude models reject", () => {
+    // Not a style preference. A real request returned
+    //   400 invalid_request_error: `temperature` is deprecated for this model
+    // and every companion job failed with a bare "The provider answered 400".
+    const body = buildAnthropicBody("claude-sonnet-5", MESSAGES, SCHEMA)
+    expect("temperature" in body).toBe(false)
+  })
+
   it("forces the tool call, and names the tool it forces", () => {
     const body = buildAnthropicBody("claude-sonnet-5", MESSAGES, SCHEMA)
     const tools = body.tools as { name: string; input_schema: unknown }[]
@@ -147,6 +155,12 @@ describe("buildRequestBody", () => {
     expect(
       buildRequestBody("anthropic", "claude-sonnet-5", MESSAGES, SCHEMA),
     ).toEqual(buildAnthropicBody("claude-sonnet-5", MESSAGES, SCHEMA))
+  })
+
+  it("keeps temperature on the openai body", () => {
+    // The two protocols genuinely disagree here — dropping it from Anthropic must not
+    // quietly drop it from the path where it is wanted.
+    expect(buildChatBody("gpt", MESSAGES, SCHEMA).temperature).toBe(0.4)
   })
 
   it("leaves the openai body's system message in place", () => {
