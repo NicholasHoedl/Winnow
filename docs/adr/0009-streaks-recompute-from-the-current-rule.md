@@ -1,7 +1,17 @@
 # ADR-0009: Streaks Recompute From The Current Rule
 
-**Status:** Accepted (T7c)
+**Status:** Superseded by [ADR-0014](0014-habits-are-a-quota-and-a-log.md) (T12a)
 **Date:** 2026-08-04
+
+> **Superseded, not refuted.** Everything below was the right call for the feature it
+> describes — a habits view derived from the recurring-task engine, where the denominator is
+> not stored. T12a retired that feature: a habit is now its own primitive, a quota plus a log
+> of completions, and a repeating task is just a repeating task again. Two of the three
+> supporting rules survive in ADR-0014, restated in periods rather than cycles. The third —
+> "streaks count cycles, the heatmap counts days" — dissolved rather than moved: entries
+> record the local day they happened, so there is no `occurrenceDate`-is-a-period-start trap
+> left to guard against. `reopenWouldDestroy`, described under Consequences, is unaffected and
+> still guards `toggleTaskStatus`; it moved to `todos/service.ts`.
 
 ## Context
 
