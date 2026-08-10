@@ -4,7 +4,7 @@
 // This component positions squares and nothing else. What a square MEANS, and therefore
 // what colour it is, is decided by the caller and arrives as a class — the same division
 // bar-chart and line-chart use, and the reason nothing under charts/ knows about tasks or
-// dates. The (col, row) maths lives with the dates, in `todos/habits.ts`.
+// dates. The (col, row) maths lives with the dates, in `habits/service.ts`.
 
 import { cn } from "@/lib/utils"
 
