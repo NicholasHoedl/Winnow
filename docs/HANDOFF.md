@@ -280,10 +280,16 @@ Four things worth knowing before touching it:
   matching exactly the goal a test just clicked.
 
 **T10b put routines and habits in the rail too**, under one rule worth keeping: *the rail
-never offers an action the task list beside it already offers.* A routine gets a Run button
-(running one creates tasks); a habit gets no tick, because today's instance is already a
-checkable row in the list. On mobile the two become links, not content. The Activity header
-lost its Routines and Habits icons — the rail and the mobile shortcuts both reach them.
+never offers an action the task list beside it already offers.* A routine gets a Run button,
+because running one creates tasks. On mobile the two become links, not content. The Activity
+header lost its Routines and Habits icons — the rail and the mobile shortcuts both reach them.
+
+**T12a inverted what that rule implies for a habit, without changing the rule.** A habit used
+to BE a repeating task, so its tick was already a row in the list, and the rail showed a
+streak and nothing clickable. A habit is now a quota with a log: it generates no tasks, it has
+no row anywhere else, and the rail is the only place on that screen it can be logged from — so
+it gets a `+1`. It still gets **no checkbox**, because a quota is not done-or-not-done, and
+`e2e/activity.spec.ts` asserts both halves.
 
 **The e2e suite's `visibleCard` excludes `[data-rail]`.** Every rail entry carries that
 attribute. Without it a spec cleaning up by title prefix matches the rail card as well as

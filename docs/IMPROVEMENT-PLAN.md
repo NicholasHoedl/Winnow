@@ -22,7 +22,7 @@ picked up — it is **not** code-level detail yet.
 | T6b — Robustness: offline fallback            | ✅ shipped    |
 | T7a — Net-new: Notes / Journal                | ✅ shipped    |
 | T7b — Net-new: Routines / templates           | ✅ shipped    |
-| T7c — Net-new: Habits / streaks               | ✅ shipped    |
+| T7c — Net-new: Habits / streaks               | ⤳ retired by T12a |
 | T7d — Net-new: Weekly review                  | ✅ shipped    |
 | T8 — Goal momentum from linked tasks          | ✅ shipped    |
 | T9a — AI companion: shell + goal planning     | ✅ shipped    |
@@ -32,8 +32,12 @@ picked up — it is **not** code-level detail yet.
 | T10a — Activity: /todos and /goals merged     | ✅ shipped    |
 | T10b — Activity: routines and habits in rail  | ✅ shipped    |
 | T11 — AI configured from Settings, not env    | ✅ shipped    |
+| T12a — Habits: a quota and a log              | ✅ shipped    |
+| T12b — Goal momentum reads adherence          | next          |
+| T12c — Companion proposes habits, not dates   | after T12b    |
 
-**T7 is complete**, so the remaining work is Checkpoint 0.4 (hosting) and then T5c-b.
+**T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
+but T12b and T12c sit ahead of both, since they finish what T12a started.
 
 **T10** was not on this roadmap either. `/todos` and `/goals` had been describing the same
 rows from opposite ends since T2 gave tasks a `goalId`, and each had grown a compromise to
@@ -41,6 +45,15 @@ cover for the split — a read-only task list inside the goal card, with exactly
 actionable in T5a. `/activity` puts the goals in a rail beside the real task list and
 retires the compromise. It also freed the first nav slot since the bar filled at seven.
 ADR-0013 has the reasoning, including the three shapes that were rejected.
+
+**T12** was not on this roadmap either, and it came out of the companion's OUTPUT rather than
+from the code. Asked to break down a goal it proposed milestones dressed as tasks ("Learn
+words 1-250") and dated commitments you don't control ("Drill mount and side control on Aug
+31") — not carelessness, but the only well-formed answer available, because
+`goalPlanTaskSchema` requires a `dueDate` and Winnow could not express "3 classes a week" at
+all. T12a builds that primitive and retires T7c's derived habits with it. T12b wires it to
+goal momentum, which today reads **Stalled** on any goal whose work is a habit. T12c reshapes
+the companion payload. ADR-0014 has the reasoning and supersedes ADR-0009.
 
 **T8** was not on this roadmap. It came out of a question about associating tasks with
 goals — an association that already existed (`tasks.goalId`, T2) but measured nothing.
@@ -634,7 +647,12 @@ entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT 
 - **No search fan-out.** Deliberate: routines are few and named, and you reach them from
   the page you were already on. Recorded here rather than left as an oversight.
 
-**T7c — shipped**, no migration:
+**T7c — shipped, and RETIRED by T12a.** No migration either way. Everything below was true of
+the *derived* habits view, which no longer exists: a habit now has its own tables and states a
+RATE rather than a schedule. Two of its three decisions survived the rewrite, restated in
+periods instead of cycles; the third dissolved rather than moved. Kept here because the
+reasoning was sound for what it described, and because T12a inherited half of it — see
+ADR-0014 and the T12a notes below.
 
 - **No new table was needed**, as scoped. `syncRuleInstances` deletes only rows matching
   `eq(tasks.status, "open")` and the lazy path inserts with `onConflictDoNothing`, so a
@@ -663,6 +681,40 @@ entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT 
 - Known and left alone: deleting a rule orphans its completed rows (`seriesId` is
   `onDelete: "set null"`), so the habit disappears from the view. Defensible — you deleted
   the habit — and recorded in ADR-0009 rather than discovered later.
+
+**T12a — shipped**, migration `0032` (`habits` + `habit_entries`; 25 → 27 tables):
+
+- **A quota is a rule plus a log**, not N materialized tasks. Generating "3 a week" as three
+  instances collides with `unique(tasks.series_id, occurrence_date)`, with the same
+  constraint on `task_recurrence_exceptions`, and with `cyclesInRange`'s dedupe — three
+  places that treat `occurrenceDate` as the unit of identity and agree with each other. It
+  also renders as three identical rows, all soft-due Sunday, which is not what "three times
+  this week" looks like. ADR-0014 has the alternatives.
+- **`habit_entries` deliberately has no unique constraint** on (habit, date): two classes on
+  Tuesday is two rows, and a quota of three is only meaningful if the third can land on a day
+  that already has one. The price is that `+1` is not idempotent, so the button disables in
+  flight and undo deletes the exact id the action returned rather than "today's entry".
+- **The e2e caught a design bug the unit tests could not.** The streak's floor rounded a
+  partial first period UP — the right rule for the ring's denominator, the wrong one for a
+  streak — so a habit created today sat below its own floor and read *"3/3 this week · Streak
+  0"* however many times it was logged. A partial period is an unfair denominator; a target
+  met inside one was harder to hit, not weaker. `windowAdherence` still rounds up;
+  `habitStreak` does not.
+- **The screenshots caught what neither could**: the ring read "0%" for a habit with no
+  completed period yet, which every habit is for its first. Reads "—" now.
+- **The rail rule survived unchanged and got stronger.** *The rail never offers an action the
+  task list beside it already offers* — a habit generates no tasks at all now, so the `+1` is
+  the rule applied rather than an exception to it. It still gets no checkbox, and
+  `e2e/activity.spec.ts` asserts both halves.
+- **`unit` and `targetAmount` ship unread**, and are kept OUT of `habitInputSchema` so that
+  is structural rather than aspirational: `z.object()` strips them, so nothing can write a
+  value nothing reads. Without that, a T12c proposal setting `targetAmount: 20` would produce
+  a habit reading "1 of 1 done" after a single word.
+- **Ordering was the safety mechanism.** `reopenWouldDestroy` moved to `todos/service.ts` and
+  `dateRange` to `lib/date.ts` BEFORE anything was deleted, so `tsc` could prove the rest
+  unreferenced. Nothing was removed on judgement.
+- Retiring T7c **deleted no user data**: those repeating tasks still repeat: they just stop
+  rendering a streak.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

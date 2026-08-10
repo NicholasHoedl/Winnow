@@ -257,14 +257,19 @@ a classic, easy-to-introduce bug.
 > `transaction_recurrences` and `user_preferences`, and the planned `accounts` table
 > was never built.
 >
-> **Absent entirely.** Four modules shipped after this document was last revised and
+> **Absent entirely.** Five modules shipped after this document was last revised and
 > have no section here at all: **notes** (T7a, journal + free notes), **routines**
-> (T7b, `routines` + `routine_items`), **habits** (T7c — no tables of its own; it is
-> derived from the existing recurrence engine, see ADR-0009) and **review** (T7d —
-> also no tables; a pure projection of four other modules) and **companion** (T9a, the AI
-> proposal store — `ai_proposals`). There are 25 user-owned tables across 13 modules, at
-> 31 migrations (`0000`–`0030`). Do not infer from silence here that something does not
-> exist.
+> (T7b, `routines` + `routine_items`), **habits** (T12a, `habits` + `habit_entries` — a
+> quota and a log; see ADR-0014, which supersedes ADR-0009), **review** (T7d — no tables;
+> a pure projection of four other modules) and **companion** (T9a, the AI proposal store —
+> `ai_proposals`). There are 27 user-owned tables across 14 modules, at 33 migrations
+> (`0000`–`0032`). Do not infer from silence here that something does not exist.
+>
+> Habits are the one entry above whose description **reversed**. Between T7c and T12a the
+> module had no tables at all: every repeating task was implicitly a habit, and streaks were
+> recomputed from the recurrence engine on read. T12a retired that. A habit is now its own
+> primitive stating a RATE — "3 classes a week" — it generates no tasks and has no row in the
+> to-do list, and a repeating task is just a repeating task again.
 >
 > `user_preferences` has no section of its own: one row per user, holding the settings
 > the server must read — zone, week start, currency, time format, default task
