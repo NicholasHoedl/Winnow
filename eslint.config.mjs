@@ -17,6 +17,13 @@ const eslintConfig = defineConfig([
     // Turbopack chunks in there made `pnpm lint` permanently red on code nobody wrote.
     // vitest.config.ts already excludes the same directory, for the same reason.
     ".claude/**",
+    // Playwright's own output, for the same reason. The HTML reporter writes a bundled,
+    // minified copy of its trace viewer into `playwright-report/`, which lints as 184
+    // errors of `rules-of-hooks` and `no-this-alias` in code nobody here wrote — enough to
+    // bury the real ones. Both directories are gitignored, but ESLint's flat config does
+    // not read .gitignore, so it has to be said again here.
+    "playwright-report/**",
+    "test-results/**",
   ]),
 ]);
 

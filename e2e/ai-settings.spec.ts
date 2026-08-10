@@ -17,6 +17,19 @@ import { test, expect, type Page } from "./_test"
 const STUB_URL = "http://127.0.0.1:3100"
 const STUB_MODEL = "stub"
 const KEY = "sk-test-e2e-abcdefgh9z7q"
+const SECOND_KEY = "sk-test-e2e-zyxwvuts4321"
+
+/**
+ * The key form's submit button, which is NOT always called the same thing.
+ *
+ * It reads "Save key" on a fresh install and "Replace key" once a key is stored
+ * (`ai-section.tsx`). Matching the literal "Save key" made this file state-dependent, and
+ * that is what made it look flaky: on a machine with a real key stored, the locator could
+ * never match and the test burned its entire timeout waiting. It then passed on every run
+ * afterwards — because the `afterEach` below had removed the key in the meantime, so the
+ * state that caused the failure no longer existed to cause it again.
+ */
+const SAVE_KEY = /^(Save|Replace) key$/
 
 function section(page: Page) {
   return page
@@ -37,6 +50,10 @@ test.afterEach(async ({ page }) => {
   await ai.getByRole("button", { name: "Save AI settings" }).click()
   await expect(page.getByText("AI settings saved")).toBeVisible()
 
+  // This clears the key unconditionally, including one this file did not create — which is
+  // destructive against the shared dev database and used to be unrecoverable. It is safe
+  // now only because `ai.teardown.ts` backs the key up before the run and writes it back
+  // afterwards, at the database level. Do not remove that teardown.
   const remove = ai.getByRole("button", { name: "Remove key" })
   if (await remove.count()) {
     await remove.click()
@@ -49,7 +66,7 @@ test("a saved API key is never sent to the browser", async ({ page }) => {
   const ai = section(page)
 
   await ai.getByLabel("API key").fill(KEY)
-  await ai.getByRole("button", { name: "Save key" }).click()
+  await ai.getByRole("button", { name: SAVE_KEY }).click()
   await expect(page.getByText("API key saved")).toBeVisible()
 
   // The field is write-only: what was typed is gone, and the placeholder identifies the
@@ -72,6 +89,37 @@ test("a saved API key is never sent to the browser", async ({ page }) => {
   expect(html).toContain("9z7q")
 })
 
+test("a second key replaces the first, under a different button label", async ({
+  page,
+}) => {
+  await page.goto("/settings")
+  const ai = section(page)
+
+  await ai.getByLabel("API key").fill(KEY)
+  await ai.getByRole("button", { name: SAVE_KEY }).click()
+  await expect(page.getByText("API key saved")).toBeVisible()
+
+  // The button RENAMES itself once something is stored, and that is the whole point of
+  // this test. Matching the literal "Save key" is what made this file state-dependent: on
+  // a machine with a key already saved the locator could never match, the test burned its
+  // entire timeout, and the `afterEach` then deleted the key — so it passed ever after and
+  // the failure read as flakiness. Asserted explicitly here so the coverage does not depend
+  // on what happens to be in the database when the suite runs.
+  await expect(ai.getByRole("button", { name: "Replace key" })).toBeVisible()
+
+  await ai.getByLabel("API key").fill(SECOND_KEY)
+  await ai.getByRole("button", { name: SAVE_KEY }).click()
+  await expect(page.getByText("API key saved")).toBeVisible()
+
+  // The hint follows the NEW key, so the replacement landed rather than being ignored.
+  await expect(ai.getByLabel("API key")).toHaveAttribute(
+    "placeholder",
+    /Saved · ••••4321/,
+  )
+  const html = await page.content()
+  expect(html).not.toContain(SECOND_KEY)
+})
+
 test("settings survive a reload, and the key survives a settings change", async ({
   page,
 }) => {
@@ -79,7 +127,7 @@ test("settings survive a reload, and the key survives a settings change", async 
   const ai = section(page)
 
   await ai.getByLabel("API key").fill(KEY)
-  await ai.getByRole("button", { name: "Save key" }).click()
+  await ai.getByRole("button", { name: SAVE_KEY }).click()
   await expect(page.getByText("API key saved")).toBeVisible()
 
   // Changing the model must not clear the key. The two are separate forms and separate
