@@ -202,8 +202,30 @@ export function EventDialog({
     if (openKey !== null) setScope(isRecurring ? "this" : "all")
   }
 
+  // Reset the form to match what the dialog is showing — but ONLY when what it shows
+  // actually changes.
+  //
+  // The guard is load-bearing. `calendars` and `defaultDate` arrive from a server
+  // component, so `revalidatePath("/calendar")` after a save hands this a NEW array
+  // identity holding identical contents. Without the guard the effect re-ran on that alone
+  // and, on the create path, called `reset(emptyValues(...))` against a dialog the user had
+  // already reopened and typed into — silently wiping it. Found as an e2e flake:
+  // `calendar-week` filled the form and clicked Add, and the click produced ZERO network
+  // requests, because the revalidated tree landed between the last field and the button.
+  //
+  // Keyed on the occurrence and the scope, because switching "This event" / "All events"
+  // must re-fill the fields. Not on either array prop: their identity says nothing about
+  // what belongs in the form.
+  const resetKeyRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!open) return
+    if (!open) {
+      resetKeyRef.current = null
+      return
+    }
+    const resetKey = `${openKey}:${scope}`
+    if (resetKeyRef.current === resetKey) return
+    resetKeyRef.current = resetKey
+
     if (!occurrence) {
       reset(emptyValues(defaultDate, calendars[0]?.id ?? ""))
       return
@@ -258,7 +280,16 @@ export function EventDialog({
       recurrenceMonthlyMode: s.recurrenceMonthlyMode,
       recurrenceEndDate: s.recurrenceEndDate ?? "",
     })
-  }, [open, occurrence, scope, defaultDate, timeZone, calendars, reset])
+  }, [
+    open,
+    openKey,
+    occurrence,
+    scope,
+    defaultDate,
+    timeZone,
+    calendars,
+    reset,
+  ])
 
   const onSubmit = handleSubmit(async (data) => {
     let result: ActionResult
