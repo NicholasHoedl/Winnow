@@ -105,14 +105,15 @@ test("a file it can't read changes nothing", async ({ page }) => {
       payload: { ...before, version: 999 },
       expect: /version 999/i,
     },
+    // "a missing table" used to be a case here. T12a made an absent key mean EMPTY rather
+    // than an error, so a backup taken before a table existed still restores — otherwise
+    // every tranche that adds a table invalidates every earlier backup. `import.test.ts`
+    // asserts that acceptance for every key. A table that IS present and malformed is still
+    // rejected, which is what this case now covers instead.
     {
-      name: "a missing table",
-      payload: (() => {
-        const copy = { ...before }
-        delete copy.tasks
-        return copy
-      })(),
-      expect: /missing "tasks"/i,
+      name: "a table that is the wrong kind of value",
+      payload: { ...before, tasks: {} },
+      expect: /should be a list/i,
     },
     {
       name: "a link to a row that isn't in the file",

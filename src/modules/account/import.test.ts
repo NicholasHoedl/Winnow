@@ -68,15 +68,28 @@ describe("parseImport — shape", () => {
     expect(parseImport({ ...emptyBackup(), version: "1" }).ok).toBe(false)
   })
 
-  it("REJECTS a backup missing any single table", () => {
-    // Every one, not a sample: a table dropped from the file is a table silently emptied
-    // by the import, which is the failure the whole coverage guard exists to prevent.
+  /**
+   * This assertion was inverted in T12a, deliberately, and the reasoning belongs with it.
+   *
+   * It used to REJECT a backup missing any table, on the grounds that a dropped table is a
+   * table the import silently empties. The cost turned out to be worse than the risk: every
+   * tranche that adds a table invalidates every backup taken before it. T9a did it with
+   * `ai_proposals` and T12a would have done it again with `habits`/`habit_entries` — and on
+   * a self-hosted app whose whole recovery story is one JSON file, "your backup from
+   * yesterday no longer opens" beats anything this was catching.
+   *
+   * The guards that actually identify a Winnow backup are unchanged and still tested above
+   * and below: an exact `version`, the right shape for a key that IS present, and ids on
+   * every row. What is accepted now is only "this file predates a table", which restores
+   * correctly because an absent table simply has nothing to insert.
+   */
+  it("accepts a backup that predates a table, treating it as empty", () => {
     for (const key of EXPORT_KEYS) {
       const payload = emptyBackup()
       delete payload[key]
       const result = parseImport(payload)
-      expect(result.ok, `a backup with no "${key}" was accepted`).toBe(false)
-      if (!result.ok) expect(result.error).toContain(key)
+      expect(result.ok, `a backup with no "${key}" was rejected`).toBe(true)
+      if (result.ok) expect(result.data.tables[key]).toEqual([])
     }
   })
 

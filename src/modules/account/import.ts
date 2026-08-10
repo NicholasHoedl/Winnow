@@ -60,8 +60,21 @@ export function parseImport(input: unknown): ParseResult {
 
   for (const { key } of USER_TABLES) {
     const value = input[key]
+    // An ABSENT key is treated as empty rather than rejected, and that is a deliberate
+    // loosening. Every tranche that adds a table would otherwise invalidate every backup
+    // file taken before it: T9a did exactly that with `ai_proposals`, and T12a would have
+    // done it again with `habits` and `habit_entries`. On a self-hosted app whose entire
+    // recovery story is one JSON file, silently breaking yesterday's backup is a worse
+    // failure than the malformed-file case this branch was catching.
+    //
+    // What identifies a Winnow backup is unchanged: `version` must match exactly, and a key
+    // that IS present must still hold the right shape and rows with ids. The only thing no
+    // longer rejected is "this file predates a table", which is a normal thing for a backup
+    // to be — and which restores correctly, because a table absent from the file simply has
+    // nothing to insert.
     if (value === undefined) {
-      return { ok: false, error: `The backup is missing "${key}".` }
+      tables[key] = []
+      continue
     }
 
     // The singleton is stored as an object-or-null; everything else as an array.
