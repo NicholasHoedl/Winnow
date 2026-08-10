@@ -1,13 +1,20 @@
 import "server-only"
 import { z } from "zod"
 
-import { AI_API_KEY, AI_BASE_URL, AI_MODEL, AI_READY } from "@/lib/config"
+import {
+  AI_API_KEY,
+  AI_BASE_URL,
+  AI_MODEL,
+  AI_PROVIDER,
+  AI_READY,
+} from "@/lib/config"
 
 import {
-  buildChatBody,
-  buildChatUrl,
+  buildRequestBody,
+  buildRequestHeaders,
+  buildRequestUrl,
   classifyFetchError,
-  extractContent,
+  extractPayload,
   GENERATE_TIMEOUT_MS,
   type AiResult,
 } from "./ai-request"
@@ -41,16 +48,18 @@ export async function generatePayload<T>(
 
   let response: Response
   try {
-    response = await fetch(buildChatUrl(AI_BASE_URL), {
+    response = await fetch(buildRequestUrl(AI_PROVIDER, AI_BASE_URL), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Sent only when set: a local endpoint typically wants no auth header at all,
-        // and some reject an empty bearer token outright.
-        ...(AI_API_KEY ? { Authorization: `Bearer ${AI_API_KEY}` } : {}),
-      },
+      // URL, headers and body all vary by provider — see `AiProvider` in ai-request.ts for
+      // why Anthropic is a second protocol rather than a base-URL swap.
+      headers: buildRequestHeaders(AI_PROVIDER, AI_API_KEY),
       body: JSON.stringify(
-        buildChatBody(AI_MODEL, messages, z.toJSONSchema(schema)),
+        buildRequestBody(
+          AI_PROVIDER,
+          AI_MODEL,
+          messages,
+          z.toJSONSchema(schema),
+        ),
       ),
       cache: "no-store",
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
@@ -70,17 +79,10 @@ export async function generatePayload<T>(
     return { ok: false, failure: { kind: "malformed" } }
   }
 
-  const content = extractContent(body)
-  if (content === null) return { ok: false, failure: { kind: "malformed" } }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(content)
-  } catch {
-    // A provider without structured-output support answers with prose around the JSON,
-    // or with an apology. Both land here, and both are the same thing to the user.
-    return { ok: false, failure: { kind: "malformed" } }
-  }
+  // Already a value, not text: the OpenAI path parses the JSON string inside
+  // `extractPayload`, the Anthropic path reads the forced tool call's input directly.
+  const parsed = extractPayload(AI_PROVIDER, body)
+  if (parsed === null) return { ok: false, failure: { kind: "malformed" } }
 
   const result = schema.safeParse(parsed)
   if (!result.success) return { ok: false, failure: { kind: "malformed" } }

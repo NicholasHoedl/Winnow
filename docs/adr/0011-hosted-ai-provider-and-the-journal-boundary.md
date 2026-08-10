@@ -39,11 +39,25 @@ cannot supply.
 ## Decision
 
 **1. The companion calls a hosted API**, behind the OpenAI-compatible seam already planned
-(`AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` in `src/lib/config.ts`, shaped
-exactly like the `OFF_*` keys).
+(originally `AI_ENABLED` / `AI_BASE_URL` / `AI_MODEL` / `AI_API_KEY` in `src/lib/config.ts`,
+shaped exactly like the `OFF_*` keys — **moved into the Settings page in T11**, see the
+final amendment).
 
 The seam is kept precisely *because* the provider is now remote: it leaves a local endpoint
 one env var away, which is what the next decision depends on.
+
+> **Amended 2026-08-06.** The seam now carries **two** protocols — `openai` by default, or
+> `anthropic` — selected by `AI_PROVIDER`. The user's key is Anthropic's, and that API is
+> not an OpenAI dialect: different path, `x-api-key` instead of a bearer token, a
+> required version header, `system` hoisted out of the message list, a required
+> `max_tokens`, and structured output via forced tool-use rather than `response_format`.
+>
+> The Anthropic path is the **stronger** of the two on the one thing this feature depends
+> on. `response_format` is a request a provider may ignore — which is why the OpenAI path
+> is documented as degrading to `malformed` — whereas `tool_choice` naming a tool forces
+> the call, and the payload arrives already parsed rather than as text that might have
+> prose around it. Both still pass through the same Zod parse, so the schema is enforced on
+> our side either way.
 
 **2. Journal and note content never leaves the machine.** Not "avoid where practical" — it
 is never included in any payload sent to a hosted provider, by any feature, ever.
@@ -95,3 +109,41 @@ the feature. Occasional planning plus a weekly review is a rounding error.
 
 **Reversible.** Everything above is a config change plus a local endpoint. That is the
 whole point of keeping the seam.
+
+
+---
+
+## Amended 2026-08-07 (T11): configured in the app, not the environment
+
+The five `AI_*` env vars are **gone**. Provider, base URL, model and API key live in
+`user_preferences` and are edited on the Settings page; `src/lib/config.ts` holds nothing
+about AI. `getAiSettings` / `getAiConfig` read them per request and `aiReady` decides
+whether the feature is usable.
+
+Removed rather than kept as a fallback: two sources for one setting needs a precedence rule,
+and a precedence rule produces a settings page that sometimes silently does nothing.
+
+**The opt-in property is unchanged.** The columns default to off with empty strings, so a
+fresh install and a restored backup both have no companion until someone fills the form in —
+the same guarantee `AI_ENABLED=false` used to give.
+
+Three consequences, each a place this could go wrong later:
+
+1. **The key must never reach the browser.** `preferencesFor` lists its fields by name and
+   must never spread the row — that list is the only thing between a new column and the
+   client-side `PreferencesProvider`. The key is fetched by a separate `getAiConfig`, whose
+   only caller should stay `ai-client.ts`, and the settings page gets a masked hint
+   (`••••4f2a`) rather than the value. `e2e/ai-settings.spec.ts` asserts the key is absent
+   from the whole rendered document, RSC payload included.
+2. **The key is excluded from the account export in BOTH directions.** The exporter blanks
+   it, so a backup file cannot spend money; and `importUserData` carries the existing key
+   across the wipe, because a backup that cannot contain your key must not be able to delete
+   it either.
+3. **The e2e suite no longer takes its provider from `.env`.** `e2e/ai.setup.ts` writes the
+   stub's details through the real settings form before any spec runs, which has the side
+   benefit of exercising that path on every run.
+
+Deliberately **not** encrypted at rest. On a single-user self-hosted box, whoever can read
+this row can generally read the machine, and encrypting with `AUTH_SECRET` would add a
+rotation failure mode surfacing as a puzzling 401 from the provider. The calendar feed token
+sets the same precedent.
