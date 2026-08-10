@@ -20,12 +20,17 @@ import { type Locator, type Page } from "@playwright/test"
  * the row genuinely renders twice.
  */
 export function visibleCard(page: Page, text: string | RegExp): Locator {
-  // Goal rail cards are excluded, and that exclusion is load-bearing. They carry `bg-card`
-  // like every other card, so a locator built from a shared prefix — a spec cleaning up
-  // "E2E link " tasks while an "E2E link goal …" sits in the rail — matched the goal too,
-  // then hung waiting for a "Task actions" button a goal card does not have.
+  // Rail entries are excluded, and that exclusion is load-bearing since T10. Every card in
+  // the rail carries `bg-card` like every other card, so a locator built from a shared title
+  // — a spec cleaning up "E2E link " tasks while an "E2E link goal …" sits in the rail, or a
+  // habit whose rule and whose task row have the same name — matched the rail entry too, and
+  // then hung waiting for a "Task actions" button it does not have. Both of those actually
+  // happened, in T10a and T10b.
+  //
+  // `[data-rail]` rather than a list of testids: a block added to the rail later is excluded
+  // by construction instead of by remembering to come back here.
   return page
-    .locator('div.bg-card:not([data-testid="goal-card"])')
+    .locator("div.bg-card:not([data-rail])")
     .filter({ hasText: text })
     .filter({ visible: true })
 }
@@ -41,6 +46,20 @@ export function visibleCard(page: Page, text: string | RegExp): Locator {
 export function goalCard(page: Page, text: string | RegExp): Locator {
   return page
     .getByTestId("goal-card")
+    .filter({ hasText: text })
+    .filter({ visible: true })
+}
+
+/**
+ * A goal in EITHER presentation — the desktop rail card or the mobile chip.
+ *
+ * For helpers that run at whatever viewport the test happens to be using. Asserting
+ * `goalCard` after creating a goal at 375px finds nothing, because the rail is not rendered
+ * there at all: two components, one goal.
+ */
+export function goalEntry(page: Page, text: string | RegExp): Locator {
+  return page
+    .getByTestId(/^goal-(card|chip)$/)
     .filter({ hasText: text })
     .filter({ visible: true })
 }

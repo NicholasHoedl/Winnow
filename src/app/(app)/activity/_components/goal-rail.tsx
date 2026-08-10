@@ -29,7 +29,7 @@ import { Progress } from "@/components/ui/progress"
  * ragged left edges 28px apart, which is exactly the kind of thing that looks like a bug
  * and gets reported as one.
  */
-const HANDLE_GUTTER = "pl-7"
+export const HANDLE_GUTTER = "pl-7"
 
 type RailProps = {
   goals: GoalWithProgress[]
@@ -108,6 +108,7 @@ function GoalRailCard({
       // `div.bg-card`, and `cn` drops `bg-card` the moment the selected variant sets a
       // different background — so a selected goal would silently stop matching.
       data-testid="goal-card"
+      data-rail=""
       className={cn(
         "bg-card flex items-start gap-1 rounded-lg border p-2.5 transition-colors",
         selected && "border-primary bg-primary/[0.04]",
@@ -151,8 +152,14 @@ function GoalRailCard({
   )
 }
 
-/** Desktop: a sticky column beside the task list. */
-export function GoalRail({
+/**
+ * Desktop: the goals block of the rail.
+ *
+ * Not the whole rail — `ActivityRail` owns the `<aside>` and puts routines and habits under
+ * this (T10b). Kept as a block rather than a self-contained sidebar so the three can share
+ * one sticky column and one scroll.
+ */
+export function GoalsBlock({
   goals,
   selectedGoalId,
   onSelect,
@@ -161,10 +168,7 @@ export function GoalRail({
   onReorder,
 }: RailProps) {
   return (
-    <aside
-      aria-label="Goals"
-      className="hidden lg:sticky lg:top-4 lg:flex lg:h-fit lg:flex-col lg:gap-2"
-    >
+    <section aria-label="Goals" className="flex flex-col gap-2">
       <div
         className={cn("flex items-center justify-between gap-2", HANDLE_GUTTER)}
       >
@@ -222,7 +226,7 @@ export function GoalRail({
           )}
         />
       )}
-    </aside>
+    </section>
   )
 }
 
@@ -279,6 +283,7 @@ export function GoalChips({
             <div
               key={goal.id}
               data-testid="goal-chip"
+              data-rail=""
               className={cn(
                 "flex w-40 shrink-0 snap-start items-start gap-1 rounded-lg border p-2.5",
                 selected && "border-primary bg-primary/[0.04]",

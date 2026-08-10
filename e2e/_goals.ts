@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test"
 
-import { goalCard } from "./_card"
+import { goalCard, goalEntry } from "./_card"
 
 /**
  * Creating, opening and deleting a goal on `/activity`.
@@ -36,7 +36,8 @@ export async function addGoal(
     await dialog.getByLabel("Target date (optional)").fill(fields.targetDate)
   }
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(goalCard(page, fields.title)).toHaveCount(1)
+  // `goalEntry`, not `goalCard`: this helper is called at phone widths too.
+  await expect(goalEntry(page, fields.title)).toHaveCount(1)
 }
 
 /** Open one goal's detail dialog — milestones, progress wording, edit and delete. */

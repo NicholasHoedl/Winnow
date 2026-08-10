@@ -1,12 +1,12 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { Flame, ListChecks, Plus, Repeat, Settings2, X } from "lucide-react"
+import { Plus, Repeat, Settings2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
+import type { RoutineWithItems } from "@/modules/routines/queries"
 import { reorderGoals } from "@/modules/goals/actions"
 import {
   clearTaskRecurrenceException,
@@ -17,14 +17,20 @@ import {
   skipTaskOccurrence,
   toggleTaskStatus,
 } from "@/modules/todos/actions"
-import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
+import type {
+  Habit,
+  List,
+  TaskSeries,
+  TaskWithSeries,
+} from "@/modules/todos/queries"
 import { bucketTasks } from "@/modules/todos/service"
 
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 
-import { GoalChips, GoalRail } from "./goal-rail"
+import { ActivityRail, RailShortcuts } from "./activity-rail"
+import { GoalChips } from "./goal-rail"
 import { GoalDetailDialog } from "./goal-detail-dialog"
 import { GoalDialog } from "./goal-dialog"
 import { ListManager } from "./list-manager"
@@ -32,6 +38,7 @@ import { QuickAdd } from "./quick-add"
 import { RecurrenceManager } from "./recurrence-manager"
 import { TaskDialog } from "./task-dialog"
 import { TaskItem } from "./task-item"
+import { RunRoutineDialog } from "../routines/_components/run-routine-dialog"
 
 // Just a STATUS filter. "Due today" and "Overdue" were chips until T5a; the sections below
 // say the same thing without hiding everything else to do it.
@@ -57,6 +64,9 @@ export function ActivityView({
   goals,
   events,
   rules,
+  routines,
+  habits,
+  today,
   selectedGoalId: initialGoalId,
   timeZone,
 }: {
@@ -69,6 +79,11 @@ export function ActivityView({
   /** The full goals, with progress and momentum, for the rail. */
   goals: GoalWithProgress[]
   events: EventOption[]
+  routines: RoutineWithItems[]
+  /** Every repeating task with its completion history — the rail's streaks. */
+  habits: Habit[]
+  /** The user's own today, for the run dialog's default anchor. */
+  today: string
   selectedGoalId: string | null
   timeZone: string
 }) {
@@ -99,6 +114,9 @@ export function ActivityView({
     null,
   )
   const [goalOrder, setGoalOrder] = React.useState<string[] | null>(null)
+  // Which routine the run dialog is for. The id, for the same reason `detailGoalId` is an
+  // id: a captured routine would not see its items change underneath it.
+  const [runRoutineId, setRunRoutineId] = React.useState<string | null>(null)
 
   /**
    * Select a goal, and put it in the URL — without a refetch.
@@ -299,6 +317,10 @@ export function ActivityView({
 
   // Same resolve-don't-capture rule as `activeGoal`: derived every render, so the dialog
   // shows the goal as it is now rather than as it was when it was opened.
+  const runRoutine = runRoutineId
+    ? (routines.find((routine) => routine.id === runRoutineId) ?? null)
+    : null
+
   const detailGoal = detailGoalId
     ? (goals.find((goal) => goal.id === detailGoalId) ?? null)
     : null
@@ -349,22 +371,6 @@ export function ActivityView({
           >
             <Repeat className="size-4" />
           </Button>
-          {/* Sub-routes rather than nav entries. T10b folds their summaries into the rail;
-              until then these are the way in. */}
-          <Link
-            href="/activity/routines"
-            aria-label="Routines"
-            className={buttonVariants({ variant: "outline", size: "icon" })}
-          >
-            <ListChecks className="size-4" />
-          </Link>
-          <Link
-            href="/activity/habits"
-            aria-label="Habits"
-            className={buttonVariants({ variant: "outline", size: "icon" })}
-          >
-            <Flame className="size-4" />
-          </Link>
           <Button
             variant="outline"
             size="icon"
@@ -382,7 +388,7 @@ export function ActivityView({
 
       {/* The rail is a sibling of the list, not a wrapper: on mobile the chips render in
           the flow above the quick-add, and on desktop the grid puts them side by side. */}
-      <div className="mb-4 lg:hidden">
+      <div className="mb-4 flex flex-col gap-3 lg:hidden">
         <GoalChips
           goals={orderedGoals}
           selectedGoalId={activeGoal?.id ?? null}
@@ -390,16 +396,23 @@ export function ActivityView({
           onOpenDetail={(goal) => setDetailGoalId(goal.id)}
           onCreate={openCreateGoal}
         />
+        <RailShortcuts
+          routineCount={routines.length}
+          habitCount={habits.length}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[17.5rem_minmax(0,1fr)]">
-        <GoalRail
+        <ActivityRail
           goals={orderedGoals}
           selectedGoalId={activeGoal?.id ?? null}
           onSelect={selectGoal}
           onOpenDetail={(goal) => setDetailGoalId(goal.id)}
           onCreate={openCreateGoal}
           onReorder={handleGoalReorder}
+          routines={routines}
+          habits={habits}
+          onRunRoutine={(routine) => setRunRoutineId(routine.id)}
         />
 
         <div className="min-w-0">
@@ -536,6 +549,14 @@ export function ActivityView({
         open={goalDialogOpen}
         onOpenChange={setGoalDialogOpen}
       />
+      {runRoutine && (
+        <RunRoutineDialog
+          routine={runRoutine}
+          today={today}
+          open
+          onOpenChange={(open) => !open && setRunRoutineId(null)}
+        />
+      )}
       <GoalDetailDialog
         goal={detailGoal}
         open={detailGoal !== null}
