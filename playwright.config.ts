@@ -91,7 +91,13 @@ export default defineConfig({
       // 404 to everything except /chat/completions. Waiting for the socket is the honest
       // readiness signal here.
       port: 3100,
-      reuseExistingServer: !process.env.CI,
+      // NEVER reused, unlike the dev server below. The stub is a source file pretending to
+      // be a provider, and a long-lived process goes stale the moment that file is edited —
+      // so the suite silently keeps asserting against the OLD canned payload while the new
+      // one sits unread on disk. That cost a debugging round in T12c: three specs failed
+      // against a stub still emitting the pre-T12c shape. It starts in milliseconds, so
+      // reuse buys nothing and costs correctness.
+      reuseExistingServer: false,
       timeout: 20_000,
     },
     {
