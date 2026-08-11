@@ -11,6 +11,7 @@ import {
   invalid,
 } from "@/lib/action-result"
 import { dayDiff, todayInZone } from "@/lib/date"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { goals } from "@/modules/goals/schema"
 import { getUserPreferences } from "@/modules/preferences/queries"
@@ -22,15 +23,22 @@ import { habitInputSchema, logEntrySchema } from "./validation"
 const idSchema = z.string().uuid()
 
 /**
- * Habits render on their own page and in the /activity rail.
+ * Habits render on their own page, in the /activity strip, and on both hubs.
  *
- * Deliberately NOT `revalidateHubs()`: no hub shows a habit in T12a, and revalidating a
- * page that cannot have changed is a claim about coupling that is not true yet. T12b adds
- * it, when goal momentum starts reading them.
+ * T12a said "deliberately NOT `revalidateHubs()`: no hub shows a habit", and promised to
+ * add it in T12b. T12b shipped without it and the comment quietly became false —
+ * `goals/queries.ts` reads `habit_entries`, so a logged session already moved the stalled
+ * marker on `/` and `/review`. T12d makes it doubly true: `/` now draws the habits card
+ * directly.
+ *
+ * Per `lib/revalidate.ts`'s own honesty this buys nothing observable today — every route
+ * is dynamic and the client router cache uses staleTime 0. It is here because the coupling
+ * is real, which is what this call is a statement about.
  */
 function revalidateHabitViews() {
   revalidatePath("/activity/habits")
   revalidatePath("/activity")
+  revalidateHubs()
 }
 
 /**

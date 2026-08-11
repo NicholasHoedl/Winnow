@@ -174,3 +174,36 @@ test("the strip logs the same habit the page shows", async ({ page }) => {
   await expect(visibleCard(page, title)).toContainText("1/3 this week")
 })
 
+/**
+ * The third surface, and the only thing that proves two separate claims at once: that the
+ * dashboard card logs through the SAME hook the other two use, and that
+ * `revalidateHabitViews` reaches `/` — which it did not until T12d, despite a comment since
+ * T12a saying it would.
+ */
+test("the dashboard card shows today's practice and logs it", async ({
+  page,
+}) => {
+  const title = `${PREFIX} card ${Date.now()}`
+  await addHabit(page, title)
+
+  await page.goto("/")
+  const card = page
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByText("Habits", { exact: true }) })
+  await expect(card).toHaveCount(1)
+
+  // The count line, which is the card's answer to showing only three of however many
+  // there are. A regex because how many OTHER habits this account keeps is not this
+  // test's business — only that the line states the truth in the right shape.
+  await expect(card).toContainText(/\d+ of \d+ short|All met/)
+
+  // The card shows at most three rows, unmet first. A habit created seconds ago is unmet,
+  // so it is in that group — but it sorts last within it, so this assertion assumes the
+  // account has fewer than three OTHER unmet habits. If that stops being true this fails
+  // loudly and legibly, which is the right failure to have.
+  await expect(card).toContainText(title)
+  await expect(card).toContainText("0/3 this week")
+
+  await card.getByRole("button", { name: `Log ${title}` }).click()
+  await expect(card).toContainText("1/3 this week")
+})

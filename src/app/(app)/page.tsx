@@ -10,6 +10,7 @@ import {
   getMonthEvents,
 } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
+import { getHabitStrip } from "@/modules/habits/queries"
 import { getJournalEntry } from "@/modules/notes/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import {
@@ -29,6 +30,7 @@ import {
 } from "./_components/dashboard-calendar"
 import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
+import { HabitsCard } from "./_components/habits-card"
 import { JournalCard } from "./_components/journal-card"
 import { StatCards } from "./_components/stat-cards"
 import { TodayAgenda } from "./_components/today-agenda"
@@ -65,6 +67,7 @@ export default async function DashboardPage({
     calendars,
     journalEntry,
     aiSettings,
+    habits,
   ] = await Promise.all([
     auth(),
     getTasks(),
@@ -78,6 +81,9 @@ export default async function DashboardPage({
     getCalendars(),
     getJournalEntry(today),
     getAiSettings(),
+    // The cheap read, same as /activity — two bounded queries for a card that shows
+    // done/target and nothing else.
+    getHabitStrip(),
   ])
 
   const name = session?.user?.name ?? "there"
@@ -193,11 +199,19 @@ export default async function DashboardPage({
           <Reveal delay={0.08}>
             <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
           </Reveal>
+          {/* Directly under the tasks, so *what I have to do* and *what I have to keep
+              doing* read as one pair — the same pairing /activity now makes with the strip
+              above its list. Not in the right column: that one already runs five cards
+              deep, where a sixth pushed past the fold. Renders nothing at all when there
+              are no habits. */}
+          <Reveal delay={0.11}>
+            <HabitsCard habits={habits} />
+          </Reveal>
           {/* In this column rather than the right one for two reasons: the journal is a
               today thing, like everything else here — and the right rail already runs
               five cards deep, where a sixth pushed past the fold and undid the "each
               column caps itself, the page doesn't scroll" property below. */}
-          <Reveal delay={0.11}>
+          <Reveal delay={0.14}>
             <JournalCard entry={journalEntry} />
           </Reveal>
         </div>
