@@ -55,6 +55,32 @@ if it can be trusted at a glance. This is the one schema change (migration `0026
 knowingly against the "no schema change" constraint the design started with: 14 days was a
 guess about one person's habits, in that person's own app.
 
+## Amendment: habit sessions are movement (T12b, 2026-08-10)
+
+`goalMomentum` counts a third source alongside completed tasks and ticked milestones: an
+entry logged against a habit attached to the goal (`habits.goal_id`, ADR-0014).
+
+This closes a hole the original decision could not see, because the primitive did not exist.
+A goal whose work is "attend 3 classes a week" completes no tasks and ticks no milestones, so
+it reported **stalled** indefinitely while being worked hard — the badge crying wolf on
+exactly the goals it was built to stay quiet about. That is the same failure "Both tasks and
+milestones count as movement" was already guarding against, one source further on.
+
+Three things follow:
+
+- **A goal whose only trackable work is a habit now gets a reading**, where it previously
+  returned null. One attached habit makes the goal measurable; logging nothing against it is
+  a genuine stall and now says so.
+- **Adherence is deliberately NOT surfaced here.** "2 of 3 this week" is a better sentence
+  than "6 finished in the last 14 days" — and it belongs to the habit, which already shows it
+  in the rail beside this. Momentum answers *is this alive*; how well a rate is being kept is
+  a different question, and putting it on the goal card too would be the same number in two
+  places, which is the duplication the rail's own rule exists to prevent.
+- **An archived habit stops counting**, matching `getHabitsView`. Retiring a practice lets its
+  goal go quiet rather than keeping it alive on something you no longer do.
+
+The window, the null-when-untrackable rule and the untouched `goalProgress` are all unchanged.
+
 ## Consequences
 
 **A purely numeric goal gets no momentum reading, permanently** — not until there is a

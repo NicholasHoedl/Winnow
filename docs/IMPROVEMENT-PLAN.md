@@ -33,7 +33,7 @@ picked up — it is **not** code-level detail yet.
 | T10b — Activity: routines and habits in rail  | ✅ shipped    |
 | T11 — AI configured from Settings, not env    | ✅ shipped    |
 | T12a — Habits: a quota and a log              | ✅ shipped    |
-| T12b — Goal momentum reads adherence          | next          |
+| T12b — Goal momentum counts habit sessions    | ✅ shipped    |
 | T12c — Companion proposes habits, not dates   | after T12b    |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
@@ -715,6 +715,27 @@ ADR-0014 and the T12a notes below.
   unreferenced. Nothing was removed on judgement.
 - Retiring T7c **deleted no user data**: those repeating tasks still repeat: they just stop
   rendering a streak.
+
+**T12b — shipped**, no migration:
+
+- **A logged habit session is movement**, alongside a completed task and a ticked milestone.
+  One new input on `goalMomentum`, one extra query in `getGoals`, and every surface that
+  already read `goal.momentum` — the rail marker, the mobile chip, the detail sentence, the
+  dashboard card — corrected itself with no UI change at all.
+- **The scoped plan was wrong and was dropped.** T12a's plan said goals with habits should
+  read "2 of 3 this week". They should not: the rail's HABITS block shows that exact number
+  a few pixels away, and putting it on the goal card too is the duplication the rail's own
+  rule exists to prevent. ADR-0010's split — progress is *how far*, momentum is *is this
+  alive* — has no room for a third question, and adherence is one.
+- **`loggedOn` is a separate input from `completedAt`, and has to be.** An entry's `on_date`
+  is ALREADY a local wall date; pushing it through `todayInZone` as if it were an instant
+  reads it as UTC midnight and lands it a day earlier in every negative-offset zone. There is
+  a unit test that fails if the two are ever merged.
+- **The join is LEFT, deliberately.** A habit with nothing logged still has to arrive, because
+  that is what makes its goal read *stalled* rather than unmeasurable — an inner join would
+  silently drop exactly the goals the badge exists to flag.
+- Archived habits stop counting, matching `getHabitsView`: retiring a practice lets its goal
+  go quiet rather than keeping it alive on something you no longer do.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 
