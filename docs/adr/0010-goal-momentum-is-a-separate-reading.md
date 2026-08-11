@@ -6,7 +6,7 @@
 ## Context
 
 `tasks.goalId` has existed since T2 — nullable, `ON DELETE SET NULL`, with a picker in the
-task dialog and a linked-task list on the goal card. What it never did was *measure*
+task dialog and a linked-task list on the goal card. What it never did was _measure_
 anything. `goalProgress()` (`goals/service.ts`) has a strict precedence — milestones, then
 the numeric `targetValue`/`currentValue` pair, then `kind: "none"` — and tasks appear in
 none of the three. The query comment said so outright: "Projected — the card only displays
@@ -30,7 +30,7 @@ Four options were considered for how linked tasks should relate to the existing 
 **Option 3. `goalProgress()` is untouched; momentum is a second, independent measure.**
 
 `goalMomentum()` returns `{ moved, stalled, windowDays }`, or **null** when the goal has
-nothing to track. Progress answers *how far*; momentum answers *is this alive*. They are
+nothing to track. Progress answers _how far_; momentum answers _is this alive_. They are
 different questions and a single number cannot carry both.
 
 Three decisions fall out of it:
@@ -73,7 +73,8 @@ Three things follow:
   a genuine stall and now says so.
 - **Adherence is deliberately NOT surfaced here.** "2 of 3 this week" is a better sentence
   than "6 finished in the last 14 days" — and it belongs to the habit, which already shows it
-  in the rail beside this. Momentum answers *is this alive*; how well a rate is being kept is
+  a few pixels away (in the rail until T12d, in the strip above the task list since).
+  Momentum answers _is this alive_; how well a rate is being kept is
   a different question, and putting it on the goal card too would be the same number in two
   places, which is the duplication the rail's own rule exists to prevent.
 - **An archived habit stops counting**, matching `getHabitsView`. Retiring a practice lets its

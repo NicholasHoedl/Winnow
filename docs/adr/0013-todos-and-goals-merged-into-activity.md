@@ -42,7 +42,7 @@ chip scroller on a phone. 375px cannot spare a sidebar, and stacking the full ra
 list would push the tasks off the fold — which is the one thing the page exists to show.
 
 **A goal's detail — milestones, edit, delete — moved into a dialog**, because a 280px rail
-has no room for an add-a-milestone form. There is no goal *page* anymore.
+has no room for an add-a-milestone form. There is no goal _page_ anymore.
 
 **The linked-task list is gone**, and with it the single-actionable-row compromise. The
 tasks are right there, all of them checkable, sortable and editable. A read-only copy inside
@@ -53,7 +53,7 @@ an invitation.
 
 > **Reversed 2026-08-06, by the user, immediately after T10b.** The Companion took the slot:
 > `/companion` is now the second nav entry, directly after Activity. The reasoning above was
-> about not spending the slot *by default* — not about refusing to spend it on something
+> about not spending the slot _by default_ — not about refusing to spend it on something
 > asked for. The bar is back at seven, which is the measured ceiling, so the next addition
 > faces the original problem again: a More sheet or a scroller first.
 >
@@ -93,12 +93,12 @@ want the same gesture and the scroll is the one needed every time.
 
 ## T10b: the rest of the rail, and the rule that governs it
 
-Routines and habits joined the rail as two more blocks. Deciding what each block may *do*
+Routines and habits joined the rail as two more blocks. Deciding what each block may _do_
 needed a rule, and it is the same one that removed the goal card's linked-task list above:
 
 > **The rail never offers an action the task list beside it already offers.**
 
-So a routine gets a **Run** button — running a routine *creates* tasks, which the list
+So a routine gets a **Run** button — running a routine _creates_ tasks, which the list
 cannot do for you — and a habit gets **no tick at all**, because today's habit instance is
 already a checkable row in that list. Adding a checkbox to the rail's habit row would
 recreate, in the same tranche, exactly the two-places-to-keep-in-step problem T10a spent its
@@ -114,6 +114,52 @@ to the same place is two too many. And `/activity` now calls `getHabits()` on ev
 with the **same 90-day window** the habits page uses — a shorter window would be cheaper and
 would make the rail's streak number disagree with the page it links to, which is a worse bug
 than a slower query on a single-user app.
+
+## Amendment: habits leave the rail (T12d, 2026-08-11)
+
+**The rule above is unchanged. Its habit example was wrong, and had been since T12a.**
+
+Read the T10b section again with today's primitives and two of its sentences are false.
+"A habit gets no tick at all, because today's habit instance is already a checkable row in
+that list" described a habit that _was_ a repeating task; T12a made a habit a quota and a log
+(ADR-0014) that generates no tasks whatever, so the rail gained a `+1` and that paragraph
+stopped being true without being rewritten. "The rail shows the streak and the recent cycles"
+went the same way — it shows a progress bar and done/target.
+
+The deeper problem was structural, and the rule did not catch it because the rule never
+mentions a viewport. **The rail is `lg:flex`.** So "the rail is the only place on this screen
+a habit can be logged" was true on a laptop and meaningless on a phone, where `/activity`
+offered a tile reading "Habits 3" and no way to log anything. Logging a practice is the most
+phone-shaped action in the app, and it was the one action the page could not do.
+
+So habits moved to a **strip directly above the task list, at every width** — one component,
+no `lg:` inside it, sitting below the quick-add so a phone never stacks two horizontal
+scrollers. Three things did not change, and saying so is the point of this amendment:
+
+- **The rule.** The rail still never offers an action the list beside it already offers.
+  Habits satisfied it and left anyway, because the rail could not reach half the widths the
+  app runs at. What replaced them as its illustration is the routines line, which offers a
+  picker rather than a button per routine.
+- **The guard.** A habit still gets **no checkbox** — a quota is not done-or-not-done. It now
+  heads `habit-strip.tsx` instead of the rail, and `activity.spec.ts` still asserts both the
+  absent checkbox and that a habit creates no task.
+- **`getHabitsView`'s windows.** 90 days drawn, 400 loaded, still shared by the streak, the
+  ring and the heatmap.
+
+**The last paragraph of T10b is superseded, and its reasoning was right.** It said a shorter
+window on `/activity` "would make the rail's streak number disagree with the page it links
+to", and that is exactly true of a streak: it is a function of how far back entries were
+loaded. `getHabitStrip` bounds its scan at about a month anyway, and may, because the strip
+shows only `adherence` for the period containing today — which every window containing today
+produces identically. The two surfaces agree **by construction** rather than by matching
+window sizes, which is the stronger form of the same invariant. A cheaper streak would still
+be the bug T10b said it was.
+
+Two smaller consequences. The rail's routines block became one line with a single `Run…`
+picker: a Run button per routine is what let the rail grow to 724px for three goals, two
+routines and three habits, and that is a real loss of directness taken deliberately, not a
+tidy-up. And habits became reachable from outside `/activity/habits` for the first time —
+⌘K search, a "New habit" create command, and a dashboard card that logs.
 
 ## What was rejected
 

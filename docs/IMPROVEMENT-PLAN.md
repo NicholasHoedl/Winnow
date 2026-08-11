@@ -7,34 +7,35 @@ picked up — it is **not** code-level detail yet.
 
 ## Status
 
-| Tranche                                       | State         |
-| --------------------------------------------- | ------------- |
-| T0 — Foundations, cohesion & safety           | ✅ shipped    |
-| T1 — Frictionless capture & navigation        | ✅ shipped    |
-| T2 — One product: links, Today hub, reminders | ✅ shipped    |
-| T3 — Depth: Budget                            | ✅ shipped    |
-| T4 — Depth: Meals                             | ✅ shipped    |
-| T5a — Depth: to-dos + goals                   | ✅ shipped    |
-| T5b — Depth: calendar (grid, drag, split)     | ✅ shipped    |
-| T5c-a — Calendar: iCal export + feed          | ✅ shipped    |
-| T5c-b — Calendar: event reminders (Web Push)  | after hosting |
-| T6a — Robustness: data durability             | ✅ shipped    |
-| T6b — Robustness: offline fallback            | ✅ shipped    |
-| T7a — Net-new: Notes / Journal                | ✅ shipped    |
-| T7b — Net-new: Routines / templates           | ✅ shipped    |
-| T7c — Net-new: Habits / streaks               | ⤳ retired by T12a |
-| T7d — Net-new: Weekly review                  | ✅ shipped    |
-| T8 — Goal momentum from linked tasks          | ✅ shipped    |
-| T9a — AI companion: shell + goal planning     | ✅ shipped    |
-| T9b — companion: routines                     | ✅ shipped    |
-| T9c — companion: weekly synthesis             | ✅ shipped    |
-| T9d — companion: transaction import           | ✅ shipped    |
-| T10a — Activity: /todos and /goals merged     | ✅ shipped    |
-| T10b — Activity: routines and habits in rail  | ✅ shipped    |
-| T11 — AI configured from Settings, not env    | ✅ shipped    |
-| T12a — Habits: a quota and a log              | ✅ shipped    |
-| T12b — Goal momentum counts habit sessions    | ✅ shipped    |
-| T12c — Companion proposes habits, not dates   | ✅ shipped    |
+| Tranche                                           | State             |
+| ------------------------------------------------- | ----------------- |
+| T0 — Foundations, cohesion & safety               | ✅ shipped        |
+| T1 — Frictionless capture & navigation            | ✅ shipped        |
+| T2 — One product: links, Today hub, reminders     | ✅ shipped        |
+| T3 — Depth: Budget                                | ✅ shipped        |
+| T4 — Depth: Meals                                 | ✅ shipped        |
+| T5a — Depth: to-dos + goals                       | ✅ shipped        |
+| T5b — Depth: calendar (grid, drag, split)         | ✅ shipped        |
+| T5c-a — Calendar: iCal export + feed              | ✅ shipped        |
+| T5c-b — Calendar: event reminders (Web Push)      | after hosting     |
+| T6a — Robustness: data durability                 | ✅ shipped        |
+| T6b — Robustness: offline fallback                | ✅ shipped        |
+| T7a — Net-new: Notes / Journal                    | ✅ shipped        |
+| T7b — Net-new: Routines / templates               | ✅ shipped        |
+| T7c — Net-new: Habits / streaks                   | ⤳ retired by T12a |
+| T7d — Net-new: Weekly review                      | ✅ shipped        |
+| T8 — Goal momentum from linked tasks              | ✅ shipped        |
+| T9a — AI companion: shell + goal planning         | ✅ shipped        |
+| T9b — companion: routines                         | ✅ shipped        |
+| T9c — companion: weekly synthesis                 | ✅ shipped        |
+| T9d — companion: transaction import               | ✅ shipped        |
+| T10a — Activity: /todos and /goals merged         | ✅ shipped        |
+| T10b — Activity: routines and habits in rail      | ✅ shipped        |
+| T11 — AI configured from Settings, not env        | ✅ shipped        |
+| T12a — Habits: a quota and a log                  | ✅ shipped        |
+| T12b — Goal momentum counts habit sessions        | ✅ shipped        |
+| T12c — Companion proposes habits, not dates       | ✅ shipped        |
+| T12d — Activity revisited for the habit primitive | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -648,7 +649,7 @@ entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT 
   the page you were already on. Recorded here rather than left as an oversight.
 
 **T7c — shipped, and RETIRED by T12a.** No migration either way. Everything below was true of
-the *derived* habits view, which no longer exists: a habit now has its own tables and states a
+the _derived_ habits view, which no longer exists: a habit now has its own tables and states a
 RATE rather than a schedule. Two of its three decisions survived the rewrite, restated in
 periods instead of cycles; the third dissolved rather than moved. Kept here because the
 reasoning was sound for what it described, and because T12a inherited half of it — see
@@ -696,14 +697,14 @@ ADR-0014 and the T12a notes below.
   flight and undo deletes the exact id the action returned rather than "today's entry".
 - **The e2e caught a design bug the unit tests could not.** The streak's floor rounded a
   partial first period UP — the right rule for the ring's denominator, the wrong one for a
-  streak — so a habit created today sat below its own floor and read *"3/3 this week · Streak
-  0"* however many times it was logged. A partial period is an unfair denominator; a target
+  streak — so a habit created today sat below its own floor and read _"3/3 this week · Streak
+  0"_ however many times it was logged. A partial period is an unfair denominator; a target
   met inside one was harder to hit, not weaker. `windowAdherence` still rounds up;
   `habitStreak` does not.
 - **The screenshots caught what neither could**: the ring read "0%" for a habit with no
   completed period yet, which every habit is for its first. Reads "—" now.
-- **The rail rule survived unchanged and got stronger.** *The rail never offers an action the
-  task list beside it already offers* — a habit generates no tasks at all now, so the `+1` is
+- **The rail rule survived unchanged and got stronger.** _The rail never offers an action the
+  task list beside it already offers_ — a habit generates no tasks at all now, so the `+1` is
   the rule applied rather than an exception to it. It still gets no checkbox, and
   `e2e/activity.spec.ts` asserts both halves.
 - **`unit` and `targetAmount` ship unread**, and are kept OUT of `habitInputSchema` so that
@@ -725,14 +726,14 @@ ADR-0014 and the T12a notes below.
 - **The scoped plan was wrong and was dropped.** T12a's plan said goals with habits should
   read "2 of 3 this week". They should not: the rail's HABITS block shows that exact number
   a few pixels away, and putting it on the goal card too is the duplication the rail's own
-  rule exists to prevent. ADR-0010's split — progress is *how far*, momentum is *is this
-  alive* — has no room for a third question, and adherence is one.
+  rule exists to prevent. ADR-0010's split — progress is _how far_, momentum is _is this
+  alive_ — has no room for a third question, and adherence is one.
 - **`loggedOn` is a separate input from `completedAt`, and has to be.** An entry's `on_date`
   is ALREADY a local wall date; pushing it through `todayInZone` as if it were an instant
   reads it as UTC midnight and lands it a day earlier in every negative-offset zone. There is
   a unit test that fails if the two are ever merged.
 - **The join is LEFT, deliberately.** A habit with nothing logged still has to arrive, because
-  that is what makes its goal read *stalled* rather than unmeasurable — an inner join would
+  that is what makes its goal read _stalled_ rather than unmeasurable — an inner join would
   silently drop exactly the goals the badge exists to flag.
 - Archived habits stop counting, matching `getHabitsView`: retiring a practice lets its goal
   go quiet rather than keeping it alive on something you no longer do.
@@ -762,6 +763,62 @@ ADR-0014 and the T12a notes below.
 - Not built: a rate-feasibility warning ("at 20 words a day you reach 5000 in February, not
   December"). It needs `targetAmount` on a proposed habit, which is the measured variant
   deferred from T12a. Named here rather than left as a gap someone rediscovers.
+
+**T12d — shipped**, no migration. T12a made habits a primitive and nothing revisited the page
+around them, so the rail still treated one the way it did when a habit _was_ a repeating task:
+
+- **A habit could not be logged from `/activity` on a phone.** The rail is `lg:flex`; below
+  that the page offered a tile reading "Habits 3". Logging a practice is the most phone-shaped
+  action in the app and it was the one action the page could not do. Habits are now a **strip
+  above the task list at every width** — one component, no `lg:` in it — placed below the
+  quick-add so a phone never stacks two horizontal scrollers. ADR-0013 is amended: the rail's
+  rule is unchanged, its habit example was simply wrong at a width the original never checked.
+- **The rail's routines block became one line with a single `Run…` picker.** A Run button per
+  routine is what let the rail reach 724px for three goals, two routines and three habits. The
+  action survives at a height independent of routine count; the directness does not, and that
+  is recorded as a deliberate loss rather than a tidy-up.
+- **`getHabitStrip` replaces `getHabitsView` on the two surfaces that show only done/target.**
+  400 days of entries and a thirteen-column row per habit became ~37 days and four fields. Safe
+  because `adherence` for the period containing today is identical under every window
+  containing today — the surfaces agree by construction, where a _streak_ genuinely would not.
+  `currentPeriodFloor` derives the bound, and it is the min of the week and month starts, not
+  the month's: a week straddles the boundary, so the month alone undercounts weekly habits for
+  the first days of most months.
+- **The log handler existed twice, verbatim.** `useLogHabit` is now the one copy, feeding three
+  surfaces. It gained `pendingId` instead of a boolean — a shared flag greyed out _every_
+  habit while one write was in flight, invisible in a rail of three and plainly broken in a
+  strip of eight.
+- **Habits became reachable from outside their own page**: ⌘K search (title only, archived
+  excluded, no service import), a "New habit" create command, and a dashboard card that logs.
+  The card carries a `3 of 8 short` line because it truncates at three and `+N more` cannot say
+  whether what it hid still needs you.
+- **`revalidateHabitViews` gained `revalidateHubs()`**, and a comment claiming T12b would add it
+  was corrected. T12b shipped without it, and `goals/queries.ts` has read `habit_entries` ever
+  since — so the claim had been false for a tranche.
+- Incidental: six functions wrapped in React `cache()` (`requireUserId` ran ~20× per
+  `/activity` render, `getUserPreferences` 4×), and `GoalWithProgress.nextAction` deleted as
+  genuinely dead. `linkedTaskTotal` looked equally dead and is **not** — it feeds
+  `goalMomentum`'s `trackableCount`, and removing it would have flipped goals from stalled to
+  unmeasurable and reddened `goal-momentum.spec.ts` for an unrelated-looking reason.
+- **Four specs were asserting on data they never created**, and went red together the first
+  time the account was sparse — `navigation` (nothing due today, so `TodayAgenda` swaps
+  itself and its heading for an empty state), `task-links` (no events, so the Event picker is
+  not rendered), `budget-trends` (no transactions, so there is no `<svg>` at all), and
+  `companion`'s import (no categories, so all three stub rows land uncategorised and every
+  count is off by one). Each read as a feature having vanished. All four now seed and clean
+  up; `ensureFoodCategory` creates the category **only if missing and removes it only if it
+  created it**, because deleting it outright would take a real category's budgets with it.
+  `_ai-stub.mjs` had recorded that assumption as a fact — _"a category the seed account
+  actually has"_ — and now says where it is seeded.
+- **The new routines-picker spec was flaky, and the cause was older than it.** Its
+  routine-item "Add" click was never awaited, so `/activity` could render from a read taken
+  before the INSERT landed and the run dialog offered "Create 0 tasks". That race predates
+  T12d; what T12d did was remove the `"1 step"` assertion that used to catch it in ten
+  seconds, leaving only a locator whose exact wording derives from the same count — which
+  turned a fast, legible failure into a silent 60-second hang. Fixed with
+  `await expect(itemDialog).toBeHidden()` and by asserting the Create button is visible
+  before clicking it. No product change: a user cannot navigate faster than the awaited
+  round trip, because the dialog stays open until it resolves.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

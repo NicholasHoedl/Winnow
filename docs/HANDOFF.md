@@ -74,13 +74,13 @@ is current.
 So the roadmap has run out of code that can be written without a deployment. **Hosting is
 now the only thing standing between this app and being used.**
 
-| Next up                                   | Why                                                                                                                                                                                                                         |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Next up                                   | Why                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**. |
-| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                |
-| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                           |
-| **The AI companion — complete**           | **T9a–T9d all shipped**: `/companion`, with goal planning, routine building, a narrated week and transaction import. See §5, ADR-0011 and ADR-0012.                                                                        |
-| **The Activity page — complete**           | **T10a–T10b both shipped**: `/todos` and `/goals` merged into `/activity`, with goals, routines and habits in one rail beside the task list. See §5 and ADR-0013.                                                        |
+| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                             |
+| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                        |
+| **The AI companion — complete**           | **T9a–T9d all shipped**: `/companion`, with goal planning, routine building, a narrated week and transaction import. See §5, ADR-0011 and ADR-0012.                                                                                                      |
+| **The Activity page — complete**          | **T10a–T10b both shipped**: `/todos` and `/goals` merged into `/activity`, with goals, routines and habits in one rail beside the task list. See §5 and ADR-0013.                                                                                        |
 
 ### Hosting: what is already known
 
@@ -143,6 +143,14 @@ it is `winnow-postgres-1`.
 - **The e2e suite runs against the persistent dev database.** Specs create and clean their
   own rows; a failing spec often leaves debris behind, so check
   `SELECT ... WHERE title LIKE 'E2E%'` after a red run.
+- **A spec must seed whatever it asserts on**, even when it passes without doing so. The
+  suite also _reads_ ambient data, and four specs quietly depended on the account already
+  holding events, transactions, categories and a task due today — they all went red together
+  the first time it did not, and each failure read as a feature having vanished rather than
+  as missing data. If several unrelated specs fail at once and every message says something
+  _disappeared_, count rows before reading product code. Anything that seeds a row a real
+  user might also own (a budget category, say) must create it only if missing and delete it
+  only if it created it.
 - **The month grid caps chips per day.** An e2e that creates several events on today will
   find them hidden behind "+N more" — use the **day view** (`/calendar?view=day`) for
   creation and cleanup.
@@ -153,7 +161,12 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **672 unit tests, 103 e2e, 0 lint errors.**
+Current green baseline: **751 unit tests, 124 e2e, 0 lint errors** (T12d, 2026-08-11).
+
+Two e2e are chronically flaky and neither has been solved: `quick-add-burst:42` and
+`todos-reorder:86`. They pass on retry and a full run therefore exits 0. Treat a non-zero
+flaky count as a triage item rather than a pass, and do not assume a new flake is one of
+these two without reading its trace.
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
 Playwright starts alongside the app. `AI_BASE_URL` in `.env` points at it. A real model
@@ -176,7 +189,7 @@ waits it out on `goto`/`reload`; anything that reads after a _client-side_ mutat
 scoping to `#content` (the staging div sits at body level).
 
 **A disabled submit button silently kills Enter.** A form whose submit button is
-`disabled` performs no *implicit submission*, so while an action is in flight the keyboard
+`disabled` performs no _implicit submission_, so while an action is in flight the keyboard
 path into the form is simply gone. Every text quick-add did this. Type a second entry
 inside that ~300ms window and it vanished — no row, no toast, no error, with the text
 still visibly sitting in the box. Measured: 0ms and 150ms gaps lost the entry, 300ms and
@@ -255,7 +268,7 @@ Do not reopen these without new information:
   have been reversed at implementation time on this basis — `@serwist/next` and an iCal
   library. A plan naming a library does not settle it.
 
-### The Activity page (T10a–T10b, complete)
+### The Activity page (T10a–T10b, revisited by T12d)
 
 **ADR-0013 is the authority.** The short version, and the parts that bite:
 
@@ -279,23 +292,39 @@ Four things worth knowing before touching it:
   selected, and `cn` drops `bg-card` when it does, so the utility-class locator would stop
   matching exactly the goal a test just clicked.
 
-**T10b put routines and habits in the rail too**, under one rule worth keeping: *the rail
-never offers an action the task list beside it already offers.* A routine gets a Run button,
-because running one creates tasks. On mobile the two become links, not content. The Activity
-header lost its Routines and Habits icons — the rail and the mobile shortcuts both reach them.
+**T10b put routines and habits in the rail too**, under one rule worth keeping: _the rail
+never offers an action the task list beside it already offers._ A routine gets a Run control,
+because running one creates tasks.
 
-**T12a inverted what that rule implies for a habit, without changing the rule.** A habit used
-to BE a repeating task, so its tick was already a row in the list, and the rail showed a
-streak and nothing clickable. A habit is now a quota with a log: it generates no tasks, it has
-no row anywhere else, and the rail is the only place on that screen it can be logged from — so
-it gets a `+1`. It still gets **no checkbox**, because a quota is not done-or-not-done, and
-`e2e/activity.spec.ts` asserts both halves.
+**T12d moved habits out of the rail, and the rule did not change.** Read ADR-0013's T12d
+amendment before touching this. The short version: the rule never mentions a viewport, and
+the rail is `lg:flex` — so "the rail is the only place a habit can be logged" was true on a
+laptop and meaningless on a phone, where the page offered a tile reading "Habits 3" and no way
+to log anything. Four things follow:
 
-**The e2e suite's `visibleCard` excludes `[data-rail]`.** Every rail entry carries that
-attribute. Without it a spec cleaning up by title prefix matches the rail card as well as
-the row and hangs on a "Task actions" button the rail does not have — which happened once in
-T10a with goals and again in T10b with habits. A new rail block is excluded by construction;
-do not go back to listing testids.
+- **Habits are a strip above the task list, at every width** (`habit-strip.tsx`). One
+  component, no `lg:` inside it, below the quick-add so a phone never stacks two horizontal
+  scrollers. A habit still gets **no checkbox** — a quota is not done-or-not-done — and
+  `e2e/activity.spec.ts` asserts that, plus "exactly one button", plus "creates no task".
+- **Routines are one line with a single `Run…` picker**, not a card per routine with a Run
+  button each. That is what let the rail reach 724px. The action survives at a fixed height;
+  the directness does not, and the file says so.
+- **`/activity` and `/` use `getHabitStrip`, not `getHabitsView`.** ~37 days of entries and
+  four fields instead of 400 days and a thirteen-column row. Safe only because those surfaces
+  show `adherence` for the current period, which is identical under every window containing
+  today. **A cheaper window for a STREAK would still be the bug T10b said it was.**
+- **One log handler, `useLogHabit`**, shared by the strip, the habits page and the dashboard
+  card. It returns `pendingId`, not a boolean: a shared flag disabled every habit at once.
+
+**The e2e suite's `visibleCard` excludes `[data-rail]`.** Every rail entry carries it, and so
+does every habit chip in the strip. The attribute no longer means "in the rail" — what it has
+always meant to that selector is **"not a row in the task list"**, and the rail was simply the
+only place that was true. Without it a spec cleaning up by title prefix matches the chip as
+well as the row and hangs on a "Task actions" button it does not have — which happened once in
+T10a with goals and again in T10b with habits. Renaming it to `data-aside` is the honest fix
+and was deliberately not taken: a rename is invisible to TypeScript, so one missed card fails
+later as a hang in an unrelated spec. If it is ever done, do it alone, with a
+`rg -c 'data-rail'` count either side.
 
 ### The AI companion (T9a–T9d, complete)
 
@@ -414,7 +443,7 @@ T9c or T9d rebuilt any of them.
   recorded here previously, which caps a local model at 7–8B and costs exactly the
   judgment the feature exists for.
 - **Journal and note content never leaves the machine.** Not a preference — a hard
-  boundary, and one that has to be *enforced* rather than intended. Prompt payloads are
+  boundary, and one that has to be _enforced_ rather than intended. Prompt payloads are
   built from named fields, never spread from raw rows, and the notes module must be
   unreachable from the prompt-building path. Journal-aware retrospectives are deferred,
   not cancelled: they are the one feature that would justify a local model later.
