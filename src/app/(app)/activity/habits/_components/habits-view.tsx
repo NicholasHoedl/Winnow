@@ -18,17 +18,17 @@ import { toast } from "sonner"
 import { accentForKey } from "@/lib/colors"
 import { dateRange } from "@/lib/date"
 import type { GoalOption } from "@/modules/goals/queries"
-import {
-  archiveHabit,
-  deleteEntry,
-  deleteHabit,
-  logEntry,
-} from "@/modules/habits/actions"
+import { archiveHabit, deleteHabit } from "@/modules/habits/actions"
 import type {
   HabitCard as HabitCardData,
   HabitRow,
 } from "@/modules/habits/queries"
-import { heatmapLayout, periodLabel } from "@/modules/habits/service"
+import { useLogHabit } from "@/modules/habits/use-log-habit"
+import {
+  heatmapLayout,
+  periodLabel,
+  periodPhrase,
+} from "@/modules/habits/service"
 import { Heatmap, type HeatmapCell } from "@/components/charts/heatmap"
 import { Ring } from "@/components/charts/ring"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -198,12 +198,6 @@ function HabitPanel({
   )
 }
 
-/** "today" / "this week" / "this month" — the span the count beside it belongs to. */
-function periodPhrase(period: HabitRow["period"]): string {
-  if (period === "day") return "today"
-  return period === "week" ? "this week" : "this month"
-}
-
 export function HabitsView({
   cards,
   from,
@@ -224,34 +218,14 @@ export function HabitsView({
   const [confirmTarget, setConfirmTarget] = React.useState<HabitRow | null>(
     null,
   )
-  const [pending, startTransition] = React.useTransition()
+  // Logging has its own transition, inside the hook. Sharing this one used to mean
+  // archiving a habit greyed out every Log button on the page.
+  const [, startTransition] = React.useTransition()
+  const { pendingId, log } = useLogHabit()
 
   function openDialog(habit: HabitRow | null) {
     setEditing(habit)
     setDialogOpen(true)
-  }
-
-  function handleLog(card: HabitCardData) {
-    startTransition(async () => {
-      const result = await logEntry(card.habit.id)
-      if (!result.ok) {
-        toast.error(result.error)
-        return
-      }
-      // Undo deletes exactly the row this call created. "Today's entry for this habit"
-      // would be ambiguous — there is deliberately no unique constraint, so there can be
-      // three of them.
-      toast(`Logged ${card.habit.title}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undone = await deleteEntry(result.entryId)
-              if (!undone.ok) toast.error(undone.error)
-            }),
-        },
-      })
-    })
   }
 
   function handleArchive(habit: HabitRow) {
@@ -311,8 +285,8 @@ export function HabitsView({
               card={card}
               days={days}
               weekStartsOn={weekStartsOn}
-              pending={pending}
-              onLog={handleLog}
+              pending={pendingId === card.habit.id}
+              onLog={(target) => log(target.habit)}
               onEdit={openDialog}
               onArchive={handleArchive}
               onDelete={setConfirmTarget}

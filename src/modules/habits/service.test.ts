@@ -4,9 +4,11 @@ import { dateRange } from "@/lib/date"
 
 import {
   adherence,
+  currentPeriodFloor,
   habitStreak,
   heatmapLayout,
   periodLabel,
+  periodPhrase,
   periodRange,
   periodStart,
   shiftPeriod,
@@ -86,6 +88,45 @@ describe("periodRange", () => {
   it("ends February on the 28th, and a leap February on the 29th", () => {
     expect(periodRange("2026-02-10", "month").end).toBe("2026-02-28")
     expect(periodRange("2028-02-10", "month").end).toBe("2028-02-29")
+  })
+})
+
+describe("currentPeriodFloor", () => {
+  // The case the whole function exists for. On the 1st of a month the current WEEK
+  // usually opened in the previous month, so "the start of the month" is too late a floor
+  // and a weekly habit would lose the sessions logged in the days before it — a bug that
+  // appears and disappears on a calendar.
+  it("reaches into the previous month when the week straddles the boundary", () => {
+    // 2026-08-01 is a Saturday: its Sunday-start week opened 07-26, its Monday-start
+    // week opened 07-27, and the month opened the same day we are asking about.
+    expect(currentPeriodFloor("2026-08-01", 0)).toBe("2026-07-26")
+    expect(currentPeriodFloor("2026-08-01", 1)).toBe("2026-07-27")
+  })
+
+  it("is the month start whenever the month is the older of the two", () => {
+    expect(currentPeriodFloor("2026-07-22", 0)).toBe("2026-07-01")
+  })
+
+  it("agrees with both when a month opens on a week start", () => {
+    // 2026-11-01 is a Sunday, so under the default week start there is nothing to straddle.
+    expect(currentPeriodFloor("2026-11-01", 0)).toBe("2026-11-01")
+  })
+
+  // The invariant `getHabitStrip` rests on, and the reason it may bound its scan at ~37
+  // days where the habits page loads 400. If clipping the entries here could ever move the
+  // figure, the strip and the page would disagree about the same habit.
+  it("cannot change the adherence it bounds, at any cadence", () => {
+    const today = "2026-08-01"
+    const all = dateRange("2025-06-28", today).flatMap((date) => on(date, 2))
+    const floor = currentPeriodFloor(today, 0)
+    const bounded = all.filter((entry) => entry.onDate >= floor)
+
+    for (const period of ["day", "week", "month"] as const) {
+      const rule = { period, targetCount: 3 }
+      expect(
+        adherence(tallyByPeriod(bounded, period, 0), rule, today, 0),
+      ).toEqual(adherence(tallyByPeriod(all, period, 0), rule, today, 0))
+    }
   })
 })
 
@@ -185,6 +226,16 @@ describe("adherence", () => {
     const result = adherence(new Map(), broken, "2026-07-22", 0)
     expect(result.target).toBe(1)
     expect(result.percent).toBe(0)
+  })
+
+  // Called with ONLY the two fields it declares. `getHabitStrip` selects exactly these
+  // columns, so a `startDate` or `endDate` read creeping back into this function would
+  // break the strip at runtime; this test makes it a compile error instead.
+  it("needs nothing but the period and the target", () => {
+    const tally = tallyByPeriod(on("2026-07-22", 2), "week", 0)
+    expect(
+      adherence(tally, { period: "week", targetCount: 3 }, "2026-07-22", 0),
+    ).toMatchObject({ done: 2, target: 3, remaining: 1, met: false })
   })
 })
 
@@ -370,6 +421,17 @@ describe("periodLabel", () => {
   it("states the rate when there is one", () => {
     expect(periodLabel({ period: "week", targetCount: 3 })).toBe("3× a week")
     expect(periodLabel({ period: "day", targetCount: 2 })).toBe("2× a day")
+  })
+})
+
+describe("periodPhrase", () => {
+  // Asserted verbatim by the e2e ("0/3 this week", "0/1 today"), so these three strings
+  // are a contract with the suite as much as a wording choice. It moved here out of
+  // `habits-view.tsx` when the dashboard card needed the same phrase.
+  it("names the span the count beside it belongs to", () => {
+    expect(periodPhrase("day")).toBe("today")
+    expect(periodPhrase("week")).toBe("this week")
+    expect(periodPhrase("month")).toBe("this month")
   })
 })
 

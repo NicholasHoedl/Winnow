@@ -9,11 +9,13 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { habitEntries, habits } from "./schema"
 import {
   adherence,
+  currentPeriodFloor,
   habitStreak,
   tallyByDay,
   tallyByPeriod,
   windowAdherence,
   type Adherence,
+  type HabitPeriod,
   type HabitStreak,
 } from "./service"
 
@@ -45,10 +47,19 @@ export type HabitsView = {
 }
 
 /**
- * How far back the heatmap is drawn. Same value the rail uses, deliberately: a cheaper
- * window there would make the rail's streak DISAGREE with the page it links to, which is
- * worse on a single-user app than one more bounded query. This is the first optimisation
- * someone will reach for — it is here on purpose.
+ * How far back the heatmap is drawn, and the span the page's ring is scored over.
+ *
+ * Until T12d this was also the rail's window, and the comment here defended that: a cheaper
+ * window there would have made the rail's STREAK disagree with the page it links to. That
+ * reasoning was right and still is — a streak and a window percentage are both functions of
+ * how far back entries were loaded, so two surfaces computing them from different windows
+ * genuinely print different numbers for one habit.
+ *
+ * What changed is the reading, not the rule. `getHabitStrip` shows only `adherence` for the
+ * period containing today, and every window containing today produces that identically — so
+ * it can bound its scan at about a month and still agree with this page BY CONSTRUCTION,
+ * rather than by matching window sizes. The 90 and 400 below now exist solely for the
+ * streak, the ring and the heatmap, which only `/activity/habits` draws.
  */
 export const HABIT_WINDOW_DAYS = 90
 
@@ -121,4 +132,71 @@ export async function getHabitsView(): Promise<HabitsView> {
   })
 
   return { cards, from, to: today, weekStartsOn }
+}
+
+/** A habit reduced to what a strip or a summary row draws: its name and how it is doing. */
+export type HabitStripCard = {
+  id: string
+  title: string
+  period: HabitPeriod
+  /** done/target for the period containing today. The only reading this shape carries. */
+  now: Adherence
+}
+
+/**
+ * The cheap read, for surfaces that show `now` and nothing else — the strip above the task
+ * list and the dashboard's practice card.
+ *
+ * `getHabitsView` is the wrong tool for them and was being used anyway: it loads 400 days of
+ * entries and hands a client component a thirteen-column row, a streak, a window percentage
+ * and up to ninety `{date, count}` pairs, of which those surfaces render four fields. This
+ * loads about a month and four fields.
+ *
+ * The floor is `currentPeriodFloor`, not a fixed day count, because it is derived from what
+ * `adherence` actually needs: the earliest start of any period containing today. See the
+ * note on `HABIT_WINDOW_DAYS` for why a cheaper window is safe here and would not be for a
+ * streak.
+ *
+ * No upper bound on `onDate`, matching `getHabitsView` — an entry backfilled into the
+ * current period counts on both surfaces or on neither.
+ */
+export async function getHabitStrip(): Promise<HabitStripCard[]> {
+  const userId = await requireUserId()
+  const { timeZone, weekStartsOn } = await getUserPreferences()
+  const today = todayInZone(new Date(), timeZone)
+  const floor = currentPeriodFloor(today, weekStartsOn)
+
+  const [habitRows, entryRows] = await Promise.all([
+    db.query.habits.findMany({
+      where: and(eq(habits.userId, userId), isNull(habits.archivedAt)),
+      // `targetCount` is selected but not returned: it feeds `adherence` here and is folded
+      // into `now.target`, so the client gets the reading rather than the rule.
+      columns: { id: true, title: true, period: true, targetCount: true },
+      orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
+    }),
+    db.query.habitEntries.findMany({
+      where: and(
+        eq(habitEntries.userId, userId),
+        gte(habitEntries.onDate, floor),
+      ),
+      columns: { habitId: true, onDate: true },
+    }),
+  ])
+
+  const byHabit = new Map<string, { onDate: string }[]>()
+  for (const entry of entryRows) {
+    const found = byHabit.get(entry.habitId)
+    if (found) found.push(entry)
+    else byHabit.set(entry.habitId, [entry])
+  }
+
+  return habitRows.map(({ targetCount, ...habit }) => ({
+    ...habit,
+    now: adherence(
+      tallyByPeriod(byHabit.get(habit.id) ?? [], habit.period, weekStartsOn),
+      { period: habit.period, targetCount },
+      today,
+      weekStartsOn,
+    ),
+  }))
 }

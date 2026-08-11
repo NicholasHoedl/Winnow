@@ -81,6 +81,25 @@ export function periodRange(
 }
 
 /**
+ * The earliest date any of today's three current periods can begin.
+ *
+ * A read that shows only `adherence` — done/target for the period containing today — needs
+ * no entry older than this, whatever cadence its habits use. That makes it the floor
+ * `getHabitStrip` bounds its scan at, in place of the 400 days a streak has to walk.
+ *
+ * It is the earlier of the current week's start and the current month's, **not simply the
+ * month's**: a week straddles the month boundary, so on the 1st of a month the current week
+ * usually began in the previous one. Taking the month alone would silently undercount every
+ * weekly habit for the first few days of most months — a bug that appears and disappears on
+ * a calendar, which is the kind that survives a long time.
+ */
+export function currentPeriodFloor(today: string, weekStartsOn = 0): string {
+  const week = periodStart(today, "week", weekStartsOn)
+  const month = periodStart(today, "month")
+  return week < month ? week : month
+}
+
+/**
  * Entries per period, keyed by period start.
  *
  * Counts ROWS, not `amount` — the measured variant ("20 words") is a later tranche, and
@@ -130,7 +149,11 @@ export type Adherence = {
  */
 export function adherence(
   tally: ReadonlyMap<string, number>,
-  habit: HabitRule,
+  // Only the two fields it actually reads, not the whole rule. That is what lets
+  // `getHabitStrip` select four columns instead of thirteen — widening this was the
+  // enabling change, and a test calls it with a bare literal so re-adding a `startDate`
+  // read here fails loudly rather than breaking the strip's column list.
+  habit: Pick<HabitRule, "period" | "targetCount">,
   today: string,
   weekStartsOn = 0,
 ): Adherence {
@@ -317,6 +340,18 @@ export function periodLabel(
   const target = targetOf(habit)
   if (target === 1) return EVERY_LABEL[habit.period]
   return `${target}× a ${PERIOD_NOUN[habit.period]}`
+}
+
+/**
+ * "today" / "this week" / "this month" — the span an `adherence` count belongs to.
+ *
+ * Was private to `habits-view.tsx` until the dashboard card needed the same phrase. The
+ * strings are unchanged on purpose: the e2e asserts "0/3 this week" and "0/1 today", so
+ * moving this file-to-file must not move the wording with it.
+ */
+export function periodPhrase(period: HabitPeriod): string {
+  if (period === "day") return "today"
+  return period === "week" ? "this week" : "this month"
 }
 
 export type GridCell = { date: string; col: number; row: number }
