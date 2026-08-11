@@ -1,6 +1,30 @@
 import { test, expect } from "./_test"
 
+import { visibleCard } from "./_card"
+
+/**
+ * The agenda is the one section here that is NOT unconditional: `TodayAgenda` replaces
+ * itself — heading and all — with "Nothing due and nothing scheduled" when nothing is
+ * overdue or due today. So this seeds a task due today rather than asserting against
+ * whatever the shared dev database happens to hold.
+ *
+ * Not hypothetical tidying: it went red the first time this account had nothing due, and
+ * the failure read as "the dashboard lost its agenda" rather than "there is nothing to put
+ * in it". The other four labels render unconditionally, empty states included, so they
+ * need no seed.
+ */
 test("dashboard shows the key sections", async ({ page }) => {
+  const title = `E2E nav agenda ${Date.now()}`
+
+  // The dialog prefills today's date; quick-add deliberately captures into Someday
+  // instead (T5a-S6), which would never reach the agenda.
+  await page.goto("/activity")
+  await page.getByRole("button", { name: "New task" }).click()
+  const seedDialog = page.getByRole("dialog")
+  await seedDialog.getByLabel("Title", { exact: true }).fill(title)
+  await seedDialog.getByRole("button", { name: "Create" }).click()
+  await expect(visibleCard(page, title)).toBeVisible()
+
   await page.goto("/")
   await expect(
     page.getByRole("heading", { name: /good to see you/i }),
@@ -13,6 +37,13 @@ test("dashboard shows the key sections", async ({ page }) => {
   for (const label of ["Coming up", "Macros", "Budget"]) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
   }
+
+  await page.goto("/activity")
+  await page.getByRole("button", { name: "All", exact: true }).click()
+  const row = visibleCard(page, title)
+  await row.getByRole("button", { name: "Task actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(visibleCard(page, title)).toHaveCount(0)
 })
 
 test("primary nav reaches every module", async ({ page }) => {

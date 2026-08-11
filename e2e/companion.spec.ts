@@ -357,9 +357,53 @@ test("a summary refinement replaces it in place", async ({ page }) => {
   await deleteTasksMatching(page, prefix)
 })
 
+/**
+ * Make sure the account owns an expense category called "Food", and say whether we made it.
+ *
+ * The stub names "Food" on exactly one of its three rows so that one matches and two do
+ * not — see the note above `importFor` in `_ai-stub.mjs`. That arithmetic only holds if the
+ * category exists, and it was simply ASSUMED to: on an account with none, all three land
+ * uncategorised and the counts below are each off by one, which reads as "the matcher
+ * broke" rather than "there was nothing to match against".
+ *
+ * The return value is load-bearing. This runs against the persistent dev database, so
+ * deleting "Food" unconditionally afterwards would destroy a real category the machine's
+ * owner uses — the same class of mistake that once deleted their API key. Only a category
+ * this function created is removed again.
+ */
+async function ensureFoodCategory(page: Page): Promise<boolean> {
+  await page.goto("/budget")
+  await page.getByRole("button", { name: "Manage categories" }).click()
+  const dialog = page.getByRole("dialog")
+  await expect(dialog).toBeVisible()
+
+  if ((await dialog.getByText("Food", { exact: true }).count()) > 0) {
+    await page.keyboard.press("Escape")
+    return false
+  }
+
+  // The kind select defaults to Expense, which is what `checkCategory`'s type match needs.
+  await dialog.getByLabel("Name").fill("Food")
+  await dialog.getByRole("button", { name: "Add category" }).click()
+  await expect(dialog.getByText("Food", { exact: true })).toBeVisible()
+  await page.keyboard.press("Escape")
+  return true
+}
+
+async function removeFoodCategory(page: Page) {
+  await page.goto("/budget")
+  await page.getByRole("button", { name: "Manage categories" }).click()
+  await page.getByRole("button", { name: "Delete Food" }).click()
+  await page.getByRole("button", { name: "Delete category" }).click()
+  await expect(page.getByText("Food", { exact: true })).toHaveCount(0)
+  await page.keyboard.press("Escape")
+}
+
 test("pasted transactions are extracted, pruned and applied", async ({
   page,
 }) => {
+  const seededFood = await ensureFoodCategory(page)
+
   await page.goto("/companion")
   await page
     .getByLabel("Transactions to read")
@@ -395,6 +439,10 @@ test("pasted transactions are extracted, pruned and applied", async ({
     await page.getByRole("menuitem", { name: "Delete" }).click()
     await expect(visibleCard(page, payee)).toHaveCount(0)
   }
+
+  // Only if this test was what created it. Deleting a category the owner already had would
+  // take its budgets with it.
+  if (seededFood) await removeFoodCategory(page)
 })
 
 test("an import refinement asks for an extraction, not a summary", async ({

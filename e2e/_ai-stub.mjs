@@ -105,10 +105,15 @@ function summaryFor(isRefinement) {
 /**
  * Extracted transactions.
  *
- * One row names a category the seed account actually has ("Food" — an expense category,
- * so it also satisfies `checkCategory`'s type match), one names a category nothing will
- * match, and one is income. That exercises the renderer's matched / unmatched / income
- * branches and gives the footer's uncategorised count something to say.
+ * One row names "Food" — an expense category, so it also satisfies `checkCategory`'s type
+ * match — one names a category nothing will match, and one is income. That exercises the
+ * renderer's matched / unmatched / income branches and gives the footer's uncategorised
+ * count something to say.
+ *
+ * "Food" existing was ASSUMED here until it did not, on an account with no categories at
+ * all: all three rows then landed uncategorised and the spec's counts were each off by one.
+ * `companion.spec.ts` now seeds it (`ensureFoodCategory`) rather than hoping. If this name
+ * changes, change it there too — the two are a pair.
  *
  * Dated TODAY, not a fixed date: `/budget` opens on the current month, so a row dated in
  * some other month is created correctly and then invisible — which reads in a test as
