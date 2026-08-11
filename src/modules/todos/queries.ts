@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import { and, asc, desc, eq, gte, isNotNull, lt, ne } from "drizzle-orm"
 
 import { db } from "@/db"
@@ -121,31 +122,39 @@ export async function syncRuleInstances(
 
 // Lazy, idempotent materializer (mirrors ensureDefaultCalendars in calendar/queries).
 // Runs inside the task reads below so recurring instances appear without a cron job.
-async function ensureRecurringTasks(
-  userId: string,
-  today: string,
-  weekStartsOn: number,
-): Promise<void> {
-  // One exceptions query for the whole user, handed to every rule below. Loading them
-  // per-rule would double this loop's query count on the app's hottest path.
-  const [rules, skipped] = await Promise.all([
-    db.query.taskRecurrences.findMany({
-      where: eq(taskRecurrences.userId, userId),
-    }),
-    loadSkipped(userId),
-  ])
-  for (const rule of rules) {
-    await syncRuleInstances(userId, rule, today, weekStartsOn, false, skipped)
-  }
-}
+//
+// `cache()` because the dashboard calls getTasks() and getTaskSummary() in the same render,
+// and each awaited this — so the whole 2N delete/insert loop ran twice for no new rows.
+// Keyed on all three arguments, which is the right key: they are derived from the same
+// preferences within a request, so a second call inside one render always matches.
+const ensureRecurringTasks = cache(
+  async (
+    userId: string,
+    today: string,
+    weekStartsOn: number,
+  ): Promise<void> => {
+    // One exceptions query for the whole user, handed to every rule below. Loading them
+    // per-rule would double this loop's query count on the app's hottest path.
+    const [rules, skipped] = await Promise.all([
+      db.query.taskRecurrences.findMany({
+        where: eq(taskRecurrences.userId, userId),
+      }),
+      loadSkipped(userId),
+    ])
+    for (const rule of rules) {
+      await syncRuleInstances(userId, rule, today, weekStartsOn, false, skipped)
+    }
+  },
+)
 
-export async function getLists(): Promise<List[]> {
+/** `cache()`: the app shell's always-mounted task dialog and the page both need the lists. */
+export const getLists = cache(async (): Promise<List[]> => {
   const userId = await requireUserId()
   return db.query.lists.findMany({
     where: eq(lists.userId, userId),
     orderBy: [asc(lists.sortOrder), asc(lists.createdAt)],
   })
-}
+})
 
 export async function getTasks(): Promise<TaskWithSeries[]> {
   const userId = await requireUserId()

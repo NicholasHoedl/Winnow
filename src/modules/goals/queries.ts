@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import {
   and,
   asc,
@@ -54,8 +55,6 @@ export type GoalWithProgress = GoalRow & {
   linkedTaskTotal: number
   /** Null when the goal has nothing to measure movement on — see `goalMomentum`. */
   momentum: GoalMomentum | null
-  /** The soonest-due open linked task: what to actually do next for this goal. */
-  nextAction: LinkedTask | null
 }
 
 /** Minimal shape the task-dialog goal picker binds to. */
@@ -109,8 +108,8 @@ export async function getGoals(
           goalId: true,
           completedAt: true,
         },
-        // NULLs sort last in Postgres ASC, so a dated task outranks an undated one — which
-        // is exactly the order `nextAction` wants.
+        // NULLs sort last in Postgres ASC, so a dated task outranks an undated one — the
+        // order the goal detail dialog lists them in.
         orderBy: [asc(tasks.dueDate), asc(tasks.createdAt)],
       }),
       db
@@ -196,21 +195,21 @@ export async function getGoals(
         today,
         timeZone,
       }),
-      nextAction: linked.find((t) => t.status === "open") ?? null,
     }
   })
 }
 
 /** Lightweight goal list (id + title) for pickers — used in the always-mounted task
- * dialog, so it skips getGoals()'s milestone/progress computation (T2). */
-export async function getGoalOptions(): Promise<GoalOption[]> {
+ * dialog, so it skips getGoals()'s milestone/progress computation (T2). `cache()` for the
+ * same reason as getLists: the shell's dialog and the page can both want it in one render. */
+export const getGoalOptions = cache(async (): Promise<GoalOption[]> => {
   const userId = await requireUserId()
   return db.query.goals.findMany({
     where: eq(goals.userId, userId),
     columns: { id: true, title: true },
     orderBy: [asc(goals.createdAt)],
   })
-}
+})
 
 export type CompletedMilestone = {
   id: string

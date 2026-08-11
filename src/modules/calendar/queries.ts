@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
@@ -312,13 +313,17 @@ export async function getFeedToken(): Promise<string> {
   return winner!.token
 }
 
-/** Flat list of event *series* (unexpanded), newest first, for pickers — e.g. linking
- * a task to an event (T2). Series-level: one row per event, not per occurrence. */
-export async function getEventOptions(): Promise<EventOption[]> {
+/**
+ * Flat list of event *series* (unexpanded), newest first, for pickers — e.g. linking
+ * a task to an event (T2). Series-level: one row per event, not per occurrence.
+ *
+ * `cache()`: the app shell's always-mounted task dialog and /activity both need it.
+ */
+export const getEventOptions = cache(async (): Promise<EventOption[]> => {
   const userId = await requireUserId()
   return db.query.events.findMany({
     where: eq(events.userId, userId),
     columns: { id: true, title: true, startAt: true, allDay: true },
     orderBy: [desc(events.startAt)],
   })
-}
+})

@@ -1,4 +1,5 @@
 import "server-only"
+import { cache } from "react"
 import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
@@ -22,11 +23,21 @@ import { userPreferences } from "./schema"
 
 export type UserPreferencesRow = typeof userPreferences.$inferSelect
 
-/** Effective preferences for the current user: the saved row normalised over the
- * defaults, so callers never special-case a missing row (first run). */
-export async function getUserPreferences(): Promise<UserPreferences> {
-  return preferencesFor(await requireUserId())
-}
+/**
+ * Effective preferences for the current user: the saved row normalised over the
+ * defaults, so callers never special-case a missing row (first run).
+ *
+ * `cache()` because almost every read needs the zone and the week start, so this ran four
+ * times on one /activity render and six on the dashboard — the layout, the page, and each
+ * module query that derives "today" for itself. Per-request, so a preference saved in one
+ * request is read fresh by the next.
+ *
+ * `preferencesFor` is deliberately left uncached: its one caller outside this file is the
+ * .ics feed, which authenticates with a token and calls it exactly once.
+ */
+export const getUserPreferences = cache(async (): Promise<UserPreferences> =>
+  preferencesFor(await requireUserId()),
+)
 
 /**
  * The same, for a user resolved some way other than the session.
