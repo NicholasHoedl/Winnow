@@ -111,6 +111,63 @@ test("finishing a linked task moves a stalled goal", async ({ page }) => {
   await deleteTask(page, taskTitle)
 })
 
+/**
+ * T12b. The defect the whole T12 line exists to fix.
+ *
+ * A habit creates no tasks and ticks no milestones, so before this a goal worked entirely
+ * through one had nothing momentum could see: it returned null and the card said nothing, or
+ * — once the goal had any other stale work — it read Stalled while being worked hard.
+ */
+test("a goal worked through a habit reads as moving, not stalled", async ({
+  page,
+}) => {
+  const stamp = Date.now()
+  const goalTitle = `E2E momentum habit ${stamp}`
+  const habitTitle = `E2E momentum practice ${stamp}`
+
+  await createGoal(page, goalTitle)
+
+  await page.goto("/activity/habits")
+  await page.getByRole("button", { name: "New habit", exact: true }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(habitTitle)
+  await dialog.getByLabel("Goal", { exact: true }).click()
+  await page.getByRole("option", { name: goalTitle, exact: true }).click()
+  await dialog.getByRole("button", { name: "Add", exact: true }).click()
+  await expect(visibleCard(page, habitTitle)).toHaveCount(1)
+
+  // Attached but never logged. "Stalled" is the honest reading here — the goal is now
+  // measurable, and nothing has been done. Before T12b it was not measurable at all.
+  await page.goto("/activity")
+  const card = goalCard(page, goalTitle)
+  await expect(card.getByText("Stalled")).toBeVisible()
+
+  // One session flips it, logged from the rail rather than through a task.
+  await page
+    .getByTestId("rail-habit")
+    .filter({ hasText: habitTitle })
+    .getByRole("button", { name: `Log ${habitTitle}` })
+    .click()
+  await expect(card.getByLabel(`${goalTitle} is moving`)).toBeVisible()
+
+  // And the detail counts it the same way it counts a finished task.
+  await openDetail(page, goalTitle)
+  await expect(
+    page.getByRole("dialog").getByText(/1 finished in the last 14 days/),
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // The habit goes first: it holds the goal link, and deleting the goal would only null it.
+  await page.goto("/activity/habits")
+  await visibleCard(page, habitTitle)
+    .getByRole("button", { name: `${habitTitle} actions` })
+    .click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await page.getByRole("button", { name: "Delete habit", exact: true }).click()
+  await expect(visibleCard(page, habitTitle)).toHaveCount(0)
+  await deleteGoal(page, goalTitle)
+})
+
 test("a goal with nothing to track gets no momentum reading at all", async ({
   page,
 }) => {

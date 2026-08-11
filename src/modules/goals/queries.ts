@@ -1,9 +1,23 @@
 import "server-only"
-import { and, asc, count, eq, gte, isNotNull, lt, or } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
+// habits → goals at the schema level, so this direction is safe: `goals/schema.ts` imports
+// nothing but `users`, and nothing here reaches back into habits' own queries.
+import { habitEntries, habits } from "@/modules/habits/schema"
 import { tasks } from "@/modules/todos/schema"
 
 import { goals, milestones } from "./schema"
@@ -63,49 +77,97 @@ export async function getGoals(
   // `goalMomentum` can make it. Same two-step as getMilestonesCompletedInRange.
   const windowFloor = new Date(`${addDays(windowStart, -1)}T00:00:00Z`)
 
-  const [goalRows, milestoneRows, taskRows, taskTotals] = await Promise.all([
-    db.query.goals.findMany({
-      where: eq(goals.userId, userId),
-      // sortOrder first so a manual drag wins; createdAt stays the tiebreak, which
-      // is what every existing row (all sortOrder 0) still sorts by.
-      orderBy: [asc(goals.sortOrder), asc(goals.createdAt)],
-    }),
-    db.query.milestones.findMany({
-      where: eq(milestones.userId, userId),
-      orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
-    }),
-    // Tasks pointing at any of this user's goals (T2), bounded to what the card can
-    // actually use: everything still open, plus whatever was finished recently enough to
-    // count as movement. A task closed last year is in `linkedTaskTotal` and nowhere else.
-    //
-    // `gte` on a nullable column excludes NULLs, so a done task with no completedAt drops
-    // out here — correct, since it can evidence neither an open commitment nor movement.
-    db.query.tasks.findMany({
-      where: and(
-        eq(tasks.userId, userId),
-        isNotNull(tasks.goalId),
-        or(eq(tasks.status, "open"), gte(tasks.completedAt, windowFloor)),
-      ),
-      columns: {
-        id: true,
-        title: true,
-        status: true,
-        dueDate: true,
-        goalId: true,
-        completedAt: true,
-      },
-      // NULLs sort last in Postgres ASC, so a dated task outranks an undated one — which
-      // is exactly the order `nextAction` wants.
-      orderBy: [asc(tasks.dueDate), asc(tasks.createdAt)],
-    }),
-    db
-      .select({ goalId: tasks.goalId, total: count() })
-      .from(tasks)
-      .where(and(eq(tasks.userId, userId), isNotNull(tasks.goalId)))
-      .groupBy(tasks.goalId),
-  ])
+  const [goalRows, milestoneRows, taskRows, taskTotals, habitRows] =
+    await Promise.all([
+      db.query.goals.findMany({
+        where: eq(goals.userId, userId),
+        // sortOrder first so a manual drag wins; createdAt stays the tiebreak, which
+        // is what every existing row (all sortOrder 0) still sorts by.
+        orderBy: [asc(goals.sortOrder), asc(goals.createdAt)],
+      }),
+      db.query.milestones.findMany({
+        where: eq(milestones.userId, userId),
+        orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
+      }),
+      // Tasks pointing at any of this user's goals (T2), bounded to what the card can
+      // actually use: everything still open, plus whatever was finished recently enough to
+      // count as movement. A task closed last year is in `linkedTaskTotal` and nowhere else.
+      //
+      // `gte` on a nullable column excludes NULLs, so a done task with no completedAt drops
+      // out here — correct, since it can evidence neither an open commitment nor movement.
+      db.query.tasks.findMany({
+        where: and(
+          eq(tasks.userId, userId),
+          isNotNull(tasks.goalId),
+          or(eq(tasks.status, "open"), gte(tasks.completedAt, windowFloor)),
+        ),
+        columns: {
+          id: true,
+          title: true,
+          status: true,
+          dueDate: true,
+          goalId: true,
+          completedAt: true,
+        },
+        // NULLs sort last in Postgres ASC, so a dated task outranks an undated one — which
+        // is exactly the order `nextAction` wants.
+        orderBy: [asc(tasks.dueDate), asc(tasks.createdAt)],
+      }),
+      db
+        .select({ goalId: tasks.goalId, total: count() })
+        .from(tasks)
+        .where(and(eq(tasks.userId, userId), isNotNull(tasks.goalId)))
+        .groupBy(tasks.goalId),
+      // T12b: habits attached to a goal, with any sessions logged inside the window.
+      //
+      // A LEFT join, deliberately: a habit with nothing logged still has to arrive, because
+      // that is what makes its goal read *stalled* rather than unmeasurable. An inner join
+      // would silently drop exactly the goals the badge exists to flag.
+      //
+      // Archived habits are excluded, matching `getHabitsView`. Retiring a practice should let
+      // its goal go quiet rather than keep it alive on a habit you no longer keep.
+      db
+        .select({
+          goalId: habits.goalId,
+          habitId: habits.id,
+          onDate: habitEntries.onDate,
+        })
+        .from(habits)
+        .leftJoin(
+          habitEntries,
+          and(
+            eq(habitEntries.habitId, habits.id),
+            gte(habitEntries.onDate, windowStart),
+            lte(habitEntries.onDate, today),
+          ),
+        )
+        .where(
+          and(
+            eq(habits.userId, userId),
+            isNotNull(habits.goalId),
+            isNull(habits.archivedAt),
+          ),
+        ),
+    ])
 
   const totals = new Map(taskTotals.map((row) => [row.goalId, row.total]))
+
+  // One row per (habit, in-window entry), or one row with a null date for a habit with
+  // none — so the habit ids are de-duplicated through a Set and the dates are collected
+  // straight. Grouped in memory, the same shape milestones and linked tasks use above.
+  const habitIds = new Map<string, Set<string>>()
+  const loggedByGoal = new Map<string, string[]>()
+  for (const row of habitRows) {
+    if (!row.goalId) continue
+    const ids = habitIds.get(row.goalId) ?? new Set<string>()
+    ids.add(row.habitId)
+    habitIds.set(row.goalId, ids)
+    if (row.onDate) {
+      const dates = loggedByGoal.get(row.goalId) ?? []
+      dates.push(row.onDate)
+      loggedByGoal.set(row.goalId, dates)
+    }
+  }
 
   return goalRows.map((goal) => {
     const items = milestoneRows.filter((m) => m.goalId === goal.id)
@@ -123,9 +185,13 @@ export async function getGoals(
           ...linked.map((t) => t.completedAt),
           ...items.map((m) => m.completedAt),
         ],
+        // Already local wall dates — see `MomentumInput.loggedOn`.
+        loggedOn: loggedByGoal.get(goal.id) ?? [],
         // Counts every linked task, not just the loaded ones — a goal whose work is all
-        // ancient still has something to be stalled about.
-        trackableCount: linkedTaskTotal + items.length,
+        // ancient still has something to be stalled about. Habits count the same way: one
+        // attached habit is enough to make the goal measurable, logged or not.
+        trackableCount:
+          linkedTaskTotal + items.length + (habitIds.get(goal.id)?.size ?? 0),
         windowDays: momentumDays,
         today,
         timeZone,

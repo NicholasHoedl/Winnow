@@ -81,7 +81,10 @@ export function goalProgress(
  * lumpy and hand-maintained; finished work accumulates on its own as you use the app.
  */
 export type GoalMomentum = {
-  /** Linked tasks completed + milestones ticked whose LOCAL date falls in the window. */
+  /**
+   * Linked tasks completed, milestones ticked, and habit sessions logged whose LOCAL date
+   * falls in the window.
+   */
   moved: number
   /** Nothing at all finished in the window. */
   stalled: boolean
@@ -93,8 +96,17 @@ export type MomentumInput = {
   /** `completedAt` of every linked task and milestone on this goal. Nulls are ignored. */
   completedAt: (Date | null | undefined)[]
   /**
-   * How many linked tasks and milestones exist at all. Zero means there is nothing this
-   * measure can see, which is NOT the same as stalled — see the null return below.
+   * `on_date` of every entry logged against this goal's habits (T12b).
+   *
+   * A separate input rather than more `completedAt` because these are already LOCAL wall
+   * dates — a habit entry records the day you say it happened, not an instant — so they are
+   * compared directly and must not go through `todayInZone` a second time. Converting a
+   * date-only string as if it were an instant is how a 10pm session ends up on tomorrow.
+   */
+  loggedOn?: readonly string[]
+  /**
+   * How many linked tasks, milestones and habits exist at all. Zero means there is nothing
+   * this measure can see, which is NOT the same as stalled — see the null return below.
    */
   trackableCount: number
   windowDays: number
@@ -104,7 +116,7 @@ export type MomentumInput = {
 }
 
 /**
- * Null when the goal has nothing to track — no linked tasks and no milestones.
+ * Null when the goal has nothing to track — no linked tasks, no milestones, no habits.
  *
  * That case is a numeric goal ("12 of 30 books") or an empty one, and it must not render
  * as stalled. `goals.currentValue` is overwritten in place with no history, so a goal you
@@ -112,11 +124,19 @@ export type MomentumInput = {
  * genuinely nothing to measure, and a stalled badge would be an outright lie about a goal
  * you are actively working. Showing nothing is the honest answer.
  *
+ * **Habit sessions count as movement (T12b), and that is the point of the primitive.**
+ * Before it, a goal whose work was "attend 3 classes a week" produced no completed tasks and
+ * no ticked milestones, so it read *Stalled* forever while being worked hard — the badge
+ * crying wolf on precisely the goals it should stay quiet about. Adherence is deliberately
+ * NOT surfaced here: the rail already shows each habit's own `2/3` beside this, and momentum
+ * answers "is this alive", which is a different question from "how well".
+ *
  * Window is inclusive of today and the `windowDays - 1` days before it, so "1 week" means
  * today plus six, not today plus seven.
  */
 export function goalMomentum(input: MomentumInput): GoalMomentum | null {
-  const { completedAt, trackableCount, windowDays, today, timeZone } = input
+  const { completedAt, loggedOn, trackableCount, windowDays, today, timeZone } =
+    input
   if (trackableCount === 0) return null
 
   const start = addDays(today, -(windowDays - 1))
@@ -126,6 +146,11 @@ export function goalMomentum(input: MomentumInput): GoalMomentum | null {
     const on = todayInZone(at, timeZone)
     // The upper bound is not paranoia: account import accepts arbitrary timestamps, and
     // one future-dated row would otherwise inflate this count forever.
+    if (on >= start && on <= today) moved += 1
+  }
+  for (const on of loggedOn ?? []) {
+    // Already a local wall date — no conversion, same bounds. `logEntry` allows a backfill
+    // up to ±370 days, so the upper bound earns its keep here too.
     if (on >= start && on <= today) moved += 1
   }
 

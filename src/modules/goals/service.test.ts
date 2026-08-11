@@ -179,3 +179,77 @@ describe("goalMomentum", () => {
     })
   })
 })
+
+/**
+ * T12b: habit sessions are the third source of movement.
+ *
+ * This is the defect the whole T12 line exists to fix. A goal whose work is "attend 3 classes
+ * a week" completes no tasks and ticks no milestones, so before habits existed it read
+ * *Stalled* forever while being worked hard — the badge crying wolf on exactly the goals it
+ * should stay quiet about.
+ */
+describe("goalMomentum with habits", () => {
+  const withHabits = (loggedOn: string[], trackableCount = 1) =>
+    goalMomentum({
+      completedAt: [],
+      loggedOn,
+      trackableCount,
+      windowDays: 7,
+      today: TODAY,
+      timeZone: TZ,
+    })
+
+  it("counts a logged session as movement", () => {
+    expect(withHabits(["2026-08-03", "2026-08-01"])).toEqual({
+      moved: 2,
+      stalled: false,
+      windowDays: 7,
+    })
+  })
+
+  it("gives a habit-only goal a reading instead of null", () => {
+    // `trackableCount` counts the HABIT, so a goal with one habit and nothing logged is
+    // stalled — which is true and useful — rather than unmeasurable.
+    expect(withHabits([])).toEqual({ moved: 0, stalled: true, windowDays: 7 })
+  })
+
+  it("still returns null when the goal has no habits either", () => {
+    expect(withHabits([], 0)).toBeNull()
+  })
+
+  it("applies the same window bounds as a completion", () => {
+    expect(withHabits(["2026-07-29"])?.moved).toBe(1) // the opening day
+    expect(withHabits(["2026-07-28"])?.moved).toBe(0) // the day before it
+    expect(withHabits([TODAY])?.moved).toBe(1) // today itself
+    expect(withHabits(["2026-09-01"])?.moved).toBe(0) // a backfill into the future
+  })
+
+  // The reason `loggedOn` is a separate input rather than more `completedAt`: an entry's
+  // `on_date` is ALREADY the local day. Pushing "2026-07-29" through `todayInZone` as if it
+  // were an instant would read it as UTC midnight and land it on the 28th in Chicago —
+  // silently dropping the session that opened the window.
+  it("does not convert a wall date as if it were an instant", () => {
+    expect(withHabits(["2026-07-29"])?.moved).toBe(1)
+    expect(
+      goalMomentum({
+        completedAt: [new Date("2026-07-29T00:00:00Z")],
+        trackableCount: 1,
+        windowDays: 7,
+        today: TODAY,
+        timeZone: TZ,
+      })?.moved,
+    ).toBe(0)
+  })
+
+  it("adds habit sessions to task and milestone completions", () => {
+    const result = goalMomentum({
+      completedAt: [new Date("2026-08-04T14:00:00Z")],
+      loggedOn: ["2026-08-02"],
+      trackableCount: 2,
+      windowDays: 7,
+      today: TODAY,
+      timeZone: TZ,
+    })
+    expect(result?.moved).toBe(2)
+  })
+})
