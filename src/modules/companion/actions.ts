@@ -9,6 +9,7 @@ import { requireUserId } from "@/lib/session"
 import { createTransaction } from "@/modules/budget/actions"
 import { getCategories } from "@/modules/budget/queries"
 import { addMilestone } from "@/modules/goals/actions"
+import { createHabit } from "@/modules/habits/actions"
 import { resolveCategory } from "./service"
 import { goals } from "@/modules/goals/schema"
 import { addRoutineItem, createRoutine } from "@/modules/routines/actions"
@@ -107,12 +108,26 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
       if (!result.ok) return failed(milestone.title)
     }
 
-    // Tasks attach to the GOAL, not to a milestone: `tasks` has `goalId` and no
-    // `milestoneId`. The grouping under milestones is presentational — it makes the plan
-    // legible on the timeline — and does not survive into the data model. Linking to the
-    // goal is what makes these count toward its momentum (T8), which is the part that
-    // matters.
-    for (const task of parsed.data.payload.tasks) {
+    // The practice. Routed through `createHabit` for the same reason milestones go through
+    // `addMilestone` — one code path for "a habit was created", including the ownership
+    // check that proves this goal is the caller's.
+    //
+    // A habit generates no tasks and carries no dates (ADR-0014). Attaching it to the goal
+    // is what makes logging it count toward that goal's momentum (T12b), which is the
+    // reading that used to say Stalled on exactly this kind of work.
+    for (const habit of parsed.data.payload.habits) {
+      const result = await createHabit({
+        title: habit.title,
+        period: habit.period,
+        targetCount: habit.targetCount,
+        goalId,
+      })
+      if (!result.ok) return failed(habit.title)
+    }
+
+    // Setup tasks attach to the GOAL as well: `tasks` has `goalId` and no `milestoneId`, so
+    // the grouping a plan shows is presentational and never survives into the data model.
+    for (const task of parsed.data.payload.setupTasks) {
       const result = await createTask({
         title: task.title,
         dueDate: task.dueDate,

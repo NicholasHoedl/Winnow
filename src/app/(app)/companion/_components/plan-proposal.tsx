@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle, Flag, ListTodo } from "lucide-react"
+import { AlertTriangle, Flag, ListTodo, Repeat } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -127,8 +127,9 @@ export function PlanProposal({
 }) {
   const [excluded, setExcluded] = React.useState<{
     milestones: Set<number>
-    tasks: Set<number>
-  }>({ milestones: new Set(), tasks: new Set() })
+    habits: Set<number>
+    setupTasks: Set<number>
+  }>({ milestones: new Set(), habits: new Set(), setupTasks: new Set() })
 
   // Recomputed from the CURRENT payload, so fixing a bad date makes its warning vanish
   // as you type. The app judges these dates; the model is never asked to grade itself.
@@ -136,12 +137,13 @@ export function PlanProposal({
     () => planWarnings(payload, { targetDate }, today),
     [payload, targetDate, today],
   )
-  const warningFor = (on: "milestone" | "task", index: number) =>
+  const warningFor = (on: "milestone" | "setupTask", index: number) =>
     warnings.find((w) => w.on === on && w.index === index)
+  const planWarning = warnings.find((w) => w.on === "plan")
 
   const final = finalizePlan(payload, excluded as Excluded)
 
-  function toggle(on: "milestones" | "tasks", index: number) {
+  function toggle(on: "milestones" | "habits" | "setupTasks", index: number) {
     setExcluded((current) => {
       const next = new Set(current[on])
       if (next.has(index)) next.delete(index)
@@ -162,13 +164,25 @@ export function PlanProposal({
     })
   }
 
-  function editTask(
+  function editHabit(
+    index: number,
+    patch: { title?: string; targetCount?: number },
+  ) {
+    onChange({
+      ...payload,
+      habits: payload.habits.map((h, i) =>
+        i === index ? { ...h, ...patch } : h,
+      ),
+    })
+  }
+
+  function editSetupTask(
     index: number,
     patch: { title?: string; dueDate?: string },
   ) {
     onChange({
       ...payload,
-      tasks: payload.tasks.map((t, i) =>
+      setupTasks: payload.setupTasks.map((t, i) =>
         i === index ? { ...t, ...patch } : t,
       ),
     })
@@ -186,6 +200,16 @@ export function PlanProposal({
       {/* Capped on a phone so the footer's Apply stays reachable without scrolling past a
           long plan; on desktop it fills whatever the pinned column gives it. */}
       <div className="max-h-[55svh] overflow-y-auto p-4 lg:max-h-none lg:min-h-0 lg:flex-1">
+        {/* A judgement about the plan as a whole rather than any one row. The app noticing
+            "there is no practice here" is the same division as every other warning: the
+            model proposes, the app checks. */}
+        {planWarning && (
+          <p className="text-brand-accent mb-4 flex items-start gap-1.5 text-xs">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" />
+            {planWarning.message}
+          </p>
+        )}
+
         <ol className="border-border ml-1.5 flex flex-col gap-5 border-l-2 pl-5">
           {payload.milestones.map((milestone, index) => {
             const off = excluded.milestones.has(index)
@@ -239,46 +263,109 @@ export function PlanProposal({
                     {warning.message}
                   </p>
                 )}
-
-                <ul className="mt-2 ml-7 flex flex-col gap-1.5">
-                  {payload.tasks.map((task, taskIndex) =>
-                    task.milestoneIndex !== index ? null : (
-                      <li
-                        key={taskIndex}
-                        className="flex items-baseline gap-2 text-sm"
-                      >
-                        <Checkbox
-                          checked={!off && !excluded.tasks.has(taskIndex)}
-                          disabled={off}
-                          aria-label={`Include ${task.title}`}
-                          onCheckedChange={() => toggle("tasks", taskIndex)}
-                          className="shrink-0 self-center"
-                        />
-                        <ListTodo className="text-muted-foreground size-3.5 shrink-0 self-center" />
-                        <EditableTitle
-                          value={task.title}
-                          disabled={off || excluded.tasks.has(taskIndex)}
-                          label={`Task ${taskIndex + 1} title`}
-                          className="text-muted-foreground"
-                          onChange={(title) => editTask(taskIndex, { title })}
-                        />
-                        <EditableDate
-                          value={task.dueDate}
-                          disabled={off || excluded.tasks.has(taskIndex)}
-                          warning={warningFor("task", taskIndex)}
-                          label={`Task ${taskIndex + 1} date`}
-                          onChange={(dueDate) =>
-                            editTask(taskIndex, { dueDate })
-                          }
-                        />
-                      </li>
-                    ),
-                  )}
-                </ul>
               </li>
             )
           })}
         </ol>
+
+        {/* Off the spine, deliberately. The spine exists to expose date DISTRIBUTION, and a
+            habit has no date to distribute — putting it on a timeline would be inventing a
+            position for something that recurs. */}
+        {payload.habits.length > 0 && (
+          <section className="mt-6">
+            <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+              The practice
+            </h3>
+            <ul className="flex flex-col gap-1.5">
+              {payload.habits.map((habit, index) => {
+                const off = excluded.habits.has(index)
+                return (
+                  <li key={index} className="flex items-baseline gap-2 text-sm">
+                    <Checkbox
+                      checked={!off}
+                      aria-label={`Include ${habit.title}`}
+                      onCheckedChange={() => toggle("habits", index)}
+                      className="shrink-0 self-center"
+                    />
+                    <Repeat className="text-muted-foreground size-3.5 shrink-0 self-center" />
+                    <EditableTitle
+                      value={habit.title}
+                      disabled={off}
+                      label={`Habit ${index + 1} title`}
+                      onChange={(title) => editHabit(index, { title })}
+                    />
+                    {/* The count is editable and the period is not. "5 a week" wanting to be
+                        "3 a week" is the correction people actually make; week → day is a
+                        different habit rather than an edit to this one. */}
+                    <span
+                      className={cn(
+                        "text-muted-foreground flex shrink-0 items-baseline gap-1 text-xs tabular-nums",
+                        off && "line-through opacity-50",
+                      )}
+                    >
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={habit.targetCount}
+                        disabled={off}
+                        aria-label={`Habit ${index + 1} times per ${habit.period}`}
+                        onChange={(event) =>
+                          editHabit(index, {
+                            targetCount: Math.min(
+                              100,
+                              Math.max(1, Number(event.target.value) || 1),
+                            ),
+                          })
+                        }
+                        className="hover:border-input focus:border-ring w-10 rounded border border-transparent bg-transparent px-1 text-right outline-none"
+                      />
+                      <span>× a {habit.period}</span>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+
+        {payload.setupTasks.length > 0 && (
+          <section className="mt-6">
+            <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+              Before you start
+            </h3>
+            <ul className="flex flex-col gap-1.5">
+              {payload.setupTasks.map((task, index) => {
+                const off = excluded.setupTasks.has(index)
+                const warning = warningFor("setupTask", index)
+                return (
+                  <li key={index} className="flex items-baseline gap-2 text-sm">
+                    <Checkbox
+                      checked={!off}
+                      aria-label={`Include ${task.title}`}
+                      onCheckedChange={() => toggle("setupTasks", index)}
+                      className="shrink-0 self-center"
+                    />
+                    <ListTodo className="text-muted-foreground size-3.5 shrink-0 self-center" />
+                    <EditableTitle
+                      value={task.title}
+                      disabled={off}
+                      label={`Setup task ${index + 1} title`}
+                      onChange={(title) => editSetupTask(index, { title })}
+                    />
+                    <EditableDate
+                      value={task.dueDate}
+                      disabled={off}
+                      warning={warning}
+                      label={`Setup task ${index + 1} date`}
+                      onChange={(dueDate) => editSetupTask(index, { dueDate })}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
       </div>
 
       {/* The anti-surprise device: it counts what will actually be created, live, so
@@ -289,11 +376,15 @@ export function PlanProposal({
           <span className="text-foreground font-mono">
             {final.milestones.length}
           </span>{" "}
-          milestone{final.milestones.length === 1 ? "" : "s"} and{" "}
+          milestone{final.milestones.length === 1 ? "" : "s"},{" "}
           <span className="text-foreground font-mono">
-            {final.tasks.length}
+            {final.habits.length}
           </span>{" "}
-          task{final.tasks.length === 1 ? "" : "s"}
+          habit{final.habits.length === 1 ? "" : "s"} and{" "}
+          <span className="text-foreground font-mono">
+            {final.setupTasks.length}
+          </span>{" "}
+          task{final.setupTasks.length === 1 ? "" : "s"}
         </p>
         <div className="flex shrink-0 gap-2">
           <Button
@@ -308,7 +399,11 @@ export function PlanProposal({
             size="sm"
             onClick={() => onApply(final)}
             disabled={
-              pending || final.milestones.length + final.tasks.length === 0
+              pending ||
+              final.milestones.length +
+                final.habits.length +
+                final.setupTasks.length ===
+                0
             }
           >
             {pending ? "Applying…" : "Apply"}

@@ -29,13 +29,29 @@ export type GoalPromptContext = {
 
 export type ChatMessage = { role: "system" | "user"; content: string }
 
+/**
+ * Rewritten in T12c, and the change is the whole point of the tranche.
+ *
+ * The old prompt asked for "milestones and the tasks that reach them". Given a schema where
+ * every task needed a `dueDate`, the only well-formed answer was a list of appointments —
+ * so it produced milestones in disguise ("Learn words 1-250") and commitments the user does
+ * not control ("Drill mount and side control on Aug 31"). The model was answering the
+ * question it was asked.
+ *
+ * The question is now: what do you do REPEATEDLY to get there. Dates survive only on
+ * milestones, which are checkpoints, and on the handful of genuine one-offs that let the
+ * practice start.
+ */
 const SYSTEM_PROMPT = [
-  "You break a long-term goal into milestones and the tasks that reach them.",
-  "Milestones are checkpoints worth celebrating; tasks are single sessions of work.",
+  "You turn a long-term goal into a ladder of milestones and the recurring practice that climbs it.",
+  "Milestones are dated checkpoints worth celebrating, spaced evenly across the available time.",
+  "Habits are the repeatable actions that actually get you there, stated as a RATE — three times a week, once a day. They carry no dates.",
+  "Almost all of the work belongs in habits: a goal is reached by what you do repeatedly, not by a list of appointments.",
+  "Setup tasks are rare and few — genuine one-offs that must happen before the practice can start, like buying the book or booking a trial class.",
+  "Never propose a dated task for work the user does not control: you cannot decide what a class will cover on a given day.",
+  "Never restate a milestone as a task or a habit.",
   "Every date must be a real calendar date in YYYY-MM-DD form.",
-  "Space milestones evenly across the available time rather than bunching them.",
   "Do not restate a milestone the user already has.",
-  "Prefer few, meaningful items over many trivial ones.",
 ].join(" ")
 
 /**
@@ -85,10 +101,10 @@ export function buildGoalPlanMessages(
  * way to tell.
  */
 export type PlanWarning = {
-  /** Which list, and which position in it. */
-  on: "milestone" | "task"
+  /** Which list, and which position in it. `plan` is about the proposal as a whole. */
+  on: "milestone" | "setupTask" | "plan"
   index: number
-  kind: "past" | "after-target" | "tight" | "out-of-order"
+  kind: "past" | "after-target" | "tight" | "out-of-order" | "no-habits"
   message: string
 }
 
@@ -102,8 +118,22 @@ export function planWarnings(
 ): PlanWarning[] {
   const warnings: PlanWarning[] = []
 
+  // A plan of checkpoints with no practice behind it is the exact failure this tranche
+  // exists to prevent, and it is the app's job to notice — the model is never asked whether
+  // its own plan is any good. Cheap to check, and it names the thing that is missing rather
+  // than leaving the user to feel that something is off.
+  if (payload.habits.length === 0) {
+    warnings.push({
+      on: "plan",
+      index: 0,
+      kind: "no-habits",
+      message:
+        "No recurring practice — nothing here builds toward the milestones",
+    })
+  }
+
   const check = (
-    on: "milestone" | "task",
+    on: "milestone" | "setupTask",
     index: number,
     dueDate: string,
   ): void => {
@@ -141,7 +171,8 @@ export function planWarnings(
   }
 
   payload.milestones.forEach((m, i) => check("milestone", i, m.dueDate))
-  payload.tasks.forEach((t, i) => check("task", i, t.dueDate))
+  // Habits are not checked: they carry no dates, which is the point of them.
+  payload.setupTasks.forEach((t, i) => check("setupTask", i, t.dueDate))
 
   // Milestones are a sequence — one dated before the one it follows is the model having
   // lost track of its own ordering, and it reads as nonsense on the timeline.
@@ -163,52 +194,50 @@ export function planWarnings(
 /** What Apply will actually create, for the manifest footer. Counts what is included. */
 export function planCounts(payload: GoalPlanPayload): {
   milestones: number
-  tasks: number
+  habits: number
+  setupTasks: number
 } {
   return {
     milestones: payload.milestones.length,
-    tasks: payload.tasks.length,
+    habits: payload.habits.length,
+    setupTasks: payload.setupTasks.length,
   }
 }
 
 /** Which rows the user has switched off, by position in their own list. */
 export type Excluded = {
   milestones: ReadonlySet<number>
-  tasks: ReadonlySet<number>
+  habits: ReadonlySet<number>
+  setupTasks: ReadonlySet<number>
 }
 
 /**
- * Drop the excluded rows and renumber what is left.
+ * Drop the excluded rows.
  *
- * The renumbering is the whole reason this is a tested function rather than an inline
- * filter. `milestoneIndex` is a position in an array, so removing milestone 1 silently
- * repoints every task that named 2 at the wrong parent — the classic off-by-one that
- * looks right until the one case where it isn't.
+ * This used to be the trickiest function in the module and is now the dullest, which is
+ * worth recording rather than quietly enjoying. Tasks carried a `milestoneIndex` — a
+ * POSITION in the milestones array — so removing milestone 1 silently repointed every task
+ * that named 2 at the wrong parent, and the renumbering existed to stop that. It was the
+ * classic off-by-one that looks right until the one case where it isn't.
  *
- * A task is dropped when it is switched off OR when its milestone is: keeping tasks under
- * a milestone you just rejected reads as a mistake, even though the data model would
- * tolerate it (tasks link to the goal, never to a milestone).
+ * T12c retired `milestoneIndex` entirely. Habits and setup tasks attach to the GOAL, the
+ * same place tasks always actually attached in the data model — the nesting under milestones
+ * was only ever presentational. With nothing pointing at a position, there is nothing to
+ * renumber, and a whole class of bug went with it.
  */
 export function finalizePlan(
   payload: GoalPlanPayload,
   excluded: Excluded,
 ): GoalPlanPayload {
-  // Old position → new position, for the milestones that survived.
-  const remap = new Map<number, number>()
-  const milestones = payload.milestones.filter((_, i) => {
-    if (excluded.milestones.has(i)) return false
-    remap.set(i, remap.size)
-    return true
-  })
-
-  const tasks = payload.tasks.flatMap((task, i) => {
-    if (excluded.tasks.has(i)) return []
-    const parent = remap.get(task.milestoneIndex)
-    if (parent === undefined) return []
-    return [{ ...task, milestoneIndex: parent }]
-  })
-
-  return { milestones, tasks }
+  return {
+    milestones: payload.milestones.filter(
+      (_, i) => !excluded.milestones.has(i),
+    ),
+    habits: payload.habits.filter((_, i) => !excluded.habits.has(i)),
+    setupTasks: payload.setupTasks.filter(
+      (_, i) => !excluded.setupTasks.has(i),
+    ),
+  }
 }
 
 // --- Routines (T9b) ---

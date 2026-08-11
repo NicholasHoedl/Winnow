@@ -29,7 +29,10 @@ const goal: GoalPromptContext = {
 
 const plan = (over: Partial<GoalPlanPayload> = {}): GoalPlanPayload => ({
   milestones: [{ title: "Radicals", dueDate: "2026-09-30" }],
-  tasks: [],
+  // A habit by default, so the base fixture does not trip the `no-habits` warning in every
+  // unrelated case — the tests that care about it override this to an empty array.
+  habits: [{ title: "Review the deck", period: "day", targetCount: 1 }],
+  setupTasks: [],
   ...over,
 })
 
@@ -180,19 +183,47 @@ describe("planWarnings", () => {
     ).toHaveLength(1)
   })
 
-  it("checks tasks as well as milestones", () => {
+  it("checks setup tasks as well as milestones", () => {
     const result = planWarnings(
-      plan({
-        tasks: [
-          { title: "Buy a book", milestoneIndex: 0, dueDate: "2026-07-01" },
-        ],
-      }),
+      plan({ setupTasks: [{ title: "Buy a book", dueDate: "2026-07-01" }] }),
       goal,
       TODAY,
     )
     expect(result).toEqual([
-      { on: "task", index: 0, kind: "past", message: "Dated in the past" },
+      { on: "setupTask", index: 0, kind: "past", message: "Dated in the past" },
     ])
+  })
+
+  // T12c. The app judging the plan's SHAPE, not just its dates — a ladder with nothing
+  // climbing it is the exact failure this tranche exists to prevent, and the model is never
+  // asked to grade its own work.
+  it("flags a plan with no recurring practice at all", () => {
+    const result = planWarnings(plan({ habits: [] }), goal, TODAY)
+    expect(result).toEqual([
+      {
+        on: "plan",
+        index: 0,
+        kind: "no-habits",
+        message:
+          "No recurring practice — nothing here builds toward the milestones",
+      },
+    ])
+  })
+
+  it("says nothing about habits when there are some", () => {
+    // Habits carry no dates, so there is nothing here for the date checks to judge.
+    expect(
+      planWarnings(
+        plan({
+          habits: [
+            { title: "Attend class", period: "week", targetCount: 3 },
+            { title: "Drill at home", period: "week", targetCount: 2 },
+          ],
+        }),
+        goal,
+        TODAY,
+      ),
+    ).toEqual([])
   })
 })
 
@@ -205,13 +236,24 @@ describe("planCounts", () => {
             { title: "a", dueDate: "2026-09-01" },
             { title: "b", dueDate: "2026-10-01" },
           ],
-          tasks: [{ title: "t", milestoneIndex: 0, dueDate: "2026-09-01" }],
+          habits: [{ title: "h", period: "week", targetCount: 3 }],
+          setupTasks: [{ title: "t", dueDate: "2026-09-01" }],
         }),
       ),
-    ).toEqual({ milestones: 2, tasks: 1 })
+    ).toEqual({ milestones: 2, habits: 1, setupTasks: 1 })
   })
 })
 
+/**
+ * This suite got much duller in T12c, which is the point worth recording.
+ *
+ * Tasks used to carry a `milestoneIndex` — a POSITION in the milestones array — so dropping
+ * a middle milestone shifted every index after it and a task naming the old position moved
+ * parent silently. Half these cases existed to pin that renumbering down. T12c retired the
+ * index: habits and setup tasks attach to the goal, which is where tasks always attached in
+ * the data model anyway. Nothing points at a position any more, so there is nothing to
+ * renumber and nothing left to get wrong.
+ */
 describe("finalizePlan", () => {
   const full: GoalPlanPayload = {
     milestones: [
@@ -219,56 +261,52 @@ describe("finalizePlan", () => {
       { title: "B", dueDate: "2026-10-01" },
       { title: "C", dueDate: "2026-11-01" },
     ],
-    tasks: [
-      { title: "under A", milestoneIndex: 0, dueDate: "2026-08-20" },
-      { title: "under B", milestoneIndex: 1, dueDate: "2026-09-20" },
-      { title: "under C", milestoneIndex: 2, dueDate: "2026-10-20" },
+    habits: [
+      { title: "Practice daily", period: "day", targetCount: 1 },
+      { title: "Attend class", period: "week", targetCount: 3 },
     ],
+    setupTasks: [{ title: "Buy the book", dueDate: "2026-08-20" }],
   }
-  const none = { milestones: new Set<number>(), tasks: new Set<number>() }
+  const none = {
+    milestones: new Set<number>(),
+    habits: new Set<number>(),
+    setupTasks: new Set<number>(),
+  }
 
   it("returns everything when nothing is excluded", () => {
     expect(finalizePlan(full, none)).toEqual(full)
   })
 
-  // The reason this function exists: dropping a middle milestone shifts every index
-  // after it, and a task still naming the old position would silently move parent.
-  it("renumbers tasks when a milestone in the middle is dropped", () => {
-    const result = finalizePlan(full, {
-      milestones: new Set([1]),
-      tasks: new Set(),
-    })
+  // The three lists are independent now — dropping a milestone takes nothing with it,
+  // because nothing hangs off it.
+  it("drops a milestone without touching the practice", () => {
+    const result = finalizePlan(full, { ...none, milestones: new Set([1]) })
     expect(result.milestones.map((m) => m.title)).toEqual(["A", "C"])
-    expect(result.tasks).toEqual([
-      { title: "under A", milestoneIndex: 0, dueDate: "2026-08-20" },
-      { title: "under C", milestoneIndex: 1, dueDate: "2026-10-20" },
-    ])
+    expect(result.habits).toHaveLength(2)
+    expect(result.setupTasks).toHaveLength(1)
   })
 
-  it("drops a milestone's tasks with it", () => {
-    const result = finalizePlan(full, {
-      milestones: new Set([0]),
-      tasks: new Set(),
-    })
-    expect(result.tasks.map((t) => t.title)).toEqual(["under B", "under C"])
-  })
-
-  it("drops an individually excluded task without touching its milestone", () => {
-    const result = finalizePlan(full, {
-      milestones: new Set(),
-      tasks: new Set([1]),
-    })
+  it("drops one habit and leaves the rest of the plan alone", () => {
+    const result = finalizePlan(full, { ...none, habits: new Set([0]) })
+    expect(result.habits.map((h) => h.title)).toEqual(["Attend class"])
     expect(result.milestones).toHaveLength(3)
-    expect(result.tasks.map((t) => t.title)).toEqual(["under A", "under C"])
+  })
+
+  it("drops a setup task on its own", () => {
+    const result = finalizePlan(full, { ...none, setupTasks: new Set([0]) })
+    expect(result.setupTasks).toEqual([])
+    expect(result.milestones).toHaveLength(3)
+    expect(result.habits).toHaveLength(2)
   })
 
   it("survives excluding everything", () => {
     expect(
       finalizePlan(full, {
         milestones: new Set([0, 1, 2]),
-        tasks: new Set([0, 1, 2]),
+        habits: new Set([0, 1]),
+        setupTasks: new Set([0]),
       }),
-    ).toEqual({ milestones: [], tasks: [] })
+    ).toEqual({ milestones: [], habits: [], setupTasks: [] })
   })
 })
 

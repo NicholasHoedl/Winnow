@@ -95,26 +95,32 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
 
-  // The stub returns two milestones and two tasks.
-  await expect(page.getByText("Creates 2 milestones and 2 tasks")).toBeVisible()
+  // The T12c shape: a ladder, one recurring practice, one genuine one-off.
+  await expect(
+    page.getByText("Creates 2 milestones, 1 habit and 1 task"),
+  ).toBeVisible()
 
-  // Pruning a milestone takes its task with it — the finalize step drops both, and the
-  // manifest is what proves it before anything is written.
+  // Pruning a milestone no longer takes anything with it. `milestoneIndex` retired in
+  // T12c, so the three lists are independent — and a whole class of renumbering bug went
+  // with it.
   await page
     .getByRole("checkbox", { name: "Include STUB second milestone" })
     .click()
-  await expect(page.getByText("Creates 1 milestone and 1 task")).toBeVisible()
+  await expect(
+    page.getByText("Creates 1 milestone, 1 habit and 1 task"),
+  ).toBeVisible()
 
   // Editing in place: the row is an input, so there is no edit mode to enter.
   const renamed = `${goalTitle} renamed milestone`
   await page.getByLabel("Milestone 1 title").fill(renamed)
+  // The RATE is editable too, which is the correction people actually make: 3 a week down
+  // to 2. Nothing else about a habit needs fixing before it is created.
+  await page.getByLabel("Habit 1 times per week").fill("2")
 
   await page.getByRole("button", { name: "Apply" }).click()
 
   // Applying navigates to the result, which is also the fastest way to see it landed.
   await expect(page).toHaveURL(/\/activity/)
-  // Milestones are in the goal's detail dialog; its TASKS are the list beside the rail,
-  // which is what selecting the goal scopes. Two surfaces, so two checks.
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText(renamed)).toBeVisible()
@@ -122,14 +128,31 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await expect(detail.getByText("STUB second milestone")).toHaveCount(0)
   await page.keyboard.press("Escape")
 
-  // The surviving task is linked to the goal, so it counts toward momentum (T8).
+  // The assertion the whole T12 line exists for: the companion proposed a PRACTICE, and it
+  // landed as a real habit at the edited rate — not as a dated checklist item.
+  await page.goto("/activity/habits")
+  await expect(visibleCard(page, "STUB practice")).toContainText(
+    "0/2 this week",
+  )
+
+  // The setup task is a real task linked to the goal, so it still counts toward momentum.
+  await page.goto("/activity")
   await goalCard(page, goalTitle)
     .getByRole("button", { name: `Show tasks for ${goalTitle}` })
     .click()
-  await expect(visibleCard(page, "STUB task one")).toBeVisible()
+  await expect(visibleCard(page, "STUB setup task")).toBeVisible()
+
+  // The habit outlives its goal (`goal_id` is set null), so it is removed explicitly.
+  await page.goto("/activity/habits")
+  await visibleCard(page, "STUB practice")
+    .getByRole("button", { name: "STUB practice actions" })
+    .click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await page.getByRole("button", { name: "Delete habit", exact: true }).click()
+  await expect(visibleCard(page, "STUB practice")).toHaveCount(0)
 
   await removeGoal(page, goalTitle)
-  await deleteTasksMatching(page, "STUB task one")
+  await deleteTasksMatching(page, "STUB setup task")
 })
 
 test("a refinement replaces the proposal rather than stacking another", async ({
@@ -138,7 +161,9 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   const goalTitle = `E2E refine ${Date.now()}`
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
-  await expect(page.getByText("Creates 2 milestones and 2 tasks")).toBeVisible()
+  await expect(
+    page.getByText("Creates 2 milestones, 1 habit and 1 task"),
+  ).toBeVisible()
 
   await page.getByLabel("Change this plan").fill("make it shorter")
   await page.getByRole("button", { name: "Revise the proposal" }).click()
@@ -151,7 +176,9 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   await expect(page.getByLabel("Milestone 1 title")).toHaveValue(
     "STUB refined milestone",
   )
-  await expect(page.getByText("Creates 1 milestone and 1 task")).toBeVisible()
+  await expect(
+    page.getByText("Creates 1 milestone, 1 habit and 0 tasks"),
+  ).toBeVisible()
   // Revised in place, not stacked: this goal has no SECOND proposal queued behind the
   // one on screen. Scoped to this goal's title rather than asserting the queue is empty
   // outright — the suite shares a persistent database, and a proposal abandoned by an

@@ -40,20 +40,19 @@ function planFor(isRefinement) {
   if (isRefinement) {
     return {
       milestones: [{ title: "STUB refined milestone", dueDate: inDays(30) }],
-      tasks: [
-        { title: "STUB refined task", milestoneIndex: 0, dueDate: inDays(10) },
-      ],
+      habits: [{ title: "STUB refined habit", period: "week", targetCount: 2 }],
+      setupTasks: [],
     }
   }
+  // The T12c shape: a ladder, the practice that climbs it, and one genuine one-off. The
+  // proportions are the point — most of the work is a rate, not a dated list.
   return {
     milestones: [
       { title: "STUB first milestone", dueDate: inDays(30) },
       { title: "STUB second milestone", dueDate: inDays(60) },
     ],
-    tasks: [
-      { title: "STUB task one", milestoneIndex: 0, dueDate: inDays(7) },
-      { title: "STUB task two", milestoneIndex: 1, dueDate: inDays(45) },
-    ],
+    habits: [{ title: "STUB practice", period: "week", targetCount: 3 }],
+    setupTasks: [{ title: "STUB setup task", dueDate: inDays(7) }],
   }
 }
 

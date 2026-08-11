@@ -29,26 +29,59 @@ export const goalPlanMilestoneSchema = z.object({
   dueDate: planDate,
 })
 
-export const goalPlanTaskSchema = z.object({
+/**
+ * The recurring practice that actually reaches the milestones — "attend 3 classes a week",
+ * "20 new words a day".
+ *
+ * This is the shape T12 exists to make expressible, and its absence is what produced the
+ * plans that started the whole line. Asked for "tasks", the model could only answer with
+ * dated one-offs, so it emitted milestones in disguise ("Learn words 1-250") and
+ * commitments the user does not control ("Drill mount and side control on Aug 31" — you do
+ * not choose what a class covers). Neither was carelessness: a `dueDate` was mandatory, so
+ * a plan of dated items was the only well-formed answer available.
+ *
+ * No dates here, deliberately. A habit states a RATE and is measured by what you log.
+ */
+export const goalPlanHabitSchema = z.object({
   title: planTitle,
-  /**
-   * Which milestone this task belongs under, by position in the array above.
-   *
-   * An index rather than an id because nothing here exists yet — the milestones are
-   * proposals too, and will not have ids until the moment they are applied.
-   */
-  milestoneIndex: z.number().int().min(0),
+  period: z.enum(["day", "week", "month"]).meta({
+    description: "The unit the target is counted over",
+  }),
+  targetCount: z.number().int().min(1).max(100).meta({
+    description:
+      "How many times per period — 3 with period 'week' is 3x a week",
+  }),
+})
+
+/**
+ * A genuine one-off, and the only place a date belongs in a plan now: buying the textbook,
+ * booking the trial class, setting up the deck. Things you do once so the practice can
+ * start.
+ */
+export const goalPlanSetupTaskSchema = z.object({
+  title: planTitle,
   dueDate: planDate,
 })
 
 /**
- * Bounds are load-bearing, not decoration. "Plan this goal" with no cap invites a model
- * to return sixty milestones, which is unreviewable, unappliable in one transaction, and
- * not a plan. A refusal here is visible and recoverable; a 200-row insert is neither.
+ * Bounds are load-bearing, not decoration — and here they are the design, not a guard rail.
+ *
+ * "Plan this goal" with no cap invites sixty milestones: unreviewable, unappliable in one
+ * transaction, and not a plan. But `setupTasks: max 3` is doing something stronger than
+ * bounding size. It makes the failure mode STRUCTURALLY unavailable: a model cannot answer
+ * with a twenty-item dated checklist however it reads the prompt, because there is nowhere
+ * to put one. Prompt wording nudges; a cap of three decides.
+ *
+ * `habits` has no minimum, on purpose. Requiring one would force a fake practice onto a
+ * genuinely project-shaped goal ("renovate the kitchen"), and the cost of over-constraining
+ * is asymmetric: a rejected payload surfaces as a bare `malformed` failure the user can only
+ * escape by regenerating, whereas an under-specified plan is visible and editable in front
+ * of them.
  */
 export const goalPlanPayloadSchema = z.object({
-  milestones: z.array(goalPlanMilestoneSchema).min(1).max(12),
-  tasks: z.array(goalPlanTaskSchema).max(50),
+  milestones: z.array(goalPlanMilestoneSchema).min(1).max(20),
+  habits: z.array(goalPlanHabitSchema).max(6),
+  setupTasks: z.array(goalPlanSetupTaskSchema).max(3),
 })
 export type GoalPlanPayload = z.infer<typeof goalPlanPayloadSchema>
 
