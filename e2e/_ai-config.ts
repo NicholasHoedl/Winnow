@@ -1,5 +1,4 @@
 import "dotenv/config"
-import { type Page, type Locator } from "@playwright/test"
 import { Pool } from "pg"
 
 /**
@@ -10,34 +9,46 @@ import { Pool } from "pg"
  */
 export const AI_SETTINGS_BACKUP = "e2e/.auth/ai-settings.json"
 
-/** What `ai.setup.ts` saves and `ai.teardown.ts` restores — including the API key. */
+/** What `ai.setup.ts` saves and `ai.teardown.ts` restores — the whole AI block. */
 export type SavedAiSettings = {
   enabled: boolean
-  anthropic: boolean
+  provider: string
   baseUrl: string
   model: string
-  /** Empty string when the install has no key stored. See `readApiKey`. */
+  /** Empty string when the install has no key stored. */
   apiKey: string
 }
 
 /**
- * The API key, read and written at the DATABASE level rather than through the page.
+ * The AI settings, read and written straight into Postgres rather than through the page.
  *
- * This exists because an earlier version of these files asserted that "no part of the suite
- * can disturb the key", and that was simply wrong. `e2e/ai-settings.spec.ts` writes the key
- * column and its `afterEach` clears it — so a full run DESTROYED whatever real key was
- * stored, permanently. It then passed on every subsequent run, because the state that made
- * it fail was gone. That is what made it look like flakiness rather than a bug.
+ * **This is the third fix to the same wound, and the first one aimed at the cause.** The
+ * suite runs against the PERSISTENT DEV DATABASE, so it has to borrow the real AI
+ * configuration and give it back. Two earlier versions did that through `/settings`, and
+ * both silently destroyed real data:
  *
- * Restoring through the page is impossible by design: the field is write-only and the app
- * only ever renders a masked hint, which is a property worth keeping. Postgres has no such
- * restriction, so the backup goes around the UI instead of through it.
+ * 1. The teardown read the form before react-hook-form had populated it, got empty strings,
+ *    and wrote them back over a working configuration.
+ * 2. Fixing the teardown left the SETUP doing the same thing. `register()` sets no `value`
+ *    attribute, so those inputs arrive empty from the server and are filled imperatively on
+ *    mount; a `waitForAiFormReady` helper waited for that but SWALLOWED its timeout. On a
+ *    slow dev server the wait expired, the setup captured `baseUrl: ""` and `model: ""` as
+ *    "previous", and the teardown faithfully restored the emptiness. The tell was which
+ *    fields survived: `enabled` and `provider` are server-rendered buttons and came back
+ *    correct, while the two hydrated INPUTS came back blank — leaving `aiReady()` false, the
+ *    nav tab gone, and a settings page that still read "On".
  *
- * The tradeoff, stated plainly: this writes the key in clear text to
- * `e2e/.auth/ai-settings.json` for the duration of a run. That directory is gitignored and
- * already holds a live session cookie, and the key is already stored in clear text in this
- * machine's own Postgres — the app's own settings copy says so. The alternative is not
- * "safer", it is "the key is deleted every run", which is what actually happened.
+ * The page was never the right instrument. It renders asynchronously, it is the thing under
+ * test elsewhere, and it cannot return the API key at all by design. Postgres has none of
+ * those problems, so the fixture goes around the UI entirely — no hydration to wait for, no
+ * timeout to swallow, nothing to get half-right. `ai-settings.spec.ts` still covers the real
+ * form; a fixture has no business being a second test of it.
+ *
+ * The tradeoff, stated plainly: the backup file holds the API key in clear text for the
+ * duration of a run. That directory is gitignored and already holds a live session cookie,
+ * and the key is already in clear text in this machine's own Postgres — the app's own
+ * settings copy says so. The alternative is not "safer", it is "the key is deleted every
+ * run", which is what actually happened before it was backed up.
  */
 async function withDb<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
@@ -48,12 +59,46 @@ async function withDb<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   }
 }
 
-export async function readApiKey(): Promise<string> {
+type ConfigRow = {
+  ai_enabled: boolean
+  ai_provider: string
+  ai_base_url: string
+  ai_model: string
+  ai_api_key: string | null
+}
+
+export async function readAiConfig(): Promise<SavedAiSettings> {
   return withDb(async (pool) => {
-    const { rows } = await pool.query<{ ai_api_key: string | null }>(
-      "select ai_api_key from user_preferences limit 1",
+    const { rows } = await pool.query<ConfigRow>(
+      "select ai_enabled, ai_provider, ai_base_url, ai_model, ai_api_key from user_preferences limit 1",
     )
-    return rows[0]?.ai_api_key ?? ""
+    const row = rows[0]
+    return {
+      enabled: row?.ai_enabled ?? false,
+      provider: row?.ai_provider ?? "openai",
+      baseUrl: row?.ai_base_url ?? "",
+      model: row?.ai_model ?? "",
+      apiKey: row?.ai_api_key ?? "",
+    }
+  })
+}
+
+/**
+ * Everything except the key.
+ *
+ * Split the same way the app splits it — `setAiSettings` does not touch that column, and
+ * neither does this — so a fixture pointing the suite at the stub cannot disturb a real
+ * credential even by accident. Restoring the key is `writeApiKey`, called only by the
+ * teardown.
+ */
+export async function writeAiConfig(
+  settings: Omit<SavedAiSettings, "apiKey">,
+): Promise<void> {
+  await withDb(async (pool) => {
+    await pool.query(
+      "update user_preferences set ai_enabled = $1, ai_provider = $2, ai_base_url = $3, ai_model = $4",
+      [settings.enabled, settings.provider, settings.baseUrl, settings.model],
+    )
   })
 }
 
@@ -61,45 +106,4 @@ export async function writeApiKey(key: string): Promise<void> {
   await withDb(async (pool) => {
     await pool.query("update user_preferences set ai_api_key = $1", [key])
   })
-}
-
-/**
- * The AI block on `/settings`.
- *
- * By its heading rather than a testid: the settings page is a list of `<section>`s that all
- * look alike, and the heading is the thing a reader would use to find it too.
- */
-export function aiSection(page: Page): Locator {
-  return page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "AI companion" }) })
-}
-
-/**
- * Wait until react-hook-form has populated the AI form.
- *
- * Load-bearing, and not obvious: `register()` returns `{name, onChange, onBlur, ref}` and
- * sets NO value attribute, so the server-rendered inputs arrive EMPTY and are filled
- * imperatively on mount. Reading before that returns "" for settings that exist, and
- * filling before it writes to a DOM node react-hook-form is not yet listening to — so the
- * subsequent save submits the form's own (empty) defaults instead.
- *
- * Both happened: the teardown read empty values and then wrote them back, blanking a real
- * configuration. Waiting for the button to be enabled did not help, because the
- * server-rendered button is already enabled.
- *
- * A non-empty Base URL is the signal. When the install genuinely has none there is nothing
- * to wait for and nothing to lose, so the timeout is swallowed rather than failing.
- */
-export async function waitForAiFormReady(page: Page): Promise<void> {
-  await page
-    .waitForFunction(
-      () => {
-        const el = document.querySelector<HTMLInputElement>("#ai-base-url")
-        return !!el && el.value.length > 0
-      },
-      undefined,
-      { timeout: 10_000 },
-    )
-    .catch(() => {})
 }
