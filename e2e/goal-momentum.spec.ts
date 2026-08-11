@@ -142,9 +142,9 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
   const card = goalCard(page, goalTitle)
   await expect(card.getByText("Stalled")).toBeVisible()
 
-  // One session flips it, logged from the rail rather than through a task.
+  // One session flips it, logged from the strip rather than through a task.
   await page
-    .getByTestId("rail-habit")
+    .getByTestId("habit-chip")
     .filter({ hasText: habitTitle })
     .getByRole("button", { name: `Log ${habitTitle}` })
     .click()

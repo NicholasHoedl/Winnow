@@ -6,10 +6,10 @@ import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
-import type { HabitCard } from "@/modules/habits/queries"
+import type { HabitStripCard } from "@/modules/habits/queries"
 import type { RoutineWithItems } from "@/modules/routines/queries"
 import { reorderGoals } from "@/modules/goals/actions"
-import { deleteEntry, logEntry } from "@/modules/habits/actions"
+import { useLogHabit } from "@/modules/habits/use-log-habit"
 import {
   clearTaskRecurrenceException,
   deleteTask,
@@ -26,8 +26,9 @@ import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 
-import { ActivityRail, RailShortcuts } from "./activity-rail"
+import { ActivityRail, RoutinesLine } from "./activity-rail"
 import { GoalChips } from "./goal-rail"
+import { HabitStrip } from "./habit-strip"
 import { GoalDetailDialog } from "./goal-detail-dialog"
 import { GoalDialog } from "./goal-dialog"
 import { ListManager } from "./list-manager"
@@ -77,8 +78,8 @@ export function ActivityView({
   goals: GoalWithProgress[]
   events: EventOption[]
   routines: RoutineWithItems[]
-  /** Every live habit with its readings — the rail's quota bars. */
-  habits: HabitCard[]
+  /** Every live habit with its current-period count — the strip above the list. */
+  habits: HabitStripCard[]
   /** The user's own today, for the run dialog's default anchor. */
   today: string
   selectedGoalId: string | null
@@ -94,37 +95,10 @@ export function ActivityView({
   const [confirmSeries, setConfirmSeries] =
     React.useState<TaskWithSeries | null>(null)
   const [, startTransition] = React.useTransition()
-  // Its own transition rather than the shared one above: the rail's `+1` disables while it
-  // is pending, and borrowing the list's would grey every habit out each time a task was
-  // ticked.
-  const [habitPending, startHabitTransition] = React.useTransition()
-
-  /**
-   * Log one completion against a habit, from the rail.
-   *
-   * The undo deletes exactly the row the action returned. "Today's entry for this habit"
-   * would be ambiguous — `habit_entries` has no unique constraint on (habit, date) on
-   * purpose, so there can legitimately be three of them.
-   */
-  function handleLogHabit(card: HabitCard) {
-    startHabitTransition(async () => {
-      const result = await logEntry(card.habit.id)
-      if (!result.ok) {
-        toast.error(result.error)
-        return
-      }
-      toast(`Logged ${card.habit.title}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startHabitTransition(async () => {
-              const undone = await deleteEntry(result.entryId)
-              if (!undone.ok) toast.error(undone.error)
-            }),
-        },
-      })
-    })
-  }
+  // The strip's own transition lives inside the hook, so ticking a task cannot grey out a
+  // Log button and logging cannot grey out the list. Shared with `/activity/habits` and the
+  // dashboard card — the handler used to exist here and there, verbatim.
+  const { pendingId: habitPendingId, log: logHabit } = useLogHabit()
 
   // Goal state: which one scopes the list, which one is open in a dialog, which is being
   // edited or created.
@@ -424,9 +398,13 @@ export function ActivityView({
           onOpenDetail={(goal) => setDetailGoalId(goal.id)}
           onCreate={openCreateGoal}
         />
-        <RailShortcuts
-          routineCount={routines.length}
-          habitCount={habits.length}
+        {/* The same line the rail renders, because a phone has no rail. `pl-0` undoes the
+            gutter that aligns it with the goal cards' drag handles — there are no handles
+            out here. */}
+        <RoutinesLine
+          routines={routines}
+          onRun={(routine) => setRunRoutineId(routine.id)}
+          className="pl-0 lg:hidden"
         />
       </div>
 
@@ -439,15 +417,23 @@ export function ActivityView({
           onCreate={openCreateGoal}
           onReorder={handleGoalReorder}
           routines={routines}
-          habits={habits}
           onRunRoutine={(routine) => setRunRoutineId(routine.id)}
-          onLogHabit={handleLogHabit}
-          habitPending={habitPending}
         />
 
         <div className="min-w-0">
           <div className="mb-4">
             <QuickAdd />
+          </div>
+
+          {/* Between the quick-add and the filters, at every width. On a phone that puts
+              the quick-add row between this scroller and the goal chips above it, which is
+              what makes two horizontal scrollers on one screen readable. */}
+          <div className="mb-4">
+            <HabitStrip
+              habits={habits}
+              pendingId={habitPendingId}
+              onLog={logHabit}
+            />
           </div>
 
           <div className="mb-4 flex flex-wrap items-center gap-1">

@@ -9,9 +9,10 @@ import { visibleCard } from "./_card"
  * turns out to be enough, because the behaviour worth pinning is what happens as you log:
  * the streak turns over when the QUOTA is met, not when the first entry lands.
  *
- * `visibleCard` works on this page and not in the rail: the rail's entries carry
- * `data-rail` and are excluded by construction. Rail state is read through the
- * `rail-habit` testid instead.
+ * `visibleCard` works on this page and not on /activity: the strip's chips carry
+ * `data-rail` and are excluded by construction — the attribute means "not a row in the task
+ * list", which is what that selector has always used it for, and the rail was simply the
+ * only place that used to be true. Strip state is read through the `habit-chip` testid.
  */
 
 const PREFIX = "E2E habit"
@@ -147,19 +148,29 @@ test("a daily habit counts days, not weeks", async ({ page }) => {
   await expect(card()).toContainText("Streak 1")
 })
 
-test("the rail logs the same habit the page shows", async ({ page }) => {
-  const title = `${PREFIX} rail ${Date.now()}`
+/**
+ * The executable form of the invariant `getHabitStrip` rests on.
+ *
+ * The strip loads about a month of entries and this page loads 400 days, so the two could
+ * in principle disagree. They cannot, and the reason is worth stating: the strip shows only
+ * `adherence` for the period containing today, which every window containing today produces
+ * identically. The agreement is by construction, not by matching window sizes — which is
+ * why a cheaper query here was safe when a cheaper streak would not have been.
+ */
+test("the strip logs the same habit the page shows", async ({ page }) => {
+  const title = `${PREFIX} strip ${Date.now()}`
   await addHabit(page, title)
 
   await page.goto("/activity")
-  const railHabit = page.getByTestId("rail-habit").filter({ hasText: title })
-  await expect(railHabit).toHaveCount(1)
-  await expect(railHabit).toContainText("0/3")
+  const chip = page.getByTestId("habit-chip").filter({ hasText: title })
+  await expect(chip).toHaveCount(1)
+  await expect(chip).toContainText("0/3")
 
-  await railHabit.getByRole("button", { name: `Log ${title}` }).click()
-  await expect(railHabit).toContainText("1/3")
+  await chip.getByRole("button", { name: `Log ${title}` }).click()
+  await expect(chip).toContainText("1/3")
 
   // Same row underneath, not a second tally kept somewhere else.
   await page.goto("/activity/habits")
   await expect(visibleCard(page, title)).toContainText("1/3 this week")
 })
+
