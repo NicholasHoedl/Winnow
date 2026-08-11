@@ -3,7 +3,7 @@
 // ⌘K palette. `href` is where selecting the result navigates.
 
 export type SearchResultType =
-  "task" | "event" | "food" | "transaction" | "goal" | "note"
+  "task" | "event" | "food" | "transaction" | "goal" | "note" | "habit"
 
 export type SearchResult = {
   type: SearchResultType

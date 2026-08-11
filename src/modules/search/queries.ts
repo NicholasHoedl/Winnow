@@ -1,5 +1,5 @@
 import "server-only"
-import { and, desc, eq, ilike, or } from "drizzle-orm"
+import { and, desc, eq, ilike, isNull, or } from "drizzle-orm"
 
 import { db } from "@/db"
 import { APP_TIME_ZONE } from "@/lib/config"
@@ -9,6 +9,7 @@ import { requireUserId } from "@/lib/session"
 import { events } from "@/modules/calendar/schema"
 import { transactions } from "@/modules/budget/schema"
 import { goals } from "@/modules/goals/schema"
+import { habits } from "@/modules/habits/schema"
 import { foods } from "@/modules/meals/schema"
 import { notes } from "@/modules/notes/schema"
 import { tasks } from "@/modules/todos/schema"
@@ -37,65 +38,89 @@ export async function searchEverything(
   const userId = await requireUserId()
   const pattern = `%${escapeLike(q)}%`
 
-  const [taskRows, eventRows, foodRows, txnRows, goalRows, noteRows] =
-    await Promise.all([
-      db.query.tasks.findMany({
-        where: and(
-          eq(tasks.userId, userId),
-          or(ilike(tasks.title, pattern), ilike(tasks.notes, pattern)),
+  const [
+    taskRows,
+    eventRows,
+    foodRows,
+    txnRows,
+    goalRows,
+    noteRows,
+    habitRows,
+  ] = await Promise.all([
+    db.query.tasks.findMany({
+      where: and(
+        eq(tasks.userId, userId),
+        or(ilike(tasks.title, pattern), ilike(tasks.notes, pattern)),
+      ),
+      columns: { id: true, title: true, notes: true, dueDate: true },
+      orderBy: [desc(tasks.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    db.query.events.findMany({
+      where: and(
+        eq(events.userId, userId),
+        or(ilike(events.title, pattern), ilike(events.notes, pattern)),
+      ),
+      columns: { id: true, title: true, notes: true, startAt: true },
+      orderBy: [desc(events.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    db.query.foods.findMany({
+      where: and(eq(foods.userId, userId), ilike(foods.name, pattern)),
+      columns: { id: true, name: true, servingLabel: true },
+      orderBy: [desc(foods.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    db.query.transactions.findMany({
+      where: and(
+        eq(transactions.userId, userId),
+        or(
+          ilike(transactions.payee, pattern),
+          ilike(transactions.description, pattern),
         ),
-        columns: { id: true, title: true, notes: true, dueDate: true },
-        orderBy: [desc(tasks.updatedAt)],
-        limit: PER_MODULE_LIMIT,
-      }),
-      db.query.events.findMany({
-        where: and(
-          eq(events.userId, userId),
-          or(ilike(events.title, pattern), ilike(events.notes, pattern)),
-        ),
-        columns: { id: true, title: true, notes: true, startAt: true },
-        orderBy: [desc(events.updatedAt)],
-        limit: PER_MODULE_LIMIT,
-      }),
-      db.query.foods.findMany({
-        where: and(eq(foods.userId, userId), ilike(foods.name, pattern)),
-        columns: { id: true, name: true, servingLabel: true },
-        orderBy: [desc(foods.updatedAt)],
-        limit: PER_MODULE_LIMIT,
-      }),
-      db.query.transactions.findMany({
-        where: and(
-          eq(transactions.userId, userId),
-          or(
-            ilike(transactions.payee, pattern),
-            ilike(transactions.description, pattern),
-          ),
-        ),
-        columns: { id: true, payee: true, description: true, date: true },
-        orderBy: [desc(transactions.date)],
-        limit: PER_MODULE_LIMIT,
-      }),
-      db.query.goals.findMany({
-        where: and(
-          eq(goals.userId, userId),
-          or(ilike(goals.title, pattern), ilike(goals.notes, pattern)),
-        ),
-        columns: { id: true, title: true, notes: true, targetDate: true },
-        orderBy: [desc(goals.updatedAt)],
-        limit: PER_MODULE_LIMIT,
-      }),
-      // The body is searched as well as the title — a note whose title is optional would
-      // otherwise be findable only when someone had bothered to give it one.
-      db.query.notes.findMany({
-        where: and(
-          eq(notes.userId, userId),
-          or(ilike(notes.title, pattern), ilike(notes.body, pattern)),
-        ),
-        columns: { id: true, title: true, body: true, entryDate: true },
-        orderBy: [desc(notes.updatedAt)],
-        limit: PER_MODULE_LIMIT,
-      }),
-    ])
+      ),
+      columns: { id: true, payee: true, description: true, date: true },
+      orderBy: [desc(transactions.date)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    db.query.goals.findMany({
+      where: and(
+        eq(goals.userId, userId),
+        or(ilike(goals.title, pattern), ilike(goals.notes, pattern)),
+      ),
+      columns: { id: true, title: true, notes: true, targetDate: true },
+      orderBy: [desc(goals.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    // The body is searched as well as the title — a note whose title is optional would
+    // otherwise be findable only when someone had bothered to give it one.
+    db.query.notes.findMany({
+      where: and(
+        eq(notes.userId, userId),
+        or(ilike(notes.title, pattern), ilike(notes.body, pattern)),
+      ),
+      columns: { id: true, title: true, body: true, entryDate: true },
+      orderBy: [desc(notes.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    // Title only — a habit has no notes column to search, and no body to snippet.
+    // Archived habits are excluded, matching `getHabitsView` and `getGoals`: a practice
+    // you have retired should not come back through ⌘K.
+    //
+    // ROUTINES are deliberately not here. A routine is a template, not a record, so
+    // finding one is a navigation — and the palette already has a nav command for the
+    // page. A habit is a thing you keep, which is what makes it searchable.
+    db.query.habits.findMany({
+      where: and(
+        eq(habits.userId, userId),
+        isNull(habits.archivedAt),
+        ilike(habits.title, pattern),
+      ),
+      columns: { id: true, title: true },
+      orderBy: [desc(habits.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+  ])
 
   const results: SearchResult[] = [
     ...taskRows.map((r): SearchResult => ({
@@ -165,6 +190,20 @@ export async function searchEverything(
         ...(r.title && r.body ? { subtitle: snippet(r.body) } : {}),
       }
     }),
+    // No `subtitle`. The obvious one is the cadence — "3× a week" — but that is
+    // `periodLabel` in the habits SERVICE, and search deliberately does not import another
+    // module's service (the same rule the notes mapper above obeys). It costs nothing here:
+    // the cadence is one tap away on the page this links to.
+    //
+    // No `date` either. A habit's `startDate` is when you began keeping it, which is not
+    // the "when" any other result type means by that field.
+    ...habitRows.map((r): SearchResult => ({
+      type: "habit",
+      id: r.id,
+      title: r.title,
+      href: "/activity/habits",
+      score: scoreResult(q, r.title),
+    })),
   ]
 
   return rankAndCap(results)

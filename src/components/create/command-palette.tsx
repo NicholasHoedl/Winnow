@@ -69,6 +69,9 @@ const NAV_SHORTCUTS: Record<string, string> = {
   n: "/notes",
 }
 
+// Both exhaustive `Record<SearchResultType, …>` on purpose: adding a variant to the union
+// without touching these two is a compile error, which is the only thing standing between a
+// new searchable module and a result that renders with no icon and no label.
 const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
   task: ListTodo,
   event: CalendarDays,
@@ -76,6 +79,8 @@ const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
   transaction: Wallet,
   goal: Target,
   note: NotebookPen,
+  // The same flame the Habits nav command uses — one icon, one meaning.
+  habit: Flame,
 }
 
 const RESULT_LABEL: Record<SearchResultType, string> = {
@@ -85,6 +90,7 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
   transaction: "Transaction",
   goal: "Goal",
   note: "Note",
+  habit: "Habit",
 }
 
 type NavCommand = { href: string; label: string; icon: LucideIcon }
@@ -114,6 +120,12 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New goal", icon: Target, href: "/activity" },
   { label: "New note", icon: NotebookPen, href: "/notes" },
   { label: "New routine", icon: ListChecks, href: "/activity/routines" },
+  // `href`, not a `CreateKind`. A kind means a globally-mounted dialog in the app shell for
+  // the whole app's lifetime, which is a lot to carry for a rare action — every other
+  // command here except "New task" navigates, so this follows them. It does leave the same
+  // half-command routines already have (you land on the page and click New habit again); if
+  // that is ever fixed with a `?new=1` param it should be fixed for both at once.
+  { label: "New habit", icon: Flame, href: "/activity/habits" },
 ]
 
 function isTypingTarget(el: EventTarget | null): boolean {

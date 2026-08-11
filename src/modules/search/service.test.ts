@@ -69,8 +69,25 @@ describe("rankAndCap", () => {
     })
     const out = rankAndCap(
       [mk("low", 1), mk("high", 3), mk("bmid", 2), mk("amid", 2)],
-      3
+      3,
     )
     expect(out.map((r) => r.title)).toEqual(["high", "amid", "bmid"])
+  })
+
+  // The ranker is blind to `type` and must stay that way — a module's results compete on
+  // score alone, not on which module they came from. A habit carries neither a subtitle nor
+  // a date, which makes it the sparsest shape in the union and the one worth exercising.
+  it("ranks a habit against other types on score alone", () => {
+    const out = rankAndCap([
+      { type: "task", id: "t", title: "Drill", href: "/activity", score: 1 },
+      {
+        type: "habit",
+        id: "h",
+        title: "Drill",
+        href: "/activity/habits",
+        score: 5,
+      },
+    ])
+    expect(out.map((r) => r.type)).toEqual(["habit", "task"])
   })
 })

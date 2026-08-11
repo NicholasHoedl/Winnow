@@ -74,3 +74,45 @@ test("searches across modules and opens a result", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(visibleCard(page, title)).toHaveCount(0)
 })
+
+/**
+ * T12d: habits reach the palette.
+ *
+ * Until now a habit was findable only by already being on `/activity/habits`, which is the
+ * one place you do not need to search for it. The `Habit` badge is worth asserting as well
+ * as the hit itself — it comes from an exhaustive `Record<SearchResultType, string>`, so a
+ * result rendering with a blank label would mean the union and that map had drifted.
+ */
+test("finds a habit and offers a command to create one", async ({ page }) => {
+  const title = `E2E palette habit ${Date.now()}`
+
+  await page.goto("/activity/habits")
+  await page.getByRole("button", { name: "New habit", exact: true }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(title)
+  await dialog.getByRole("button", { name: "Add", exact: true }).click()
+  await expect(visibleCard(page, title)).toHaveCount(1)
+
+  await page.goto("/")
+  await page.getByRole("button", { name: "Search" }).first().click()
+  await page.getByPlaceholder(PLACEHOLDER).fill(title)
+
+  const result = page.getByRole("option", { name: new RegExp(title) })
+  await expect(result).toBeVisible()
+  await expect(result).toContainText("Habit")
+  await result.click()
+  await expect(page).toHaveURL(/\/activity\/habits$/)
+
+  // The create command, which is how a habit gets made without knowing the route.
+  await page.getByRole("button", { name: "Search" }).first().click()
+  await page.getByPlaceholder(PLACEHOLDER).fill("New habit")
+  await expect(page.getByRole("option", { name: "New habit" })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  await visibleCard(page, title)
+    .getByRole("button", { name: `${title} actions` })
+    .click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await page.getByRole("button", { name: "Delete habit", exact: true }).click()
+  await expect(visibleCard(page, title)).toHaveCount(0)
+})
