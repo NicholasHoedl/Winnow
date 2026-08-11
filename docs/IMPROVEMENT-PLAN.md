@@ -34,7 +34,7 @@ picked up — it is **not** code-level detail yet.
 | T11 — AI configured from Settings, not env    | ✅ shipped    |
 | T12a — Habits: a quota and a log              | ✅ shipped    |
 | T12b — Goal momentum counts habit sessions    | ✅ shipped    |
-| T12c — Companion proposes habits, not dates   | after T12b    |
+| T12c — Companion proposes habits, not dates   | ✅ shipped    |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -736,6 +736,32 @@ ADR-0014 and the T12a notes below.
   silently drop exactly the goals the badge exists to flag.
 - Archived habits stop counting, matching `getHabitsView`: retiring a practice lets its goal
   go quiet rather than keeping it alive on something you no longer do.
+
+**T12c — shipped**, no migration. The line closes where it opened:
+
+- **`goalPlanPayloadSchema` is now `{ milestones, habits, setupTasks }`.** The old shape made
+  every proposed task carry a `dueDate`, so a plan of dated appointments was the only
+  well-formed answer available — which is why the model produced milestones in disguise
+  ("Learn words 1-250") and commitments the user does not control ("Drill mount and side
+  control on Aug 31"). It was answering the question it was asked.
+- **The `setupTasks: max 3` cap is the fix, more than the prompt is.** It makes the failure
+  mode structurally unavailable: there is nowhere to put a twenty-item checklist however the
+  prompt is read. Prompt wording nudges; a cap decides. `habits` deliberately has no minimum
+  — forcing one onto a project-shaped goal would invent a fake practice, and over-constraining
+  costs a bare `malformed` the user cannot edit their way out of.
+- **`planWarnings` gained a plan-level check**: a proposal with no habits at all is flagged.
+  A ladder with nothing climbing it is the exact failure this line exists to prevent, and
+  noticing it is the app's job — the same division as every date check.
+- **`milestoneIndex` retired, and `finalizePlan` got dull.** Half its unit tests existed to
+  pin down renumbering; nothing points at an array position any more, so a whole class of
+  off-by-one went with it. Worth noticing that the correct model was also the simpler one.
+- **A stale test stub cost a debugging round.** `_ai-stub.mjs` runs as a long-lived process
+  and `reuseExistingServer` kept an old one alive, so three specs failed against the
+  pre-T12c payload while the new one sat unread on disk. The stub is now never reused: it
+  starts in milliseconds, so reuse bought nothing and cost correctness.
+- Not built: a rate-feasibility warning ("at 20 words a day you reach 5000 in February, not
+  December"). It needs `targetAmount` on a proposed habit, which is the measured variant
+  deferred from T12a. Named here rather than left as a gap someone rediscovers.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

@@ -307,8 +307,9 @@ left, the proposal renderer above the pending queue on the right. Four jobs. Thr
 run end to end — generate → prune → edit inline → Apply, which writes through the modules'
 own actions and lands you on the result:
 
-- **Plan a goal** → milestones and tasks, via `addMilestone` and `createTask`, then
-  `/activity`.
+- **Plan a goal** → milestones, the recurring **habits** that reach them, and at most three
+  genuine setup tasks — via `addMilestone`, `createHabit` and `createTask`, then `/activity`.
+  Reshaped in T12c; see the note below, because the old shape is what started the T12 line.
 - **Build a routine** → a routine and its items, via `createRoutine` and `addRoutineItem`,
   then `/activity/routines`.
 - **Read my week** → a narrated summary. **The odd one out: nothing to apply.** A paragraph
@@ -341,11 +342,22 @@ and confident and there would be no way to tell.
 
 Five things worth knowing before touching it:
 
-- **`milestoneIndex` is presentational.** `tasks` has `goalId` and no `milestoneId`, so the
-  grouping under milestones is a planning aid that does not survive Apply. Tasks link to
-  the goal, which is what makes them count toward momentum (T8).
-- **`finalizePlan` renumbers.** Dropping a milestone shifts every index after it; that is
-  the one piece of index arithmetic here and it is unit-tested for exactly that reason.
+- **A plan is `{ milestones, habits, setupTasks }` since T12c**, and the caps are the design
+  rather than a guard rail. `setupTasks` is capped at **three**, which makes the old failure
+  mode structurally unavailable: the model cannot answer with a dated checklist however it
+  reads the prompt, because there is nowhere to put one. Prompt wording nudges; a cap of
+  three decides. `habits` has no minimum on purpose — forcing one onto a project-shaped goal
+  ("renovate the kitchen") would invent a fake practice, and a rejected payload surfaces as
+  a bare `malformed` the user can only escape by regenerating.
+- **`milestoneIndex` is gone, and `finalizePlan` no longer renumbers.** Tasks used to carry
+  a position into the milestones array, so dropping a middle milestone silently repointed
+  every task after it — the one piece of index arithmetic here, and the reason that function
+  was unit-tested so heavily. Habits and setup tasks attach to the GOAL, which is where
+  tasks always attached in the data model anyway; the grouping was only ever presentational.
+  Nothing points at a position now, so a whole class of off-by-one went with it.
+- **`planWarnings` judges the plan's shape, not only its dates.** A proposal with no habits
+  at all gets a plan-level warning — a ladder with nothing climbing it is exactly the failure
+  T12 exists to prevent, and noticing it is the app's job, not the model's.
 - **The renderer's exclusion state is keyed on a version counter** so a refinement remounts
   it. Without that, rows pruned from the old plan arrive pre-pruned in the new one.
 - **A routine's `dueOffsetDays` has three distinct meanings** and nothing may collapse
