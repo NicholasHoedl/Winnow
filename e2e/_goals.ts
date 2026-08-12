@@ -54,11 +54,6 @@ export async function openGoalDetail(page: Page, title: string) {
   await expect(page.getByRole("dialog")).toBeVisible()
 }
 
-export async function closeGoalDetail(page: Page) {
-  await page.keyboard.press("Escape")
-  await expect(page.getByRole("dialog")).toHaveCount(0)
-}
-
 /** Delete a goal by title, through its detail dialog and the confirm. */
 export async function deleteGoal(page: Page, title: string) {
   await openGoalDetail(page, title)

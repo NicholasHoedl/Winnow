@@ -1,5 +1,5 @@
 import "server-only"
-import { and, asc, eq, gte, isNull } from "drizzle-orm"
+import { and, asc, desc, eq, gte, isNotNull, isNull } from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
@@ -132,6 +132,33 @@ export async function getHabitsView(): Promise<HabitsView> {
   })
 
   return { cards, from, to: today, weekStartsOn }
+}
+
+/** An archived habit, reduced to what the "retired" list needs to offer it back. */
+export type ArchivedHabit = { id: string; title: string; archivedAt: Date }
+
+/**
+ * Habits that have been retired.
+ *
+ * The only read in this module that does NOT filter `archivedAt`, and it exists because
+ * nothing else did. `archiveHabit` promised "reversible, unlike delete" and the toast said
+ * "its history is kept" — but every query excluded archived rows and no surface listed
+ * them, so archiving was a one-way disappearance and the reassurance was false. The
+ * `unarchiveHabit` action had been sitting unused since it was written.
+ *
+ * Deliberately thin: no entries, no streak, no adherence. A retired habit is something you
+ * are deciding whether to bring back, not something you are reading numbers off.
+ */
+export async function getArchivedHabits(): Promise<ArchivedHabit[]> {
+  const userId = await requireUserId()
+  const rows = await db.query.habits.findMany({
+    where: and(eq(habits.userId, userId), isNotNull(habits.archivedAt)),
+    columns: { id: true, title: true, archivedAt: true },
+    // Most recently retired first: the one you archived by mistake is the one you came
+    // here for.
+    orderBy: [desc(habits.archivedAt)],
+  })
+  return rows.filter((row): row is ArchivedHabit => row.archivedAt !== null)
 }
 
 /** A habit reduced to what a strip or a summary row draws: its name and how it is doing. */

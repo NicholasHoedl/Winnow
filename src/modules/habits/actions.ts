@@ -147,6 +147,17 @@ export async function archiveHabit(id: unknown): Promise<ActionResult> {
   return setArchived(id, new Date())
 }
 
+/**
+ * The way back, and for a long time the half of the pair nothing called.
+ *
+ * Every read filtered `archivedAt` and no surface listed a retired habit, so "reversible"
+ * above was true of the DATA and false of the app: archiving was a one-way disappearance
+ * under a toast promising the history was kept. `/activity/habits` now lists archived
+ * habits behind a toggle, fed by `getArchivedHabits`, and this is what that offers.
+ *
+ * Nothing is restored except visibility — the entries were never touched, so the streak is
+ * recomputed from them and reads whatever the gap did to it.
+ */
 export async function unarchiveHabit(id: unknown): Promise<ActionResult> {
   return setArchived(id, null)
 }

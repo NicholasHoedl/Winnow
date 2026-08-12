@@ -19,7 +19,11 @@ import {
   deleteTransactionRecurrence,
   restoreTransaction,
 } from "@/modules/budget/actions"
-import type { Category, Transaction } from "@/modules/budget/queries"
+import type {
+  Category,
+  Transaction,
+  TransactionWithSeries,
+} from "@/modules/budget/queries"
 import {
   formatCents,
   type MonthSummary,
@@ -78,7 +82,7 @@ export function BudgetView({
   month: string
   today: string
   categories: Category[]
-  transactions: Transaction[]
+  transactions: TransactionWithSeries[]
   summary: MonthSummary
   filters: Filters
   // Server-rendered analysis sections. Passed in rather than imported so the SVG
@@ -87,7 +91,8 @@ export function BudgetView({
   trends?: React.ReactNode
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
-  const [editingTx, setEditingTx] = React.useState<Transaction | null>(null)
+  const [editingTx, setEditingTx] =
+    React.useState<TransactionWithSeries | null>(null)
   const [categoriesOpen, setCategoriesOpen] = React.useState(false)
   const [budgetsOpen, setBudgetsOpen] = React.useState(false)
   const [stoppingTx, setStoppingTx] = React.useState<Transaction | null>(null)
@@ -171,7 +176,7 @@ export function BudgetView({
     setTxOpen(true)
   }
 
-  function openEdit(tx: Transaction) {
+  function openEdit(tx: TransactionWithSeries) {
     setEditingTx(tx)
     setTxOpen(true)
   }

@@ -3,7 +3,7 @@
 import { CalendarOff, MoreVertical, Pencil, Repeat, Trash2 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import type { Transaction } from "@/modules/budget/queries"
+import type { TransactionWithSeries } from "@/modules/budget/queries"
 import { formatCents } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
@@ -30,13 +30,13 @@ export function TransactionItem({
   onDelete,
   onStopRepeating,
 }: {
-  transaction: Transaction
+  transaction: TransactionWithSeries
   categoryName: string
-  onEdit: (tx: Transaction) => void
-  onDelete: (tx: Transaction) => void
+  onEdit: (tx: TransactionWithSeries) => void
+  onDelete: (tx: TransactionWithSeries) => void
   /** Only offered while the rule still exists — deleting it detaches posted rows,
    *  which clears seriesId and takes this menu item away with it. */
-  onStopRepeating: (tx: Transaction) => void
+  onStopRepeating: (tx: TransactionWithSeries) => void
 }) {
   const { currency } = usePreferences()
   const isIncome = transaction.type === "income"

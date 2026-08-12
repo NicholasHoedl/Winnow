@@ -40,6 +40,7 @@ picked up — it is **not** code-level detail yet.
 | T12f — A routine can drop its own stale tasks     | ✅ shipped        |
 | T12g — The e2e suite gets a database of its own   | ✅ shipped        |
 | T12h — Companion settings: no URL, a model list   | ✅ shipped        |
+| T12i — Dead-code sweep, and the edits it exposed  | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -197,8 +198,11 @@ and it unblocks later tranches (shared `ActionResult`, Goals module, shared date
 - **Currency correctness (Budget).** Replace the hardcoded `Amount ($)` label and `0.00`
   placeholder with the user's currency; handle **zero-decimal currencies** (JPY/¥) in the
   amount input + `dollarsToCents`/`formatCents`.
-- **Wire dead actions.** `updateCategory` (rename/kind) and `updateFood` (edit a library food)
-  exist but are unreachable — add the edit affordances.
+- ~~**Wire dead actions.** `updateCategory` (rename/kind) and `updateFood` (edit a library
+  food) exist but are unreachable — add the edit affordances.~~ Half of this was already
+  false when written: `food-manager.tsx` has called `updateFood` since T8. `updateCategory`
+  was real and is done in **T12i**, along with `renameList`, `unarchiveHabit` and
+  `updateTransactionRecurrence`, which the same sweep found in the same state.
 - **Budget correctness.** Filter the transaction dialog's category list **by type** (no income
   category on an expense); add **min/max = current month** to the transaction date input (and to
   the meals log date) so entries can't silently land in another period.
@@ -1015,3 +1019,43 @@ T0 Foundations/safety ─┬─> T1 Capture & nav ─┬─> T2 Links/Today/remi
 - **T2** turns it into one product; **T3/T4** add depth and share the charting foundation;
   **T5** deepens planning modules (needs T2); **T6** hardens; **T7** is breadth on top.
 - T3/T4/T6 are largely parallelizable after T0 if you prefer to reorder by appetite.
+
+**T12i — shipped**, no migration. A cleaning pass that was asked for as "remove unused code"
+and turned into two different jobs, because a function with no callers is ambiguous evidence.
+
+- **Deleted, because nothing needed them**: `charts/sparkline.tsx`, `getMonthBudgets`,
+  `getProposal`, `closeGoalDetail`, `APP_CURRENCY` (a note left in its place — older
+  `.env.example` files still set it and it now does nothing), `CATEGORY_ACCENT_COUNT`,
+  `UserPreferencesRow`, and the `@testing-library/user-event` dependency. `shadcn` moved to
+  devDependencies.
+- **`TransactionRecurrence` was kept**, and the reason it looked dead is the point below.
+- **Four capabilities were not dead code — they were unfinished features.** Each had a
+  working, tested, user-scoped action and no way to reach it:
+  - `unarchiveHabit`. Archiving was wired, and its toast said "its history is kept" — but
+    every read filtered `archivedAt` and no surface listed a retired habit, so archiving was
+    a one-way disappearance under a reassuring sentence. `/activity/habits` now has a "Show
+    archived" section fed by a new, deliberately thin `getArchivedHabits`.
+  - `renameList` and `updateCategory`. Both managers offered create and delete and nothing
+    between, so fixing a typo meant deleting the row — which unfiles every task or
+    transaction under it — and starting again. Both now use `CalendarManager`'s shape: the
+    create form doubles as the edit form.
+  - `updateTransactionRecurrence`. Reachable now through a scope toggle on the transaction
+    dialog, the one `TaskDialog` already had. Changing a rent amount previously meant
+    stopping the schedule and rebuilding it from memory.
+- **A category's KIND stays locked while editing**, though the action accepts it. Flipping it
+  under existing transactions leaves them pointing at a category that no longer matches their
+  type: the transaction dialog filters its picker by kind, so re-opening one of those rows
+  silently drops its category, and `budget-view` stops offering the category a budget.
+  Allowing it needs a migration path for the rows that already reference it. The e2e asserts
+  the lock, so it stays a decision rather than an omission.
+- **`getMonthTransactions` now joins the rule** the way `getTasks` does — separate read,
+  in-memory join, scoped to the `seriesId`s actually on screen rather than the whole rule
+  table. That is what makes the scope toggle possible; without the rule in hand the only
+  thing the UI could offer a repeating transaction was "Stop repeating".
+- **The `*Input` types were kept.** Several are exported and unreferenced, but they are the
+  module convention (`z.infer` beside each schema) and a convention with holes in it is worse
+  than one that is uniformly redundant.
+- **The habits e2e teardown had a hole this change opened.** An archived row carries
+  `data-rail`, so `visibleCard` cannot see it, and an archived habit has no Delete menu — a
+  test that archived and then failed before restoring would leave a row nothing swept, and
+  the next run's "0 strays" would be a lie. The teardown now unarchives first.

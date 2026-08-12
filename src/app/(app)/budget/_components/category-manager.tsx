@@ -3,10 +3,14 @@
 import * as React from "react"
 import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
-import { Trash2 } from "lucide-react"
+import { Pencil, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
-import { createCategory, deleteCategory } from "@/modules/budget/actions"
+import {
+  createCategory,
+  deleteCategory,
+  updateCategory,
+} from "@/modules/budget/actions"
 import type { Category } from "@/modules/budget/queries"
 import { categoryInputSchema } from "@/modules/budget/validation"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -18,7 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -45,7 +54,11 @@ export function CategoryManager({
   onOpenChange: (open: boolean) => void
 }) {
   const [pending, startTransition] = React.useTransition()
-  const [confirmTarget, setConfirmTarget] = React.useState<Category | null>(null)
+  const [confirmTarget, setConfirmTarget] = React.useState<Category | null>(
+    null,
+  )
+  /** The form above the list doubles as the edit form — `CalendarManager`'s shape. */
+  const [editingId, setEditingId] = React.useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -59,7 +72,9 @@ export function CategoryManager({
   })
 
   const onSubmit = handleSubmit(async (data) => {
-    const result = await createCategory(data)
+    const result = editingId
+      ? await updateCategory(editingId, data)
+      : await createCategory(data)
     if (!result.ok) {
       if (result.fieldErrors) {
         for (const [name, message] of Object.entries(result.fieldErrors)) {
@@ -69,14 +84,32 @@ export function CategoryManager({
       toast.error(result.error)
       return
     }
-    toast.success("Category added")
+    toast.success(editingId ? "Category updated" : "Category added")
+    setEditingId(null)
     reset(EMPTY)
   })
+
+  /**
+   * `kind` is loaded into the form even though the edit path will not let you change it —
+   * `updateCategory` does `.set(parsed.data)`, so omitting it would rewrite every edited
+   * category as an expense. Same reason `food-manager.tsx` carries `barcode` through an
+   * edit that never shows it.
+   */
+  function startEdit(category: Category) {
+    setEditingId(category.id)
+    reset({ name: category.name, kind: category.kind })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    reset(EMPTY)
+  }
 
   function remove(id: string) {
     startTransition(async () => {
       const result = await deleteCategory(id)
       if (!result.ok) toast.error(result.error)
+      else if (editingId === id) cancelEdit()
     })
   }
 
@@ -91,8 +124,8 @@ export function CategoryManager({
         <DialogHeader>
           <DialogTitle>Categories</DialogTitle>
           <DialogDescription>
-            Group your income and spending. Deleting a category keeps its past
-            transactions — they become uncategorized.
+            Group your income and spending. A category can be renamed; deleting
+            one keeps its past transactions — they become uncategorized.
           </DialogDescription>
         </DialogHeader>
 
@@ -105,7 +138,7 @@ export function CategoryManager({
                 <FieldError errors={[errors.name]} />
               </Field>
               <Field>
-                <FieldLabel>Kind</FieldLabel>
+                <FieldLabel htmlFor="c-kind">Kind</FieldLabel>
                 <Controller
                   control={control}
                   name="kind"
@@ -113,10 +146,20 @@ export function CategoryManager({
                     <Select
                       value={field.value}
                       onValueChange={(value) => value && field.onChange(value)}
+                      // Locked while editing, deliberately. Flipping a kind under
+                      // existing transactions leaves them pointing at a category that no
+                      // longer matches their type: the transaction dialog filters its
+                      // picker by kind, so re-opening one of those transactions silently
+                      // drops its category, and `budget-view` stops offering the category
+                      // a budget. Allowing it needs a migration path for the rows that
+                      // already reference it, which renaming does not.
+                      disabled={editingId !== null}
                     >
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger id="c-kind" className="w-32">
                         <SelectValue>
-                          {(value) => (value === "income" ? "Income" : "Expense")}
+                          {(value) =>
+                            value === "income" ? "Income" : "Expense"
+                          }
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -128,9 +171,16 @@ export function CategoryManager({
                 />
               </Field>
             </div>
-            <Button type="submit" disabled={isSubmitting} className="w-full">
-              Add category
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" disabled={isSubmitting} className="flex-1">
+                {editingId ? "Save category" : "Add category"}
+              </Button>
+              {editingId && (
+                <Button type="button" variant="outline" onClick={cancelEdit}>
+                  <X className="size-4" />
+                </Button>
+              )}
+            </div>
           </FieldGroup>
         </form>
 
@@ -153,15 +203,25 @@ export function CategoryManager({
                         <span className="truncate font-medium">
                           {category.name}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Delete ${category.name}`}
-                          disabled={pending}
-                          onClick={() => setConfirmTarget(category)}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
+                        <span className="flex shrink-0 items-center">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Edit ${category.name}`}
+                            onClick={() => startEdit(category)}
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Delete ${category.name}`}
+                            disabled={pending}
+                            onClick={() => setConfirmTarget(category)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </span>
                       </li>
                     ))}
                   </ul>

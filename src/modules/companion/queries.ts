@@ -28,14 +28,6 @@ export async function getPendingProposals(): Promise<ProposalRow[]> {
   })
 }
 
-export async function getProposal(id: string): Promise<ProposalRow | null> {
-  const userId = await requireUserId()
-  const row = await db.query.aiProposals.findFirst({
-    where: and(eq(aiProposals.id, id), eq(aiProposals.userId, userId)),
-  })
-  return row ?? null
-}
-
 /**
  * Goals the companion can plan.
  *

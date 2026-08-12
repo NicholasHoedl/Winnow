@@ -21,8 +21,6 @@ import {
 
 import { userPreferences } from "./schema"
 
-export type UserPreferencesRow = typeof userPreferences.$inferSelect
-
 /**
  * Effective preferences for the current user: the saved row normalised over the
  * defaults, so callers never special-case a missing row (first run).

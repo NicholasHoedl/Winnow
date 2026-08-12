@@ -9,8 +9,9 @@ import {
   createTransaction,
   createTransactionRecurrence,
   updateTransaction,
+  updateTransactionRecurrence,
 } from "@/modules/budget/actions"
-import type { Category, Transaction } from "@/modules/budget/queries"
+import type { Category, TransactionWithSeries } from "@/modules/budget/queries"
 import {
   currencyFractionDigits,
   currencySymbol,
@@ -21,6 +22,7 @@ import {
   transactionInputSchema,
   type TransactionInput,
 } from "@/modules/budget/validation"
+import type { ActionResult } from "@/lib/action-result"
 import { addDays, daysInMonth, fmt, isValidDateString } from "@/lib/date"
 import { numberField } from "@/lib/forms"
 import { cyclesInRange } from "@/lib/recurrence"
@@ -128,11 +130,24 @@ export function TransactionDialog({
   /** The user's local today — the horizon the catch-up preview counts up to. */
   today: string
   categories: Category[]
-  transaction: Transaction | null
+  transaction: TransactionWithSeries | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!transaction
+  const series = transaction?.series ?? null
+  const isRecurring = !!series
+  /**
+   * Which thing an edit is about — the posted row, or the rule that posted it.
+   *
+   * The same toggle `TaskDialog` carries, and the reason it is needed here is the older
+   * comment two screens down: "editing a posted row edits that row — the ledger is a
+   * record of what happened, not a template". That is still true of the row, and it left
+   * the TEMPLATE unreachable. Changing the rent from 1200 to 1300 meant stopping the rule
+   * and rebuilding the schedule from memory.
+   */
+  const [scope, setScope] = React.useState<"this" | "series">("this")
+  const isSeriesEdit = isRecurring && scope === "series"
   const { currency, weekStartsOn } = usePreferences()
   const symbol = currencySymbol(currency)
   const step = currencyFractionDigits(currency) === 0 ? "1" : "0.01"
@@ -181,8 +196,36 @@ export function TransactionDialog({
     }
   }, [txType, categories, getValues, setValue])
 
+  // Reset the scope when the dialog (re)opens — during render, so the effect below sees
+  // the right scope on its first commit. `TaskDialog` does this identically.
+  const openKeyRef = React.useRef<string | null>(null)
+  const openKey = open ? (transaction?.id ?? "new") : null
+  if (openKey !== openKeyRef.current) {
+    openKeyRef.current = openKey
+    if (openKey !== null) setScope("this")
+  }
+
   React.useEffect(() => {
     if (!open) return
+    if (series && scope === "series") {
+      // The rule's own values. `date` stays empty: a schedule has a start and an end, not
+      // a date, and the field is hidden in this mode for exactly that reason.
+      reset({
+        ...emptyValues(defaultDate, today),
+        amount: minorToAmount(series.amountCents, currency),
+        type: series.type,
+        categoryId: series.categoryId ?? "",
+        payee: series.payee ?? "",
+        description: series.description ?? "",
+        repeat: series.freq,
+        recurrenceInterval: series.recurrenceInterval,
+        weekdays: series.weekdays,
+        monthlyMode: series.monthlyMode,
+        startDate: series.startDate,
+        endDate: series.endDate ?? "",
+      })
+      return
+    }
     if (transaction) {
       reset({
         ...emptyValues(defaultDate, today),
@@ -196,17 +239,34 @@ export function TransactionDialog({
     } else {
       reset(emptyValues(defaultDate, today))
     }
-  }, [open, transaction, defaultDate, today, currency, reset])
+  }, [open, transaction, series, scope, defaultDate, today, currency, reset])
 
   const onSubmit = handleSubmit(async (data) => {
     // The resolver strips the schedule fields from `data`, so the rule path reads the
     // raw form values instead.
     const v = getValues()
-    const result = isEdit
-      ? await updateTransaction(transaction.id, data)
-      : v.repeat === "none"
-        ? await createTransaction(data)
-        : await createTransactionRecurrence(toRecurrenceInput(v, v.repeat))
+    let result: ActionResult
+    if (series && scope === "series") {
+      if (v.repeat === "none") {
+        // "Off" on a rule reads as "stop repeating", and turning an edit into a deletion
+        // is not something a Save button should do quietly. The row's menu has that.
+        setError("repeat", {
+          message:
+            'Pick a frequency, or use "Stop repeating" to end the schedule.',
+        })
+        return
+      }
+      result = await updateTransactionRecurrence(
+        series.id,
+        toRecurrenceInput(v, v.repeat),
+      )
+    } else if (isEdit) {
+      result = await updateTransaction(transaction.id, data)
+    } else if (v.repeat === "none") {
+      result = await createTransaction(data)
+    } else {
+      result = await createTransactionRecurrence(toRecurrenceInput(v, v.repeat))
+    }
 
     if (!result.ok) {
       if (result.fieldErrors) {
@@ -218,17 +278,20 @@ export function TransactionDialog({
       return
     }
     toast.success(
-      isEdit
-        ? "Transaction updated"
-        : v.repeat === "none"
-          ? "Transaction added"
-          : "Repeating transaction added",
+      isSeriesEdit
+        ? "Schedule updated"
+        : isEdit
+          ? "Transaction updated"
+          : v.repeat === "none"
+            ? "Transaction added"
+            : "Repeating transaction added",
     )
     onOpenChange(false)
   })
 
-  // A schedule only makes sense while creating. Editing a posted row edits that row —
-  // the ledger is a record of what happened, not a template.
+  // Editing a POSTED ROW still edits only that row — the ledger records what happened,
+  // not what was planned. The schedule behind it is reachable through the scope toggle,
+  // which is a different thing to be editing and says so.
   const repeat = watch("repeat")
   const interval = watch("recurrenceInterval")
   const weekdays = watch("weekdays")
@@ -238,6 +301,9 @@ export function TransactionDialog({
 
   // How many rows saving right now would post. A back-dated start is the foot-gun this
   // defuses — the same pure engine the server materializer runs, so the count matches.
+  // Create-only, including in series mode: `updateTransactionRecurrence` advances
+  // `postedThrough` when the schedule changes rather than back-posting, so an edited rule
+  // adds nothing at once and a count would be a number the save will not produce.
   const pending = React.useMemo(() => {
     if (isEdit || repeat === "none" || !isValidDateString(startDate))
       return null
@@ -273,23 +339,58 @@ export function TransactionDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {isEdit
-              ? "Edit transaction"
-              : repeat === "none"
-                ? "Add transaction"
-                : "Add repeating transaction"}
+            {isSeriesEdit
+              ? "Edit repeating transaction"
+              : isEdit
+                ? "Edit transaction"
+                : repeat === "none"
+                  ? "Add transaction"
+                  : "Add repeating transaction"}
           </DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "Update this transaction."
-              : repeat === "none"
-                ? "Record income or an expense."
-                : "Posts automatically each time it comes due."}
+            {isSeriesEdit
+              ? "Changes apply to what it posts from here on. Transactions it already posted are left alone."
+              : isEdit
+                ? isRecurring
+                  ? "Editing just this posted transaction."
+                  : "Update this transaction."
+                : repeat === "none"
+                  ? "Record income or an expense."
+                  : "Posts automatically each time it comes due."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={onSubmit}>
           <FieldGroup>
+            {isRecurring && (
+              <Field>
+                <FieldLabel>Apply changes to</FieldLabel>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      ["this", "This one"],
+                      ["series", "Schedule"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={scope === value}
+                      onClick={() => setScope(value)}
+                      className={cn(
+                        "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                        scope === value
+                          ? "border-primary ring-primary/30 ring-2"
+                          : "border-border hover:bg-accent",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="t-amount">Amount ({symbol})</FieldLabel>
@@ -337,7 +438,7 @@ export function TransactionDialog({
             >
               {/* A schedule supplies its own dates, so the one-off date field would
                   only be a second, contradictory answer. */}
-              {repeat === "none" && (
+              {!isSeriesEdit && repeat === "none" && (
                 <Field>
                   <FieldLabel htmlFor="t-date">Date</FieldLabel>
                   <Input
@@ -408,7 +509,7 @@ export function TransactionDialog({
               <FieldError errors={[errors.description]} />
             </Field>
 
-            {!isEdit && (
+            {(!isEdit || isSeriesEdit) && (
               <>
                 <RecurrenceFields
                   control={control}

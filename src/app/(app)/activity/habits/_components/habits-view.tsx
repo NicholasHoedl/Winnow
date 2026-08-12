@@ -7,6 +7,7 @@ import * as React from "react"
 import Link from "next/link"
 import {
   Archive,
+  ArchiveRestore,
   ArrowLeft,
   MoreVertical,
   Pencil,
@@ -18,8 +19,13 @@ import { toast } from "sonner"
 import { accentForKey } from "@/lib/colors"
 import { dateRange } from "@/lib/date"
 import type { GoalOption } from "@/modules/goals/queries"
-import { archiveHabit, deleteHabit } from "@/modules/habits/actions"
+import {
+  archiveHabit,
+  deleteHabit,
+  unarchiveHabit,
+} from "@/modules/habits/actions"
 import type {
+  ArchivedHabit,
   HabitCard as HabitCardData,
   HabitRow,
 } from "@/modules/habits/queries"
@@ -42,6 +48,22 @@ import {
 import { Progress } from "@/components/ui/progress"
 
 import { HabitDialog } from "./habit-dialog"
+
+/**
+ * When a habit was retired, in the local zone.
+ *
+ * NOT `formatDay`, which is next to it and looks like it would fit: that one parses a
+ * wall-date string in UTC precisely because such a string has no instant behind it.
+ * `archivedAt` is a real timestamp, so it wants the opposite treatment — read it where
+ * the user is, or a habit archived this evening reads as tomorrow.
+ */
+function formatArchivedAt(at: Date): string {
+  return at.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
 
 /** A wall-date formatted for a hover title. Parsed and formatted in UTC — the string has
  *  no instant behind it, so local parsing would shift it a day west of Greenwich. */
@@ -204,12 +226,15 @@ export function HabitsView({
   to,
   weekStartsOn,
   goals,
+  archived,
 }: {
   cards: HabitCardData[]
   from: string
   to: string
   weekStartsOn: number
   goals: GoalOption[]
+  /** Retired habits, so archiving is something you can undo — see `getArchivedHabits`. */
+  archived: ArchivedHabit[]
 }) {
   const days = dateRange(from, to)
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -222,6 +247,10 @@ export function HabitsView({
   // archiving a habit greyed out every Log button on the page.
   const [, startTransition] = React.useTransition()
   const { pendingId, log } = useLogHabit()
+  const [showArchived, setShowArchived] = React.useState(false)
+  // Per-id, for the reason `useLogHabit` tracks logging per-id: a boolean would disable
+  // every Unarchive button while one row's write is in flight.
+  const [restoringId, setRestoringId] = React.useState<string | null>(null)
 
   function openDialog(habit: HabitRow | null) {
     setEditing(habit)
@@ -235,8 +264,28 @@ export function HabitsView({
         toast.error(result.error)
         return
       }
+      // The description is a promise the app can now keep: archived habits are listed
+      // below and can be brought back. Until this UI existed, archiving hid a habit with
+      // no route back, and this sentence was false.
       toast(`${habit.title} archived`, {
-        description: "Its history is kept.",
+        description: "Its history is kept, and you can restore it below.",
+      })
+    })
+  }
+
+  function handleUnarchive(habit: ArchivedHabit) {
+    setRestoringId(habit.id)
+    startTransition(async () => {
+      const result = await unarchiveHabit(habit.id)
+      setRestoringId(null)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      // Not "restored to where it was" — `habitStreak` recomputes from the entries, which
+      // were never touched, so it comes back with whatever the gap did to it (ADR-0009).
+      toast(`${habit.title} is back`, {
+        description: "Its streak is recalculated from what it recorded.",
       })
     })
   }
@@ -293,6 +342,58 @@ export function HabitsView({
             />
           ))}
         </div>
+      )}
+
+      {archived.length > 0 && (
+        <section className="mt-8 border-t pt-4">
+          <button
+            type="button"
+            onClick={() => setShowArchived((open) => !open)}
+            className="text-muted-foreground hover:text-foreground text-sm"
+            aria-expanded={showArchived}
+          >
+            {showArchived ? "Hide" : "Show"} archived ({archived.length})
+          </button>
+
+          {showArchived && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {archived.map((habit) => (
+                <li
+                  key={habit.id}
+                  // `data-rail`, on something nowhere near the rail, and belt-and-braces:
+                  // `visibleCard` is `div.bg-card:not([data-rail])`, so an `li` is already
+                  // excluded by the element name alone. The attribute is here so that
+                  // exclusion does not DEPEND on the element name — swap this to a `div`
+                  // some day and the negative assertions proving a habit creates no task
+                  // would silently invert. To that selector the attribute has only ever
+                  // meant "not a row in the task list"; the rail was just the only place
+                  // that used to be true.
+                  data-rail
+                  data-testid="archived-habit"
+                  className="bg-card flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {habit.title}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      Archived {formatArchivedAt(habit.archivedAt)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={restoringId === habit.id}
+                    onClick={() => handleUnarchive(habit)}
+                  >
+                    <ArchiveRestore className="size-4" />
+                    Unarchive
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       <HabitDialog

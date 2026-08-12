@@ -1,6 +1,17 @@
 import "server-only"
 import { cache } from "react"
-import { and, asc, desc, eq, gte, ilike, isNull, lt, or } from "drizzle-orm"
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  ilike,
+  inArray,
+  isNull,
+  lt,
+  or,
+} from "drizzle-orm"
 
 import { db } from "@/db"
 import { monthSeries, todayInZone } from "@/lib/date"
@@ -28,6 +39,24 @@ export type Category = typeof categories.$inferSelect
 export type Transaction = typeof transactions.$inferSelect
 export type Budget = typeof budgets.$inferSelect
 export type TransactionRecurrence = typeof transactionRecurrences.$inferSelect
+
+/**
+ * The rule behind a posted transaction, with `userId` dropped — it is never rendered, the
+ * same treatment `TaskSeries` gets. This is what prefills the "Series" editor.
+ */
+export type TransactionSeries = Omit<TransactionRecurrence, "userId">
+
+/**
+ * A transaction plus the rule that posted it, or `null` for a hand-entered one.
+ *
+ * Mirrors `TaskWithSeries`, and for the same reason: without the rule in hand, the only
+ * thing the UI can offer a repeating transaction is "Stop repeating" — which is why
+ * `updateTransactionRecurrence` existed from T4 with nothing calling it. Editing a
+ * schedule meant deleting it and rebuilding it from memory.
+ */
+export type TransactionWithSeries = Transaction & {
+  series: TransactionSeries | null
+}
 
 /** A rule row as the shared engine wants it. Transactions have no flexible mode. */
 export function toRule(row: {
@@ -156,7 +185,7 @@ export async function getCategories(): Promise<Category[]> {
 export async function getMonthTransactions(
   month: string,
   filters: TransactionFilters = {},
-): Promise<Transaction[]> {
+): Promise<TransactionWithSeries[]> {
   const userId = await requireUserId()
   await ensureRecurringTransactions(userId)
   const { start, nextStart } = monthRange(month)
@@ -189,20 +218,38 @@ export async function getMonthTransactions(
       ? [direction(transactions.amountCents)]
       : [direction(transactions.date), direction(transactions.createdAt)]
 
-  return db.query.transactions.findMany({
+  const rows = await db.query.transactions.findMany({
     where: and(...conditions),
     // Final tiebreaker so rows with an equal date or amount can't shuffle between
     // renders (Postgres makes no ordering promise for ties).
     orderBy: [...order, asc(transactions.id)],
   })
-}
 
-export async function getMonthBudgets(month: string): Promise<Budget[]> {
-  const userId = await requireUserId()
-  const { start } = monthRange(month)
-  return db.query.budgets.findMany({
-    where: and(eq(budgets.userId, userId), eq(budgets.periodMonth, start)),
+  // Rules fetched separately and joined in memory, the shape `getTasks` uses. Scoped to
+  // the ids actually on screen rather than every rule the user has: a month usually shows
+  // a handful, and the alternative is shipping the whole rule table to render one badge.
+  const seriesIds = [
+    ...new Set(rows.flatMap((row) => (row.seriesId ? [row.seriesId] : []))),
+  ]
+  if (seriesIds.length === 0) {
+    return rows.map((row) => ({ ...row, series: null }))
+  }
+
+  const ruleRows = await db.query.transactionRecurrences.findMany({
+    // Still user-scoped, though `seriesId` came from a row already proven to be theirs —
+    // it costs an index column and means this read is safe read in isolation.
+    where: and(
+      eq(transactionRecurrences.userId, userId),
+      inArray(transactionRecurrences.id, seriesIds),
+    ),
+    columns: { userId: false },
   })
+  const byId = new Map(ruleRows.map((rule) => [rule.id, rule]))
+
+  return rows.map((row) => ({
+    ...row,
+    series: (row.seriesId ? byId.get(row.seriesId) : null) ?? null,
+  }))
 }
 
 /** Rollups for the `monthCount` months ending at (and including) `endMonth`, oldest

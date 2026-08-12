@@ -85,3 +85,75 @@ test("a repeating transaction posts, is badged, and can be stopped", async ({
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(row).toHaveCount(0)
 })
+
+/**
+ * Editing the SCHEDULE, not the row it posted.
+ *
+ * `updateTransactionRecurrence` shipped with T3-S10 and nothing called it until now: the
+ * dialog's own comment said a posted row is a record rather than a template, which was
+ * true and left the template unreachable — changing a rent amount meant stopping the rule
+ * and rebuilding the schedule from memory.
+ *
+ * The load-bearing assertion is the one in the middle: after the rule's amount changes,
+ * the transaction it ALREADY posted still reads the old amount. A schedule edit that
+ * rewrote history would silently restate a month that has already been reconciled.
+ */
+test("a repeating transaction's schedule can be edited without rewriting what it posted", async ({
+  page,
+}) => {
+  const payee = `E2E Schedule ${Date.now()}`
+  const row = visibleCard(page, payee)
+
+  await page.goto("/budget")
+  await page.getByRole("button", { name: "Add", exact: true }).click()
+
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Amount", { exact: false }).fill("7")
+  await dialog.getByLabel("Payee").fill(payee)
+  await dialog.getByLabel("Repeat").click()
+  await page.getByRole("option", { name: "Daily" }).click()
+  await dialog.getByRole("button", { name: "Add", exact: true }).click()
+  await dialog.waitFor({ state: "hidden" })
+
+  await expect(row).toContainText("7.00")
+
+  // Edit, then switch scope. The toggle only exists for a row that came from a rule —
+  // which is itself part of what this asserts.
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Edit" }).click()
+  await dialog.getByRole("button", { name: "Schedule", exact: true }).click()
+
+  // Prefilled from the RULE, not from the row: the schedule fields are only present in
+  // this scope, so seeing them proves which record is being edited.
+  await expect(dialog.getByLabel("Amount", { exact: false })).toHaveValue("7")
+  await expect(dialog.getByLabel("Repeat")).toContainText("Daily")
+
+  await dialog.getByLabel("Amount", { exact: false }).fill("9")
+  await dialog.getByRole("button", { name: "Save", exact: true }).click()
+  await dialog.waitFor({ state: "hidden" })
+
+  // What it already posted is untouched — the point of the whole test.
+  await expect(row).toContainText("7.00")
+  await expect(row.getByRole("img", { name: "Repeating" })).toBeVisible()
+
+  // And the rule itself kept the new figure.
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Edit" }).click()
+  await dialog.getByRole("button", { name: "Schedule", exact: true }).click()
+  await expect(dialog.getByLabel("Amount", { exact: false })).toHaveValue("9")
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await dialog.waitFor({ state: "hidden" })
+
+  // Cleanup, as the test above: the rule would otherwise keep posting on every run.
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Stop repeating" }).click()
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Stop repeating" })
+    .click()
+  await expect(row.getByRole("img", { name: "Repeating" })).toHaveCount(0)
+
+  await row.getByRole("button", { name: "Transaction actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(row).toHaveCount(0)
+})

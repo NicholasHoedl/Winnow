@@ -70,8 +70,6 @@ const ACCENTS: CategoryAccent[] = [
   },
 ]
 
-export const CATEGORY_ACCENT_COUNT = ACCENTS.length
-
 /** Stable accent for an index (e.g. a category's position in a sorted list). */
 export function categoryAccent(index: number): CategoryAccent {
   return ACCENTS[((index % ACCENTS.length) + ACCENTS.length) % ACCENTS.length]

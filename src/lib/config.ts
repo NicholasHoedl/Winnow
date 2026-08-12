@@ -2,8 +2,10 @@
 // Single-user app: one fixed zone, overridable via env.
 export const APP_TIME_ZONE = process.env.APP_TIME_ZONE ?? "America/Chicago"
 
-// Currency for money display (money is stored as integer cents regardless).
-export const APP_CURRENCY = process.env.APP_CURRENCY ?? "USD"
+// `APP_CURRENCY` was here and is gone: the display currency moved to
+// `user_preferences.currency`, read through `getUserPreferences`, the same journey the AI
+// settings took below and for the same reason. Noted rather than silently deleted because
+// `.env.example` files in older checkouts still set it, and it now does nothing.
 
 // Open Food Facts — the app's only outbound HTTP call (ADR-0005). Opt-OUT, because the
 // common case is a machine with internet; an install without it sets OFF_ENABLED=false

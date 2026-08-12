@@ -49,6 +49,25 @@ async function addHabit(
  */
 test.afterEach(async ({ page }) => {
   await page.goto("/activity/habits")
+
+  // Archived strays first. An archived row carries `data-rail` — see the header note — so
+  // `visibleCard` cannot see it, and an archived habit has no Delete menu: the only way
+  // out is back through Unarchive. Without this, a test that archives and then fails
+  // before restoring leaves a row nothing sweeps, and the next run's "0 strays" is a lie.
+  const showArchived = page.getByRole("button", { name: /^Show archived/ })
+  if (await showArchived.isVisible()) {
+    await showArchived.click()
+    const retired = page
+      .getByTestId("archived-habit")
+      .filter({ hasText: new RegExp(PREFIX) })
+    for (let i = 0; i < 10; i++) {
+      const before = await retired.count()
+      if (before === 0) break
+      await retired.first().getByRole("button", { name: "Unarchive" }).click()
+      await expect(retired).toHaveCount(before - 1)
+    }
+  }
+
   const strays = visibleCard(page, new RegExp(PREFIX))
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
@@ -206,4 +225,43 @@ test("the dashboard card shows today's practice and logs it", async ({
 
   await card.getByRole("button", { name: `Log ${title}` }).click()
   await expect(card).toContainText("1/3 this week")
+})
+
+/**
+ * Archiving, and the way back.
+ *
+ * The action to unarchive existed from T7c and nothing called it: every read filtered
+ * `archivedAt` and no surface listed a retired habit, so archiving was a one-way
+ * disappearance while the toast said its history was kept. This test is the proof that the
+ * round trip closes — and, because it asserts the habit is gone from the live list in
+ * between, that archiving still HIDES it rather than merely labelling it.
+ */
+test("an archived habit can be brought back", async ({ page }) => {
+  const title = `${PREFIX} retire ${Date.now()}`
+  await addHabit(page, title)
+
+  await visibleCard(page, title)
+    .getByRole("button", { name: `${title} actions` })
+    .click()
+  await page.getByRole("menuitem", { name: "Archive" }).click()
+
+  // Gone from the live list — the whole point of archiving.
+  await expect(visibleCard(page, title)).toHaveCount(0)
+
+  await page.getByRole("button", { name: /^Show archived/ }).click()
+  const row = page.getByTestId("archived-habit").filter({ hasText: title })
+  await expect(row).toHaveCount(1)
+
+  await row.getByRole("button", { name: "Unarchive" }).click()
+
+  // Back as a full card, not just off the retired list — which is what proves the row's
+  // `archivedAt` was cleared rather than the list being filtered client-side.
+  await expect(visibleCard(page, title)).toHaveCount(1)
+  await expect(
+    page.getByTestId("archived-habit").filter({ hasText: title }),
+  ).toHaveCount(0)
+
+  // Its readings survived the round trip: the quota is the one it was created with, and
+  // the entries were never touched, so nothing had to be re-entered.
+  await expect(visibleCard(page, title)).toContainText("0/3")
 })
