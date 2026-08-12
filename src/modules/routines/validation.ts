@@ -2,9 +2,14 @@ import { z } from "zod"
 
 import { isValidDateString } from "@/lib/date"
 
+/** Matches `routineUnfinishedEnum`. Optional so a payload that predates the column — or
+ *  any caller that does not care — lands on the harmless default rather than failing. */
+export const UNFINISHED = ["keep", "drop"] as const
+
 export const routineInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   description: z.string().trim().max(1000).or(z.literal("")).optional(),
+  onUnfinished: z.enum(UNFINISHED).optional(),
 })
 export type RoutineInput = z.infer<typeof routineInputSchema>
 

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
@@ -24,8 +24,26 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
-type RoutineFormValues = { name: string; description?: string }
+type Unfinished = "keep" | "drop"
+
+const UNFINISHED_OPTIONS: { value: Unfinished; label: string }[] = [
+  { value: "keep", label: "Leave them overdue" },
+  { value: "drop", label: "Delete them" },
+]
+
+type RoutineFormValues = {
+  name: string
+  description?: string
+  onUnfinished?: Unfinished
+}
 
 export function RoutineDialog({
   routine,
@@ -39,13 +57,14 @@ export function RoutineDialog({
   const isEdit = !!routine
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
     formState: { errors, isSubmitting },
   } = useForm<RoutineFormValues>({
     resolver: standardSchemaResolver(routineInputSchema),
-    defaultValues: { name: "", description: "" },
+    defaultValues: { name: "", description: "", onUnfinished: "keep" },
   })
 
   React.useEffect(() => {
@@ -53,6 +72,7 @@ export function RoutineDialog({
     reset({
       name: routine?.name ?? "",
       description: routine?.description ?? "",
+      onUnfinished: routine?.onUnfinished ?? "keep",
     })
   }, [open, routine, reset])
 
@@ -101,6 +121,46 @@ export function RoutineDialog({
                 {...register("description")}
               />
               <FieldError errors={[errors.description]} />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="r-unfinished">
+                When a task isn&apos;t done by its due date
+              </FieldLabel>
+              <Controller
+                control={control}
+                name="onUnfinished"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? "keep"}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger id="r-unfinished">
+                      {/* A bare <SelectValue/> renders the raw value — "keep" — rather
+                          than the label. base-ui needs the function child. */}
+                      <SelectValue>
+                        {(value) =>
+                          UNFINISHED_OPTIONS.find((o) => o.value === value)
+                            ?.label ?? "Leave them overdue"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNFINISHED_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {/* Says "deleted", not "removed" or "cleared". This throws work away with no
+                  undo, and the form is the only place that can warn before it happens. */}
+              <p className="text-muted-foreground text-xs">
+                Deleting applies once the day has passed, and only to tasks you
+                never finished — completed ones are kept. There is no undo.
+              </p>
+              <FieldError errors={[errors.onUnfinished]} />
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-5">

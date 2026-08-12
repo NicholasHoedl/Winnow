@@ -1,12 +1,26 @@
 import "server-only"
 import { cache } from "react"
-import { and, asc, desc, eq, gte, isNotNull, lt, ne } from "drizzle-orm"
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  ne,
+} from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
 import { currentCycle } from "@/lib/recurrence"
 import { requireUserId } from "@/lib/session"
 import { getUserPreferences } from "@/modules/preferences/queries"
+// A queries file reading another module's schema, which is the same direction
+// `goals/queries.ts` reads `habits/schema.ts`. Safe: no schema file imports this one, so
+// the eager-`priorityEnum` cycle described in HANDOFF §4 is not in play here.
+import { routines } from "@/modules/routines/schema"
 
 import {
   lists,
@@ -147,6 +161,55 @@ const ensureRecurringTasks = cache(
   },
 )
 
+/**
+ * Delete the unfinished tasks of routines set to `drop`, once their day has passed.
+ *
+ * Lazy-on-read, beside `ensureRecurringTasks` and for the same reason: this app has no
+ * scheduler, page rendering is the scheduler (ADR-0004). So the sweep runs wherever tasks
+ * are read, which is every surface that could have shown the row.
+ *
+ * **This DELETES user data with no undo, so read the boundaries as load-bearing rather
+ * than defensive.** All five must hold, and each excludes something it would be a bug to
+ * take:
+ *
+ * - `routine_id` is in the drop set — a task nobody's routine created has a NULL here, and
+ *   `NULL IN (…)` is NULL, never true, so hand-written tasks cannot match by accident.
+ * - the routine is the CALLER'S and is set to `drop` — the subquery is user-scoped too, so
+ *   a stranger's `drop` routine cannot reach into this account's rows.
+ * - `status = 'open'` — a completed task is history. Deleting it would rewrite what you did.
+ * - `due_date IS NOT NULL` — a routine item with a null offset makes a task with no due
+ *   date, which has no day to be past. Without this, `NULL < today` would be NULL and
+ *   exclude it anyway, but relying on that is a footgun for the next person.
+ * - `due_date < today` in the USER'S zone — never today's work, never the future.
+ *
+ * `cache()` for the same reason `ensureRecurringTasks` has it: the dashboard reads tasks
+ * twice in one render, and this would otherwise issue the delete twice.
+ */
+const dropExpiredRoutineTasks = cache(
+  async (userId: string, today: string): Promise<void> => {
+    await db.delete(tasks).where(
+      and(
+        eq(tasks.userId, userId),
+        eq(tasks.status, "open"),
+        isNotNull(tasks.dueDate),
+        lt(tasks.dueDate, today),
+        inArray(
+          tasks.routineId,
+          db
+            .select({ id: routines.id })
+            .from(routines)
+            .where(
+              and(
+                eq(routines.userId, userId),
+                eq(routines.onUnfinished, "drop"),
+              ),
+            ),
+        ),
+      ),
+    )
+  },
+)
+
 /** `cache()`: the app shell's always-mounted task dialog and the page both need the lists. */
 export const getLists = cache(async (): Promise<List[]> => {
   const userId = await requireUserId()
@@ -159,11 +222,14 @@ export const getLists = cache(async (): Promise<List[]> => {
 export async function getTasks(): Promise<TaskWithSeries[]> {
   const userId = await requireUserId()
   const { timeZone, weekStartsOn } = await getUserPreferences()
-  await ensureRecurringTasks(
-    userId,
-    todayInZone(new Date(), timeZone),
-    weekStartsOn,
-  )
+  const today = todayInZone(new Date(), timeZone)
+  // Both lazy-on-read, and deliberately in this order: the sweep clears yesterday's
+  // dropped routine work before the generator materializes today's, so a row can never be
+  // created and removed inside one render. They touch disjoint sets anyway — a recurring
+  // instance carries `seriesId`, a routine's task carries `routineId`, and `runRoutine`
+  // sets neither of the other's — but the order makes that easy to keep true.
+  await dropExpiredRoutineTasks(userId, today)
+  await ensureRecurringTasks(userId, today, weekStartsOn)
 
   // Postgres sorts NULLs last for ASC by default, so undated tasks fall to the bottom.
   const [taskRows, ruleRows, subtaskRows] = await Promise.all([

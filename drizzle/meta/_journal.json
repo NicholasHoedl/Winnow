@@ -239,6 +239,13 @@
       "when": 1786477975096,
       "tag": "0033_freezing_centennial",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1786543270711,
+      "tag": "0034_previous_wasp",
+      "breakpoints": true
     }
   ]
 }

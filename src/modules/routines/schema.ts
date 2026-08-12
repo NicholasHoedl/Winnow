@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -8,9 +9,32 @@ import {
 } from "drizzle-orm/pg-core"
 
 // Relative imports (not "@/db/schema") so drizzle-kit resolves them without aliases.
-// routines → todos is acyclic: todos imports calendar + goals, and nothing imports this.
+// routines → todos is acyclic in the SCHEMA layer: todos imports calendar + goals, and no
+// schema file imports this one. `todos/queries.ts` does (T12f's sweep needs to read a
+// routine's policy), and that is fine — a queries file is never imported by a schema.
+//
+// Note for anyone adding a link the other way: `tasks.routine_id` is deliberately declared
+// WITHOUT `.references()` because this file imports `priorityEnum` below and reads it
+// eagerly, so a reference back would make the pair circular. See HANDOFF §4.
 import { users } from "../../db/schema"
 import { lists, priorityEnum } from "../todos/schema"
+
+/**
+ * What becomes of a run's tasks that were never finished, once their due date is behind us.
+ *
+ * `keep` is the original behaviour and the default: the task goes overdue like any other,
+ * because a task you did not do is a true thing about your day.
+ *
+ * `drop` is for the routines where that is noise rather than information — a morning
+ * routine you half-finish most days accrues an overdue pile that means nothing except that
+ * mornings are like that. It DELETES the row. Not hides, not completes: completing it would
+ * claim you did something you did not and would inflate the weekly review, and hiding it
+ * would grow an invisible heap the All filter slowly fills with.
+ */
+export const routineUnfinishedEnum = pgEnum("routine_unfinished", [
+  "keep",
+  "drop",
+])
 
 /**
  * A named set of tasks to spin up in one action — "Morning routine", "Trip prep".
@@ -28,6 +52,11 @@ export const routines = pgTable("routines", {
     .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
+  /** See `routineUnfinishedEnum`. Defaulting to `keep` leaves every existing routine
+   *  behaving exactly as it did — this option can only ever be opted INTO. */
+  onUnfinished: routineUnfinishedEnum("on_unfinished")
+    .notNull()
+    .default("keep"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

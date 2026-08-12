@@ -67,6 +67,11 @@ export async function createRoutine(
       userId,
       name: parsed.data.name,
       description: nullify(parsed.data.description),
+      // Omitted rather than defaulted to a literal, so the column's own default is the
+      // single place "keep" is written down.
+      ...(parsed.data.onUnfinished
+        ? { onUnfinished: parsed.data.onUnfinished }
+        : {}),
     })
     .returning({ id: routines.id })
   revalidateRoutines()
@@ -88,6 +93,11 @@ export async function updateRoutine(
     .set({
       name: parsed.data.name,
       description: nullify(parsed.data.description),
+      // Left alone when absent: an edit that does not mention the policy must not silently
+      // reset a routine back to `keep` and start letting its tasks pile up again.
+      ...(parsed.data.onUnfinished
+        ? { onUnfinished: parsed.data.onUnfinished }
+        : {}),
     })
     .where(and(eq(routines.id, parsedId.data), eq(routines.userId, userId)))
   revalidateRoutines()
