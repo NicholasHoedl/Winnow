@@ -105,12 +105,32 @@ export async function importUserData(payload: unknown): Promise<ActionResult> {
           .values(rows.map((row) => toInsertRow(table, row, userId)))
       }
       if (existingKey) {
+        // `updatedAt` is set EXPLICITLY, and that is the whole point of the line.
+        //
+        // The column carries `$onUpdate(() => new Date())`, which fires on this upsert's
+        // update branch and restamps the row to the moment of the restore. That quietly
+        // contradicts what a restore is: `toInsertRow` deliberately keeps `id`,
+        // `createdAt` and `updatedAt` from the file, because "putting back the row that
+        // was" and "re-creating it now" are different things. This write exists only to
+        // carry the API key across the wipe and has no business changing anything else.
+        //
+        // It was invisible because it only happens when an API key is STORED, and
+        // `import.spec.ts`'s round-trip runs after `ai-settings.spec.ts`, whose afterEach
+        // clears the key — so the branch was skipped in a full run and the test passed.
+        // Run that spec on its own with a real key and it fails, as it always would have.
+        const restored = parsed.data.tables.preferences?.[0]?.updatedAt
         await tx
           .insert(userPreferences)
           .values({ userId, aiApiKey: existingKey })
           .onConflictDoUpdate({
             target: userPreferences.userId,
-            set: { aiApiKey: existingKey },
+            set: {
+              aiApiKey: existingKey,
+              // A backup predating the column, or one with no preferences row at all,
+              // has nothing to restore — then stamping now is the honest answer.
+              updatedAt:
+                typeof restored === "string" ? new Date(restored) : new Date(),
+            },
           })
       }
     })
