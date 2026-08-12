@@ -37,6 +37,8 @@ picked up — it is **not** code-level detail yet.
 | T12c — Companion proposes habits, not dates       | ✅ shipped        |
 | T12d — Activity revisited for the habit primitive | ✅ shipped        |
 | T12e — Agenda groups routine work, and reorders   | ✅ shipped        |
+| T12f — A routine can drop its own stale tasks     | ✅ shipped        |
+| T12g — The e2e suite gets a database of its own   | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -868,6 +870,58 @@ of its way to preserve was overwritten a line later. It stayed hidden because th
 runs when a key is STORED, and `import.spec.ts`'s round-trip sorts after `ai-settings.spec.ts`,
 whose `afterEach` clears the key. Run that spec alone with a real key and it fails, as it
 always would have. `updatedAt` is now set explicitly from the file being restored.
+
+**T12f — shipped**, migration `0034` (`routines.on_unfinished`). A routine can now choose
+what becomes of the tasks a run created that were never finished, once their day has passed:
+leave them overdue, as always, or delete them.
+
+- **It deletes, and the form says so.** Hiding them would grow an invisible heap the All
+  filter slowly fills with; completing them would claim you did something you did not and
+  would inflate the weekly review. Neither is honest, so the option is a real delete with no
+  undo — and the field's helper text states that plainly, because the form is the only place
+  that can warn before it happens.
+- **`keep` is the default and every existing routine got it**, so this can only be opted
+  into. A half-finished morning routine still goes overdue unless you say otherwise.
+- **Swept lazily on read**, beside `ensureRecurringTasks`, because page rendering is this
+  app's scheduler (ADR-0004). One bounded DELETE in `getTasks`, so every surface that could
+  have shown the row clears it.
+- **The boundaries are the feature.** All five must hold: the routine is the caller's and is
+  set to `drop`; the task is `open`; its due date is non-null; and it is strictly before
+  today in the user's zone. A hand-written task has a NULL `routine_id`, and `NULL IN (…)` is
+  NULL rather than true, so nothing outside a drop routine can be reached.
+- **The e2e's negative assertions carry the weight.** A `keep` routine's stale task and a
+  hand-written overdue task are both in exactly the state the sweep looks for and both have
+  to survive it. A negative day offset is what makes any of this testable — the task is born
+  past due, so the sweep is reachable without waiting for midnight. One case is NOT covered
+  and is named in the spec: a completed routine task ageing past its due date, which the UI
+  cannot reach because visiting /activity runs the sweep before the task can be ticked.
+
+**T12g — shipped**, no migration. The e2e suite ran against the owner's real database for
+its entire history. That is finally over, and it should have been done long before:
+
+- **The vector was `reuseExistingServer`, not the connection string.** Playwright ATTACHED
+  to whatever dev server was already running — the one pointed at real data — so no amount
+  of overriding `DATABASE_URL` in the config could have helped. The env of a process you did
+  not start is not yours to set. The suite now starts its own server, on **port 3001**, and
+  never reuses one.
+- **The test URL is derived from `DATABASE_URL`** (`winnow` → `winnow_test`) rather than
+  configured separately, because a second connection string is a second thing to drift, and
+  the run it drifts on is the run that eats real data. `assertSafeToDestroy` refuses to
+  start unless the target name ends in `_test`.
+- **`global-setup.ts` creates, migrates, EMPTIES and re-seeds the database before every
+  run.** Starting from empty is the point: it makes T12d's seeding work mandatory rather
+  than merely tidy, and closes the ambient-data class of failure permanently.
+- **`next.config.ts` gained an env-driven `distDir`.** Two `next dev` processes sharing one
+  `.next` race on the same artifacts, and the whole point is that the owner keeps working on
+  3000 while a suite runs.
+- **A fresh database immediately found a latent bug.** `writeAiConfig` did an UPDATE with no
+  WHERE, which assumed a `user_preferences` row already existed — true on a database used by
+  hand, false on a newly seeded account, where the row is created lazily on first save. It
+  matched zero rows and the failure surfaced an assertion later as "Companion heading not
+  visible". Now an upsert.
+- Several comments across `e2e/` and `account/coverage.test.ts` asserted the old arrangement
+  as a live fact and justified decisions with it. They are corrected rather than deleted —
+  including the note that a clear-all e2e was impossible, which is now merely unwritten.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

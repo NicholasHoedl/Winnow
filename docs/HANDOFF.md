@@ -140,9 +140,22 @@ it is `winnow-postgres-1`.
   out React's streaming (see §4). A new spec that imports the base `test` will flake.
 - **Use `visibleCard()` from `e2e/_card.ts`** for card/row locators rather than
   `page.locator("div.bg-card")`.
-- **The e2e suite runs against the persistent dev database.** Specs create and clean their
-  own rows; a failing spec often leaves debris behind, so check
-  `SELECT ... WHERE title LIKE 'E2E%'` after a red run.
+- **The e2e suite runs against `winnow_test`, not your database** (T12g). It also starts its
+  own dev server on **port 3001** — 3000 is yours and is never touched, so you can keep
+  working while a suite runs. `e2e/global-setup.ts` creates the database if missing,
+  migrates it, **empties it**, and re-seeds the account before every run.
+  - This was NOT true before T12g, and the old arrangement is why real data kept
+    disappearing. The app's `webServer` had `reuseExistingServer`, so Playwright attached to
+    whatever dev server was already up — the one pointed at real data. Overriding
+    `DATABASE_URL` in the config could never have helped: the env of a process you did not
+    start is not yours to set.
+  - The connection string is DERIVED from `DATABASE_URL` (`winnow` → `winnow_test`) rather
+    than configured separately, so there is no second value to drift. `assertSafeToDestroy`
+    in `e2e/_test-db.ts` refuses to run if the target does not end in `_test`.
+  - Because the database is emptied each run, **a spec that does not seed what it asserts on
+    will fail** — see the next bullet. That is the intended pressure.
+  - Debris no longer reaches you, but it still accumulates within a run; the `afterEach`
+    sweeps are still worth keeping honest.
 - **A spec must seed whatever it asserts on**, even when it passes without doing so. The
   suite also _reads_ ambient data, and four specs quietly depended on the account already
   holding events, transactions, categories and a task due today — they all went red together
