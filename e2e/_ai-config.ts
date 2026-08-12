@@ -1,6 +1,8 @@
 import "dotenv/config"
 import { Pool } from "pg"
 
+import { TEST_DATABASE_URL } from "./_test-db"
+
 /**
  * Where the setup stashes the real AI configuration so the teardown can put it back.
  *
@@ -22,10 +24,14 @@ export type SavedAiSettings = {
 /**
  * The AI settings, read and written straight into Postgres rather than through the page.
  *
- * **This is the third fix to the same wound, and the first one aimed at the cause.** The
- * suite runs against the PERSISTENT DEV DATABASE, so it has to borrow the real AI
- * configuration and give it back. Two earlier versions did that through `/settings`, and
- * both silently destroyed real data:
+ * **Read the history here as history: since T12g the suite runs against `winnow_test` and
+ * cannot reach the real configuration at all.** What follows is why this file goes through
+ * Postgres rather than the settings page, which is still the right shape — and why backing
+ * anything up was ever necessary.
+ *
+ * The suite used to run against the PERSISTENT DEV DATABASE, so it had to borrow the real
+ * AI configuration and give it back. Two versions did that through `/settings`, and both
+ * silently destroyed real data:
  *
  * 1. The teardown read the form before react-hook-form had populated it, got empty strings,
  *    and wrote them back over a working configuration.
@@ -51,7 +57,12 @@ export type SavedAiSettings = {
  * run", which is what actually happened before it was backed up.
  */
 async function withDb<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 })
+  // The TEST database, not `DATABASE_URL`. This file runs in the Playwright process, whose
+  // env still points at the real one — so before T12g these writes went straight into it,
+  // which is how the account's AI settings were disturbed at all. The backup and restore
+  // below are now belt-and-braces rather than the only thing standing between a run and a
+  // destroyed credential.
+  const pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 1 })
   try {
     return await fn(pool)
   } finally {
@@ -95,8 +106,11 @@ export async function writeAiConfig(
   settings: Omit<SavedAiSettings, "apiKey">,
 ): Promise<void> {
   await withDb(async (pool) => {
-    await pool.query(
-      "update user_preferences set ai_enabled = $1, ai_provider = $2, ai_base_url = $3, ai_model = $4",
+    await upsertPreferences(
+      pool,
+      "ai_enabled = $2, ai_provider = $3, ai_base_url = $4, ai_model = $5",
+      "ai_enabled, ai_provider, ai_base_url, ai_model",
+      "$2, $3, $4, $5",
       [settings.enabled, settings.provider, settings.baseUrl, settings.model],
     )
   })
@@ -104,6 +118,39 @@ export async function writeAiConfig(
 
 export async function writeApiKey(key: string): Promise<void> {
   await withDb(async (pool) => {
-    await pool.query("update user_preferences set ai_api_key = $1", [key])
+    await upsertPreferences(pool, "ai_api_key = $2", "ai_api_key", "$2", [key])
   })
+}
+
+/**
+ * Write to the account's preferences row, creating it if it is not there yet.
+ *
+ * An UPDATE was enough while the suite ran against a database that had been used by hand —
+ * the row always existed, because saving any setting creates it. Against the freshly seeded
+ * `winnow_test` it silently matched ZERO rows, and the whole companion setup failed one
+ * assertion later with "Companion heading not visible", which points nowhere near the
+ * cause. A brand-new account genuinely has no preferences row; `getUserPreferences` returns
+ * defaults rather than reading one.
+ *
+ * The suite is single-user by construction, so "the account" is the only row in `users`.
+ */
+async function upsertPreferences(
+  pool: Pool,
+  updateSet: string,
+  insertColumns: string,
+  insertValues: string,
+  params: unknown[],
+): Promise<void> {
+  const { rows } = await pool.query<{ id: string }>(
+    "select id from users order by created_at limit 1",
+  )
+  const userId = rows[0]?.id
+  if (!userId) throw new Error("No seeded user to write AI settings for.")
+
+  await pool.query(
+    `insert into user_preferences (user_id, ${insertColumns})
+     values ($1, ${insertValues})
+     on conflict (user_id) do update set ${updateSet}`,
+    [userId, ...params],
+  )
 }

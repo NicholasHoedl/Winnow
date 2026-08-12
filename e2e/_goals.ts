@@ -25,7 +25,13 @@ export async function addGoal(
     targetDate?: string
   },
 ) {
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label, because the affordance changes with the account's state: `GoalChips`
+  // renders a text button reading "Add a goal" when there are none, and a `+` icon
+  // labelled "Add goal" once there is at least one. Matching only the second meant this
+  // helper silently required a goal to already exist — invisible while the suite ran
+  // against a hand-used database, and the first thing to break when T12g gave it an empty
+  // one. Anchored so "Add a goal" cannot also match some future "Add a goal category".
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(fields.title)
   if (fields.current) await dialog.getByLabel("Current").fill(fields.current)

@@ -12,8 +12,13 @@ import {
 /**
  * Put the real AI configuration back after the suite.
  *
- * `ai.setup.ts` repoints this account at the local stub, and this runs against the
- * PERSISTENT DEV DATABASE — so without this the machine's owner is left with a companion
+ * `ai.setup.ts` repoints the test account at the local stub. Since T12g that account lives
+ * in `winnow_test`, which is emptied before every run, so this restore no longer protects
+ * anything of the owner's — it is kept because it is the only thing asserting the setup
+ * actually wrote what it meant to, and because the day someone points the suite back at a
+ * real database is the day its absence would matter.
+ *
+ * It used to matter directly: without it the machine's owner was left with a companion
  * dialling `127.0.0.1:3100`, a port that only exists while Playwright is running. That
  * happened, and it presented as "I added my API key and nothing works".
  *

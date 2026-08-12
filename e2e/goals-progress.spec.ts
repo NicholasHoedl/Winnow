@@ -43,7 +43,9 @@ async function addGoal(
     targetDate?: string
   },
 ) {
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(fields.title)
   if (fields.current) await dialog.getByLabel("Current").fill(fields.current)

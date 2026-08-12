@@ -1,12 +1,25 @@
 import "dotenv/config"
 import { defineConfig, devices } from "@playwright/test"
 
-const baseURL = "http://localhost:3000"
+import { TEST_DATABASE_URL } from "./e2e/_test-db"
+
+// Its own port, so this never attaches to the dev server you are using. 3000 is yours.
+const baseURL = "http://localhost:3001"
 
 // Serial, single-worker: the specs share one single-user Postgres and create /
-// clean their own data, so parallelism would race. Reuses a running dev server.
+// clean their own data, so parallelism would race.
+//
+// **The suite runs against `winnow_test`, not your database.** That was not true until
+// T12g, and the reason is worth stating because it is not obvious from a config file: the
+// app's `webServer` had `reuseExistingServer`, so Playwright ATTACHED to whatever dev
+// server was already running — the one pointed at real data. Overriding `DATABASE_URL`
+// here would not have helped, because the env of a server you did not start is not yours
+// to set. So the server below is never reused, listens on its own port, and is handed the
+// test connection string. See `e2e/_test-db.ts` for the derivation and its guard.
 export default defineConfig({
   testDir: "./e2e",
+  // Creates, migrates, empties and seeds `winnow_test` before anything runs.
+  globalSetup: "./e2e/global-setup.ts",
   fullyParallel: false,
   workers: 1,
   // One retry — and the reason this is not a cover-up: Playwright reports a test that
@@ -101,10 +114,21 @@ export default defineConfig({
       timeout: 20_000,
     },
     {
-      command: "pnpm dev",
+      command: "pnpm dev --port 3001",
       url: baseURL,
-      reuseExistingServer: !process.env.CI,
-      timeout: 120_000,
+      // NEVER reused, and this is the whole safety property. Reuse meant attaching to a
+      // server whose `DATABASE_URL` is the real one; the `env` below only reaches a
+      // process Playwright started itself.
+      reuseExistingServer: false,
+      env: {
+        DATABASE_URL: TEST_DATABASE_URL,
+        // Its own build output, so this server and yours do not fight over `.next`. Two
+        // `next dev` processes sharing one dist directory race on the same artifacts.
+        NEXT_DIST_DIR: ".next-e2e",
+      },
+      // Longer than the old 120s: this is a cold Turbopack start every time now, with no
+      // warm `.next` to fall back on and no chance of a running server answering instantly.
+      timeout: 180_000,
     },
   ],
 })

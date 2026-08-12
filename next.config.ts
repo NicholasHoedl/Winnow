@@ -3,6 +3,10 @@ import type { NextConfig } from "next"
 const nextConfig: NextConfig = {
   // Self-contained server bundle for the Docker image (Checkpoint 0.4 deploy).
   output: "standalone",
+  // Normally `.next`. The e2e suite starts its OWN dev server (against the test database)
+  // and sets this to `.next-e2e`, so the two processes do not race on the same build
+  // artifacts while both are running. Nothing else sets it.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // Pin the workspace root so Next doesn't infer it from stray lockfiles
   // higher up the filesystem (e.g. a package-lock.json in the home dir).
   turbopack: {

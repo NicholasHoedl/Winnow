@@ -30,7 +30,9 @@ async function order(page: import("@playwright/test").Page) {
 }
 
 async function addGoal(page: import("@playwright/test").Page, name: string) {
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(name)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()

@@ -25,8 +25,14 @@ import { INSERT_ORDER } from "./tables"
 // the "empty" account), and T4-S11 (calendars surviving clear-all; calendars AND
 // event_exceptions missing from the backup, so a restore silently reverted every
 // per-occurrence edit). Nothing catches it: a forgotten table is not a type error, and
-// neither function has e2e coverage — running clear-all in a spec would wipe the
+// neither function has e2e coverage — running clear-all in a spec would have wiped the
 // persistent dev database.
+//
+// T12g removed that obstacle: the suite now runs against `winnow_test`, which is emptied
+// before every run anyway, so a clear-all spec is finally possible. It has not been
+// written. This derived check is still the better guard — it fails on a table nobody
+// remembered, which is the actual failure mode — but the reason given for having no e2e is
+// no longer true, and saying so is better than leaving a stale excuse in place.
 //
 // So the check is derived rather than written down. It discovers every module schema on
 // disk, finds every table carrying a `user_id` column — the definition of "user-owned",

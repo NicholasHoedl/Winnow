@@ -88,7 +88,9 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
 
   // --- A goal to link against.
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const goalDialog = page.getByRole("dialog")
   await goalDialog.getByLabel("Title", { exact: true }).fill(GOAL)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()

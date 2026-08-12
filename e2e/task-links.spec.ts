@@ -16,7 +16,9 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
 
   // A goal to link to.
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const goalDialog = page.getByRole("dialog")
   await goalDialog.getByLabel("Title").fill(goalTitle)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()

@@ -25,6 +25,9 @@
 
 # next.js
 /.next/
+# The e2e suite's own build output — its dev server runs with NEXT_DIST_DIR set so it
+# does not race this one. See playwright.config.ts.
+/.next-e2e/
 /out/
 
 # production

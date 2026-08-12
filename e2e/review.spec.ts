@@ -48,7 +48,9 @@ test("this week's completed work lands in the right cards", async ({
 
   // --- A ticked milestone under a goal.
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(goalTitle)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()

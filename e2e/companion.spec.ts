@@ -366,10 +366,12 @@ test("a summary refinement replaces it in place", async ({ page }) => {
  * uncategorised and the counts below are each off by one, which reads as "the matcher
  * broke" rather than "there was nothing to match against".
  *
- * The return value is load-bearing. This runs against the persistent dev database, so
- * deleting "Food" unconditionally afterwards would destroy a real category the machine's
- * owner uses — the same class of mistake that once deleted their API key. Only a category
- * this function created is removed again.
+ * The return value is kept even though T12g moved the suite onto `winnow_test`, where the
+ * category can only ever be one this run made. It costs a boolean, and "delete only what
+ * you created" is the habit that stops the next fixture — written when someone has once
+ * again pointed a suite at something real — from being the one that does damage. It was
+ * written for exactly that reason: deleting "Food" unconditionally used to destroy a real
+ * category, the same class of mistake that once deleted the account's API key.
  */
 async function ensureFoodCategory(page: Page): Promise<boolean> {
   await page.goto("/budget")

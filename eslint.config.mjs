@@ -1,6 +1,6 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import { defineConfig, globalIgnores } from "eslint/config"
+import nextVitals from "eslint-config-next/core-web-vitals"
+import nextTs from "eslint-config-next/typescript"
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -9,6 +9,11 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // The e2e suite's dev server writes here instead of `.next`, so the two processes do
+    // not race on one dist directory (T12g). Same generated Turbopack output, same reason
+    // to ignore it — and it is a separate line because `.next/**` is anchored and does not
+    // match a differently named sibling.
+    ".next-e2e/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
@@ -25,6 +30,6 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
   ]),
-]);
+])
 
-export default eslintConfig;
+export default eslintConfig

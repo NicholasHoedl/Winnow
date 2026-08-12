@@ -20,7 +20,9 @@ import { goalCard, visibleCard } from "./_card"
 
 async function createGoal(page: Page, title: string) {
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Add goal" }).click()
+  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
+  // is the `+` once a goal exists.
+  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title").fill(title)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
