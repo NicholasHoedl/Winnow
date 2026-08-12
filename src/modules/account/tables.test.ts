@@ -36,10 +36,17 @@ describe("references", () => {
 
   it("names every cross-table link a task can carry", () => {
     // The busiest row in the app, and the one whose links reach outside its own module.
+    //
+    // `routineId` is the one that is NOT derived from drizzle metadata: declaring it in
+    // the schema would make todos and routines circular, so migration 0033 writes the
+    // constraint by hand and `UNDECLARED_REFERENCES` restates it here. This assertion is
+    // what stops that restatement from being quietly dropped — without it the importer
+    // would let a crafted backup point a task at a stranger's routine.
     expect(refs("tasks").sort()).toEqual([
       "eventId->events",
       "goalId->goals",
       "listId->lists",
+      "routineId->routines",
       "seriesId->taskRecurrences",
     ])
   })

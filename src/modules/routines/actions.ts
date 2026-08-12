@@ -316,6 +316,11 @@ export async function runRoutine(
         dueDate: task.dueDate,
         priority: task.priority,
         listId: task.listId,
+        // What lets the dashboard's agenda keep these together instead of scattering a
+        // morning routine's steps through the day's other work. Nothing else reads it, and
+        // a task that loses it (its routine deleted, so the FK sets null) simply stops
+        // being grouped — the reading degrades rather than breaking.
+        routineId: parsedId.data,
         // Keep the routine's order inside whatever date section each task lands in.
         sortOrder: index,
       })),

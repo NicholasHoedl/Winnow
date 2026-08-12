@@ -79,6 +79,7 @@ describe("buildTodayAgenda", () => {
   it("returns empty groups for empty input", () => {
     expect(buildTodayAgenda([], [], now, TZ)).toEqual({
       overdue: [],
+      groups: [],
       items: [],
     })
   })
@@ -110,5 +111,111 @@ describe("buildTodayAgenda", () => {
   it("carries the occurrence's own time onto the agenda item", () => {
     const { items } = buildTodayAgenda([], [occ("09:30"), occ(null)], now, TZ)
     expect(items.map((i) => i.time)).toEqual([null, "09:30"])
+  })
+})
+
+// T12e: a routine's steps stay together instead of scattering through the day.
+describe("buildTodayAgenda — routine groups", () => {
+  const MORNING = "11111111-1111-4111-8111-111111111111"
+  const EVENING = "22222222-2222-4222-8222-222222222222"
+  const NAMES = new Map([
+    [MORNING, "Morning routine"],
+    [EVENING, "Evening routine"],
+  ])
+
+  /** A due-today task, optionally stamped with the routine that created it. */
+  function step(label: string, routineId: string | null = null) {
+    return { dueDate: "2026-07-21", status: "open" as const, routineId, label }
+  }
+
+  it("collects a routine's tasks into one named block, out of the flat list", () => {
+    const { groups, items } = buildTodayAgenda(
+      [step("make bed", MORNING), step("call mom"), step("shower", MORNING)],
+      [],
+      now,
+      TZ,
+      NAMES,
+    )
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].name).toBe("Morning routine")
+    // Contiguous even though a loose task sat between them in the input — which is the
+    // whole point, and what leaving them in the time sort would have prevented.
+    expect(groups[0].tasks.map((t) => t.label)).toEqual(["make bed", "shower"])
+    expect(shape(items)).toEqual(["task:call mom"])
+  })
+
+  it("keeps one block per routine, ordered by where each first appears", () => {
+    const { groups } = buildTodayAgenda(
+      [
+        step("wind down", EVENING),
+        step("make bed", MORNING),
+        step("brush", EVENING),
+      ],
+      [],
+      now,
+      TZ,
+      NAMES,
+    )
+    expect(groups.map((g) => g.name)).toEqual([
+      "Evening routine",
+      "Morning routine",
+    ])
+    expect(groups[0].tasks.map((t) => t.label)).toEqual(["wind down", "brush"])
+  })
+
+  // The FK sets routine_id to null when a routine is deleted, so this is defensive —
+  // but a nameless heading would be worse than no heading, and an ungrouped task is
+  // exactly what the agenda showed before grouping existed.
+  it("leaves a task loose when its routine cannot be named", () => {
+    const { groups, items } = buildTodayAgenda(
+      [step("orphan", "33333333-3333-4333-8333-333333333333")],
+      [],
+      now,
+      TZ,
+      NAMES,
+    )
+    expect(groups).toEqual([])
+    expect(shape(items)).toEqual(["task:orphan"])
+  })
+
+  it("groups nothing when no names are supplied at all", () => {
+    const { groups, items } = buildTodayAgenda(
+      [step("make bed", MORNING)],
+      [],
+      now,
+      TZ,
+    )
+    expect(groups).toEqual([])
+    expect(shape(items)).toEqual(["task:make bed"])
+  })
+
+  // Overdue is judged before grouping, deliberately: a routine step you did not do
+  // yesterday is overdue work, not part of today's sequence.
+  it("does not group an overdue routine task", () => {
+    const stale = {
+      dueDate: "2026-07-19",
+      status: "open" as const,
+      routineId: MORNING,
+      label: "yesterday's bed",
+    }
+    const { overdue, groups } = buildTodayAgenda([stale], [], now, TZ, NAMES)
+    expect(overdue.map((t) => t.label)).toEqual(["yesterday's bed"])
+    expect(groups).toEqual([])
+  })
+
+  it("still merges loose tasks with events by time", () => {
+    const { items } = buildTodayAgenda(
+      [step("make bed", MORNING), step("call mom")],
+      [occ("09:00", "standup"), occ(null, "holiday")],
+      now,
+      TZ,
+      NAMES,
+    )
+    expect(shape(items)).toEqual([
+      "event:holiday",
+      "task:call mom",
+      "event:standup",
+    ])
   })
 })

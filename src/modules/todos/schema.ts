@@ -107,6 +107,30 @@ export const tasks = pgTable(
     eventId: uuid("event_id").references(() => events.id, {
       onDelete: "set null",
     }),
+    /**
+     * The routine whose run created this task (null for everything else), so the
+     * dashboard's agenda can group a morning routine's steps instead of scattering them
+     * among the day's other work.
+     *
+     * **Declared WITHOUT `.references()`, and that is deliberate.** Every other link on
+     * this table names its target table, which pulls that schema in as an import — but
+     * `routines/schema.ts` already imports `priorityEnum` from THIS file, and reads it
+     * eagerly at table-definition time rather than through a lazy callback. Importing
+     * `routines` back would make the pair circular, and whichever module happened to
+     * evaluate second would see `priorityEnum` as `undefined` and crash. Both files carry
+     * comments asserting the graph is acyclic; this keeps that true.
+     *
+     * The foreign key is real all the same — `ON DELETE SET NULL`, matching `goalId` and
+     * `eventId` — but it is written by hand in migration 0033 rather than generated from
+     * here. Consequence worth knowing: drizzle-kit cannot see that constraint, so it will
+     * never regenerate or alter it. If this column's target ever changes, the migration is
+     * hand-written too.
+     *
+     * Only tasks created after 0033 carry it. There is no backfill: matching old tasks by
+     * title against a routine's steps would claim hand-written tasks that happen to agree,
+     * and nothing afterwards could tell the two apart.
+     */
+    routineId: uuid("routine_id"),
     title: text("title").notNull(),
     notes: text("notes"),
     // Date-only (no time-of-day). `mode: "string"` returns 'YYYY-MM-DD' and avoids

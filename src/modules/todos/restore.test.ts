@@ -17,6 +17,7 @@ const task = {
   occurrenceDate: "2026-07-20",
   goalId: "3d6833e3-6279-4f80-aaa8-f3b6cb4e3d72",
   eventId: null,
+  routineId: "1c0f5f0b-2a9e-4d7b-9f45-6b2f4c8a1d33",
   title: "Water the plants",
   notes: "the fiddle-leaf fig especially",
   dueDate: "2026-07-26",

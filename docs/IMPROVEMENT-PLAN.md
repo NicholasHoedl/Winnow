@@ -36,6 +36,7 @@ picked up — it is **not** code-level detail yet.
 | T12b — Goal momentum counts habit sessions        | ✅ shipped        |
 | T12c — Companion proposes habits, not dates       | ✅ shipped        |
 | T12d — Activity revisited for the habit primitive | ✅ shipped        |
+| T12e — Agenda groups routine work, and reorders   | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -819,6 +820,54 @@ around them, so the rail still treated one the way it did when a habit _was_ a r
   `await expect(itemDialog).toBeHidden()` and by asserting the Create button is visible
   before clicking it. No product change: a user cannot navigate faster than the awaited
   round trip, because the dialog stays open until it resolves.
+
+**T12e — shipped**, migration `0033` (`tasks.routine_id`). The dashboard's agenda mixed a
+routine's steps in with everything else due today, so a five-step morning routine read as
+five unrelated chores:
+
+- **A task now records the routine whose run created it**, which is what makes grouping
+  possible at all — nothing linked the two before. **Only tasks created after 0033 carry it;
+  there is no backfill**, deliberately: matching old tasks by title against a routine's steps
+  would claim hand-written tasks that happen to agree, and nothing afterwards could tell them
+  apart. The cost is one cycle of a daily routine looking ungrouped.
+- **The column is declared without `.references()`** and its foreign key is hand-written in
+  the migration, because `routines/schema.ts` already imports `priorityEnum` from todos and
+  reads it eagerly — a reference back would make the two circular and crash whichever
+  evaluated second, drizzle-kit included. See the trap in HANDOFF §4. `account/tables.ts`
+  gained `UNDECLARED_REFERENCES` so the backup importer still checks the link; without it a
+  crafted file could point a restored task at a stranger's routine.
+- **Each routine becomes its own block** in the agenda — heading, icon, count, tinted
+  background — rather than a per-row badge, which at five rows reads as noise rather than
+  structure. Tinted rather than indented: `Gutter` exists to hold every checkbox and event
+  time on one x-axis, and indenting only the grouped rows broke it by 10px, which looked
+  like a bug rather than like hierarchy.
+- **Tasks reorder by drag**, within a group or among the loose ones, reusing `SortableList`
+  and `reorderTasks`. Events are not draggable: an event's position IS its time. The whole
+  of today's due tasks are sent on every drop, not just the list that moved, because
+  `sortOrder` is shared with /activity and renumbering one group alone would interleave it
+  with everything else there.
+- **The agenda's "Calendar →" link is gone.** It was the only thing in that header, it went
+  somewhere the nav already reaches, and nothing on screen explained why it was there.
+- Caught by the existing guards rather than by review: `restore.ts`'s column map, its
+  `restoreTaskSchema`, and `tables.test.ts`'s task-reference list all failed the moment the
+  column existed. That is three separate mechanisms doing exactly what they were built for.
+- **The e2e asserts the drag HANDLES, not the drag.** A first version drove the keyboard
+  sensor and polled for the new order; it failed about half the time. The cause was chased
+  properly and not found: instrumented runs with an 8-second server delay injected showed
+  the component reordering locally in ~50ms, and a tightened announcement assertion
+  confirmed dnd-kit dropped the row at position 2 and called `onReorder` — yet the DOM read
+  unchanged in the failing runs. Rather than ship a test that is red every other run, the
+  assertion was narrowed to what T12e actually added, leaving the drag mechanism to
+  `todos-reorder.spec.ts`, which covers the same `SortableList`. **The gap is unexplained
+  and is written down here rather than papered over**; reordering is verified by hand.
+
+**Also fixed, unrelated to the agenda and found while verifying it:** a restore silently
+rewrote `user_preferences.updated_at`. Carrying the API key across the wipe is an upsert, and
+`$onUpdate` restamps the row on its update branch — so the one thing `toInsertRow` goes out
+of its way to preserve was overwritten a line later. It stayed hidden because the branch only
+runs when a key is STORED, and `import.spec.ts`'s round-trip sorts after `ai-settings.spec.ts`,
+whose `afterEach` clears the key. Run that spec alone with a real key and it fails, as it
+always would have. `updatedAt` is now set explicitly from the file being restored.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

@@ -42,6 +42,10 @@ export function restorableTask(task: RestorableTask, userId: string) {
     // The T2 cross-module links.
     goalId: task.goalId,
     eventId: task.eventId,
+    // The routine whose run created it. Losing this on undo would silently move the task
+    // out of its group on the dashboard's agenda and into the loose list — visible, but
+    // easy to read as the grouping being flaky rather than as undo dropping a column.
+    routineId: task.routineId,
     title: task.title,
     notes: task.notes,
     dueDate: task.dueDate,

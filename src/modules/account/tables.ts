@@ -78,6 +78,23 @@ function hasUserId(table: PgTable): boolean {
   return getTableConfig(table).columns.some((c) => c.name === "user_id")
 }
 
+/**
+ * Foreign keys that exist in the DATABASE but not in the drizzle schema, keyed by export
+ * key. Every reference below is derived from `getTableConfig().foreignKeys`, which is the
+ * point — a new link is checked with no list to update. These are the exceptions.
+ *
+ * `tasks.routine_id` is one because declaring `.references(() => routines.id)` would make
+ * `todos/schema.ts` and `routines/schema.ts` circular: routines already imports
+ * `priorityEnum` back from todos and reads it eagerly, so one of the two would evaluate
+ * against an undefined enum. The constraint is real — migration 0033 writes it by hand —
+ * but drizzle cannot see it, and without this entry the importer would stop checking that
+ * a restored task's routine is one the file actually contains. That is precisely the
+ * cross-account hole `findDanglingReference` exists to close.
+ */
+const UNDECLARED_REFERENCES: Record<string, Reference[]> = {
+  tasks: [{ column: "routineId", to: "routines" }],
+}
+
 function build(): UserTable[] {
   // SQL table name → the entry, so a foreign key's target can be named in JSON terms.
   const bySqlName = new Map<
@@ -122,7 +139,10 @@ function build(): UserTable[] {
         .map(([property]) => property)
       return {
         ...entry,
-        references,
+        references: [
+          ...references,
+          ...(UNDECLARED_REFERENCES[entry.key] ?? []),
+        ],
         columns: Object.keys(columns),
         dateColumns,
       }

@@ -179,6 +179,26 @@ rather than pretending otherwise.
 
 Each of these cost hours. Do not re-discover them.
 
+**`todos/schema.ts` and `routines/schema.ts` cannot both import each other.** Routines
+already imports `lists` and `priorityEnum` from todos, and `priorityEnum` is read EAGERLY at
+table-definition time rather than through a lazy `() => …` callback. So adding a
+`.references(() => routines.id)` on the todos side makes the pair circular, and whichever
+module ESM evaluates second sees `priorityEnum` as `undefined` and crashes — including
+inside drizzle-kit, the tool that generates migrations. `tasks.routine_id` (T12e) is
+therefore declared as a plain `uuid()` with **no `.references()`**, and its foreign key is
+written by hand in migration `0033`. Two consequences travel with that:
+
+- drizzle-kit cannot see the constraint, so it will never alter or regenerate it. Changing
+  that column's target means hand-writing the migration too.
+- `account/tables.ts` derives the backup's reference graph from drizzle metadata, so this
+  link would be invisible there — which would stop the importer checking that a restored
+  task's routine came from the same file, the exact cross-account hole
+  `findDanglingReference` exists to close. `UNDECLARED_REFERENCES` restates it, and
+  `tables.test.ts` asserts the restatement is still there.
+
+If you ever need a real declared reference, the fix is to move `priorityEnum` (and `lists`)
+somewhere neutral so routines stops importing todos — not to add the import and hope.
+
 **React's streaming staging div.** Fizz emits each completed Suspense boundary as
 `<div hidden id="S:n">` plus a `$RC(...)` script that relocates the content. In between,
 the DOM holds everything **twice**, and Playwright's strict mode counts both — so a loose

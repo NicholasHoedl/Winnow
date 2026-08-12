@@ -112,6 +112,7 @@ export const restoreTaskSchema = z.object({
   occurrenceDate: dayOrNull,
   goalId: z.string().uuid().nullable(),
   eventId: z.string().uuid().nullable(),
+  routineId: z.string().uuid().nullable(),
   title: z.string().trim().min(1).max(200),
   notes: z.string().max(2000).nullable(),
   dueDate: dayOrNull,

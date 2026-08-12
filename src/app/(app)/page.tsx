@@ -12,6 +12,7 @@ import {
 import { getGoals } from "@/modules/goals/queries"
 import { getHabitStrip } from "@/modules/habits/queries"
 import { getJournalEntry } from "@/modules/notes/queries"
+import { getRoutineNames } from "@/modules/routines/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import {
   getAiSettings,
@@ -68,6 +69,7 @@ export default async function DashboardPage({
     journalEntry,
     aiSettings,
     habits,
+    routineNames,
   ] = await Promise.all([
     auth(),
     getTasks(),
@@ -84,6 +86,9 @@ export default async function DashboardPage({
     // The cheap read, same as /activity — two bounded queries for a card that shows
     // done/target and nothing else.
     getHabitStrip(),
+    // Ids to names, so the agenda can head each routine's block. Not `getRoutines()`:
+    // that would fetch every routine's full item list to read one string per row.
+    getRoutineNames(),
   ])
 
   const name = session?.user?.name ?? "there"
@@ -92,11 +97,12 @@ export default async function DashboardPage({
   // Overdue tasks, and today's events and due tasks merged into one time-ordered list.
   // This was a separate `/today` route until it was folded in here — the two pages ran
   // five of the same queries and differed only by this.
-  const { overdue, items } = buildTodayAgenda(
+  const { overdue, groups, items } = buildTodayAgenda(
     tasks,
     dayEvents,
     new Date(),
     timeZone,
+    routineNames,
   )
 
   // What the card beside the agenda shows: the open tasks the agenda does NOT.
@@ -191,6 +197,7 @@ export default async function DashboardPage({
           <Reveal delay={0.05}>
             <TodayAgenda
               overdue={overdue}
+              groups={groups}
               items={items}
               calendars={calendars}
               use24Hour={use24HourTime}
