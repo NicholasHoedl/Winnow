@@ -483,12 +483,21 @@ T9c or T9d rebuilt any of them.
 - **Behind a two-protocol seam, configured in Settings** (T11) — `user_preferences.ai_*`,
   not the environment. `src/lib/config.ts` holds nothing about AI any more; `getAiSettings`
   / `getAiConfig` read it per request and `aiReady` decides whether it is usable. A local
-  endpoint is one settings field away.
-  **The provider is `openai` or `anthropic`, and they are not interchangeable by URL** —
+  endpoint is the **Custom** provider, which is what that escape hatch became in T12h — no
+  longer an editable URL box on every provider, but a choice that reveals one.
+  **Two things are called "provider" since T12h, and conflating them is a 400.** The
+  SETTINGS choice is `anthropic` / `openai` / `custom`; the WIRE PROTOCOL (`AiProvider`) is
+  only `openai` or `anthropic`, and `wireProtocol()` maps between them — `custom` speaks
+  OpenAI at an address you supply. The base URL is written from the choice on SAVE
+  (`resolveBaseUrl`), never on read: resolving on read would replace the e2e stub's address
+  with the real provider's and point the whole suite at a paid API.
+  **The two protocols are not interchangeable by URL** —
   different path, `x-api-key` vs bearer, a required version header, `system` outside the
   messages, a required `max_tokens`, and tool-use instead of `response_format`. Both
   protocols are unit-tested in `companion/ai-request.test.ts`; the e2e stub speaks OpenAI
-  only, so that file is the ONLY coverage the Anthropic path has.
+  only, so that file is the ONLY coverage the Anthropic path has. That now includes the
+  model list: `extractModels` is tested against both response shapes, but the Anthropic one
+  has never been checked against a LIVE response — the account's key returns 401.
   Nothing is forwarded through `docker-compose.prod.yml` any more: the configuration is in
   the database, so it survives a redeploy and is set once, from the app.
 - **Propose-only.** The model never writes to the database. It emits a proposal, that

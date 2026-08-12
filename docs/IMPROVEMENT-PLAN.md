@@ -39,6 +39,7 @@ picked up — it is **not** code-level detail yet.
 | T12e — Agenda groups routine work, and reorders   | ✅ shipped        |
 | T12f — A routine can drop its own stale tasks     | ✅ shipped        |
 | T12g — The e2e suite gets a database of its own   | ✅ shipped        |
+| T12h — Companion settings: no URL, a model list   | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -922,6 +923,37 @@ its entire history. That is finally over, and it should have been done long befo
 - Several comments across `e2e/` and `account/coverage.test.ts` asserted the old arrangement
   as a live fact and justified decisions with it. They are corrected rather than deleted —
   including the note that a clear-all e2e was impossible, which is now merely unwritten.
+
+**T12h — shipped**, no migration (the provider column is plain text, as its comment
+predicted). The companion's setup asked for two things nobody should have to know: the
+provider's base URL, and a model id typed from memory.
+
+- **Base URL is written from the provider on save**, never typed. `resolveBaseUrl` ignores
+  whatever the form sent for `anthropic` and `openai` — the field is not even rendered for
+  them — and honours it only for the new `custom` provider.
+- **`custom` is the escape hatch made explicit.** ADR-0011 records the local-model decision
+  as reversible because "a local endpoint is one setting away"; that setting used to be an
+  editable URL on every provider, which meant the door was open by accident. Now it is a
+  choice you make.
+- **Settings choice and wire protocol are now different types.** `AiProvider` is a protocol
+  and there are exactly two, because Anthropic is not an OpenAI dialect; `AiProviderChoice`
+  is what the user picks and there are three. `wireProtocol()` maps `custom` → `openai`.
+  Conflating them would produce a 400 with no obvious cause.
+- **The model field is a dropdown fetched from the provider** through a Server Action, so
+  the key never reaches the browser. It takes the provider being CONSIDERED rather than the
+  one saved — otherwise switching provider and opening the list would offer the old one's
+  models. The saved model is always kept in the list, so an unreachable provider cannot
+  silently wipe the setting on save.
+- **Not filtered to chat-capable models**, deliberately: nothing in either response says
+  which is which, and any heuristic that hid OpenAI's embedding models would also hide
+  whatever a local endpoint calls its own.
+- **The e2e stub now answers `/models`.** A stand-in provider that 404s there leaves the
+  settings page with an empty dropdown — it stopped standing in for enough.
+- Found while verifying, and unrelated to the change: **the account's stored Anthropic key
+  returns 401**. It is structurally intact (108 chars, `sk-ant-` prefix, no whitespace or
+  encoding damage) and the AI teardown had completed cleanly, so this is a revoked or
+  expired key rather than fixture damage. The old form could not have told anyone; the new
+  dropdown says so on arrival.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 
