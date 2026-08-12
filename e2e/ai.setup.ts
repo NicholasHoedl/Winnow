@@ -35,9 +35,15 @@ setup("configure the AI stub", async ({ page }) => {
 
   // The API key is deliberately not passed: `writeAiConfig` does not touch that column, so
   // pointing the suite at the stub cannot disturb a real credential.
+  // `custom`, not `openai` — and the distinction is now load-bearing rather than cosmetic.
+  // T12h resolves the base URL from the provider when settings are SAVED, and `openai`
+  // resolves to api.openai.com. Nothing here goes through that path (this writes the
+  // columns directly), so the stub URL would survive either way — but naming the endpoint
+  // for what it is means a future change that starts resolving on read cannot quietly
+  // point the whole suite at a paid API.
   await writeAiConfig({
     enabled: true,
-    provider: "openai",
+    provider: "custom",
     baseUrl: "http://127.0.0.1:3100",
     model: "stub",
   })

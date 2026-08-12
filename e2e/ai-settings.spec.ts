@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./_test"
+import { test, expect, type Locator, type Page } from "./_test"
 
 /**
  * Browser coverage for T11: the companion configured from settings rather than the
@@ -31,6 +31,19 @@ const SECOND_KEY = "sk-test-e2e-zyxwvuts4321"
  */
 const SAVE_KEY = /^(Save|Replace) key$/
 
+/**
+ * Choose a model from the dropdown the provider populates.
+ *
+ * Waits for the option rather than the trigger: the list arrives from a network call to the
+ * provider, so it is briefly empty on arrival and after every provider change.
+ */
+async function selectModel(ai: Locator, page: Page, model: string) {
+  await ai.getByLabel("Model", { exact: true }).click()
+  const option = page.getByRole("option", { name: model, exact: true })
+  await expect(option).toBeVisible()
+  await option.click()
+}
+
 function section(page: Page) {
   return page
     .locator("section")
@@ -42,11 +55,12 @@ test.afterEach(async ({ page }) => {
   await page.goto("/settings")
   const ai = section(page)
   await ai.getByRole("button", { name: "On", exact: true }).click()
-  await ai
-    .getByRole("button", { name: "OpenAI-compatible", exact: true })
-    .click()
+  // `Custom` is the stub's honest provider: an OpenAI-compatible endpoint at an address
+  // this suite supplies. It is also the only choice that still shows a Base URL field —
+  // the two hosted providers set theirs from the provider alone (T12h).
+  await ai.getByRole("button", { name: "Custom", exact: true }).click()
   await ai.getByLabel("Base URL").fill(STUB_URL)
-  await ai.getByLabel("Model", { exact: true }).fill(STUB_MODEL)
+  await selectModel(ai, page, STUB_MODEL)
   await ai.getByRole("button", { name: "Save AI settings" }).click()
   await expect(page.getByText("AI settings saved")).toBeVisible()
 
@@ -133,13 +147,17 @@ test("settings survive a reload, and the key survives a settings change", async 
   // Changing the model must not clear the key. The two are separate forms and separate
   // actions precisely because a write-only field is empty on every render — sharing one
   // form would wipe the key on every save.
-  await ai.getByLabel("Model", { exact: true }).fill("some-other-model")
+  // A DIFFERENT model, picked from the list the stub advertises at /models. Typing one is
+  // no longer possible: the field is a dropdown of what the provider says it serves.
+  await selectModel(ai, page, "stub-alt")
   await ai.getByRole("button", { name: "Save AI settings" }).click()
   await expect(page.getByText("AI settings saved")).toBeVisible()
 
   await page.reload()
-  await expect(ai.getByLabel("Model", { exact: true })).toHaveValue(
-    "some-other-model",
+  // `toContainText`, not `toHaveText`: the trigger's text is the label plus the chevron
+  // glyph the Select draws inside the same button.
+  await expect(ai.getByLabel("Model", { exact: true })).toContainText(
+    "stub-alt",
   )
   await expect(ai.getByLabel("API key")).toHaveAttribute("placeholder", /Saved/)
 })

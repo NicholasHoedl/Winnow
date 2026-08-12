@@ -4,15 +4,24 @@ import { z } from "zod"
 import { getAiConfig } from "@/modules/preferences/queries"
 
 import {
+  buildModelsUrl,
   buildRequestBody,
   buildRequestHeaders,
   buildRequestUrl,
   classifyFetchError,
+  extractModels,
   extractPayload,
   GENERATE_TIMEOUT_MS,
+  MODELS_TIMEOUT_MS,
+  type AiModel,
   type AiResult,
 } from "./ai-request"
-import { aiReady } from "./ai-settings"
+import {
+  aiReady,
+  resolveBaseUrl,
+  wireProtocol,
+  type AiProviderChoice,
+} from "./ai-settings"
 import type { ChatMessage } from "./service"
 
 // The second outbound call in the codebase, after Open Food Facts. Same rule, for the
@@ -45,20 +54,20 @@ export async function generatePayload<T>(
   const config = await getAiConfig()
   if (!aiReady(config)) return { ok: false, failure: { kind: "disabled" } }
 
+  // The stored value is what the user PICKED; the request builders want a wire protocol.
+  // `custom` is an OpenAI-compatible endpoint at an address they supplied, so it resolves
+  // to the same protocol as `openai` — see `wireProtocol`.
+  const wire = wireProtocol(config.provider)
+
   let response: Response
   try {
-    response = await fetch(buildRequestUrl(config.provider, config.baseUrl), {
+    response = await fetch(buildRequestUrl(wire, config.baseUrl), {
       method: "POST",
       // URL, headers and body all vary by provider — see `AiProvider` in ai-request.ts for
       // why Anthropic is a second protocol rather than a base-URL swap.
-      headers: buildRequestHeaders(config.provider, config.apiKey),
+      headers: buildRequestHeaders(wire, config.apiKey),
       body: JSON.stringify(
-        buildRequestBody(
-          config.provider,
-          config.model,
-          messages,
-          z.toJSONSchema(schema),
-        ),
+        buildRequestBody(wire, config.model, messages, z.toJSONSchema(schema)),
       ),
       cache: "no-store",
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
@@ -80,7 +89,7 @@ export async function generatePayload<T>(
 
   // Already a value, not text: the OpenAI path parses the JSON string inside
   // `extractPayload`, the Anthropic path reads the forced tool call's input directly.
-  const parsed = extractPayload(config.provider, body)
+  const parsed = extractPayload(wire, body)
   if (parsed === null) return { ok: false, failure: { kind: "malformed" } }
 
   const result = schema.safeParse(parsed)
@@ -92,4 +101,66 @@ export async function generatePayload<T>(
 /** Which model produced a proposal, recorded on the row so a bad run can be traced. */
 export async function currentModel(): Promise<string> {
   return (await getAiConfig()).model
+}
+
+/**
+ * Ask the configured provider what models it serves, for the Settings dropdown.
+ *
+ * Deliberately NOT gated on `aiReady`. That requires a model to already be set, and the
+ * entire point of this call is to choose one — gating on it would mean the dropdown only
+ * worked once you had typed a model in by hand, which is the thing being removed. It needs
+ * a base URL and nothing else.
+ *
+ * The API key is not required either, for the same reason `buildRequestHeaders` omits it
+ * when unset: a self-hosted endpoint usually wants no auth. A hosted provider will answer
+ * 401 without one, which arrives as `http` and is a truer message than a guess made here.
+ */
+export async function fetchModels(
+  /**
+   * The provider being CONSIDERED, when that is not the one saved.
+   *
+   * The Settings form asks for a model list before it saves, and a fetch that read only
+   * stored settings would answer for the previous provider — offering Anthropic's models
+   * to someone who has just switched to OpenAI and not yet pressed Save. The API key is
+   * never part of this: it always comes from storage, so a caller cannot use this to
+   * exfiltrate it by naming an endpoint of their own... which they CAN, by choosing
+   * `custom`. That is a deliberate capability of the feature, not a hole — pointing the
+   * companion at your own server is the entire purpose of that option, and the key goes
+   * wherever the companion goes.
+   */
+  override?: { provider: AiProviderChoice; baseUrl: string },
+): Promise<AiResult<AiModel[]>> {
+  const config = await getAiConfig()
+  const provider = override?.provider ?? config.provider
+  const baseUrl = resolveBaseUrl(provider, override?.baseUrl ?? config.baseUrl)
+  if (baseUrl === "") {
+    return { ok: false, failure: { kind: "disabled" } }
+  }
+
+  const wire = wireProtocol(provider)
+  let response: Response
+  try {
+    response = await fetch(buildModelsUrl(baseUrl), {
+      headers: buildRequestHeaders(wire, config.apiKey),
+      cache: "no-store",
+      signal: AbortSignal.timeout(MODELS_TIMEOUT_MS),
+    })
+  } catch (error) {
+    return { ok: false, failure: classifyFetchError(error) }
+  }
+
+  if (!response.ok) {
+    return { ok: false, failure: { kind: "http", status: response.status } }
+  }
+
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    return { ok: false, failure: { kind: "malformed" } }
+  }
+
+  const models = extractModels(body)
+  if (models === null) return { ok: false, failure: { kind: "malformed" } }
+  return { ok: true, data: models }
 }

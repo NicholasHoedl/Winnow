@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { CURRENCY_CODES, THEMES } from "@/lib/preferences"
+import { AI_PROVIDERS } from "@/modules/companion/ai-settings"
 
 // Robust across runtimes: constructing a formatter throws RangeError for an
 // unknown IANA zone (no dependence on Intl.supportedValuesOf).
@@ -61,9 +62,14 @@ export type AppearancePreferencesInput = z.infer<
  */
 export const aiSettingsSchema = z.object({
   enabled: z.boolean(),
-  provider: z.enum(["openai", "anthropic"]),
+  provider: z.enum(AI_PROVIDERS),
   // Trimmed because it is pasted, and a trailing space produces a DNS failure reported as
   // "can't reach the AI provider" with nothing pointing at the real cause.
+  //
+  // Still accepted for every provider, not just `custom`, because the action decides what
+  // is actually stored: `resolveBaseUrl` overwrites it with the canonical URL for the two
+  // hosted providers and only honours it for `custom`. Rejecting it here instead would
+  // make the form's hidden field a validation error rather than an ignored one.
   baseUrl: z.string().trim().max(500),
   model: z.string().trim().max(120),
 })

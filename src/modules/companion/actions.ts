@@ -4,7 +4,11 @@ import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
 import { db } from "@/db"
-import { invalid, type ActionResult } from "@/lib/action-result"
+import {
+  invalid,
+  type ActionFailure,
+  type ActionResult,
+} from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { createTransaction } from "@/modules/budget/actions"
 import { getCategories } from "@/modules/budget/queries"
@@ -15,11 +19,20 @@ import { goals } from "@/modules/goals/schema"
 import { addRoutineItem, createRoutine } from "@/modules/routines/actions"
 import { createTask } from "@/modules/todos/actions"
 
+import { fetchModels } from "./ai-client"
+import { describeAiFailure } from "./ai-request"
+import { AI_PROVIDERS } from "./ai-settings"
 import { aiProposals } from "./schema"
 import { applyProposalSchema } from "./validation"
 import { z } from "zod"
 
 const idSchema = z.string().uuid("Invalid id")
+
+/** What the Settings form is CONSIDERING, which may not be what is saved yet. */
+const listModelsSchema = z.object({
+  provider: z.enum(AI_PROVIDERS),
+  baseUrl: z.string().trim().max(500),
+})
 
 function revalidateCompanion(): void {
   revalidatePath("/companion")
@@ -200,4 +213,32 @@ export async function discardProposal(id: unknown): Promise<ActionResult> {
 
   revalidateCompanion()
   return { ok: true }
+}
+
+/**
+ * What models the configured provider serves, for the Settings dropdown.
+ *
+ * A Server Action rather than a query the page awaits, because it is a NETWORK call the
+ * user retries: awaiting it during render would make /settings unreachable whenever the
+ * provider is slow, for a field that is one of six on the page.
+ *
+ * The API key never leaves the server — `fetchModels` reads it, sends it to the provider,
+ * and returns only ids and labels. The failure comes back as a described string rather than
+ * an `AiFailure`, so the client component needs no knowledge of the taxonomy and nothing
+ * about the request shape crosses the boundary.
+ */
+export async function listAiModels(
+  input: unknown,
+): Promise<
+  { ok: true; models: { id: string; label: string }[] } | ActionFailure
+> {
+  await requireUserId()
+  const parsed = listModelsSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const result = await fetchModels(parsed.data)
+  if (!result.ok) {
+    return { ok: false, error: describeAiFailure(result.failure) }
+  }
+  return { ok: true, models: result.data }
 }

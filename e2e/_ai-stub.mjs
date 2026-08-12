@@ -164,7 +164,26 @@ function importFor(isRefinement) {
   }
 }
 
+/**
+ * What this stub claims to serve, for the Settings model dropdown (T12h).
+ *
+ * `stub` first because `ai.setup.ts` configures the suite to use it; the second exists so
+ * a spec can switch models and prove the choice persists, which needs two of something.
+ * Shaped like an OpenAI-compatible `/models` response — `{ data: [{ id }] }` — which is
+ * also the shape Anthropic uses, so one body covers both protocols.
+ */
+const MODELS = { object: "list", data: [{ id: "stub" }, { id: "stub-alt" }] }
+
 const server = createServer((request, response) => {
+  // Answered because the app now ASKS: a provider that 404s here leaves the settings page
+  // with an empty dropdown and no way to choose. A stub that cannot be configured through
+  // the UI it is standing in for is not standing in for much.
+  if (request.url?.endsWith("/models")) {
+    response.writeHead(200, { "Content-Type": "application/json" })
+    response.end(JSON.stringify(MODELS))
+    return
+  }
+
   if (!request.url?.endsWith("/chat/completions")) {
     response.writeHead(404).end()
     return

@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest"
 import {
   buildAnthropicBody,
   buildChatBody,
+  buildModelsUrl,
   buildRequestBody,
   buildRequestHeaders,
   buildRequestUrl,
   describeAiFailure,
+  extractModels,
   extractPayload,
   extractToolInput,
   MAX_OUTPUT_TOKENS,
@@ -251,5 +253,59 @@ describe("describeAiFailure", () => {
     expect(describeAiFailure({ kind: "http", status: 500 })).toContain(
       "Nothing was created",
     )
+  })
+})
+
+describe("buildModelsUrl", () => {
+  it("appends /models and tolerates a trailing slash", () => {
+    expect(buildModelsUrl("https://api.openai.com/v1")).toBe(
+      "https://api.openai.com/v1/models",
+    )
+    expect(buildModelsUrl("http://127.0.0.1:11434/v1//")).toBe(
+      "http://127.0.0.1:11434/v1/models",
+    )
+  })
+})
+
+describe("extractModels", () => {
+  it("reads an OpenAI-compatible list, labelling by id", () => {
+    const models = extractModels({
+      object: "list",
+      data: [{ id: "gpt-4o-mini" }, { id: "gpt-4o" }],
+    })
+    expect(models).toEqual([
+      { id: "gpt-4o", label: "gpt-4o" },
+      { id: "gpt-4o-mini", label: "gpt-4o-mini" },
+    ])
+  })
+
+  it("prefers Anthropic's display_name when it sends one", () => {
+    const models = extractModels({
+      data: [{ type: "model", id: "claude-x", display_name: "Claude X" }],
+    })
+    expect(models).toEqual([{ id: "claude-x", label: "Claude X" }])
+  })
+
+  it("sorts by label, so the order does not shift between calls", () => {
+    const models = extractModels({
+      data: [{ id: "zeta" }, { id: "alpha" }, { id: "mid" }],
+    })
+    expect(models?.map((m) => m.id)).toEqual(["alpha", "mid", "zeta"])
+  })
+
+  // An endpoint that answered properly and serves nothing is a different fact from one
+  // that answered with rubbish, and the form says different things about them.
+  it("keeps an empty list distinct from an unusable body", () => {
+    expect(extractModels({ data: [] })).toEqual([])
+    expect(extractModels({ models: ["gpt-4o"] })).toBeNull()
+    expect(extractModels("not json at all")).toBeNull()
+    expect(extractModels(null)).toBeNull()
+  })
+
+  it("skips entries with no usable id rather than failing the whole list", () => {
+    const models = extractModels({
+      data: [{ id: "good" }, { id: "" }, { name: "no id" }, null, 7],
+    })
+    expect(models).toEqual([{ id: "good", label: "good" }])
   })
 })

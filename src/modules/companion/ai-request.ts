@@ -65,6 +65,69 @@ export function buildRequestUrl(provider: AiProvider, baseUrl: string): string {
  * The key is omitted when unset for the same reason as before: a local endpoint usually
  * wants no auth at all, and some reject an empty credential outright.
  */
+/**
+ * Where to ask a provider what models it has.
+ *
+ * One path for both protocols, unusually: OpenAI-compatible servers and Anthropic both
+ * serve `GET {base}/models`, and both answer `{ data: [...] }`. The headers still differ,
+ * which is why `buildRequestHeaders` is reused rather than inlined.
+ */
+export function buildModelsUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/models`
+}
+
+/**
+ * Shorter than a generation, and for a different reason.
+ *
+ * `GENERATE_TIMEOUT_MS` is 90s because someone pressed a button expecting to wait. This
+ * fills a dropdown while they are reading the page, so a stall has to give up quickly
+ * enough to show "couldn't reach the provider" and a retry rather than looking frozen.
+ */
+export const MODELS_TIMEOUT_MS = 15_000
+
+/** One model a provider says it can serve. */
+export type AiModel = { id: string; label: string }
+
+/**
+ * The model list out of either provider's `/models` response.
+ *
+ * `null` means the body was not a model list at all — the caller turns that into
+ * `malformed`, the same as a generation that came back unusable. An EMPTY array is a
+ * different answer and is preserved: the endpoint replied properly and serves nothing,
+ * which the form says out loud rather than showing an empty dropdown.
+ *
+ * Anthropic sends `display_name` ("Claude Sonnet 4.5"); OpenAI-compatible servers send
+ * only `id`. The label falls back to the id so a self-hosted endpoint is not blank.
+ *
+ * Deliberately NOT filtered to chat-capable models. OpenAI's list includes embeddings and
+ * speech models that cannot serve a completion, but nothing in the response says which is
+ * which — and any heuristic that hides them would also hide whatever a local endpoint
+ * happens to call its model. Showing everything is noisier and honest; guessing is quieter
+ * and sometimes wrong in a way nobody could debug.
+ */
+export function extractModels(body: unknown): AiModel[] | null {
+  if (typeof body !== "object" || body === null) return null
+  const data = (body as { data?: unknown }).data
+  if (!Array.isArray(data)) return null
+
+  const models: AiModel[] = []
+  for (const entry of data) {
+    if (typeof entry !== "object" || entry === null) continue
+    const row = entry as { id?: unknown; display_name?: unknown }
+    if (typeof row.id !== "string" || row.id === "") continue
+    models.push({
+      id: row.id,
+      label:
+        typeof row.display_name === "string" && row.display_name !== ""
+          ? row.display_name
+          : row.id,
+    })
+  }
+  // Sorted by what is shown, so the order does not shift between providers or between two
+  // calls to the same one — neither list promises an order.
+  return models.sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export function buildRequestHeaders(
   provider: AiProvider,
   apiKey: string,

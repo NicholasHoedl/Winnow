@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { db } from "@/db"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
+import { resolveBaseUrl } from "@/modules/companion/ai-settings"
 
 import { userPreferences } from "./schema"
 import {
@@ -91,7 +92,10 @@ export async function setAiSettings(input: unknown): Promise<ActionResult> {
   const values = {
     aiEnabled: parsed.data.enabled,
     aiProvider: parsed.data.provider,
-    aiBaseUrl: parsed.data.baseUrl,
+    // Resolved HERE rather than on read. For `anthropic` and `openai` the canonical URL
+    // wins and whatever the form sent is ignored — the field is not even shown for them.
+    // Only `custom` keeps what was typed, which is the whole point of that option.
+    aiBaseUrl: resolveBaseUrl(parsed.data.provider, parsed.data.baseUrl),
     aiModel: parsed.data.model,
   }
   await db
