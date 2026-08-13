@@ -62,7 +62,17 @@ function Stat({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-muted-foreground text-xs">{label}</span>
-      <span className={cn("text-lg font-semibold tabular-nums", className)}>
+      {/* Smaller on a phone, because a currency figure cannot wrap and this column is
+          93px at 393px: `$12,345.67` renders at 96px in Bricolage Grotesque and lay across
+          the column beside it. Shrinking the type rather than stacking the three stats —
+          stacking buys certainty at the cost of three rows of vertical space at the top of
+          the page, and a summary you have to scroll past is worse than a smaller one. */}
+      <span
+        className={cn(
+          "text-base font-semibold tabular-nums sm:text-lg",
+          className,
+        )}
+      >
         {value}
       </span>
     </div>
@@ -249,7 +259,9 @@ export function BudgetView({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-4 rounded-xl border p-4">
+      {/* A tighter gap on a phone buys each column ~5px, which is the difference between
+          this fitting at 375px and not. Three narrow stats do not need 16px between them. */}
+      <div className="grid grid-cols-3 gap-2 rounded-xl border p-4 sm:gap-4">
         <Stat
           label="Income"
           value={money(summary.incomeCents)}

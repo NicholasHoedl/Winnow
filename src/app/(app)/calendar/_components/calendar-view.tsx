@@ -267,7 +267,12 @@ export function CalendarView({
           </h1>
           <p className="text-muted-foreground text-sm">Your events.</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* `flex-wrap` here, not only on the header. The header already wrapped, but this
+            row was a single unbreakable flex child of it — four view links plus two
+            buttons, ~416px intrinsic — so at 393px it overflowed and took the whole
+            document sideways with it. Wrapping one level too high looks identical in the
+            markup and is not the same thing. */}
+        <div className="flex flex-wrap items-center gap-2">
           <div className="bg-muted inline-flex rounded-lg p-0.5">
             {CALENDAR_VIEWS.map((v) => (
               <Link

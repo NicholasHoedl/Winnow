@@ -78,8 +78,34 @@ export default defineConfig({
     },
     {
       name: "chromium",
+      // The mobile sweep is excluded rather than allowed to run here too: at desktop width
+      // its assertions pass trivially, so it would cost a second full pass over eleven
+      // routes to prove nothing.
+      testIgnore: /mobile-layout\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
+        storageState: "e2e/.auth/user.json",
+      },
+      dependencies: ["setup", "ai-setup"],
+    },
+    /**
+     * The only project that renders this app below 768px.
+     *
+     * WebKit, not Chromium wearing an iPhone user-agent: `devices["iPhone 15"]` carries
+     * `defaultBrowserType: "webkit"`, which the runner honours — unlike `playwright open`,
+     * where `--device` sets the viewport and `-b` still defaults to chromium. That
+     * distinction is the whole value of the project; a Chromium run at 393px would miss
+     * every Safari-specific layout difference.
+     *
+     * Depends on `ai-setup` as well as `setup`, and not for convenience: `/companion` 404s
+     * unless the companion is configured, so without it one of the eleven routes would fail
+     * on a missing `h1` and read as a layout fault.
+     */
+    {
+      name: "mobile",
+      testMatch: /mobile-layout\.spec\.ts/,
+      use: {
+        ...devices["iPhone 15"],
         storageState: "e2e/.auth/user.json",
       },
       dependencies: ["setup", "ai-setup"],
