@@ -95,7 +95,11 @@ export default async function AppLayout({
             <main
               id="content"
               tabIndex={-1}
-              className="flex-1 pb-20 outline-none md:pb-0"
+              // Clears the fixed BottomNav, plus the gap the old `pb-20` was really
+              // buying. That 5rem was a guess made against a nav measuring 54px, and it
+              // held until `env(safe-area-inset-bottom)` stopped being zero: on an iPhone
+              // the nav is ~88px, so the last few pixels of every page sat underneath it.
+              className="flex-1 pb-[calc(var(--bottom-nav-height)_+_1.5rem)] outline-none md:pb-0"
             >
               {/* Renders itself (and its own spacing) only on the first visit of
                   a new local day; otherwise nothing at all. */}

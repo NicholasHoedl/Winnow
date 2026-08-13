@@ -65,6 +65,33 @@
   --sidebar-accent-foreground: #f9f8f6;
   --sidebar-border: rgb(255 255 255 / 8%);
   --sidebar-ring: #a0b89c;
+  /*
+   * How much of the bottom of the viewport the mobile nav occupies.
+   *
+   * Zero here, because `BottomNav` is `md:hidden` — the override below is the real value
+   * and this is the desktop case. Two things need this number and NEITHER can see the
+   * nav: the main content's bottom padding (`(app)/layout.tsx`) and the toast offset
+   * (`ui/sonner.tsx`). Before this variable both carried their own guess, and the content
+   * padding's guess was wrong on any phone with a home indicator.
+   */
+  --bottom-nav-height: 0px;
+}
+
+/*
+ * `48rem` is Tailwind's `md`, matching `BottomNav`'s own `md:hidden` — not a number picked
+ * to look right. Sonner has its own mobile breakpoint at 600px, so passing it a fixed
+ * `mobileOffset` would leave 600–768px overlapping: nav visible, desktop offset applied.
+ * Driving both of its offsets from this variable makes that breakpoint irrelevant.
+ *
+ * 3.5rem is the nav's content height rounded UP (py-2 + a 20px icon + gap-1 + a ~13px
+ * label + the top border ≈ 54px), and the inset is the iOS home indicator — 34px on an
+ * iPhone 15, 0 everywhere else. Emulators report 0, which is exactly why the shortfall
+ * this fixes was invisible until someone measured it.
+ */
+@media (width < 48rem) {
+  :root {
+    --bottom-nav-height: calc(3.5rem + env(safe-area-inset-bottom));
+  }
 }
 
 .dark {
