@@ -203,6 +203,19 @@ and it unblocks later tranches (shared `ActionResult`, Goals module, shared date
   false when written: `food-manager.tsx` has called `updateFood` since T8. `updateCategory`
   was real and is done in **T12i**, along with `renameList`, `unarchiveHabit` and
   `updateTransactionRecurrence`, which the same sweep found in the same state.
+- **Seed `BudgetsDialog` by remounting, not by an effect.** `budgets-dialog.tsx:60` `reset()`s
+  the whole form from a `useEffect` keyed on `open`, `categories`, `budgetedByCategory` and
+  `currency` — so a prop changing while the dialog is open wipes whatever is half-typed. It is
+  already load-bearing in a second file: `budget-view.tsx:124` memoizes `budgetedByCategory`
+  purely "so the dialog's seeding effect doesn't see a new object on every render", which is a
+  workaround for this, not a requirement of its own. The fix is to extract the form into a child
+  of `DialogContent` — base-ui unmounts closed dialog content, so it remounts on open and can
+  seed from a lazy `useState` initializer with no effect at all. The memo then stops being
+  load-bearing. `budgets-dialog.spec.ts` already covers the round trip.
+  _Rescued from `claude/quirky-meninsky-4e8676` (`cda124f`, 2026-07-23) before that branch was
+  deleted — the branch also changed `mode-toggle.tsx`, which is obsolete: `main` solved that
+  half a third way with the `useHydrated` hook. Not urgent; `eslint .` is at 0 errors and the
+  rule that originally motivated it no longer fires._
 - **Budget correctness.** Filter the transaction dialog's category list **by type** (no income
   category on an expense); add **min/max = current month** to the transaction date input (and to
   the meals log date) so entries can't silently land in another period.
