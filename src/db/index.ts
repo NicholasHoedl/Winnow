@@ -10,7 +10,6 @@ import * as calendarSchema from "@/modules/calendar/schema"
 import * as companionSchema from "@/modules/companion/schema"
 import * as goalsSchema from "@/modules/goals/schema"
 import * as habitsSchema from "@/modules/habits/schema"
-import * as notesSchema from "@/modules/notes/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
 import * as routinesSchema from "@/modules/routines/schema"
 
@@ -25,7 +24,6 @@ const schema = {
   ...companionSchema,
   ...goalsSchema,
   ...habitsSchema,
-  ...notesSchema,
   ...preferencesSchema,
   ...routinesSchema,
 }

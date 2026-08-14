@@ -11,7 +11,6 @@ import { transactions } from "@/modules/budget/schema"
 import { goals } from "@/modules/goals/schema"
 import { habits } from "@/modules/habits/schema"
 import { foods } from "@/modules/meals/schema"
-import { notes } from "@/modules/notes/schema"
 import { tasks } from "@/modules/todos/schema"
 
 import {
@@ -44,7 +43,6 @@ export async function searchEverything(
     foodRows,
     txnRows,
     goalRows,
-    noteRows,
     habitRows,
   ] = await Promise.all([
     db.query.tasks.findMany({
@@ -90,17 +88,6 @@ export async function searchEverything(
       ),
       columns: { id: true, title: true, notes: true, targetDate: true },
       orderBy: [desc(goals.updatedAt)],
-      limit: PER_MODULE_LIMIT,
-    }),
-    // The body is searched as well as the title — a note whose title is optional would
-    // otherwise be findable only when someone had bothered to give it one.
-    db.query.notes.findMany({
-      where: and(
-        eq(notes.userId, userId),
-        or(ilike(notes.title, pattern), ilike(notes.body, pattern)),
-      ),
-      columns: { id: true, title: true, body: true, entryDate: true },
-      orderBy: [desc(notes.updatedAt)],
       limit: PER_MODULE_LIMIT,
     }),
     // Title only — a habit has no notes column to search, and no body to snippet.
@@ -173,26 +160,9 @@ export async function searchEverything(
       score: scoreResult(q, r.title, r.notes),
       ...(r.notes ? { subtitle: snippet(r.notes) } : {}),
     })),
-    ...noteRows.map((r): SearchResult => {
-      // The notes module's `noteTitle` does this properly, but search deliberately does
-      // not import another module's service (same reasoning that moved `dueStatus` into
-      // lib/date rather than let goals import todos) — and `snippet` is the helper this
-      // module already owns for exactly this.
-      const heading = r.title ?? (snippet(r.body) || "Untitled note")
-      return {
-        type: "note",
-        id: r.id,
-        title: heading,
-        date: r.entryDate,
-        href: "/notes",
-        score: scoreResult(q, heading, r.body),
-        // Only when the heading isn't already the body — otherwise it prints twice.
-        ...(r.title && r.body ? { subtitle: snippet(r.body) } : {}),
-      }
-    }),
     // No `subtitle`. The obvious one is the cadence — "3× a week" — but that is
     // `periodLabel` in the habits SERVICE, and search deliberately does not import another
-    // module's service (the same rule the notes mapper above obeys). It costs nothing here:
+    // module's service. It costs nothing here:
     // the cadence is one tap away on the page this links to.
     //
     // No `date` either. A habit's `startDate` is when you began keeping it, which is not

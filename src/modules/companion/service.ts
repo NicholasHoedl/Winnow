@@ -12,14 +12,15 @@ import type {
 /**
  * Everything the model is told about a goal.
  *
- * **This type is the journal boundary from ADR-0011, expressed in code.** Prompt payloads
- * are built by naming fields, never by spreading a row — `...goal` here would ship
- * whatever columns the goals table grows next, and the same careless habit one module
- * over would ship a journal entry. Every field below is a deliberate decision to send it.
+ * **This type is ADR-0011's boundary expressed in code.** Prompt payloads are built by
+ * naming fields, never by spreading a row — `...goal` here would ship whatever columns the
+ * goals table grows next, to a third party, without anyone deciding to. Every field below
+ * is a deliberate decision to send it.
  *
- * `notes` is the goal's own description ("read 30 minutes daily, no manga"), NOT the notes
- * module. That distinction matters and the word is unfortunately overloaded: `notes` the
- * table is off-limits to this feature entirely, forever.
+ * `notes` is the goal's own description ("read 30 minutes daily, no manga"), and it IS
+ * sent: it is the only place the user says what the goal actually means, and a plan built
+ * without it is a plan built from a title. It is also the most personal thing in this
+ * payload, which is why it is listed here by name rather than arriving as a side effect.
  */
 export type GoalPromptContext = {
   title: string
@@ -280,7 +281,9 @@ const ROUTINE_SYSTEM_PROMPT = [
  *
  * Nothing about the user's data is sent — a routine is designed from a description, not
  * from their history. That makes this the least sensitive prompt in the app, and it is
- * still built by naming fields for the same reason the goal one is (ADR-0011).
+ * still built by naming fields for the same reason the goal one is (ADR-0011): the rule is
+ * about the habit, and a prompt builder that spreads rows is one schema change away from
+ * sending something nobody chose to send.
  */
 export function buildRoutineMessages(
   brief: string,

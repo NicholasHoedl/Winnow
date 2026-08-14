@@ -65,15 +65,35 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 35 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 36 migrations from scratch plus `scripts/seed-user.ts`. A first deploy therefore
+runs `0022`, which CREATES the notes table, and later `0035`, which drops it again. That is
+correct and deliberate: migration history is append-only, so the sequence is replayed rather
+than rewritten to skip a table no longer wanted.
 
 ## 2. Where the work stands
 
-**Every tranche is shipped except T5c-b.** T0–T6b; all of T7, split into T7a Notes → T7b
-Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
+**Every tranche is shipped except T5c-b and T13.** T0–T6b; all of T7, split into T7a Notes
+→ T7b Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
 choosing; then T8 (goal momentum), T9a–T9d (the AI companion), T10a–T10b, T11 and T12a–T12i
 — none of which were on the roadmap. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and
 its status table is current; read it rather than trusting the summary here.
+
+**T13 is IN PROGRESS and is the only unfinished work in the tree.** It moves each AI tool
+onto the page of the artifact it produces, which means `/companion` disperses and then
+disappears, `/goals` comes back as a page, and the goal rail leaves `/activity`. Four
+phases, each landing green on its own: **1** remove notes and give Review the freed nav slot
+(done) · **2** extract the companion spine with no visible change · **3** `/goals` returns
+and the rail leaves · **4** disperse the rest and delete `/companion`. If you are picking
+this up mid-flight, read the T13 section of `IMPROVEMENT-PLAN.md` first — the phase ORDER is
+load-bearing, because the nav bar is at its measured ceiling of seven and every phase has to
+pair a removal with its addition or it lands at eight.
+
+**T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
+pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
+after a verified-empty pre-flight dump — the user had written nothing in it). Anything you
+read below or in `IMPROVEMENT-PLAN.md` about a Journal card, a `/notes` route or a notes
+module describes something that no longer exists; the history is kept because ADR-0011's
+privacy reasoning was built on it and reads oddly without it.
 
 **T7c is marked "retired by T12a", not shipped**, and that is not bookkeeping. T7c derived a
 habit from a repeating task, so every habit materialised task rows; T12a rebuilt habits as a
@@ -499,8 +519,9 @@ button is now a second door rather than the only one, and is kept deliberately.
 **The one prompt that sends your own detail.** Every other job sends titles, descriptions
 or already-summed figures; transaction import sends the text you paste, because that is
 the feature. The UI says so above the box rather than leaving it to be discovered. ADR-0011
-described the weekly review as sending "rollups, not rows" — T9d deliberately widens that,
-and the journal boundary is untouched.
+described the weekly review as sending "rollups, not rows" — T9d deliberately widens that.
+(That sentence used to end "and the journal boundary is untouched". T13 removed the journal;
+see ADR-0011's 2026-08-14 amendment for what replaced the boundary.)
 
 **The rule the whole thing hangs off**, and the one to preserve in anything added next:
 **the app does the arithmetic, the model does the language.** `planWarnings` in
@@ -581,11 +602,15 @@ T9c or T9d rebuilt any of them.
   was made on wrong hardware information — the host has **6GB** of VRAM, not the 12GB+
   recorded here previously, which caps a local model at 7–8B and costs exactly the
   judgment the feature exists for.
-- **Journal and note content never leaves the machine.** Not a preference — a hard
-  boundary, and one that has to be _enforced_ rather than intended. Prompt payloads are
-  built from named fields, never spread from raw rows, and the notes module must be
-  unreachable from the prompt-building path. Journal-aware retrospectives are deferred,
-  not cancelled: they are the one feature that would justify a local model later.
+- **Prompt payloads are built from named fields, never spread from raw rows.** Not a
+  preference — a hard boundary, and one that has to be _enforced_ rather than intended.
+  This was written as "journal and note content never leaves the machine" until T13
+  removed that module; ADR-0011's amendment restates it without a subject, which makes it
+  **stronger**, because free text now lives in `goals.notes`, `tasks.notes` and
+  `events.notes` — columns the companion reads by design and cannot simply be fenced off
+  from. The only mechanical enforcement is the exact-string assertion in
+  `companion/service.test.ts`; it is brittle on purpose, so do not loosen it.
+  Journal-aware retrospectives are **cancelled, not deferred** — there is no corpus.
 - **Behind a two-protocol seam, configured in Settings** (T11) — `user_preferences.ai_*`,
   not the environment. `src/lib/config.ts` holds nothing about AI any more; `getAiSettings`
   / `getAiConfig` read it per request and `aiReady` decides whether it is usable. A local
@@ -620,8 +645,9 @@ First slice is **goal planning**: the thinnest cut through every layer, everythi
 reuses the same spine, and it is also the least sensitive thing in the app to send anywhere
 — a goal title and its milestones. Later slices, in rough value order: an LLM fallback when
 a quick-add parser returns `null` (invisible, and it would have caught the `abc278c` →
-278-carbs trap in §6); cross-module questions the UI has no page for; and — only behind a
-local model — journal-aware retrospectives.
+278-carbs trap in §6); and cross-module questions the UI has no page for. Journal-aware
+retrospectives used to close this list as the one thing worth a local model for; T13
+removed the journal, so that argument is gone with it.
 
 The API key is **not** an environment secret. T11 moved it into the app: it lives in
 `user_preferences.ai_api_key`, entered on the Settings page, and there is nothing to add to
@@ -682,14 +708,25 @@ still the old indigo.**
 - **The dashboard overflows below ~1400px wide.** Measured on the current dev account
   (August 2026, a full month of recurring events): 231px at 1280×800, 12px at 1366×768, 0
   at 1440×900 and up. The ~19px figure recorded here previously was against less data, so
-  this number tracks what is in the database rather than being fixed. T7a's Journal card
-  is **not** a contributor — hiding it leaves both numbers identical.
+  this number tracks what is in the database rather than being fixed. The Journal card was
+  measured and found **not** to contribute — hiding it left both numbers identical — so its
+  removal in T13 did not improve this, and the figures above still stand.
 - **Nav is at seven items with the companion enabled** (six in `navItems` plus the
   conditional Companion tab — see the next bullet), **and seven is the measured ceiling.** `bottom-nav.tsx` is a plain flex
   with `flex-1` and no overflow handling; seven labels fit a 375px phone with nothing to
   spare, and an eighth needs a More sheet or a scroller first. T10 merged To-dos and Goals
   into Activity, freeing the first slot since T7a, and the Companion tab immediately spent
-  it. `e2e/navigation.spec.ts` measures the fit rather than trusting it.
+  it. T13 freed a second by removing Notes, and **Review** immediately spent that one — so
+  the bar is still at seven and the ceiling is unchanged. Anything wanting a tab from here
+  has to take one. `e2e/navigation.spec.ts` measures the fit rather than trusting it, and
+  `e2e/pending-feedback.spec.ts` holds a duplicate of the seven-label array: both files
+  change together or the second one fails.
+- **Giving a page a tab means taking it OUT of the command palette by hand.** `NAV_COMMANDS`
+  in `command-palette.tsx` is `[...navItems, …four hand-written entries]`, and those four are
+  hand-written *because* they have no tab. T13 gave `/review` a tab while it was still listed
+  by hand, which put one page in the ⌘K "Go to" menu twice under two names. Nothing catches
+  it — it typechecks, it lints, and no spec asserts that menu's contents — so check the list
+  by eye whenever `navItems` changes.
 - **The Companion tab is conditional and is NOT in `navItems`.** `/companion` renders
   nothing unless the companion is configured in Settings, so `navItemsFor(companionEnabled)`
   splices the tab in at render. The `(app)` layout resolves `aiReady(await getAiSettings())`

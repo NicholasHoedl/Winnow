@@ -62,7 +62,7 @@ test("a nav tab shows a spinner while its route loads", async ({ page }) => {
     "Calendar",
     "Budget",
     "Meals",
-    "Notes",
+    "Review",
   ])
 
   await page.unrouteAll({ behavior: "ignoreErrors" })

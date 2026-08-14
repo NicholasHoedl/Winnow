@@ -1,8 +1,8 @@
 import {
   CalendarDays,
+  ClipboardList,
   LayoutDashboard,
   ListTodo,
-  NotebookPen,
   Sparkles,
   Utensils,
   Wallet,
@@ -29,7 +29,10 @@ export const navItems: NavItem[] = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/budget", label: "Budget", icon: Wallet },
   { href: "/meals", label: "Meals", icon: Utensils },
-  { href: "/notes", label: "Notes", icon: NotebookPen },
+  // `/review` had no tab until now — the bar was at its ceiling, so the dashboard and
+  // the palette were the only ways to reach it. Notes leaving freed the slot, and a
+  // weekly read of your own figures earns it more than a second door to the dashboard.
+  { href: "/review", label: "Review", icon: ClipboardList },
 ]
 
 /**

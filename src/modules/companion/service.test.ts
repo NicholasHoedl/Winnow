@@ -38,10 +38,11 @@ const plan = (over: Partial<GoalPlanPayload> = {}): GoalPlanPayload => ({
 })
 
 describe("buildGoalPlanMessages", () => {
-  // Asserted as an exact string, not a set of `toContain`s. This is the ADR-0011 journal
-  // boundary's tripwire: any field that starts reaching the prompt — because someone
-  // spread a row, or widened GoalPromptContext — changes this string and fails here,
-  // rather than quietly travelling to a third party.
+  // Asserted as an exact string, not a set of `toContain`s. This is ADR-0011's tripwire:
+  // any field that starts reaching the prompt — because someone spread a row, or widened
+  // GoalPromptContext — changes this string and fails here, rather than quietly travelling
+  // to a third party. With the notes module gone this is the ONLY mechanical enforcement
+  // the boundary has left, so it is worth the brittleness it costs.
   it("sends exactly the named fields and nothing else", () => {
     const [system, user] = buildGoalPlanMessages(goal)
     expect(system.role).toBe("system")

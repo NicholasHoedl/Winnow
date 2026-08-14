@@ -11,7 +11,6 @@ import {
 } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
 import { getHabitStrip } from "@/modules/habits/queries"
-import { getJournalEntry } from "@/modules/notes/queries"
 import { getRoutineNames } from "@/modules/routines/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import {
@@ -32,7 +31,6 @@ import {
 import { DashboardTaskList } from "./_components/dashboard-task-list"
 import { GoalsSummary } from "./_components/goals-summary"
 import { HabitsCard } from "./_components/habits-card"
-import { JournalCard } from "./_components/journal-card"
 import { StatCards } from "./_components/stat-cards"
 import { TodayAgenda } from "./_components/today-agenda"
 import { Tomorrow } from "./_components/tomorrow"
@@ -66,7 +64,6 @@ export default async function DashboardPage({
     monthData,
     goals,
     calendars,
-    journalEntry,
     aiSettings,
     habits,
     routineNames,
@@ -81,7 +78,6 @@ export default async function DashboardPage({
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(timeZone, goalMomentumDays),
     getCalendars(),
-    getJournalEntry(today),
     getAiSettings(),
     // The cheap read, same as /activity — two bounded queries for a card that shows
     // done/target and nothing else.
@@ -213,13 +209,6 @@ export default async function DashboardPage({
               are no habits. */}
           <Reveal delay={0.11}>
             <HabitsCard habits={habits} />
-          </Reveal>
-          {/* In this column rather than the right one for two reasons: the journal is a
-              today thing, like everything else here — and the right rail already runs
-              five cards deep, where a sixth pushed past the fold and undid the "each
-              column caps itself, the page doesn't scroll" property below. */}
-          <Reveal delay={0.14}>
-            <JournalCard entry={journalEntry} />
           </Reveal>
         </div>
 

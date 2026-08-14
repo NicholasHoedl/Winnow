@@ -20,7 +20,7 @@ picked up — it is **not** code-level detail yet.
 | T5c-b — Calendar: event reminders (Web Push)      | after hosting     |
 | T6a — Robustness: data durability                 | ✅ shipped        |
 | T6b — Robustness: offline fallback                | ✅ shipped        |
-| T7a — Net-new: Notes / Journal                    | ✅ shipped        |
+| T7a — Net-new: Notes / Journal                    | ⤳ removed in T13  |
 | T7b — Net-new: Routines / templates               | ✅ shipped        |
 | T7c — Net-new: Habits / streaks                   | ⤳ retired by T12a |
 | T7d — Net-new: Weekly review                      | ✅ shipped        |
@@ -41,6 +41,7 @@ picked up — it is **not** code-level detail yet.
 | T12g — The e2e suite gets a database of its own   | ✅ shipped        |
 | T12h — Companion settings: no URL, a model list   | ✅ shipped        |
 | T12i — Dead-code sweep, and the edits it exposed  | ✅ shipped        |
+| T13 — Tools move to their artifacts; notes goes   | 🔨 in progress    |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -68,7 +69,8 @@ see ADR-0010 for why the two are kept separate rather than blended.
 
 **T9** was not on this roadmap either, and it is the first work built ahead of hosting
 rather than behind it. An AI companion that proposes structured work you approve — never
-writes on its own, never sees the journal (ADR-0011). T9a shipped the spine and one job;
+writes on its own, and builds every prompt from named fields (ADR-0011 — written at the
+time as "never sees the journal", which T13 removed the subject of). T9a shipped the spine and one job;
 T9b routines, T9c synthesis and T9d interpretation each reuse it and ship alone.
 
 T5c-b moved behind T7 deliberately: it is the one remaining item that cannot be verified
@@ -630,7 +632,10 @@ modules, and the per-module wiring alone is ~23 touch points. The order is depen
 Notes and Routines stand alone, Habits needs work in the recurrence engine, and the Weekly
 review aggregates everything including the modules above it.
 
-**T7a — shipped**, migration `0022`:
+**T7a — shipped**, migration `0022`. **Removed in T13**, migration `0035` — the module, the
+pages, the dashboard card and the table are gone, after a pre-flight dump confirmed the user
+had written nothing in it. What follows is kept as the record of why it was built the way it
+was, because ADR-0011's privacy reasoning rests on it; none of it describes current code.
 
 - **Notes and journal entries are one table**, not two. `entry_date` nullable is the only
   difference between them, and one-per-day falls out of a plain `unique(user_id,
@@ -639,7 +644,9 @@ entry_date)` with no partial index needed — Postgres treats NULLs as DISTINCT 
   already leans on the same property for one-off transactions.
 - `/notes` is the **seventh and last** nav entry. `bottom-nav.tsx` is a plain flex with
   `flex-1` and no overflow handling; seven items fit on a 375px phone, eight would not.
-  T7b–T7d therefore live at sub-routes and in the palette, not in the tab bar.
+  T7b–T7d therefore live at sub-routes and in the palette, not in the tab bar. _(The
+  ceiling outlived the module: T13 gave the freed slot to `/review`, so the bar is still
+  at seven and the measurement in `navigation.spec.ts` still has to pass.)_
 - Search fans out over title **and** body. Search still does not import another module's
   service — the display title is built from its own `snippet` helper.
 - The dashboard's Journal card sits in the **left** column. In the right rail it was the
@@ -1073,3 +1080,66 @@ and turned into two different jobs, because a function with no callers is ambigu
   `data-rail`, so `visibleCard` cannot see it, and an archived habit has no Delete menu — a
   test that archived and then failed before restoring would leave a row nothing swept, and
   the next run's "0 strays" would be a lie. The teardown now unarchives first.
+
+---
+
+## Tranche 13 — Tools move to the page of the artifact they produce 🔨
+
+**Premise.** `/companion` collected four AI jobs on one page, away from everything they act
+on. The better home for each is the page showing the thing it produces: a plan belongs with
+goals, a routine with activity, a week's narration with the review, an import with the
+budget. So `/companion` disperses and then disappears.
+
+Two consequences follow. **Goals needs a page again** — plans have to land somewhere, and
+`/goals` has been a permanent 308 to `/activity` since ADR-0013 merged them. And with the
+goal rail leaving `/activity`, the width it occupied returns to the habit and routine
+surfaces that T12d compressed *because* the rail had grown to 724px.
+
+**Nav arithmetic is the binding constraint, and it drives the phase order.** Seven is a
+measured ceiling, not a round number. The bar is at seven now, so **each phase must pair a
+removal with its addition** or it lands at eight mid-way and breaks the ceiling:
+
+| | |
+|---|---|
+| Before | Dashboard · Activity · **Companion** · Calendar · Budget · Meals · **Notes** |
+| After  | Dashboard · Activity · **Goals** · Calendar · Budget · Meals · **Review** |
+
+Four phases: **1.** remove notes, Review takes the slot · **2.** extract the companion spine
+with no visible change · **3.** `/goals` returns and the rail leaves `/activity` · **4.**
+disperse the rest and delete `/companion`. Each leaves typecheck, lint, unit and e2e green
+before the next starts.
+
+**T13 Phase 1 — shipped**, migration `0035`:
+
+- **Notes/journal is removed entirely** — 17 files deleted (the module, the route, the
+  dashboard card, its spec) plus unwiring at nine sites, and `DROP TABLE notes CASCADE`.
+  The user chose the permanent option knowingly over exporting first; a pre-flight
+  `scripts/backup.sh` dump confirmed the table held **0 rows**, so nothing was destroyed.
+- **`account/tables.test.ts` fired, which is the whole point of it.** It pins the backup
+  surface at an *exact* count rather than a floor, so the table going 27 → 26 failed the
+  suite and forced the number to be re-typed by hand. Its comment argued only the
+  add-a-table direction; removal proves it works both ways.
+- **Review takes the freed nav slot** rather than the bar shrinking to six. `/review` had
+  page, loading and error since T9d but no tab — the dashboard button and the palette were
+  its only doors, and a weekly read of your own figures earns a tab more than a second door
+  to the dashboard does. The dashboard button stays; a second door is the established call.
+- **Promoting a page to a tab means removing it from the palette by hand**, and this is the
+  trap the phase actually hit. `NAV_COMMANDS` is `[...navItems, …four hand-written entries]`,
+  and `/review` was one of the four — listed there precisely *because* it had no tab. Adding
+  it to `navItems` put one page in the ⌘K "Go to" menu twice under two names ("Review" and
+  "Weekly review"), which reads as two pages. Nothing catches this: it typechecks, it lints,
+  and no spec asserts the menu's contents.
+- **A backup taken before T13 still restores, and silently drops its notes rows.** The
+  importer iterates `USER_TABLES` and reads `input[key]`, so a key for a table that no longer
+  exists is never looked at — no error, no warning. `EXPORT_VERSION` is deliberately not
+  bumped: a bump refuses every existing backup outright, trading a partial restore for none
+  at all. Documented in `account/import.ts`, since "the restore succeeded" and "everything in
+  the file was restored" stopped being the same sentence.
+- **ADR-0011's §2 lost its subject and had to be vacated, not marked satisfied.** "Journal
+  and note content never leaves the machine" cannot be honoured by deleting the journal. The
+  amendment restates the enforcement half generally — *prompt payloads are built from named
+  fields, never spread from raw rows* — which is strictly stronger, since free text now
+  lives in `goals.notes`, `tasks.notes` and `events.notes`, all reachable from modules the
+  companion reads by design.
+- **Journal-aware retrospectives are cancelled, not deferred.** They were ADR-0011's single
+  strongest argument for standing up a local model later. There is no corpus now.

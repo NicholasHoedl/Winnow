@@ -34,7 +34,6 @@ const ROUTES = [
   "/calendar",
   "/companion",
   "/meals",
-  "/notes",
   "/review",
   "/settings",
 ] as const

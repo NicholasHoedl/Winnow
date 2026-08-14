@@ -18,7 +18,6 @@ import * as companionSchema from "@/modules/companion/schema"
 import * as goalsSchema from "@/modules/goals/schema"
 import * as habitsSchema from "@/modules/habits/schema"
 import * as mealsSchema from "@/modules/meals/schema"
-import * as notesSchema from "@/modules/notes/schema"
 import * as preferencesSchema from "@/modules/preferences/schema"
 import * as routinesSchema from "@/modules/routines/schema"
 import * as todosSchema from "@/modules/todos/schema"
@@ -32,7 +31,6 @@ const SCHEMAS = [
   goalsSchema,
   habitsSchema,
   mealsSchema,
-  notesSchema,
   preferencesSchema,
   routinesSchema,
   todosSchema,

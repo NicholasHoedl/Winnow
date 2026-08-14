@@ -72,6 +72,18 @@ export function parseImport(input: unknown): ParseResult {
     // longer rejected is "this file predates a table", which is a normal thing for a backup
     // to be — and which restores correctly, because a table absent from the file simply has
     // nothing to insert.
+    //
+    // The OPPOSITE direction now exists too, and it is silent: this loop reads only the
+    // keys in `USER_TABLES`, so a key in the file for a table that has since been REMOVED
+    // is never looked at. T13 dropped `notes`, making that the first backup file in the
+    // app's life to carry rows nothing will ever read — they are discarded without a
+    // warning. That is the only available behaviour (there is no table to put them in) but
+    // it is worth stating, because "the restore succeeded" and "everything in the file was
+    // restored" stopped being the same sentence here.
+    //
+    // `EXPORT_VERSION` is deliberately NOT bumped for a removal. A bump refuses every
+    // existing backup outright, which trades a silent partial restore for no restore at
+    // all — the wrong way round for an app whose whole recovery story is one JSON file.
     if (value === undefined) {
       tables[key] = []
       continue

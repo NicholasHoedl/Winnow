@@ -3,7 +3,7 @@
 // The ⌘K command palette: jump to any page or search across every module. Mounted once
 // in the app shell. Owns its open state and the global keyboard shortcuts:
 //   • ⌘K / Ctrl+K       toggle the palette (works even while typing)
-//   • g then a/c/b/m/n/d  go to activity / calendar / budget / meals / notes / dashboard.
+//   • g then a/c/b/m/r/d  go to activity / calendar / budget / meals / review / dashboard.
 //                          `t` and `g` are kept as aliases for activity (T10). `g n` is
 //                          unambiguous with the bare `n` below: the pending-g branch
 //                          returns before it.
@@ -13,11 +13,9 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarDays,
-  ClipboardList,
   Flame,
   ListChecks,
   ListTodo,
-  NotebookPen,
   Search,
   Settings,
   Target,
@@ -66,7 +64,7 @@ const NAV_SHORTCUTS: Record<string, string> = {
   c: "/calendar",
   b: "/budget",
   m: "/meals",
-  n: "/notes",
+  r: "/review",
 }
 
 // Both exhaustive `Record<SearchResultType, …>` on purpose: adding a variant to the union
@@ -78,7 +76,6 @@ const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
   food: Utensils,
   transaction: Wallet,
   goal: Target,
-  note: NotebookPen,
   // The same flame the Habits nav command uses — one icon, one meaning.
   habit: Flame,
 }
@@ -89,7 +86,6 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
   food: "Food",
   transaction: "Transaction",
   goal: "Goal",
-  note: "Note",
   habit: "Habit",
 }
 
@@ -98,11 +94,15 @@ type NavCommand = { href: string; label: string; icon: LucideIcon }
 // The sub-routes are listed by hand for the same reason /settings is: they are real
 // destinations that deliberately don't get a nav tab, so the palette is the only place
 // they're discoverable without being on /activity already.
+//
+// `/review` used to be listed here as "Weekly review" for exactly that reason, and was
+// REMOVED from this list in T13 when it took the freed nav slot — `...navItems` now
+// supplies it. Leaving both would put one page in this menu twice under two different
+// names, which reads as two pages. Anything promoted to a tab has to leave here.
 const NAV_COMMANDS: NavCommand[] = [
   ...navItems,
   { href: "/activity/habits", label: "Habits", icon: Flame },
   { href: "/activity/routines", label: "Routines", icon: ListChecks },
-  { href: "/review", label: "Weekly review", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
@@ -118,7 +118,6 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New transaction", icon: Wallet, href: "/budget" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
   { label: "New goal", icon: Target, href: "/activity" },
-  { label: "New note", icon: NotebookPen, href: "/notes" },
   { label: "New routine", icon: ListChecks, href: "/activity/routines" },
   // `href`, not a `CreateKind`. A kind means a globally-mounted dialog in the app shell for
   // the whole app's lifetime, which is a lot to carry for a rare action — every other

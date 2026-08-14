@@ -53,8 +53,13 @@ export async function getPlannableGoals(): Promise<
  * **This function is where ADR-0011's boundary is actually enforced.** Both reads below
  * name their columns explicitly. `findFirst` with no `columns` would hand back the whole
  * row and invite a caller to spread it into a prompt, and the habit — not any single
- * line — is what would eventually put a journal entry on the wire. The notes module is
- * not imported here, and must not be.
+ * line — is what puts private text on the wire.
+ *
+ * The rule used to be stated as "the notes module is not imported here". That module was
+ * removed in T13, so the ADR restates it without a subject: name your fields. It applies
+ * with more force now rather than less, because the free text the user writes lives in
+ * `goals.notes` and `tasks.notes` — columns this feature reads by design — instead of in
+ * one module that could simply be fenced off.
  */
 export async function buildGoalContext(
   goalId: string,
@@ -80,7 +85,7 @@ export async function buildGoalContext(
 
   return {
     title: goal.title,
-    // The goal's own description, NOT the notes module — see GoalPromptContext.
+    // The goal's own description — see GoalPromptContext for why it is sent at all.
     notes: goal.notes,
     targetDate: goal.targetDate,
     existingMilestones: existing.map((m) => m.title),

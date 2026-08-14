@@ -24,7 +24,6 @@ import {
   mealEntries,
   waterLogs,
 } from "@/modules/meals/schema"
-import { notes } from "@/modules/notes/schema"
 import { userPreferences } from "@/modules/preferences/schema"
 import { routineItems, routines } from "@/modules/routines/schema"
 import {
@@ -95,8 +94,5 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   await tx
     .delete(calendarFeedTokens)
     .where(eq(calendarFeedTokens.userId, userId))
-  // No user-owned parent, so position here is free — grouped with preferences rather
-  // than threaded into the FK-ordered block above, where it would imply a dependency.
-  await tx.delete(notes).where(eq(notes.userId, userId))
   await tx.delete(userPreferences).where(eq(userPreferences.userId, userId))
 }

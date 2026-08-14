@@ -53,7 +53,7 @@ test("primary nav reaches every module", async ({ page }) => {
     { label: "Calendar", path: "/calendar" },
     { label: "Budget", path: "/budget" },
     { label: "Meals", path: "/meals" },
-    { label: "Notes", path: "/notes" },
+    { label: "Review", path: "/review" },
   ]
   for (const { label, path } of routes) {
     await page.getByRole("link", { name: label, exact: true }).first().click()
@@ -102,7 +102,7 @@ test("the companion has a nav tab, directly after Activity", async ({
     "Calendar",
     "Budget",
     "Meals",
-    "Notes",
+    "Review",
   ])
 
   await nav.getByRole("link", { name: "Companion", exact: true }).click()
@@ -115,6 +115,10 @@ test("seven tabs still fit a 375px phone without overflowing", async ({
   // The bar is a plain flex with `flex-1` and no overflow handling, so "it fits" is a
   // measurement, not a style. T10 freed a slot and the Companion tab spends it — this is
   // the check that says the ceiling is still seven and not six.
+  //
+  // Removing notes did not raise that ceiling, it only changed who spends the slot:
+  // Review took it, so the count is unchanged and this measurement still has to pass.
+  // Anything wanting a tab from here on has to take one, not add one.
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto("/")
   const bar = page.locator("nav").filter({ hasText: "Dashboard" }).last()

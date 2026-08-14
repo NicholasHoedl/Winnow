@@ -246,6 +246,13 @@
       "when": 1786543270711,
       "tag": "0034_previous_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1786744490591,
+      "tag": "0035_boring_junta",
+      "breakpoints": true
     }
   ]
 }

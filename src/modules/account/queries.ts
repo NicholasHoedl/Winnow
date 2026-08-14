@@ -27,7 +27,6 @@ import {
   mealEntries,
   waterLogs,
 } from "@/modules/meals/schema"
-import { notes } from "@/modules/notes/schema"
 import { userPreferences } from "@/modules/preferences/schema"
 import { routineItems, routines } from "@/modules/routines/schema"
 import {
@@ -69,7 +68,6 @@ export async function exportUserData() {
     taskRecurrenceRows,
     taskRecurrenceExceptionRows,
     transactionRecurrenceRows,
-    noteRows,
     routineRows,
     routineItemRows,
     habitRows,
@@ -168,10 +166,6 @@ export async function exportUserData() {
       where: eq(transactionRecurrences.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
-    db.query.notes.findMany({
-      where: eq(notes.userId, userId),
-      orderBy: (t, { asc }) => asc(t.id),
-    }),
     db.query.routines.findMany({
       where: eq(routines.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
@@ -216,7 +210,6 @@ export async function exportUserData() {
     taskRecurrences: taskRecurrenceRows,
     taskRecurrenceExceptions: taskRecurrenceExceptionRows,
     transactionRecurrences: transactionRecurrenceRows,
-    notes: noteRows,
     routines: routineRows,
     routineItems: routineItemRows,
     habits: habitRows,

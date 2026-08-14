@@ -147,3 +147,53 @@ Deliberately **not** encrypted at rest. On a single-user self-hosted box, whoeve
 this row can generally read the machine, and encrypting with `AUTH_SECRET` would add a
 rotation failure mode surfacing as a puzzling 401 from the provider. The calendar feed token
 sets the same precedent.
+
+---
+
+## Amended 2026-08-14 (T13): the journal is gone, the rule that guarded it is not
+
+The notes/journal module was **removed entirely** — UI, module, and the table, dropped in
+migration `0035`. Decision §2 above therefore has no subject left: there is no journal
+content on this machine for a payload to leak.
+
+**§2 is not thereby satisfied — it is vacated.** A rule whose subject no longer exists has
+not been honoured, it has stopped being testable, and the difference matters because the
+*enforcement* half of it was never really about the journal. Restated so it survives its
+subject:
+
+> **Prompt payloads are constructed explicitly from named fields, never spread from raw
+> module rows.** No `...row` in a prompt builder, for any module, whether or not the module
+> holding the sensitive column exists today.
+
+That is the durable rule, and it is the one the Consequences section already gave first.
+It generalises without loss: `tasks.notes`, `goals.notes`, `events.notes` and a routine
+item's notes are all free-text columns the user may treat exactly as they treated the
+journal, and every one of them is reachable from a module the companion *does* read. The
+boundary moved from "one module is off-limits" to "every builder names its fields", which
+is the stronger of the two and always was — the module-level ban was only ever a coarse
+belt over that brace.
+
+**What is genuinely lost:** the second enforcement bullet, "the notes module must be
+unreachable from the prompt-building path, and a test should assert it". No such test was
+ever written, and now none can be. `account/coverage.test.ts` remains the model for the
+shape it should have taken.
+
+**The title and the filename still say "journal", and are left that way on purpose.** Not
+because anything would break — every reference in HANDOFF and IMPROVEMENT-PLAN is to
+"ADR-0011" by number, and none names the file — but because an ADR records what was decided
+when it was decided. A record retitled to match what the codebase later became is no longer
+a record. Read the title as historical and this amendment as the current rule.
+
+**Journal-aware retrospectives are cancelled, not deferred.** §2 called them "the one
+feature that justifies standing up a local model later". With the module removed there is
+no corpus to retrospect over, so the local-model argument loses its strongest single
+motivation. Anyone reviving journaling should read this ADR from the top: the reasoning
+about *graded feature privacy* is what would apply to it, and it would arrive into an app
+whose prompt builders are field-named rather than module-fenced.
+
+**The five code comments that named the boundary** — two in `companion/queries.ts`, two in
+`companion/service.ts`, one in `companion/service.test.ts` — were reworded to state the
+field-naming rule instead of pointing at a module that is no longer there. The test at
+`service.test.ts` asserting the goal prompt as an exact string is now the **only mechanical
+enforcement this ADR has**, which is worth knowing before anyone loosens it for being
+brittle. Brittle is the feature.
