@@ -14,6 +14,7 @@ import {
   summaryReadiness,
   uncategorisedCount,
   type GoalPromptContext,
+  summaryObservations,
 } from "./service"
 import type { GoalPlanPayload } from "./validation"
 
@@ -143,6 +144,31 @@ describe("planWarnings", () => {
       TODAY,
     )
     expect(result[0].message).toBe("1 day before your target date")
+  })
+
+  /**
+   * The bug this pair exists to stop coming back.
+   *
+   * A goal whose milestones are already complete makes the model answer with an EMPTY
+   * milestone list — correctly, because the prompt lists what exists precisely so it does
+   * not propose duplicates. `milestones` used to be `.min(1)`, so that correct answer was
+   * rejected by the Zod parse and reached the user as a bare "the provider answered with
+   * something this app couldn't read as a plan", with no way forward but regenerating and
+   * getting the same result. Observed against a real goal with five milestones.
+   */
+  it("flags a plan with no milestones instead of the schema rejecting it", () => {
+    const result = planWarnings(plan({ milestones: [] }), goal, TODAY)
+    expect(result).toContainEqual({
+      on: "plan",
+      index: 0,
+      kind: "no-milestones",
+      message: "No milestones — nothing here marks progress toward the goal",
+    })
+  })
+
+  it("does not flag missing milestones when some are proposed", () => {
+    const result = planWarnings(plan(), goal, TODAY)
+    expect(result.some((w) => w.kind === "no-milestones")).toBe(false)
   })
 
   it("flags a milestone dated before the one it follows", () => {
@@ -470,10 +496,31 @@ describe("buildSummaryMessages", () => {
   })
 
   it("sends the previous summary when refining", () => {
-    const previous = { headline: "A quiet week", observations: ["Not much."] }
+    const previous = { headline: "A quiet week", observation1: "Not much." }
     const [, user] = buildSummaryMessages(week, "be blunter", previous)
     expect(user.content).toContain("Revise this existing summary")
     expect(user.content).toContain("be blunter")
+  })
+})
+
+describe("summaryObservations", () => {
+  // The schema stores four discrete fields because the provider would not fill an array
+  // reliably; every reader still wants a list, and this is the only place that bridges the
+  // two. A gap in the middle should not truncate the rest.
+  it("collects the filled fields in order and drops the gaps", () => {
+    expect(
+      summaryObservations({
+        headline: "h",
+        observation1: "first",
+        observation3: "third",
+      }),
+    ).toEqual(["first", "third"])
+  })
+
+  it("returns just the required one when nothing else is set", () => {
+    expect(
+      summaryObservations({ headline: "h", observation1: "only" }),
+    ).toEqual(["only"])
   })
 })
 

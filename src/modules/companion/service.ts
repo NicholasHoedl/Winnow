@@ -3,7 +3,11 @@
 
 import { dayDiff } from "@/lib/date"
 
-import type { GoalPlanPayload, RoutinePayload } from "./validation"
+import type {
+  GoalPlanPayload,
+  RoutinePayload,
+  SummaryPayload,
+} from "./validation"
 
 /**
  * Everything the model is told about a goal.
@@ -104,7 +108,13 @@ export type PlanWarning = {
   /** Which list, and which position in it. `plan` is about the proposal as a whole. */
   on: "milestone" | "setupTask" | "plan"
   index: number
-  kind: "past" | "after-target" | "tight" | "out-of-order" | "no-habits"
+  kind:
+    | "past"
+    | "after-target"
+    | "tight"
+    | "out-of-order"
+    | "no-habits"
+    | "no-milestones"
   message: string
 }
 
@@ -129,6 +139,21 @@ export function planWarnings(
       kind: "no-habits",
       message:
         "No recurring practice — nothing here builds toward the milestones",
+    })
+  }
+
+  // The counterpart, and the reason `milestones` no longer carries a `.min(1)`. A goal
+  // whose milestones are already complete makes the model answer with an empty list —
+  // correctly, since the prompt sends the existing titles so it will not duplicate them.
+  // The schema used to reject that correct answer as `malformed`, which reached the user as
+  // an unexplained failure they could only meet again by regenerating. Saying what is
+  // missing is strictly better than refusing to show them anything.
+  if (payload.milestones.length === 0) {
+    warnings.push({
+      on: "plan",
+      index: 0,
+      kind: "no-milestones",
+      message: "No milestones — nothing here marks progress toward the goal",
     })
   }
 
@@ -336,6 +361,23 @@ export type SummaryPromptContext = {
   goalMovement: string[]
 }
 
+/**
+ * The observations as a sequence.
+ *
+ * They are stored as four discrete fields rather than an array — see the note on
+ * `summaryPayloadSchema` for the provider behaviour that forced it — and every reader wants
+ * a list. This is the ONLY place that knows the field names, so adding a fifth means
+ * changing the schema and this function and nothing else.
+ */
+export function summaryObservations(payload: SummaryPayload): string[] {
+  return [
+    payload.observation1,
+    payload.observation2,
+    payload.observation3,
+    payload.observation4,
+  ].filter((o): o is string => typeof o === "string" && o.length > 0)
+}
+
 const SUMMARY_SYSTEM_PROMPT = [
   "You write a short, factual review of someone's week from figures they already recorded.",
   "Every number you are given is already correct — restate them, never recompute or estimate.",
@@ -347,7 +389,7 @@ const SUMMARY_SYSTEM_PROMPT = [
 export function buildSummaryMessages(
   week: SummaryPromptContext,
   instruction?: string,
-  previous?: { headline: string; observations: string[] },
+  previous?: SummaryPayload,
 ): ChatMessage[] {
   const lines = [
     `Week of ${week.weekStart} to ${week.weekEnd}.`,

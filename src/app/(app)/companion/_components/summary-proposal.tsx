@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ScrollText } from "lucide-react"
 
 import type { SummaryPayload } from "@/modules/companion/validation"
+import { summaryObservations } from "@/modules/companion/service"
 import { Button } from "@/components/ui/button"
 
 /**
@@ -47,7 +48,7 @@ export function SummaryProposal({
 
       <div className="max-h-[55svh] overflow-y-auto p-4 lg:max-h-none lg:min-h-0 lg:flex-1">
         <div className="flex flex-col gap-3">
-          {payload.observations.map((observation, index) => (
+          {summaryObservations(payload).map((observation, index) => (
             <p key={index} className="text-sm leading-relaxed">
               {observation}
             </p>

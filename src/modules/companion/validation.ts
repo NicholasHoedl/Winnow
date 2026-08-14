@@ -77,9 +77,21 @@ export const goalPlanSetupTaskSchema = z.object({
  * is asymmetric: a rejected payload surfaces as a bare `malformed` failure the user can only
  * escape by regenerating, whereas an under-specified plan is visible and editable in front
  * of them.
+ *
+ * `milestones` has no minimum either, and it USED to — which cost a real user the feature
+ * entirely. It carried `.min(1)` while `buildGoalPlanMessages` sends the goal's existing
+ * milestone titles specifically so the model does not propose duplicates. On a goal whose
+ * milestones were already complete the model therefore answered with an empty list, which
+ * is the correct answer, and the parse rejected it. Every attempt failed identically, and
+ * the only thing on screen was "the provider answered with something this app couldn't read
+ * as a plan" — the asymmetry above, in exactly the shape it predicted, one field over.
+ *
+ * An empty plan is now a `no-milestones` warning from `planWarnings` instead: visible,
+ * editable, and honest about what is missing. The MAXIMA are untouched — those are the half
+ * that is genuinely load-bearing.
  */
 export const goalPlanPayloadSchema = z.object({
-  milestones: z.array(goalPlanMilestoneSchema).min(1).max(20),
+  milestones: z.array(goalPlanMilestoneSchema).max(20),
   habits: z.array(goalPlanHabitSchema).max(6),
   setupTasks: z.array(goalPlanSetupTaskSchema).max(3),
 })
@@ -134,7 +146,33 @@ export type RoutinePayload = z.infer<typeof routinePayloadSchema>
  */
 export const summaryPayloadSchema = z.object({
   headline: z.string().trim().min(1).max(120),
-  observations: z.array(z.string().trim().min(1).max(400)).min(1).max(4),
+  /**
+   * Four discrete fields rather than an array, and that is a provider-compatibility
+   * decision — the only one of its kind in this file.
+   *
+   * As `observations: z.array(z.string())` this job failed roughly 7 times in 8 against
+   * `claude-sonnet-5`. The model called the tool correctly but filled that one parameter
+   * with a STRING: the observations concatenated, sometimes with its own
+   * `<parameter name=…>` markup inside the value. The parse rejected it as `malformed`,
+   * which reached the user as "the provider answered with something this app couldn't read"
+   * and could only be met again by retrying into the same wall.
+   *
+   * Two fixes were tried and BOTH FAILED, so neither is worth repeating: wrapping each
+   * observation in an object (the model serialised the objects instead), and adding an
+   * explicit "call the tool" instruction to the system prompt (2 in 6 — noise). What
+   * distinguishes this from every array that DOES work here — routine items, plan
+   * milestones, import rows — is that those hold short fields while these hold long free
+   * prose. Removing the array removes the failure mode rather than arguing with it.
+   *
+   * `observation1` is required for the reason the old `.min(1)` existed: `summaryReadiness`
+   * refuses a thin week before a call is spent, so there is always material to describe and
+   * an empty summary is a non-answer. Read them with `summaryObservations()`, which is the
+   * one place that knows these field names.
+   */
+  observation1: z.string().trim().min(1).max(400),
+  observation2: z.string().trim().min(1).max(400).optional(),
+  observation3: z.string().trim().min(1).max(400).optional(),
+  observation4: z.string().trim().min(1).max(400).optional(),
 })
 export type SummaryPayload = z.infer<typeof summaryPayloadSchema>
 
@@ -160,7 +198,14 @@ export const importRowSchema = z.object({
 })
 
 export const importPayloadSchema = z.object({
-  rows: z.array(importRowSchema).min(1).max(100),
+  /**
+   * No minimum, for the reason `milestones` has none: "there are no transactions in this
+   * text" is a CORRECT answer — a header-only export, an unrecognised format, a covering
+   * letter — and `.min(1)` turned it into a bare `malformed` the user could only meet again
+   * by re-pasting. Confirmed against the live provider, which answered `{rows: []}`.
+   * The cap stays; a hundred rows is a real bound on what one screen can review.
+   */
+  rows: z.array(importRowSchema).max(100),
 })
 export type ImportPayload = z.infer<typeof importPayloadSchema>
 

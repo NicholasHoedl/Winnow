@@ -90,15 +90,13 @@ function summaryFor(isRefinement) {
   if (isRefinement) {
     return {
       headline: "STUB refined headline",
-      observations: ["STUB refined observation."],
+      observation1: "STUB refined observation.",
     }
   }
   return {
     headline: "STUB a steady week",
-    observations: [
-      "STUB you finished more on Wednesday than any other day.",
-      "STUB meals were logged on five of seven days.",
-    ],
+    observation1: "STUB you finished more on Wednesday than any other day.",
+    observation2: "STUB meals were logged on five of seven days.",
   }
 }
 
