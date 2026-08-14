@@ -31,7 +31,9 @@ minute, and everything React would otherwise render in that tree waits with it.
 **An outbound call expected to take longer than a few seconds runs in a route handler,
 called from the client with `fetch`.** Everything else stays exactly where ADR-0005 put it.
 
-`POST /companion/generate` is the first and currently only instance.
+`POST /api/companion/generate` is the first and currently only instance. (It was
+`POST /companion/generate` until T13 — see the amendment at the foot of this ADR. The rule
+is unchanged; only the address is.)
 
 The dividing line is duration, not subject matter. A Server Action is still the default
 for every mutation in the app, including the ones this feature performs: `applyProposal`
@@ -72,3 +74,29 @@ and stated here: **if it can take longer than a few seconds, it is a route handl
 **Revalidation is not automatic.** A Server Action can call `revalidatePath`; a route
 handler's response does not refresh the client router. `/companion` calls `router.refresh()`
 after a successful generation, which a Server Action would have done implicitly.
+
+
+---
+
+## Amended 2026-08-14 (T13): the endpoint moved to `/api`
+
+`POST /companion/generate` is now `POST /api/companion/generate`. **The decision above is
+untouched** — this is where the one instance lives, not what the rule says.
+
+It moved because T13 disperses the companion's four jobs onto the pages of the artifacts
+they produce, so four pages call this endpoint. An endpoint addressed by one page's route
+segment is a lie once that page is not the only caller, and a falsehood once that page is
+deleted.
+
+**One consequence is worth knowing, because it is a security-shaped thing that is not a
+security change.** `proxy.ts`'s matcher deliberately excludes `/api` (see
+`api/calendar/[token]`, whose comment explains why the exclusion is safer than widening the
+regex). At `/companion/generate` the proxy caught a request with no session and 307'd it to
+`/login` before the handler ran. At `/api/companion/generate` it does not.
+
+Nothing is less protected: `requireUserId()` was always the authoritative check, runs first,
+and is unchanged. But it THROWS, and an uncaught throw in a route handler is a **500** — so
+the handler now catches it and answers **401** with the same `{ ok: false, error }` body
+every other failure uses. The client reads that body and never inspects `response.ok`, so a
+signed-out request surfaces as a toast rather than a crash. A 500 meaning "you are signed
+out" is precisely the sort of misleading signal this repo has already lost time to.

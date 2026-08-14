@@ -1143,3 +1143,40 @@ before the next starts.
   companion reads by design.
 - **Journal-aware retrospectives are cancelled, not deferred.** They were ADR-0011's single
   strongest argument for standing up a local model later. There is no corpus now.
+
+**T13 Phase 2 — shipped**, no migration, and **no visible change**: `/companion` renders and
+behaves exactly as it did. The point was to make Phase 4 small, since Phase 4 is four pages
+each running a slice of what was one component.
+
+- **`useProposal()`** in `modules/companion/`, holding what is genuinely shared — `busy`,
+  the active proposal and its parsed payload, the renderer's remount `version`, the
+  instruction text, the `generate` fetch, and apply/discard/done. It lives in the module
+  beside `actions.ts` following `use-log-habit.ts`, because what it encapsulates is facts
+  about the ACTIONS: apply re-sends the edited payload so the schema re-validates it,
+  discard waits for the write rather than clearing optimistically, and generate goes over
+  `fetch` because a Server Action would block the transition for a minute. Each of those
+  was re-derived wrongly at least once before it was written down.
+- **What the hook refuses to hold** is the load-bearing half: the job's own inputs (goal id,
+  brief, pasted text), the refinement request body, and where to go after applying. Those
+  differ per kind and per page. Pulling them in is how a shared hook becomes a switch
+  statement with a hook wrapped round it.
+- **`onApplied` is optional, and its absence is the behaviour Phase 4 wants.** `/companion`
+  passes one and navigates, because it is not the page the rows land on. A page that IS
+  their home passes nothing and just refreshes — the new milestones are already on screen.
+- **`components/companion/`** now holds `RefinementBox` and the four renderers, moved out of
+  the page's `_components`. Moved in Phase 2 rather than Phase 3: leaving them there would
+  have had `/goals` importing from a directory Phase 4 deletes.
+- **`getPendingProposals(kind?)`.** Without the filter `/goals` would auto-open a pending
+  IMPORT, because the view opens `pending[0]` and "newest" says nothing about which page
+  you are on.
+- **Revalidation is a kind→path map** plus `revalidateHubs()`. `discardProposal` is handed
+  an id and nothing else, so it gets the kind back from the UPDATE's `returning` rather than
+  paying for a second SELECT — and an empty result means it was not pending, so there is
+  nothing to revalidate.
+- **The endpoint moved to `POST /api/companion/generate`** (ADR-0012 amended). One
+  consequence is security-shaped without being a security change: `proxy.ts`'s matcher
+  excludes `/api`, so the coarse 307-to-login no longer stands in front. `requireUserId()`
+  was always the authoritative check and still runs first — but it THROWS, and an uncaught
+  throw in a route handler is a **500**, so it is now caught and answered **401** in the
+  same `{ok:false,error}` shape the client already reads. "Signed out" reading as a server
+  error is exactly the misleading signal this repo has lost time to before.

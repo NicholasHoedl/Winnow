@@ -9,20 +9,32 @@ import { aiProposals } from "./schema"
 import type { GoalPromptContext } from "./service"
 
 export type ProposalRow = typeof aiProposals.$inferSelect
+export type ProposalKind = ProposalRow["kind"]
 
 /**
- * Proposals awaiting a decision, newest first — the bottom-right pane.
+ * Proposals awaiting a decision, newest first.
  *
  * Only `pending`. An applied proposal has become real rows and a discarded one was
  * rejected; neither is something you still owe an answer to, and a list that never
  * shrinks stops being a queue.
+ *
+ * `kind` is optional and omitting it returns every kind, which is what `/companion` wants
+ * — one page reviewing all four. It exists for T13, which puts each job on the page of the
+ * thing it produces: without the filter `/goals` would auto-open a pending IMPORT, because
+ * the view opens `pending[0]` and "newest" says nothing about which page you are on. A
+ * caller that shows one kind must ask for one kind.
  */
-export async function getPendingProposals(): Promise<ProposalRow[]> {
+export async function getPendingProposals(
+  kind?: ProposalKind,
+): Promise<ProposalRow[]> {
   const userId = await requireUserId()
   return db.query.aiProposals.findMany({
+    // `and()` drops `undefined` arms, so the unfiltered call builds the same SQL it always
+    // did rather than a three-clause where with a tautology in it.
     where: and(
       eq(aiProposals.userId, userId),
       eq(aiProposals.status, "pending"),
+      kind ? eq(aiProposals.kind, kind) : undefined,
     ),
     orderBy: [desc(aiProposals.createdAt)],
   })

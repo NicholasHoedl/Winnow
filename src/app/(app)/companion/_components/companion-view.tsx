@@ -9,23 +9,15 @@ import {
   ScrollText,
   Sparkles,
   Target,
-  Wand2,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { applyProposal, discardProposal } from "@/modules/companion/actions"
 import type { ProposalRow } from "@/modules/companion/queries"
 import {
-  goalPlanPayloadSchema,
-  importPayloadSchema,
-  routinePayloadSchema,
-  summaryPayloadSchema,
-  type GoalPlanPayload,
-  type ImportPayload,
-  type RoutinePayload,
-  type SummaryPayload,
-} from "@/modules/companion/validation"
+  useProposal,
+  type ActivePayload,
+} from "@/modules/companion/use-proposal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -36,71 +28,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-import { ImportProposal, type CategoryOption } from "./import-proposal"
-import { PlanProposal } from "./plan-proposal"
-import { RoutineProposal } from "./routine-proposal"
-import { SummaryProposal } from "./summary-proposal"
+import {
+  ImportProposal,
+  type CategoryOption,
+} from "@/components/companion/import-proposal"
+import { PlanProposal } from "@/components/companion/plan-proposal"
+import { RefinementBox } from "@/components/companion/refinement-box"
+import { RoutineProposal } from "@/components/companion/routine-proposal"
+import { SummaryProposal } from "@/components/companion/summary-proposal"
 
 export type GoalOption = {
   id: string
   title: string
   /** Needed by the renderer to judge proposed dates — see `getPlannableGoals`. */
   targetDate: string | null
-}
-
-/**
- * A payload the page is currently holding, tagged with which shape it is.
- *
- * The stored column is `jsonb` and the row's `kind` says how to read it, so the tag is
- * carried here rather than inferred from the shape — guessing between two object shapes
- * is how a renderer ends up silently drawing the wrong one.
- */
-type ActivePayload =
-  | { kind: "goal_plan"; payload: GoalPlanPayload }
-  | { kind: "routine"; payload: RoutinePayload }
-  | { kind: "summary"; payload: SummaryPayload }
-  | { kind: "import"; payload: ImportPayload }
-
-/** Stored payloads are `unknown` until parsed — the same gate the generator passed. */
-function readPayload(proposal: ProposalRow): ActivePayload | null {
-  if (proposal.kind === "goal_plan") {
-    const parsed = goalPlanPayloadSchema.safeParse(proposal.payload)
-    return parsed.success ? { kind: "goal_plan", payload: parsed.data } : null
-  }
-  if (proposal.kind === "routine") {
-    const parsed = routinePayloadSchema.safeParse(proposal.payload)
-    return parsed.success ? { kind: "routine", payload: parsed.data } : null
-  }
-  if (proposal.kind === "import") {
-    const parsed = importPayloadSchema.safeParse(proposal.payload)
-    return parsed.success ? { kind: "import", payload: parsed.data } : null
-  }
-  const parsed = summaryPayloadSchema.safeParse(proposal.payload)
-  return parsed.success ? { kind: "summary", payload: parsed.data } : null
-}
-
-/**
- * Per-kind copy, as lookups rather than nested ternaries.
- *
- * The ternaries these replace stopped at `routine` and let `import` fall through to the
- * summary's wording — and the same fall-through in the request builder below meant
- * refining an extraction asked the server for a WEEKLY SUMMARY. A `Record` keyed on the
- * union fails to compile when a fifth kind arrives; a ternary chain silently picks the
- * last branch.
- */
-const KIND_NOUN: Record<ActivePayload["kind"], string> = {
-  goal_plan: "plan",
-  routine: "routine",
-  summary: "summary",
-  import: "extraction",
-}
-
-const REFINE_PLACEHOLDER: Record<ActivePayload["kind"], string> = {
-  goal_plan: "Make it three months — drop anything before March…",
-  routine: "Add a walk — move the prep to two days before…",
-  summary: "Be blunter — say more about the money…",
-  import: "Drop the refunds — put the coffees under Food…",
 }
 
 /** "Jul 27 – Aug 2" from the two dates the review was built for. */
@@ -128,82 +69,40 @@ export function CompanionView({
   const router = useRouter()
   const [paste, setPaste] = React.useState("")
   const [goalId, setGoalId] = React.useState(goals[0]?.id ?? "")
-  const [active, setActive] = React.useState<ProposalRow | null>(
-    pending[0] ?? null,
-  )
-  const [payload, setPayload] = React.useState<ActivePayload | null>(() =>
-    pending[0] ? readPayload(pending[0]) : null,
-  )
   const [brief, setBrief] = React.useState("")
-  const [instruction, setInstruction] = React.useState("")
-  const [busy, setBusy] = React.useState(false)
+
   /**
-   * Bumped whenever a different plan arrives, and used as the renderer's `key`.
+   * `onApplied` navigates because THIS page is not where the rows land.
    *
-   * The renderer holds which rows you switched off, and that state is meaningless against
-   * a plan it was not chosen for — refine "make it shorter" and row 2 would arrive
-   * pre-pruned for no reason the user could see. Remounting is the honest reset.
+   * The point of a proposal is the rows it created, and seeing them in their real home is
+   * also the fastest way to notice it reads worse than it looked. T13 removes the need:
+   * once each job sits on the page of its own artifact, applying leaves you looking at
+   * what you just made, and the callback goes away with this page.
    */
-  const [version, setVersion] = React.useState(0)
+  const proposal = useProposal({
+    pending,
+    onApplied: (applied) => {
+      if (applied.kind === "goal_plan") {
+        toast.success("Plan added to your goal")
+        router.push("/activity")
+      } else if (applied.kind === "routine") {
+        toast.success("Routine created")
+        router.push("/activity/routines")
+      } else {
+        toast.success(
+          `${applied.payload.rows.length} transaction${
+            applied.payload.rows.length === 1 ? "" : "s"
+          } added`,
+        )
+        router.push("/budget")
+      }
+    },
+  })
+  const { busy, active, payload, version } = proposal
 
   const goalFor = (id: string | null) => goals.find((g) => g.id === id) ?? null
   const goalTitleFor = (id: string | null) =>
     goalFor(id)?.title ?? "Unknown goal"
-
-  function open(proposal: ProposalRow) {
-    const parsed = readPayload(proposal)
-    if (!parsed) {
-      toast.error("That proposal can't be read — discard it and try again.")
-      return
-    }
-    setActive(proposal)
-    setPayload(parsed)
-    setInstruction("")
-    setVersion((n) => n + 1)
-  }
-
-  /**
-   * Generation goes through `fetch` to a route handler, not a Server Action.
-   *
-   * A Server Action would block the React transition it runs in for as long as the
-   * provider takes — up to a minute. ADR-0012 records the reasoning; the visible
-   * consequence is that this button can show its own pending state while the rest of the
-   * page stays alive.
-   */
-  async function generate(body: Record<string, unknown>) {
-    setBusy(true)
-    try {
-      const response = await fetch("/companion/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      const data = (await response.json()) as
-        { ok: true; proposal: ProposalRow } | { ok: false; error: string }
-      if (!data.ok) {
-        // Typed failure from the provider, rendered here rather than thrown. Nothing was
-        // created, and the manual path — /activity — is untouched.
-        toast.error(data.error)
-        return
-      }
-      open(data.proposal)
-      router.refresh()
-    } catch {
-      toast.error("Couldn't reach the app's own server. Nothing was created.")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  /**
-   * A summary has nothing to create, so Done just clears it from the queue. Reusing
-   * `discardProposal` rather than inventing a fourth status: "read and finished with" and
-   * "rejected" are the same outcome for something that was only ever going to be read.
-   */
-  function onDone() {
-    onDiscard()
-    toast.success("Marked as read")
-  }
 
   /**
    * The request a refinement sends, per kind — everything but the instruction itself.
@@ -213,11 +112,8 @@ export function CompanionView({
    * extraction its source text. A `switch` over the union rather than a ternary chain: the
    * chain that was here let `import` fall through and ask for a summary instead.
    *
-   * Null means "cannot refine this right now", which only happens for an extraction whose
-   * source text has been cleared out of the box. The text is deliberately NOT stored on
-   * the proposal — a pasted bank statement is not something to keep a second copy of.
-   * Returning null rather than a boolean keeps that rule in ONE place: the render disables
-   * the box on the same call that would have built the request.
+   * Null means "cannot refine this right now" — see `RefinementBox`, which takes the null
+   * and disables itself on it.
    */
   function refinementBody(
     current: ActivePayload,
@@ -242,68 +138,7 @@ export function CompanionView({
     }
   }
 
-  function onApply(finalized: Exclude<ActivePayload, { kind: "summary" }>) {
-    if (!active) return
-    setBusy(true)
-    void applyProposal({ id: active.id, ...finalized })
-      .then((result) => {
-        if (!result.ok) {
-          toast.error(result.error)
-          return
-        }
-        setActive(null)
-        setPayload(null)
-        // Straight to the result: the point of a proposal is the rows it created, and
-        // seeing them in their real home is also the fastest way to notice it reads worse
-        // than it looked.
-        if (finalized.kind === "goal_plan") {
-          toast.success("Plan added to your goal")
-          router.push("/activity")
-        } else if (finalized.kind === "routine") {
-          toast.success("Routine created")
-          router.push("/activity/routines")
-        } else {
-          toast.success(
-            `${finalized.payload.rows.length} transaction${
-              finalized.payload.rows.length === 1 ? "" : "s"
-            } added`,
-          )
-          router.push("/budget")
-        }
-      })
-      .finally(() => setBusy(false))
-  }
-
-  /**
-   * Clears the proposal only once the write has landed.
-   *
-   * It used to null the local state first and fire the action unawaited, which looked
-   * instant and lost the write to any navigation that outran it — the proposal was back
-   * on the next page load. Same shape as the quick-add capture bug: optimistic UI in
-   * front of an unawaited action. A single UPDATE is fast enough not to need the
-   * optimism, and `busy` keeps the button honest while it runs.
-   */
-  function onDiscard() {
-    if (!active) return
-    const id = active.id
-    setBusy(true)
-    void discardProposal(id)
-      .then((result) => {
-        if (!result.ok) {
-          toast.error(result.error)
-          return
-        }
-        setActive(null)
-        setPayload(null)
-        router.refresh()
-      })
-      .finally(() => setBusy(false))
-  }
-
   const stillPending = pending.filter((p) => p.id !== active?.id)
-  // Null when the proposal on screen cannot be refined — see `refinementBody`. Computed
-  // once here because the refine box asks the same question three times.
-  const refineBody = payload ? refinementBody(payload) : null
 
   return (
     // Height is pinned only where the side-by-side layout exists. On a phone the panes
@@ -353,7 +188,9 @@ export function CompanionView({
                 </SelectContent>
               </Select>
               <Button
-                onClick={() => generate({ kind: "goal_plan", goalId })}
+                onClick={() =>
+                  void proposal.generate({ kind: "goal_plan", goalId })
+                }
                 disabled={busy || !goalId}
                 aria-busy={busy}
               >
@@ -377,7 +214,7 @@ export function CompanionView({
                 event.preventDefault()
                 const trimmed = brief.trim()
                 if (!trimmed) return
-                void generate({ kind: "routine", brief: trimmed })
+                void proposal.generate({ kind: "routine", brief: trimmed })
               }}
             >
               <Input
@@ -412,7 +249,7 @@ export function CompanionView({
             <Button
               variant="outline"
               className="mt-3"
-              onClick={() => generate({ kind: "summary" })}
+              onClick={() => void proposal.generate({ kind: "summary" })}
               disabled={busy}
               aria-busy={busy}
             >
@@ -438,7 +275,7 @@ export function CompanionView({
                 event.preventDefault()
                 const trimmed = paste.trim()
                 if (!trimmed) return
-                void generate({ kind: "import", text: trimmed })
+                void proposal.generate({ kind: "import", text: trimmed })
               }}
             >
               <Textarea
@@ -463,54 +300,15 @@ export function CompanionView({
             </form>
           </div>
 
-          {/* Refinement is scoped to the proposal on the right — not an open chat. Each
-              turn sends that plan plus this instruction, so there is no transcript to
-              manage and nothing to infer about which job was meant. */}
           {active && payload && (
-            <form
-              className="flex flex-col gap-2 border-t pt-4"
-              onSubmit={(event) => {
-                event.preventDefault()
-                const trimmed = instruction.trim()
-                if (!trimmed || !refineBody) return
-                setInstruction("")
-                void generate({ ...refineBody, instruction: trimmed })
-              }}
-            >
-              <label
-                htmlFor="refine"
-                className="text-muted-foreground text-xs font-medium"
-              >
-                Change this {KIND_NOUN[payload.kind]}
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="refine"
-                  value={instruction}
-                  onChange={(event) => setInstruction(event.target.value)}
-                  // Off when there is nothing to build a request from — an extraction
-                  // whose source text is gone, which is every extraction after a reload.
-                  // Said here rather than on submit: a box that takes a sentence and then
-                  // refuses it is worse than one that explains itself while empty.
-                  disabled={!refineBody}
-                  placeholder={
-                    refineBody
-                      ? REFINE_PLACEHOLDER[payload.kind]
-                      : "Put the transactions back in the box above to change this"
-                  }
-                />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Revise the proposal"
-                  aria-busy={busy}
-                  disabled={!refineBody}
-                >
-                  <Wand2 className="size-4" />
-                </Button>
-              </div>
-            </form>
+            <RefinementBox
+              kind={payload.kind}
+              value={proposal.instruction}
+              onChange={proposal.setInstruction}
+              body={refinementBody(payload)}
+              busy={busy}
+              onRefine={(body) => void proposal.generate(body)}
+            />
           )}
         </div>
 
@@ -525,25 +323,29 @@ export function CompanionView({
               key={version}
               payload={payload.payload}
               onChange={(next) =>
-                setPayload({ kind: "goal_plan", payload: next })
+                proposal.setPayload({ kind: "goal_plan", payload: next })
               }
               goalTitle={goalTitleFor(active.targetId)}
               targetDate={goalFor(active.targetId)?.targetDate ?? null}
               today={today}
               pending={busy}
-              onApply={(next) => onApply({ kind: "goal_plan", payload: next })}
-              onDiscard={onDiscard}
+              onApply={(next) =>
+                proposal.apply({ kind: "goal_plan", payload: next })
+              }
+              onDiscard={proposal.discard}
             />
           ) : active && payload?.kind === "routine" ? (
             <RoutineProposal
               key={version}
               payload={payload.payload}
               onChange={(next) =>
-                setPayload({ kind: "routine", payload: next })
+                proposal.setPayload({ kind: "routine", payload: next })
               }
               pending={busy}
-              onApply={(next) => onApply({ kind: "routine", payload: next })}
-              onDiscard={onDiscard}
+              onApply={(next) =>
+                proposal.apply({ kind: "routine", payload: next })
+              }
+              onDiscard={proposal.discard}
             />
           ) : active && payload?.kind === "import" ? (
             <ImportProposal
@@ -552,8 +354,10 @@ export function CompanionView({
               categories={categories}
               currency={currency}
               pending={busy}
-              onApply={(next) => onApply({ kind: "import", payload: next })}
-              onDiscard={onDiscard}
+              onApply={(next) =>
+                proposal.apply({ kind: "import", payload: next })
+              }
+              onDiscard={proposal.discard}
             />
           ) : active && payload?.kind === "summary" ? (
             <SummaryProposal
@@ -561,7 +365,7 @@ export function CompanionView({
               payload={payload.payload}
               weekLabel={weekLabel(new Date(active.createdAt))}
               pending={busy}
-              onDone={onDone}
+              onDone={proposal.done}
             />
           ) : (
             <div className="text-muted-foreground flex items-center justify-center rounded-xl border border-dashed p-10 text-center text-sm">
@@ -583,16 +387,16 @@ export function CompanionView({
                 data-testid="pending-queue"
                 className="mt-2 flex max-h-32 flex-col gap-1 overflow-y-auto"
               >
-                {stillPending.map((proposal) => (
-                  <li key={proposal.id}>
+                {stillPending.map((row) => (
+                  <li key={row.id}>
                     <button
                       type="button"
-                      onClick={() => open(proposal)}
+                      onClick={() => proposal.open(row)}
                       className={cn(
                         "hover:bg-muted w-full truncate rounded px-2 py-1 text-left text-sm",
                       )}
                     >
-                      {goalTitleFor(proposal.targetId)}
+                      {goalTitleFor(row.targetId)}
                     </button>
                   </li>
                 ))}

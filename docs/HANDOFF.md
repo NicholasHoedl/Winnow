@@ -491,7 +491,15 @@ what it must **not** delete as well as what it must.
 generation runs in a route handler. This is the short version.
 
 **What exists.** `/companion` — a two-pane page: job buttons plus a refinement box on the
-left, the proposal renderer above the pending queue on the right. Four jobs. Three of them
+left, the proposal renderer above the pending queue on the right. Four jobs.
+
+**Its parts are no longer its own, as of T13 Phase 2.** The page still looks and behaves
+exactly as described here, but the machinery moved out so four pages can share it:
+`useProposal()` in `modules/companion/` holds the state and the apply/discard/generate
+handlers (following `use-log-habit.ts`); `components/companion/` holds `RefinementBox` and
+the four proposal renderers; `getPendingProposals(kind?)` filters; and generation is
+**`POST /api/companion/generate`**, moved out of the page's own route. If you are reading
+this to change the companion, change those, not the view. Three of them
 run end to end — generate → prune → edit inline → Apply, which writes through the modules'
 own actions and lands you on the result:
 

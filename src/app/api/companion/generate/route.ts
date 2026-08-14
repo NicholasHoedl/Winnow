@@ -37,7 +37,7 @@ import { getWeeklyReview } from "@/modules/review/queries"
 const TASK_TITLE_CAP = 20
 
 /**
- * Generate (or revise) a proposal.
+ * Generate (or revise) a proposal. `POST /api/companion/generate`.
  *
  * **A route handler rather than a Server Action, which contradicts ADR-0005 — see
  * ADR-0012 for why.** In one line: a Server Action blocks the React transition it is
@@ -47,6 +47,18 @@ const TASK_TITLE_CAP = 20
  *
  * The auth check ADR-0005 worried a second API surface would need is `requireUserId()`,
  * the same call every query and action in the app already makes.
+ *
+ * **It lives under `/api` since T13, and that changes who rejects an unauthenticated
+ * request.** It used to sit at `/companion/generate`, inside the `(app)` segment, where
+ * `proxy.ts` caught a request with no session and 307'd it to `/login` before this file
+ * ran. That matcher excludes `/api` — deliberately, see `api/calendar/[token]` — so the
+ * proxy no longer stands in front. Nothing is less protected: `requireUserId()` was always
+ * the authoritative check and it still runs first. But it THROWS, and an uncaught throw in
+ * a route handler is a 500, so it is caught below and answered as a 401. A 500 for "you
+ * are signed out" is the kind of wrong signal that costs someone an afternoon.
+ *
+ * It moved because four pages will call it once T13 disperses the companion, and an
+ * endpoint addressed by one page's route is a lie at that point.
  */
 function bad(error: string, status: number): Response {
   return NextResponse.json({ ok: false, error }, { status })
@@ -74,7 +86,15 @@ async function loadPrevious<T>(
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const userId = await requireUserId()
+  // Answered as JSON with `ok: false`, because that is the only shape the client reads —
+  // it parses the body and never looks at `response.ok`, so a 401 surfaces as a toast
+  // rather than as a thrown parse.
+  let userId: string
+  try {
+    userId = await requireUserId()
+  } catch {
+    return bad("You're signed out — sign in and try again.", 401)
+  }
 
   // Belt and braces: the page is not rendered when the companion is off, but a route
   // handler is reachable regardless of what the UI chose to show.

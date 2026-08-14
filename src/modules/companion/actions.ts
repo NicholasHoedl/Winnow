@@ -9,6 +9,7 @@ import {
   type ActionFailure,
   type ActionResult,
 } from "@/lib/action-result"
+import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 import { createTransaction } from "@/modules/budget/actions"
 import { getCategories } from "@/modules/budget/queries"
@@ -22,6 +23,7 @@ import { createTask } from "@/modules/todos/actions"
 import { fetchModels } from "./ai-client"
 import { describeAiFailure } from "./ai-request"
 import { AI_PROVIDERS } from "./ai-settings"
+import type { ProposalKind } from "./queries"
 import { aiProposals } from "./schema"
 import { applyProposalSchema } from "./validation"
 import { z } from "zod"
@@ -34,8 +36,36 @@ const listModelsSchema = z.object({
   baseUrl: z.string().trim().max(500),
 })
 
-function revalidateCompanion(): void {
+/**
+ * Where a proposal of each kind is reviewed — the page that has to re-read after a write.
+ *
+ * T13 moves each job onto the page of the artifact it produces, so "the companion page"
+ * stops being one place. A `Record` keyed on the enum rather than a switch: a fifth kind
+ * fails to compile here instead of silently revalidating nothing.
+ *
+ * `/goals` is listed before it exists (it is a 308 to `/activity` until T13 Phase 3).
+ * Revalidating a path with no page is a no-op, not an error, and listing it now means the
+ * map is right on the commit that gives it a page rather than one commit later.
+ */
+const PROPOSAL_PATH: Record<ProposalKind, string> = {
+  goal_plan: "/goals",
+  routine: "/activity",
+  summary: "/review",
+  import: "/budget",
+}
+
+/**
+ * Re-read every page that shows this proposal or what it just became.
+ *
+ * Three paths, and each is a different claim. `/companion` is where it is reviewed TODAY
+ * and goes when that page does; `PROPOSAL_PATH` is where it will be reviewed once T13
+ * lands; `revalidateHubs()` covers the dashboard and the weekly review, which compose
+ * every module and therefore change whenever a proposal turns into rows.
+ */
+function revalidateProposal(kind: ProposalKind): void {
   revalidatePath("/companion")
+  revalidatePath(PROPOSAL_PATH[kind])
+  revalidateHubs()
 }
 
 /**
@@ -105,7 +135,7 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
   }
 
   const failed = (title: string): ActionResult => {
-    revalidateCompanion()
+    revalidateProposal(parsed.data.kind)
     return { ok: false, error: `Couldn't add “${title}”.` }
   }
 
@@ -190,7 +220,7 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
     }
   }
 
-  revalidateCompanion()
+  revalidateProposal(parsed.data.kind)
   return { ok: true }
 }
 
@@ -200,7 +230,11 @@ export async function discardProposal(id: unknown): Promise<ActionResult> {
   const parsed = idSchema.safeParse(id)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db
+  // `returning` rather than a second SELECT: this action is handed an id and nothing else,
+  // but `revalidateProposal` needs the kind, and the UPDATE already knows it. An empty
+  // array means it was not pending — already applied, already discarded, or not the
+  // caller's — in which case nothing changed and there is nothing to revalidate.
+  const [discarded] = await db
     .update(aiProposals)
     .set({ status: "discarded" })
     .where(
@@ -210,8 +244,9 @@ export async function discardProposal(id: unknown): Promise<ActionResult> {
         eq(aiProposals.status, "pending"),
       ),
     )
+    .returning({ kind: aiProposals.kind })
 
-  revalidateCompanion()
+  if (discarded) revalidateProposal(discarded.kind)
   return { ok: true }
 }
 
