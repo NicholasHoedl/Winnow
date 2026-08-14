@@ -19,9 +19,10 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
       AUTH_TRUST_HOST: "true"
       APP_TIME_ZONE: ${APP_TIME_ZONE:-America/Chicago}
-      APP_CURRENCY: ${APP_CURRENCY:-USD}
-      # No AI_* here: as of T11 the companion is configured in the app's Settings page and
-      # stored in the database, so it survives a redeploy without touching this file.
+      # No APP_CURRENCY and no AI_* here. Both moved into `user_preferences` — the currency
+      # in T12i, the companion's whole configuration in T11 — so they survive a redeploy and
+      # are set from the app rather than from this file. Passing them did nothing, which is
+      # worse than omitting them: it invites someone to set one and expect an effect.
       NODE_ENV: production
     ports:
       # localhost only — tailscale serve terminates TLS and proxies to this.
