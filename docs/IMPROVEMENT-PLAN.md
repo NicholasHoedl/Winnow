@@ -966,11 +966,12 @@ provider's base URL, and a model id typed from memory.
   whatever a local endpoint calls its own.
 - **The e2e stub now answers `/models`.** A stand-in provider that 404s there leaves the
   settings page with an empty dropdown — it stopped standing in for enough.
-- Found while verifying, and unrelated to the change: **the account's stored Anthropic key
-  returns 401**. It is structurally intact (108 chars, `sk-ant-` prefix, no whitespace or
-  encoding damage) and the AI teardown had completed cleanly, so this is a revoked or
-  expired key rather than fixture damage. The old form could not have told anyone; the new
-  dropdown says so on arrival.
+- ~~Found while verifying, and unrelated to the change: **the account's stored Anthropic key
+  returns 401**.~~ **Wrong, and corrected on 2026-08-14** while debugging T12j: the key
+  works. A live `POST /v1/messages` with `claude-sonnet-5` returned HTTP 200 and a valid
+  `tool_use` payload. Whatever produced the original 401 reading was transient or
+  mismeasured — worth remembering that this entry was believed for two days and sent the
+  next debugging session down the wrong path before the code ruled it out.
 
 **T7d — shipped**, migration `0024` (`milestones.completed_at`):
 

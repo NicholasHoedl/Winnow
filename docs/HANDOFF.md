@@ -207,8 +207,9 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **767 unit tests across 44 files, 140 e2e,
-0 lint errors, 5 lint warnings** (2026-08-13, 13.5 minutes wall clock for the e2e).
+Current green baseline, measured on a full run: **784 unit tests across 46 files, 143 e2e,
+0 lint errors, 5 lint warnings** (2026-08-14, 11.5 minutes wall clock for the e2e, zero
+flaky).
 
 The 140 counts **both** Playwright projects — `chromium` plus the eleven-route `mobile`
 sweep — along with the setup and teardown projects. A `--project=chromium` run will
@@ -308,6 +309,33 @@ every page. That constraint is why `AppearanceSync` reads storage inside an effe
 instead. The retired palette store had the same bug in a nastier form — its server
 snapshot reported the default, so it wrote that default into the account on every
 authenticated page load.
+
+**A schema minimum can reject a CORRECT answer, and it surfaces as `malformed`.** Two of the
+companion's four payload schemas carried `.min(1)` on an array that a good answer could
+legitimately leave empty, and both reached the user as "the provider answered with something
+this app couldn't read" — a dead end whose only exit was retrying into the same wall.
+
+- `goalPlanPayloadSchema.milestones`: the prompt sends the goal's EXISTING milestone titles
+  so the model will not duplicate them, so a goal whose milestones are already complete gets
+  an empty list back. Correct answer, rejected.
+- `importPayloadSchema.rows`: paste a covering letter or a header-only export and "there are
+  no transactions here" is the honest answer. Rejected.
+
+Both minima are gone and `planWarnings` gained a `no-milestones` warning to say it out loud.
+When adding a payload field, ask what the model should return when there is genuinely nothing
+to say — and remember `ai-client.ts` maps any non-2xx to `http`, so if you are seeing
+`malformed` the request SUCCEEDED and the body is the problem.
+
+**`summaryPayloadSchema` uses four numbered fields instead of an array, on purpose.** Do not
+"tidy" `observation1`–`observation4` back into `observations: string[]`. As an array,
+`claude-sonnet-5` called the tool correctly but filled that one parameter with a STRING — the
+observations concatenated, sometimes with its own `<parameter name=…>` markup inside the
+value. Measured at roughly 1 success in 8. Two fixes failed before the shape change: making
+each observation an object (the model serialised the objects instead) and adding an explicit
+"call the tool" line to the prompt (2 in 6, i.e. noise). Four discrete fields measured 6/6.
+Every array that DOES work in that file — routine items, plan milestones, import rows — holds
+short fields; this one held long free prose. `summaryObservations()` in `companion/service.ts`
+is the only place that knows the field names.
 
 **`git checkout <file>` on uncommitted work discards it.** Used it to undo a deliberate
 sabotage and lost the real edit underneath. Prefer re-applying the inverse edit.
@@ -574,8 +602,11 @@ T9c or T9d rebuilt any of them.
   messages, a required `max_tokens`, and tool-use instead of `response_format`. Both
   protocols are unit-tested in `companion/ai-request.test.ts`; the e2e stub speaks OpenAI
   only, so that file is the ONLY coverage the Anthropic path has. That now includes the
-  model list: `extractModels` is tested against both response shapes, but the Anthropic one
-  has never been checked against a LIVE response — the account's key returns 401.
+  model list: `extractModels` is tested against both response shapes. The Anthropic path HAS
+  now been exercised against a live response (2026-08-14, `claude-sonnet-5`): HTTP 200,
+  `stop_reason: tool_use`, one `tool_use` block, payload parsed. An earlier note here said
+  the account's key returned 401 — that is **false** and was never consistent with the
+  symptom it was cited for, since `ai-client.ts` maps any non-2xx to `http`, not `malformed`.
   Nothing is forwarded through `docker-compose.prod.yml` any more: the configuration is in
   the database, so it survives a redeploy and is set once, from the app.
 - **Propose-only.** The model never writes to the database. It emits a proposal, that
