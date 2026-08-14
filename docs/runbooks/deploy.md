@@ -77,7 +77,7 @@ The app publishes on `127.0.0.1:3000` only — deliberately. Nothing on the LAN 
 
 ## 4. Migrate and seed — the one-time awkward step
 
-The database starts empty and needs all **27 migrations** plus the account. But
+The database starts empty and needs all **35 migrations** plus the account. But
 `docker-compose.prod.yml` publishes **no** port for Postgres, which is correct for
 security and means your shell cannot reach it.
 

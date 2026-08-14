@@ -262,7 +262,7 @@ a classic, easy-to-introduce bug.
 > (T7b, `routines` + `routine_items`), **habits** (T12a, `habits` + `habit_entries` — a
 > quota and a log; see ADR-0014, which supersedes ADR-0009), **review** (T7d — no tables;
 > a pure projection of four other modules) and **companion** (T9a, the AI proposal store —
-> `ai_proposals`). There are 27 user-owned tables across 14 modules, at 33 migrations
+> `ai_proposals`). There are 27 user-owned tables across 14 modules, at 35 migrations
 > (`0000`–`0032`). Do not infer from silence here that something does not exist.
 >
 > Habits are the one entry above whose description **reversed**. Between T7c and T12a the

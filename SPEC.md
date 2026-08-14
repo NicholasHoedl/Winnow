@@ -4,6 +4,28 @@ Status: Draft v1 (pre-implementation)
 Owner: solo developer / single user
 Last updated: 2026-07-21
 
+> **Historical, like `ROADMAP.md`. Preserved as written, not maintained.** This is the
+> product this project set out to build, and it is still the best statement of _why_ Winnow
+> exists — §4's core insight drives decisions being made today. It is not a description of
+> what now exists.
+>
+> The shipped app has passed it in several places, and §6's out-of-scope list is where that
+> shows most sharply:
+>
+> - **"AI features of any kind"** is listed out of scope for v1. The AI companion is now a
+>   shipped, first-class feature with its own nav tab — see ADR-0011 for the boundary it
+>   works within, which is the part worth reading before touching it.
+> - **Barcode lookups and a nutrition database** are listed out of scope. Both shipped
+>   (Open Food Facts, ADR-0005).
+> - **Recurring-event exceptions** are listed out of scope. They shipped in T5b.
+> - **Notes/journal, routines, habits and the weekly review** are absent entirely — they are
+>   T7 and T12a, neither of which was on any plan when this was written. Habits in particular
+>   are now a quota and a log rather than a kind of task (ADR-0014).
+> - **To-dos and Goals are one page**, `/activity`, not the separate modules §7 describes
+>   (ADR-0013).
+>
+> For what is actually built and where it stands, read `docs/HANDOFF.md`.
+
 ## 1. Problem Statement
 
 The user currently manages their life across a pile of separate apps: a to-do

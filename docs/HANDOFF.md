@@ -1,10 +1,12 @@
 # Handoff
 
-Last updated: **2026-08-04**.
+Last updated: **2026-08-13**.
 
-**`main` is the truth and it is pushed.** T7, T8, the recolour and the deploy runbook were
-built on `feat/t7-notes-routines-habits`, which has since been fast-forwarded into `main`
-and carries nothing `main` does not — the branch can be deleted whenever you like.
+**`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
+T12i is merged into it. The seven stale branches that used to sit beside it are gone, as are
+two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
+and `git worktree list` exactly one entry. If you find otherwise, someone has been working
+since this was written.
 
 This header does not track commits. It named the tip and listed what was outstanding, and
 went stale three times in one day; `git log` cannot be wrong and this can, so ask it.
@@ -32,9 +34,11 @@ conventions that are not guessable, and the traps that have already cost real ti
 > - **You will not type any secret.** `POSTGRES_PASSWORD`, `AUTH_SECRET` and
 >   `SEED_USER_PASSWORD` are the user's to enter. Scaffold the file, leave them blank, say
 >   so.
-> - **`pnpm test:e2e` must not run on this machine.** It is written against the dev server
->   and writes rows into whatever database it can reach. Verification here is the three
->   checks in the runbook, not the suite.
+> - **`pnpm test:e2e` must not run on this machine**, though the reason changed in T12g.
+>   It is no longer that it eats real data — it now creates and destroys its own
+>   `winnow_test` database. It is that the suite starts `pnpm dev` on port 3001 and needs a
+>   dev toolchain, neither of which belongs on a deploy target. Verification here is the
+>   three checks in the runbook, not the suite.
 > - **`docs/runbooks/deploy.md` is a first draft that has never been executed.** It was
 >   assembled from the compose file, the Dockerfile and ADR-0002. Where reality disagrees
 >   with it, reality is right — fix the runbook as you go, and commit that.
@@ -61,15 +65,32 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 31 migrations from scratch plus `scripts/seed-user.ts`.
+runs all 35 migrations from scratch plus `scripts/seed-user.ts`.
 
 ## 2. Where the work stands
 
 **Every tranche is shipped except T5c-b.** T0–T6b; all of T7, split into T7a Notes → T7b
 Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
-choosing; then T8 (goal momentum), T9a–T9d (the AI companion) and T10a–T10b, none of which
-were on the roadmap. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and its status table
-is current.
+choosing; then T8 (goal momentum), T9a–T9d (the AI companion), T10a–T10b, T11 and T12a–T12i
+— none of which were on the roadmap. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and
+its status table is current; read it rather than trusting the summary here.
+
+**T7c is marked "retired by T12a", not shipped**, and that is not bookkeeping. T7c derived a
+habit from a repeating task, so every habit materialised task rows; T12a rebuilt habits as a
+quota and a log that generate nothing (ADR-0014 supersedes ADR-0009). Anything you read about
+habits that assumes a task row is pre-T12a and wrong.
+
+The T12 line is what most of §5 now describes:
+
+|               |                                                                                                                                                            |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T11**       | The companion's configuration moved from the environment into `user_preferences`. `src/lib/config.ts` holds nothing about AI.                              |
+| **T12a–T12c** | Habits became a primitive; goal momentum counts habit sessions; the companion proposes habits rather than a dated checklist.                               |
+| **T12d**      | `/activity` revisited for that primitive — habits left the rail for a strip at every width.                                                                |
+| **T12e–T12f** | The dashboard agenda groups routine-created tasks and can be reordered; a routine chooses whether its unfinished tasks go overdue or are dropped silently. |
+| **T12g**      | **The e2e suite got its own database.** The single most important entry here — see §3.                                                                     |
+| **T12h**      | Companion settings derive the base URL and fetch the model list, instead of asking you to type both.                                                       |
+| **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
 So the roadmap has run out of code that can be written without a deployment. **Hosting is
 now the only thing standing between this app and being used.**
@@ -79,8 +100,9 @@ now the only thing standing between this app and being used.**
 | **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**. |
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                             |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                        |
-| **The AI companion — complete**           | **T9a–T9d all shipped**: `/companion`, with goal planning, routine building, a narrated week and transaction import. See §5, ADR-0011 and ADR-0012.                                                                                                      |
-| **The Activity page — complete**          | **T10a–T10b both shipped**: `/todos` and `/goals` merged into `/activity`, with goals, routines and habits in one rail beside the task list. See §5 and ADR-0013.                                                                                        |
+| **The AI companion — complete**           | **T9a–T9d shipped**, reshaped by T12c and reconfigured by T11 and T12h. See §5, ADR-0011 and ADR-0012.                                                                                                                                                   |
+| **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d. `/todos` and `/goals` merged into `/activity`; habits are a strip rather than a rail block. See §5 and ADR-0013.                                                                                               |
+| **Mobile — measured, not finished**       | T12i's follow-up added a `mobile` Playwright project that renders all eleven routes in WebKit at 393px. Nine were already clean; two faults were found and fixed. What it cannot see, and the open decisions it surfaced, are in §6.                     |
 
 ### Hosting: what is already known
 
@@ -91,7 +113,7 @@ Decided with the user, so do not re-litigate:
 
 - **Clone the repo on the desktop and build there.** This replaced an earlier plan to build
   on the laptop, `docker save` to a `.tar` and carry it over. The change is not cosmetic:
-  the PC needed the checkout regardless — 31 migrations, `scripts/seed-user.ts`, and
+  the PC needed the checkout regardless — 35 migrations, `scripts/seed-user.ts`, and
   `backup.sh` all run from the deploy directory — so shipping a tar only ever saved the
   build, at the cost of a manual transfer.
 - One consequence: **`docker-compose.prod.yml`'s `up -d --build` usage line is now
@@ -170,20 +192,46 @@ it is `winnow-postgres-1`.
 - **Verification:** `pnpm typecheck` · `pnpm lint` · `pnpm test:run` · `pnpm test:e2e` ·
   `pnpm test:e2e:prod` (separate config, real production build — the service worker only
   registers in production, so the normal suite structurally cannot reach it).
-- **Lint has 4 known warnings**, all `react-hooks/incompatible-library` from
+- **`pnpm test:e2e` runs two projects.** `chromium` is the suite proper. `mobile` renders
+  every `(app)` route in **real WebKit at 393px** and is the only thing that has ever
+  exercised this app below 768px — `devices["iPhone 15"]` carries
+  `defaultBrowserType: "webkit"`, which the runner honours. There is no npm script for it
+  alone; use `npx playwright test --project=mobile` (~1 min warm, ~2.5 cold). It depends on `ai-setup`,
+  because `/companion` 404s when the companion is unconfigured and would fail on a missing
+  heading rather than on layout.
+  - Beware the asymmetry with the CLI: `playwright open --device="iPhone 15"` sets the
+    viewport but still launches **chromium**, because `-b` defaults to it. Pass
+    `-b webkit` explicitly, and do not maximise the window — a headed viewport follows the
+    OS window, and a maximised one silently becomes a desktop render of a desktop layout.
+- **Lint has 5 known warnings**, all `react-hooks/incompatible-library` from
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline: **751 unit tests, 124 e2e, 0 lint errors** (T12d, 2026-08-11).
+Current green baseline, measured on a full run: **767 unit tests across 44 files, 140 e2e,
+0 lint errors, 5 lint warnings** (2026-08-13, 13.5 minutes wall clock for the e2e).
 
-Two e2e are chronically flaky and neither has been solved: `quick-add-burst:42` and
-`todos-reorder:86`. They pass on retry and a full run therefore exits 0. Treat a non-zero
-flaky count as a triage item rather than a pass, and do not assume a new flake is one of
-these two without reading its trace.
+The 140 counts **both** Playwright projects — `chromium` plus the eleven-route `mobile`
+sweep — along with the setup and teardown projects. A `--project=chromium` run will
+therefore report fewer, and that is not a regression.
+
+**Three** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
+`todos-reorder:86`, and — first seen 2026-08-13 — `calendar-reschedule.spec.ts:74` ("a block
+can be dragged to another day and time, and it sticks"). They pass on retry and a full run
+therefore exits 0.
+
+The third one is worth noting for how it was found: it was the ONLY flake in that run, and
+the two chronic ones did not fire. That is precisely the case the advice below exists for, so
+it is now a worked example rather than a hypothetical. Treat a non-zero flaky count as a
+triage item rather than a pass, and **do not assume a new flake is one of these three without
+reading its trace.**
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
-Playwright starts alongside the app. `AI_BASE_URL` in `.env` points at it. A real model
-cannot be tested (its output is non-deterministic by design), so what is under test is
+Playwright starts alongside the app on port 3100. **`e2e/ai.setup.ts` points the app at it
+by writing `user_preferences.ai_*` directly**, and restores the real settings in
+`ai.teardown.ts`. It is NOT an environment variable: T11 moved the companion's configuration
+into the database, and the `AI_*` keys were deleted from `.env` in T12i because nothing had
+read them since. If you see `AI_BASE_URL` mentioned as live configuration anywhere, that
+text predates T11. A real model cannot be tested (its output is non-deterministic by design), so what is under test is
 everything around it: the route handler, the Zod parse, the renderer, the renumbering, and
 the writes. Model **quality** is permanently unverified in CI, and ADR-0011 accepts that
 rather than pretending otherwise.
@@ -358,6 +406,36 @@ T10a with goals and again in T10b with habits. Renaming it to `data-aside` is th
 and was deliberately not taken: a rename is invisible to TypeScript, so one missed card fails
 later as a hang in an unrelated spec. If it is ever done, do it alone, with a
 `rg -c 'data-rail'` count either side.
+
+### The dashboard agenda and routine hygiene (T12e–T12f)
+
+Two tranches nothing else in this file described, both hanging off one new column.
+
+**`tasks.routine_id` (migration `0033`) is how a task remembers where it came from.** Read
+§4 first — it is declared with **no `.references()`** and its foreign key is hand-written,
+for a schema-cycle reason that will bite you if you try to "fix" it.
+
+- **The agenda groups routine-created tasks** under the routine's name rather than mixing
+  them into the list. `buildTodayAgenda` in `(app)/_lib/agenda.ts` returns
+  `{ overdue, groups, items }`; the group is drawn as a **tinted block, not an indented
+  one**, deliberately, so the `Gutter` x-axis still lines up across every row.
+- **The agenda reorders by drag**, through the same `@dnd-kit` `SortableList` everything
+  else uses, with an `arrange()` order overlay applied on top of the server list while the
+  write is in flight.
+- **The Calendar link was removed from the agenda** — nobody could say what it was for.
+
+**`routines.on_unfinished` (migration `0034`) is `keep` | `drop`, defaulting to `keep`** so
+every routine that existed before behaves exactly as it did. `drop` means the routine's
+unfinished tasks vanish silently at end of day instead of turning overdue — a shower routine
+you skipped is not a debt.
+
+`dropExpiredRoutineTasks` (`todos/queries.ts`) is the sweep, and it is lazy-on-read like
+every other scheduler substitute here (ADR-0004): it runs from `getTasks`, **before**
+`ensureRecurringTasks`, so a row can never be created and deleted inside one render. Five
+boundaries constrain what it may delete, and each is load-bearing — user-owned, on a `drop`
+routine, `status = 'open'`, `dueDate` non-null and before today, and `routineId IS NOT NULL`.
+That last one is what stops it touching a hand-written task, and there is an e2e asserting
+what it must **not** delete as well as what it must.
 
 ### The AI companion (T9a–T9d, complete)
 
@@ -575,7 +653,8 @@ still the old indigo.**
   at 1440×900 and up. The ~19px figure recorded here previously was against less data, so
   this number tracks what is in the database rather than being fixed. T7a's Journal card
   is **not** a contributor — hiding it leaves both numbers identical.
-- **Nav is back at seven items, the measured ceiling.** `bottom-nav.tsx` is a plain flex
+- **Nav is at seven items with the companion enabled** (six in `navItems` plus the
+  conditional Companion tab — see the next bullet), **and seven is the measured ceiling.** `bottom-nav.tsx` is a plain flex
   with `flex-1` and no overflow handling; seven labels fit a 375px phone with nothing to
   spare, and an eighth needs a More sheet or a scroller first. T10 merged To-dos and Goals
   into Activity, freeing the first slot since T7a, and the Companion tab immediately spent
@@ -585,6 +664,39 @@ still the old indigo.**
   splices the tab in at render. The `(app)` layout resolves `aiReady(await getAiSettings())`
   once and passes it to the sidebar, the bottom nav and the palette — those three must
   agree, which is why they share one `COMPANION_NAV_ITEM`.
+- **Mobile is measured now, but only in the ways a desktop can measure it.**
+  `e2e/mobile-layout.spec.ts` renders all eleven `(app)` routes at 393px and fails on two
+  things: a _blowout_ (the document scrolls sideways) and a _spill_ (content wider than its
+  own box, where an ancestor's fixed width means the page does not scroll and the text
+  simply lies over its neighbour). The second is the one no viewport check catches. It
+  **seeds a five-figure transaction on purpose** — a sweep over whatever the account happens
+  to hold measures the account, not the layout.
+  Three things it structurally cannot see, all of which need real hardware: Safari's
+  toolbar collapsing and resizing the viewport mid-scroll, a non-zero
+  `env(safe-area-inset-bottom)`, and anything gestural. It also tests one width and only the
+  content its seed creates.
+- **`--bottom-nav-height` in `globals.css` is depended on by two files that cannot see each
+  other**: the main content's bottom padding in `(app)/layout.tsx` and the toast offset in
+  `ui/sonner.tsx`. It is `0px` at `md` and up, `calc(3.5rem + env(safe-area-inset-bottom))`
+  below. The `3.5rem` is hand-measured from `bottom-nav.tsx` and **nothing enforces it** — if
+  that component's padding, icon or label size changes, the variable silently drifts and both
+  consumers drift with it. Before it existed, each carried its own guess and the padding's was
+  wrong on any phone with a home indicator.
+- **Touch targets are below Apple's 44pt guideline throughout.** `icon-sm` is 28px, `icon`
+  32px, and the reorder handle in `sortable-list.tsx` is 24px — and that handle is the only
+  way to start a drag on touch. They clear WCAG 2.2 AA (24×24) but not the iOS guideline.
+  Raising them touches every dense list in the app, so it is a decision rather than a patch,
+  and it has not been taken.
+- **The calendar week view is intact and unusable at phone width.** A 56px gutter plus seven
+  `flex-1` columns leaves ~41px per day at 393px. Nothing overflows — the layout sweep passes
+  it — but an event title in 33px of content width is not readable. `day` and `agenda` are the
+  right phone views and nothing steers anyone to them.
+- **A category's kind cannot be changed once created** (T12i), though `updateCategory`
+  accepts it. Flipping it under existing transactions leaves them pointing at a category that
+  no longer matches their type: the transaction dialog filters its picker by kind, so
+  re-opening one of those rows silently drops its category, and `budget-view` stops offering
+  the category a budget. `e2e/manager-renames.spec.ts` asserts the lock, so it stays a
+  decision rather than decaying into an omission.
 - **The export file contains a live credential** — the calendar feed token rides along
   deliberately, so a restore keeps an existing subscription working (ADR-0008).
 - **A goal measured only numerically gets no momentum reading**, and never will without a
@@ -602,7 +714,7 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0013) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0014) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by
