@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { LogOut, Search, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { LinkPending } from "@/components/shared/link-pending"
 import { Button } from "@/components/ui/button"
 import { CommandPaletteTrigger } from "@/components/create/command-palette"
 import { signOutAction } from "@/app/(app)/actions"
@@ -79,9 +80,13 @@ export function AppSidebar({
                   : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
               )}
             >
-              <item.icon
-                className={cn("size-4", active && "text-sidebar-primary")}
-              />
+              {/* Icon-only swap. `navigation.spec.ts` asserts the nav's exact innerText
+                  and `sr-only` clips rather than hiding, so added text would break it. */}
+              <LinkPending className="size-4">
+                <item.icon
+                  className={cn("size-4", active && "text-sidebar-primary")}
+                />
+              </LinkPending>
               {item.label}
             </Link>
           )
@@ -99,9 +104,11 @@ export function AppSidebar({
               : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
           )}
         >
-          <Settings
-            className={cn("size-4", settingsActive && "text-sidebar-primary")}
-          />
+          <LinkPending className="size-4">
+            <Settings
+              className={cn("size-4", settingsActive && "text-sidebar-primary")}
+            />
+          </LinkPending>
           Settings
         </Link>
         <div className="flex items-center justify-between gap-2 pt-1">

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { LinkPending } from "@/components/shared/link-pending"
 import {
   ChevronLeft,
   ChevronRight,
@@ -96,7 +97,17 @@ export function MealsView({
   const [foodsOpen, setFoodsOpen] = React.useState(false)
   const [targetsOpen, setTargetsOpen] = React.useState(false)
   const [copyOpen, setCopyOpen] = React.useState(false)
-  const [, startTransition] = React.useTransition()
+  const [isPending, startTransition] = React.useTransition()
+  /**
+   * Which entry's "Log again" is in flight, or null.
+   *
+   * Per-id and DERIVED, the pattern `use-log-habit.ts` documents: a shared boolean would
+   * put a spinner on every row's button at once, and "Log again" renders on every entry.
+   * Derived from the transition rather than tracked separately so it cannot get stuck if
+   * the action throws.
+   */
+  const [relogTarget, setRelogTarget] = React.useState<string | null>(null)
+  const relogId = isPending ? relogTarget : null
 
   const totals = sumMacros(entries)
   const progress = macroProgress(totals, targets)
@@ -125,6 +136,7 @@ export function MealsView({
   }
 
   function handleRelog(entry: MealEntry) {
+    setRelogTarget(entry.id)
     startTransition(async () => {
       const result = await logMeal({
         name: entry.name,
@@ -212,7 +224,11 @@ export function MealsView({
           aria-label="Previous day"
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
-          <ChevronLeft className="size-4" />
+          {/* Same-route param change: the segment is not remounted, so `loading.tsx`
+              never fires and nothing else in the app indicates this. */}
+          <LinkPending className="size-4">
+            <ChevronLeft className="size-4" />
+          </LinkPending>
         </Link>
         <span className="min-w-28 text-center text-sm font-medium">
           {formatDay(date, today)}
@@ -222,7 +238,9 @@ export function MealsView({
           aria-label="Next day"
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
-          <ChevronRight className="size-4" />
+          <LinkPending className="size-4">
+            <ChevronRight className="size-4" />
+          </LinkPending>
         </Link>
         <DateJumpButton
           selected={date}
@@ -279,6 +297,7 @@ export function MealsView({
                     onEdit={openEdit}
                     onDelete={handleDelete}
                     onRelog={handleRelog}
+                    relogging={relogId === entry.id}
                   />
                 ))}
               </div>

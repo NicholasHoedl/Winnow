@@ -16,6 +16,7 @@ import { deleteNote, restoreNote, setNotePinned } from "@/modules/notes/actions"
 import type { NoteRow } from "@/modules/notes/queries"
 import { excerpt, groupNotes, noteTitle } from "@/modules/notes/service"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,7 +38,7 @@ function NoteCard({
   note: NoteRow
   onEdit: (target: EditorTarget) => void
 }) {
-  const [, startTransition] = React.useTransition()
+  const [busy, startTransition] = React.useTransition()
 
   // Deleting a note is cleanly reversible — `restoreNote` puts every column back,
   // timestamps included — so this offers undo rather than a confirm step, the same call
@@ -91,10 +92,19 @@ function NoteCard({
                 variant="ghost"
                 size="icon-sm"
                 aria-label={`Actions for ${heading}`}
+                aria-busy={busy}
               />
             }
           >
-            <MoreVertical className="size-4" />
+            {/* Pinning is the reason this is here: the menu closes, then the card
+                physically MOVES between the pinned and unpinned sections after a full
+                round trip, with nothing on screen changing in between. The flag also
+                covers delete, which is honest — it is one transition. */}
+            {busy ? (
+              <Spinner className="size-4" />
+            ) : (
+              <MoreVertical className="size-4" />
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem

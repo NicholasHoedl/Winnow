@@ -11,6 +11,7 @@ import { todayInZone } from "@/lib/date"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { useCreateIntent } from "@/components/create/create-intent"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 
 // Short, human date for the confirmation toast ("Sat, Jul 26").
 function formatDue(date: string): string {
@@ -81,7 +82,12 @@ export function QuickCapture() {
         // anything typed in that window would vanish silently. Busy, not blocked.
         aria-busy={pending}
       >
-        <Plus className="size-4" />
+        {/* Swapped, not merely `aria-busy`: that attribute alone renders NOTHING (the
+            button's only busy style is a cursor, which a phone has no concept of), so
+            these four bars — the surfaces built for fast capture — had no visible
+            feedback at all. Same `size-4` box, so nothing shifts under a finger
+            mid-burst. Still never `disabled`; see the note above. */}
+        {pending ? <Spinner className="size-4" /> : <Plus className="size-4" />}
         Add
       </Button>
     </form>

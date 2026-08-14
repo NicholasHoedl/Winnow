@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { cn } from "@/lib/utils"
+import { LinkPending } from "@/components/shared/link-pending"
 
 import { isNavActive, navItemsFor } from "./nav-items"
 
@@ -25,7 +26,13 @@ export function BottomNav({ companionEnabled }: { companionEnabled: boolean }) {
               active ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <item.icon className="size-5" />
+            {/* The primary nav on a phone, and the reason this exists: on a cold
+                prefetch nothing at all happens until the RSC payload lands. Icon-only —
+                `navigation.spec.ts` pins the seven labels and equal link heights, and a
+                `size-5` spinner is the same box as a `size-5` icon. */}
+            <LinkPending className="size-5">
+              <item.icon className="size-5" />
+            </LinkPending>
             {item.label}
           </Link>
         )

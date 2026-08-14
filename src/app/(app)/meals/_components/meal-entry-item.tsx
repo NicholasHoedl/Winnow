@@ -5,6 +5,7 @@ import { CopyPlus, MoreVertical, Pencil, Trash2 } from "lucide-react"
 import type { MealEntry } from "@/modules/meals/queries"
 import { entryTotals } from "@/modules/meals/service"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,11 +24,14 @@ export function MealEntryItem({
   onEdit,
   onDelete,
   onRelog,
+  relogging,
 }: {
   entry: MealEntry
   onEdit: (entry: MealEntry) => void
   onDelete: (entry: MealEntry) => void
   onRelog: (entry: MealEntry) => void
+  /** This row's re-log is in flight. Per-row, so one tap does not spin every button. */
+  relogging: boolean
 }) {
   const totals = entryTotals(entry)
 
@@ -58,12 +62,20 @@ export function MealEntryItem({
         aria-label="Log again"
         onClick={() => onRelog(entry)}
       >
-        <CopyPlus className="size-4" />
+        {/* Not disabled: a double-log is recoverable and the button is small enough
+            that blocking it mid-tap would feel worse than the duplicate. */}
+        {relogging ? (
+          <Spinner className="size-4" />
+        ) : (
+          <CopyPlus className="size-4" />
+        )}
       </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button variant="ghost" size="icon-sm" aria-label="Entry actions" />}
+          render={
+            <Button variant="ghost" size="icon-sm" aria-label="Entry actions" />
+          }
         >
           <MoreVertical className="size-4" />
         </DropdownMenuTrigger>
@@ -72,7 +84,10 @@ export function MealEntryItem({
             <Pencil className="size-4" />
             Edit
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onClick={() => onDelete(entry)}>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => onDelete(entry)}
+          >
             <Trash2 className="size-4" />
             Delete
           </DropdownMenuItem>

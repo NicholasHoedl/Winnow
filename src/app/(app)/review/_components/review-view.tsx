@@ -3,6 +3,7 @@
 // shareable and reloadable.
 
 import Link from "next/link"
+import { LinkPending } from "@/components/shared/link-pending"
 import { ArrowLeft, ArrowRight, Flag, ListTodo } from "lucide-react"
 
 import { addDays } from "@/lib/date"
@@ -74,7 +75,11 @@ export function ReviewView({
             aria-label="Previous week"
             className="hover:bg-accent rounded-md border p-2"
           >
-            <ArrowLeft className="size-4" />
+            {/* Same-route param change: the segment is not remounted, so `loading.tsx`
+              never fires and nothing else in the app indicates this. */}
+            <LinkPending className="size-4">
+              <ArrowLeft className="size-4" />
+            </LinkPending>
           </Link>
           {!isCurrentWeek && (
             <Link
@@ -89,7 +94,9 @@ export function ReviewView({
             aria-label="Next week"
             className="hover:bg-accent rounded-md border p-2"
           >
-            <ArrowRight className="size-4" />
+            <LinkPending className="size-4">
+              <ArrowRight className="size-4" />
+            </LinkPending>
           </Link>
         </div>
       </div>

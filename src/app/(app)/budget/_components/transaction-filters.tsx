@@ -14,6 +14,7 @@ import {
   type TransactionFilters as Filters,
 } from "@/modules/budget/service"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -42,6 +43,7 @@ export function TransactionFilters({
   filters: Filters
 }) {
   const router = useRouter()
+  const [pending, startTransition] = React.useTransition()
   const searchParams = useSearchParams()
   const [text, setText] = React.useState(filters.q ?? "")
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -61,7 +63,12 @@ export function TransactionFilters({
         if (value) params.set(key, value)
         else params.delete(key)
       }
-      router.replace(`/budget?${params.toString()}`, { scroll: false })
+      // Inside the transition, not around each caller: one change covers the debounced
+      // search, both Selects and Clear. `router.replace` is itself wrapped in a React
+      // transition internally, so `useTransition` observes it.
+      startTransition(() => {
+        router.replace(`/budget?${params.toString()}`, { scroll: false })
+      })
     },
     [router, searchParams],
   )
@@ -100,7 +107,14 @@ export function TransactionFilters({
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <div className="relative min-w-48 flex-1">
-        <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+        {/* The input is deliberately NOT disabled — same typing-loss class as the
+            quick-add bars, and `text` is local state so typing stays responsive while the
+            replace is in flight. */}
+        {pending ? (
+          <Spinner className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+        ) : (
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+        )}
         <Input
           value={text}
           onChange={(e) => onSearchChange(e.target.value)}

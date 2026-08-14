@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { LinkPending } from "@/components/shared/link-pending"
 import { CalendarPlus, ChevronLeft, ChevronRight, Layers } from "lucide-react"
 import { toast } from "sonner"
 
@@ -343,7 +344,11 @@ export function CalendarView({
           aria-label={`Previous ${STEP_LABEL[view]}`}
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
-          <ChevronLeft className="size-4" />
+          {/* Same-route param change: the segment is not remounted, so `loading.tsx`
+              never fires and nothing else in the app indicates this. */}
+          <LinkPending className="size-4">
+            <ChevronLeft className="size-4" />
+          </LinkPending>
         </Link>
         <span className="min-w-52 text-center text-sm font-medium">
           {viewTitle(view, date, weekStartsOn)}
@@ -353,7 +358,9 @@ export function CalendarView({
           aria-label={`Next ${STEP_LABEL[view]}`}
           className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
         >
-          <ChevronRight className="size-4" />
+          <LinkPending className="size-4">
+            <ChevronRight className="size-4" />
+          </LinkPending>
         </Link>
         {!isCurrentPeriod(view, date, today, weekStartsOn) && (
           <Link

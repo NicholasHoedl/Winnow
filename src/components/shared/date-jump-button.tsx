@@ -6,6 +6,7 @@ import { Calendar as CalendarIcon } from "lucide-react"
 
 import { localDateToString, localStringToDate } from "@/lib/date"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Calendar } from "@/components/ui/calendar"
 import {
   Popover,
@@ -29,6 +30,7 @@ export function DateJumpButton({
   ariaLabel: string
 }) {
   const router = useRouter()
+  const [pending, startTransition] = React.useTransition()
   const [open, setOpen] = React.useState(false)
   const anchor = localStringToDate(selected)
 
@@ -37,7 +39,11 @@ export function DateJumpButton({
       <PopoverTrigger
         render={<Button variant="ghost" size="icon" aria-label={ariaLabel} />}
       >
-        <CalendarIcon className="size-4" />
+        {pending ? (
+          <Spinner className="size-4" />
+        ) : (
+          <CalendarIcon className="size-4" />
+        )}
       </PopoverTrigger>
       <PopoverContent align="center" className="w-auto p-0">
         <Calendar
@@ -48,7 +54,11 @@ export function DateJumpButton({
           onSelect={(picked) => {
             if (!picked) return
             setOpen(false)
-            router.push(hrefFor(localDateToString(picked)))
+            // The popover closing is partial acknowledgement, but the trigger stays
+            // mounted right there and the round trip is a full page change.
+            startTransition(() => {
+              router.push(hrefFor(localDateToString(picked)))
+            })
           }}
         />
       </PopoverContent>

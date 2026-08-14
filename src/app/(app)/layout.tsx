@@ -14,6 +14,7 @@ import {
 import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
 import { BottomNav } from "@/components/shared/bottom-nav"
+import { LinkPending } from "@/components/shared/link-pending"
 import { ModeToggle } from "@/components/shared/mode-toggle"
 import {
   CommandPalette,
@@ -86,7 +87,12 @@ export default async function AppLayout({
                   aria-label="Settings"
                   className={buttonVariants({ variant: "ghost", size: "icon" })}
                 >
-                  <Settings className="size-5" />
+                  {/* Works from this SERVER component because `LinkPending` takes
+                      children rather than an icon prop — a lucide component passed as a
+                      prop would be a function crossing the RSC boundary. */}
+                  <LinkPending className="size-5">
+                    <Settings className="size-5" />
+                  </LinkPending>
                 </Link>
                 <ModeToggle />
               </div>

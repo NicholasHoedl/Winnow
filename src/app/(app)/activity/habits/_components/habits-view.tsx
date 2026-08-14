@@ -85,6 +85,7 @@ function HabitPanel({
   onLog,
   onEdit,
   onArchive,
+  archiving,
   onDelete,
 }: {
   card: HabitCardData
@@ -94,6 +95,8 @@ function HabitPanel({
   onLog: (card: HabitCardData) => void
   onEdit: (habit: HabitRow) => void
   onArchive: (habit: HabitRow) => void
+  /** This habit's archive is in flight. */
+  archiving: boolean
   onDelete: (habit: HabitRow) => void
 }) {
   // Renamed on the way out of `card`: destructuring it as `window` shadows the global one
@@ -175,7 +178,10 @@ function HabitPanel({
                 <Pencil className="size-4" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onArchive(habit)}>
+              <DropdownMenuItem
+                onClick={() => onArchive(habit)}
+                aria-busy={archiving}
+              >
                 <Archive className="size-4" />
                 Archive
               </DropdownMenuItem>
@@ -251,6 +257,9 @@ export function HabitsView({
   // Per-id, for the reason `useLogHabit` tracks logging per-id: a boolean would disable
   // every Unarchive button while one row's write is in flight.
   const [restoringId, setRestoringId] = React.useState<string | null>(null)
+  // The other half of the pair. Archiving had no feedback at all while unarchiving did,
+  // which is the asymmetry rather than a considered difference.
+  const [archivingId, setArchivingId] = React.useState<string | null>(null)
 
   function openDialog(habit: HabitRow | null) {
     setEditing(habit)
@@ -258,8 +267,10 @@ export function HabitsView({
   }
 
   function handleArchive(habit: HabitRow) {
+    setArchivingId(habit.id)
     startTransition(async () => {
       const result = await archiveHabit(habit.id)
+      setArchivingId(null)
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -338,6 +349,7 @@ export function HabitsView({
               onLog={(target) => log(target.habit)}
               onEdit={openDialog}
               onArchive={handleArchive}
+              archiving={archivingId === card.habit.id}
               onDelete={setConfirmTarget}
             />
           ))}
