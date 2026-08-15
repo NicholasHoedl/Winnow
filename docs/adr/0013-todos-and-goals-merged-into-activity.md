@@ -173,3 +173,47 @@ dominate the page and push goal work below the fold.
 
 **Side-by-side columns with no relationship** — readable, but it halves the width each gets
 and collapses to the tabs option on mobile anyway.
+
+
+---
+
+## Amended 2026-08-14 (T13): the rail goes, the insight stays
+
+**`/goals` has a page again.** That reads like a reversal of this ADR and is not, so the
+line between what survives and what does not is worth drawing precisely.
+
+**What survives, unchanged:** a goal is a **predicate over tasks**. The mechanic this ADR
+introduced — `optimisticTasks.filter(t => t.goalId === activeGoal.id)` — is untouched, the
+`?goal=` contract is untouched, and `/activity` still holds the filter and the self-healing
+resolve that degrades a dangling id to "all activity". `GoalCard` links to
+`/activity?goal=<id>`: the predicate, as a URL.
+
+**What survives, and mattered more than the merge:** there is still **no linked-task list on
+a goal**. This ADR deleted that read-only copy and the reasoning holds exactly as written —
+two lists of the same rows drift, and only one of them can be acted on. `/goals` deliberately
+does not revive it. If a future reader is tempted, that temptation is the thing this ADR
+exists to refuse.
+
+**What is reversed: goals living in a RAIL.** Two arguments, neither available in T10:
+
+1. **The rail was `lg:flex`.** Below that breakpoint goals were a horizontal chip scroller —
+   `w-40` chips, no drag-reorder (dnd-kit's pointer sensor and a touch scroll want the same
+   gesture), momentum compressed to a bare icon. So the merge's benefit was a DESKTOP
+   benefit, paid for at every width. A page serves goals identically on a phone and a
+   laptop. This mirrors T12d's argument for moving habits out of the rail, and it is the
+   same mistake in the same place.
+2. **The rail's width was being paid for by its neighbours.** T12d compressed habits to
+   `w-40` and collapsed routines to a single `Run…` picker *because the rail had grown to
+   724px*. Those were described at the time as real losses taken deliberately. Removing the
+   rail returns that width, and T13 spends it: habit chips get their cadence phrase back
+   (`3× this week`, without which `2/3` cannot be read as ahead or behind), and routines get
+   a Run control each again — as a horizontal scroller, so length no longer costs height,
+   which was the actual constraint T12d's block violated.
+
+**And a third reason this ADR could not have anticipated:** T13 puts each AI tool on the page
+of the artifact it produces, and a plan needs somewhere to land. A proposal is a full screen
+of review — milestones, habits, setup tasks, each prunable — which a 280px rail cannot host
+at any width.
+
+**The nav arithmetic worked out even.** Goals took the Companion tab rather than adding one;
+the bar is still at its measured ceiling of seven.

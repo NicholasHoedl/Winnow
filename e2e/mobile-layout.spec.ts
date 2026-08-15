@@ -33,6 +33,7 @@ const ROUTES = [
   "/budget",
   "/calendar",
   "/companion",
+  "/goals",
   "/meals",
   "/review",
   "/settings",

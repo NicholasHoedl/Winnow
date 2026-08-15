@@ -156,7 +156,13 @@ export function CompanionView({
 
       <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-2">
         {/* Left: the jobs, then a conversation about whatever is on the right. */}
-        <div className="bg-card flex flex-col gap-4 rounded-xl border p-4 lg:min-h-0">
+        {/* `min-w-0` is load-bearing, not tidiness. A grid item defaults to
+            `min-width: auto`, so it refuses to shrink below its content — and the goal
+            picker's trigger is `whitespace-nowrap`, so one long goal title pushes this
+            column, and therefore the page, past the viewport. Below `lg:` the grid is a
+            single column with nothing else to absorb it. Found at 393px as a 4px spill in
+            `mobile-layout.spec.ts`; a user with a wordy goal would have found it too. */}
+        <div className="bg-card flex min-w-0 flex-col gap-4 rounded-xl border p-4 lg:min-h-0">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-medium">
               <Sparkles className="text-brand-accent size-4" />

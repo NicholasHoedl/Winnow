@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "./_test"
 
-import { goalCard, visibleCard } from "./_card"
+import { visibleCard } from "./_card"
 import { addGoal, deleteGoalsMatching } from "./_goals"
 
 /**
@@ -44,16 +44,25 @@ test.afterEach(async ({ page }) => {
     await page.reload()
     await page.getByRole("button", { name: "All", exact: true }).click()
   }
-  await page.goto("/activity")
+  await page.goto("/goals")
   await deleteGoalsMatching(page, "E2E act ")
 })
 
-test("the rail scopes the list to one goal, and the URL remembers which", async ({
+test("the goal filter scopes the list, and the URL remembers which", async ({
   page,
 }) => {
-  await page.goto("/activity")
+  // T13 changed the TRIGGER and nothing else. The rail is gone; the filter is a menu in the
+  // toolbar, `selectGoal` is untouched, and `?goal=` means what it always did — which is
+  // why this test kept its assertions and changed only how it clicks.
+  await page.goto("/goals")
   await addGoal(page, { title: GOAL_A })
   await addGoal(page, { title: GOAL_B })
+
+  // Back to `/activity` for the TASKS. `_goals.ts` and `createLinkedTask` both refuse to
+  // navigate on purpose — a `goto` hidden in a helper is how a spec ends up asserting
+  // against a page it did not mean to be on — so splitting goals onto their own page means
+  // the spec says where it is, every time.
+  await page.goto("/activity")
   await createLinkedTask(page, TASK_A, GOAL_A)
   await createLinkedTask(page, TASK_B, GOAL_B)
 
@@ -62,16 +71,14 @@ test("the rail scopes the list to one goal, and the URL remembers which", async 
   await expect(visibleCard(page, TASK_B)).toHaveCount(1)
 
   // Selecting A hides B's work — the filter excludes, which is the part it can get wrong.
-  await goalCard(page, GOAL_A)
-    .getByRole("button", { name: `Show tasks for ${GOAL_A}` })
-    .click()
+  await page.getByRole("button", { name: "Filter by goal" }).click()
+  await page.getByRole("menuitem", { name: GOAL_A }).click()
   await expect(visibleCard(page, TASK_A)).toHaveCount(1)
   await expect(visibleCard(page, TASK_B)).toHaveCount(0)
 
   // Switching straight from one goal to another, without clearing first.
-  await goalCard(page, GOAL_B)
-    .getByRole("button", { name: `Show tasks for ${GOAL_B}` })
-    .click()
+  await page.getByRole("button", { name: "Filter by goal" }).click()
+  await page.getByRole("menuitem", { name: GOAL_B }).click()
   await expect(visibleCard(page, TASK_A)).toHaveCount(0)
   await expect(visibleCard(page, TASK_B)).toHaveCount(1)
 
@@ -94,8 +101,9 @@ test("a deep link to a goal that no longer exists falls back to everything", asy
   // A goal search result links straight to `?goal=<id>`, and that link outlives the goal.
   // Resolving the id against the goals actually present means a dangling one degrades to
   // "all activity" rather than rendering an empty list with nothing to explain it.
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title: GOAL_A })
+  await page.goto("/activity")
   await createLinkedTask(page, TASK_A, GOAL_A)
 
   await page.goto("/activity?goal=00000000-0000-4000-8000-000000000000")
@@ -104,24 +112,26 @@ test("a deep link to a goal that no longer exists falls back to everything", asy
   await expect(page.getByRole("button", { name: /^Clear the / })).toHaveCount(0)
 })
 
-test("on a phone the rail becomes a chip scroller that still filters", async ({
+test("the goal filter works on a phone, and nothing scrolls sideways", async ({
   page,
 }) => {
+  // This used to assert a chip scroller, because the rail was `lg:` only and a goal had two
+  // presentations — a card on desktop, a chip on a phone. T13 removed the second: `/goals`
+  // renders one card at every width and the filter is one menu at every width, so what is
+  // left to prove here is that the phone gets the SAME control rather than a lesser one.
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title: GOAL_A })
   await addGoal(page, { title: GOAL_B })
+  await page.goto("/activity")
   await createLinkedTask(page, TASK_A, GOAL_A)
   await createLinkedTask(page, TASK_B, GOAL_B)
 
   await page.goto("/activity")
 
-  // The desktop rail is not rendered at this width; the chips are.
-  await expect(goalCard(page, GOAL_A)).toHaveCount(0)
-  const chip = page.getByTestId("goal-chip").filter({ hasText: GOAL_A })
-  await expect(chip).toHaveCount(1)
-
-  await chip.getByRole("button", { name: `Show tasks for ${GOAL_A}` }).click()
+  await expect(page.getByTestId("goal-chip")).toHaveCount(0)
+  await page.getByRole("button", { name: "Filter by goal" }).click()
+  await page.getByRole("menuitem", { name: GOAL_A }).click()
   await expect(visibleCard(page, TASK_A)).toHaveCount(1)
   await expect(visibleCard(page, TASK_B)).toHaveCount(0)
 
@@ -160,7 +170,7 @@ const ROUTINE = `E2E rail routine ${STAMP}`
 const RITEM = `E2E rail step ${STAMP}`
 const HABIT = `E2E rail habit ${STAMP}`
 
-test("the rail runs a routine from one picker, not a button each", async ({
+test("a routine runs from its own button on the activity page", async ({
   page,
 }) => {
   // --- A routine with one step, built on its own page.
@@ -186,23 +196,28 @@ test("the rail runs a routine from one picker, not a button each", async ({
   // to hide is waiting for the write to be committed.
   await expect(itemDialog).toBeHidden()
 
-  // --- The rail counts it and links to it, and one control runs any of them.
+  // --- The line counts it, links to it, and runs it.
   await page.goto("/activity")
-  // Two copies are in the DOM — the rail's and the phone's — and exactly one is ever
-  // shown, so the filter is what picks the right one at whatever width this runs at.
+  // ONE copy now. There used to be two — the rail's and the phone's — and exactly one was
+  // ever shown; T13 removed the rail, so this renders once at every width. The visible
+  // filter stays because proving "exactly one" is the assertion that would have caught the
+  // duplicate if it ever came back.
   const line = page.getByTestId("routines-line").filter({ visible: true })
   await expect(line).toHaveCount(1)
   await expect(line).toContainText("Routines")
 
-  // The demotion, pinned. A Run button PER routine is what made the rail grow without
-  // bound — 724px for three goals, two routines and three habits — so if one ever comes
-  // back this goes red rather than the height quietly regressing.
-  await expect(
-    page.getByRole("button", { name: `Run ${ROUTINE}` }),
-  ).toHaveCount(0)
-
-  await line.getByRole("button", { name: "Run…" }).click()
-  await page.getByRole("menuitem", { name: new RegExp(ROUTINE) }).click()
+  // **This assertion was inverted in T13, deliberately.** It used to pin the OPPOSITE:
+  // `toHaveCount(0)` on a per-routine Run button, because a button each is what let the
+  // rail reach 724px for three goals, two routines and three habits. That tripwire fired
+  // on this change, which is exactly what it was for — and the answer this time is that
+  // the constraint it guarded is gone rather than being ignored. There is no rail, so
+  // length costs no height; the buttons live in an `overflow-x-auto` row, the same
+  // containment the habit strip below uses. See `routines-line.tsx`, which argues it at
+  // the point of the reversal, and ADR-0013's T13 amendment.
+  //
+  // What is still pinned: the row must not make the PAGE scroll sideways. That is
+  // `mobile-layout.spec.ts`, which caught a 4px overflow here on the first attempt.
+  await line.getByRole("button", { name: `Run ${ROUTINE}` }).click()
 
   // Asserted BEFORE it is clicked, on purpose. This button's label is derived from the
   // routine's item count, so a stale read renames it — and clicking a locator whose text
@@ -219,7 +234,7 @@ test("the rail runs a routine from one picker, not a button each", async ({
   await create.click()
   await expect(page.getByText("Added 1 task")).toBeVisible()
 
-  // The task the run created is on the board beside the rail that created it.
+  // The task the run created is on the board below the line that created it.
   await expect(visibleCard(page, RITEM)).toHaveCount(1)
 
   // --- Cleanup.

@@ -19,7 +19,15 @@ const LATE = `E2E link late ${STAMP}`
 const OPEN = `E2E link open ${STAMP}`
 const OTHER = `E2E link unrelated ${STAMP}`
 
-const rail = (page: import("@playwright/test").Page) => goalCard(page, GOAL)
+/**
+ * This goal's card, on `/goals`.
+ *
+ * Named `rail` until T13, when the rail it referred to stopped existing. Worth renaming
+ * rather than leaving: every use of it now has to be on `/goals`, and a name that says
+ * "rail" invites the reader to assume it is beside the task list — which is exactly the
+ * assumption that put three assertions on the wrong page in this file.
+ */
+const card = (page: import("@playwright/test").Page) => goalCard(page, GOAL)
 
 test.afterEach(async ({ page }) => {
   // Tasks first: deleting the goal only detaches them (goal_id ON DELETE SET NULL).
@@ -37,7 +45,7 @@ test.afterEach(async ({ page }) => {
   }
   await expect(tasks).toHaveCount(0)
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   const goals = goalCard(page, "E2E link goal ")
   for (let i = 0; i < 5; i++) {
     const before = await goals.count()
@@ -87,17 +95,20 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
   test.setTimeout(90_000)
 
   // --- A goal to link against.
-  await page.goto("/activity")
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  await page.goto("/goals")
+  // One button at every state now — see `_goals.ts`. The rail had two ("Add a goal" at
+  // zero, a `+` labelled "Add goal" thereafter) and matching one silently required a goal
+  // to already exist.
+  await page.getByRole("button", { name: "New goal" }).click()
   const goalDialog = page.getByRole("dialog")
   await goalDialog.getByLabel("Title", { exact: true }).fill(GOAL)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(rail(page)).toHaveCount(1)
+  await expect(card(page)).toHaveCount(1)
 
   // --- Two tasks pointing at it, one overdue; and one that points at nothing, which is
-  // what proves the filter excludes rather than merely orders.
+  // what proves the filter excludes rather than merely orders. Back on `/activity`, which
+  // is where tasks are made — goals moved out in T13 and the helpers never navigate.
+  await page.goto("/activity")
   for (const [title, due, link] of [
     [LATE, "2020-02-01", true],
     [OPEN, "", true],
@@ -115,16 +126,23 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
     await expect(visibleCard(page, title)).toHaveCount(1)
   }
 
-  await page.goto("/activity")
-  await expect(rail(page)).toContainText("2 open")
+  await page.goto("/goals")
+  await expect(card(page)).toContainText("2 open")
 
-  // --- Unfiltered, all three are on the board.
+  // --- Unfiltered, all three are on the board. Back to `/activity` first: the count above
+  // is read from the goal card and the rows below are read from the task list, and since
+  // T13 those are two pages.
+  await page.goto("/activity")
   await expect(visibleCard(page, OTHER)).toHaveCount(1)
 
   // --- Filtered, the unrelated one is gone and the overdue one still reads as overdue.
-  await rail(page)
-    .getByRole("button", { name: `Show tasks for ${GOAL}` })
+  // The card is on `/goals` and LINKS to `/activity?goal=`, so this hop is the navigation
+  // rather than a filter click. The filter itself is unchanged from T10.
+  await page.goto("/goals")
+  await card(page)
+    .getByRole("link", { name: `Show tasks for ${GOAL}` })
     .click()
+  await expect(page).toHaveURL(/\/activity\?goal=/)
   await expect(visibleCard(page, LATE)).toHaveCount(1)
   await expect(visibleCard(page, OPEN)).toHaveCount(1)
   await expect(visibleCard(page, OTHER)).toHaveCount(0)
@@ -145,11 +163,11 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
   // --- Completing the LATE one is the case that matters: the count drops AND the overdue
   // flag goes with it, because a task you finished is not late.
   await complete(page, LATE)
-  await page.goto("/activity")
-  await expect(rail(page)).toContainText("1 open")
+  await page.goto("/goals")
+  await expect(card(page)).toContainText("1 open")
 
   // --- Finishing the rest reads as done rather than "0 open".
   await complete(page, OPEN)
-  await page.goto("/activity")
-  await expect(rail(page)).toContainText("No open tasks")
+  await page.goto("/goals")
+  await expect(card(page)).toContainText("No open tasks")
 })

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowRight, Plus } from "lucide-react"
 
 import type { HabitStripCard } from "@/modules/habits/queries"
+import { periodPhrase } from "@/modules/habits/service"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 
@@ -70,9 +71,19 @@ export function HabitStrip({
         </Link>
       </div>
 
-      {/* Same scroller as `GoalChips`, including the negative margin that lets a chip's
-          focus ring reach past the padding without clipping. */}
-      <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1">
+      {/* `px-1` for the focus ring, and NO `-mx-1` to cancel it out.
+          
+          The pair came from `GoalChips`, which is deleted now — the margin pulled the
+          scroller 4px past its parent on each side so the row sat flush while the padding
+          kept a focused chip's ring from clipping. The bleed is a real overflow, and it was
+          latent until T13 changed what contains this: it used to sit in a grid item and now
+          sits in a plain block, which is enough for `mobile-layout.spec.ts` to see it as a
+          spill at 393px ("needs 365px, has 361px").
+          
+          Keeping only the padding costs 4px of inset at each end and buys back a page that
+          does not overflow. The ring still has its room, because the padding is inside the
+          scroll container. `routines-line.tsx` hit the identical trap on the way in. */}
+      <div className="flex snap-x gap-2 overflow-x-auto px-1 pb-1">
         {habits.map((habit) => (
           <div
             key={habit.id}
@@ -85,9 +96,19 @@ export function HabitStrip({
             // rail was simply the only place that was true. `activity.spec.ts` asserts
             // `visibleCard(page, HABIT)` is 0, which is the only thing testing this.
             data-rail=""
-            className="bg-card w-40 shrink-0 snap-start rounded-lg border p-2.5"
+            // `w-48`, up from `w-40`. T12d picked 160px against a page whose left 280px
+            // belonged to the goal rail; T13 moved goals to their own page, so the 32px the
+            // cadence line needs is now there to spend.
+            className="bg-card w-48 shrink-0 snap-start rounded-lg border p-2.5"
           >
             <p className="truncate text-sm font-medium">{habit.title}</p>
+            {/* The cadence, which T12d dropped for width. Without it the figure below is
+                ambiguous in the way that matters most: `2/3` says nothing about whether you
+                have the rest of today or the rest of the month to finish it, and that is
+                the whole difference between "fine" and "behind". */}
+            <p className="text-muted-foreground mt-0.5 text-[0.6875rem]">
+              {habit.now.target}× {periodPhrase(habit.period)}
+            </p>
             <div className="mt-1.5 flex items-center gap-1.5">
               <Progress
                 value={habit.now.percent}

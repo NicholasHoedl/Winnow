@@ -121,7 +121,7 @@ now the only thing standing between this app and being used.**
 | **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                             |
 | **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                        |
 | **The AI companion — complete**           | **T9a–T9d shipped**, reshaped by T12c and reconfigured by T11 and T12h. See §5, ADR-0011 and ADR-0012.                                                                                                                                                   |
-| **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d. `/todos` and `/goals` merged into `/activity`; habits are a strip rather than a rail block. See §5 and ADR-0013.                                                                                               |
+| **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d and again by T13. `/todos` merged into `/activity`; `/goals` un-merged back to its own page and the rail is gone. Habits are a strip. See §5 and ADR-0013 with both amendments.                                 |
 | **Mobile — measured, not finished**       | T12i's follow-up added a `mobile` Playwright project that renders all eleven routes in WebKit at 393px. Nine were already clean; two faults were found and fixed. What it cannot see, and the open decisions it surfaced, are in §6.                     |
 
 ### Hosting: what is already known
@@ -401,29 +401,38 @@ Do not reopen these without new information:
 
 **ADR-0013 is the authority.** The short version, and the parts that bite:
 
-**`/todos` and `/goals` do not exist.** Both redirect permanently to **`/activity`**, one
-page: the task list, with goals as a rail beside it. Selecting a goal filters the list to
-that goal's work. `/activity/routines` and `/activity/habits` moved with their parent.
+**`/todos` does not exist** — it redirects permanently to `/activity`, along with
+`/todos/routines` and `/todos/habits`.
+
+**`/goals` DOES exist again, as of T13**, and its redirect is gone. Read ADR-0013's
+2026-08-14 amendment before changing any of this: the merge's *insight* survives and only
+its *layout* was reversed. `/activity` is the task list; `/goals` is the goal list; neither
+holds a copy of the other.
 
 Four things worth knowing before touching it:
 
 - **Selection is `?goal=<id>`, written with `history.replaceState`, not `router.replace`.**
   Every route here is dynamic, so a router navigation would refetch on every filter click
   for data that did not change. If you "fix" this to a proper navigation you will add a
-  server round-trip to a click that needs none.
-- **The rail is two components** — `GoalRail` (desktop column) and `GoalChips` (mobile
-  scroller) — not one responsive one. They render the same state and are therefore the pair
-  most likely to drift; `e2e/activity.spec.ts` exercises both.
-- **A goal's milestones live in a dialog**, not on the card. There is no goal page. The
-  linked-task list that used to sit inside the goal card is **gone**, deliberately: the
-  filtered list beside the rail is that list, and every row in it is actionable.
-- **Goals have their own e2e locator, `goalCard`** — a rail card changes background when
-  selected, and `cn` drops `bg-card` when it does, so the utility-class locator would stop
-  matching exactly the goal a test just clicked.
+  server round-trip to a click that needs none. Unchanged by T13 — only the trigger moved,
+  from a rail card to a menu in the toolbar.
+- **The rail is gone.** It was two components, `GoalsBlock` (desktop column) and `GoalChips`
+  (mobile scroller), which is exactly why it went: the merge's benefit was a DESKTOP benefit
+  paid for at every width, and on a phone goals were `w-40` chips with no drag-reorder.
+- **A goal's milestones live in a dialog**, not on the card, and there is still **no
+  linked-task list** on a goal — deliberately, and this is the part of ADR-0013 most worth
+  defending. `/goals` links each card to `/activity?goal=<id>` rather than copying the rows.
+  Two lists of the same rows drift, and only one can be acted on.
+- **Goals have their own e2e locator, `goalCard`**, keyed on `data-testid` — the utility
+  class `bg-card` is dropped by `cn` whenever a variant sets a different background, so a
+  class-based locator silently stops matching. `goalEntry` still exists as an alias of it;
+  it used to mean "card OR chip" and there are no chips now.
 
-**T10b put routines and habits in the rail too**, under one rule worth keeping: _the rail
-never offers an action the task list beside it already offers._ A routine gets a Run control,
-because running one creates tasks.
+**T10b put routines and habits in the rail too**, under one rule worth keeping even though
+the rail is not: _never offer an action the task list already offers._ A routine gets a Run
+control, because running one CREATES tasks. Goals never earned one — every task a goal owns
+is already a row you can tick — which is why moving them to `/goals` in T13 cost a glance
+and nothing else.
 
 **T12d moved habits out of the rail, and the rule did not change.** Read ADR-0013's T12d
 amendment before touching this. The short version: the rule never mentions a viewport, and
@@ -435,9 +444,15 @@ to log anything. Four things follow:
   component, no `lg:` inside it, below the quick-add so a phone never stacks two horizontal
   scrollers. A habit still gets **no checkbox** — a quota is not done-or-not-done — and
   `e2e/activity.spec.ts` asserts that, plus "exactly one button", plus "creates no task".
-- **Routines are one line with a single `Run…` picker**, not a card per routine with a Run
-  button each. That is what let the rail reach 724px. The action survives at a fixed height;
-  the directness does not, and the file says so.
+- **Routines have a Run button each again, as of T13**, in a horizontal scroller. T12d had
+  collapsed them to one `Run…` picker because a card per routine is what let the rail reach
+  724px — and T12d's own comment said not to put the buttons back. That comment was right
+  about the cause and bound the wrong axis: the problem was VERTICAL growth in a 280px sticky
+  column. There is no column now, and `overflow-x-auto` bounds the row the same way the habit
+  strip below it is bounded. `routines-line.tsx` argues this at the point of the reversal.
+- **Habit chips are `w-48` with their cadence phrase**, restored in T13 from the `w-40` T12d
+  squeezed them into to pay for the rail. `2/3` cannot be read as ahead or behind without
+  knowing whether the period is a day or a month.
 - **`/activity` and `/` use `getHabitStrip`, not `getHabitsView`.** ~37 days of entries and
   four fields instead of 400 days and a thirteen-column row. Safe only because those surfaces
   show `adherence` for the current period, which is identical under every window containing
@@ -445,10 +460,11 @@ to log anything. Four things follow:
 - **One log handler, `useLogHabit`**, shared by the strip, the habits page and the dashboard
   card. It returns `pendingId`, not a boolean: a shared flag disabled every habit at once.
 
-**The e2e suite's `visibleCard` excludes `[data-rail]`.** Every rail entry carries it, and so
-does every habit chip in the strip. The attribute no longer means "in the rail" — what it has
-always meant to that selector is **"not a row in the task list"**, and the rail was simply the
-only place that was true. Without it a spec cleaning up by title prefix matches the chip as
+**The e2e suite's `visibleCard` excludes `[data-rail]`.** Every habit chip carries it, and so
+does every goal card on `/goals` — **there is no rail at all any more, and the attribute is
+still correct**, which is the clearest possible demonstration of what it means. It never said
+"in the rail": what it has always meant to that selector is **"not a row in the task list"**,
+and the rail was simply the only place that was true when it was named. Without it a spec cleaning up by title prefix matches the chip as
 well as the row and hangs on a "Task actions" button it does not have — which happened once in
 T10a with goals and again in T10b with habits. Renaming it to `data-aside` is the honest fix
 and was deliberately not taken: a rename is invisible to TypeScript, so one missed card fails
@@ -719,14 +735,19 @@ still the old indigo.**
   this number tracks what is in the database rather than being fixed. The Journal card was
   measured and found **not** to contribute — hiding it left both numbers identical — so its
   removal in T13 did not improve this, and the figures above still stand.
-- **Nav is at seven items with the companion enabled** (six in `navItems` plus the
-  conditional Companion tab — see the next bullet), **and seven is the measured ceiling.** `bottom-nav.tsx` is a plain flex
-  with `flex-1` and no overflow handling; seven labels fit a 375px phone with nothing to
-  spare, and an eighth needs a More sheet or a scroller first. T10 merged To-dos and Goals
-  into Activity, freeing the first slot since T7a, and the Companion tab immediately spent
-  it. T13 freed a second by removing Notes, and **Review** immediately spent that one — so
-  the bar is still at seven and the ceiling is unchanged. Anything wanting a tab from here
-  has to take one. `e2e/navigation.spec.ts` measures the fit rather than trusting it, and
+- **Nav is seven items and does NOT vary any more**, and seven is the measured ceiling.
+  `bottom-nav.tsx` is a plain flex with `flex-1` and no overflow handling; seven labels fit
+  a 375px phone with nothing to spare, and an eighth needs a More sheet or a scroller first.
+  Dashboard · Activity · Goals · Calendar · Budget · Meals · Review.
+
+  Every change since the bar filled has been a **swap**, never an addition: T10 merged
+  To-dos and Goals into Activity and the Companion tab took the freed slot; T13 removed
+  Notes and **Review** took that one, then gave the Companion's slot back to **Goals**.
+  `navItemsFor(companionEnabled)` no longer branches — each page gates its own AI tool on
+  `aiReady` instead, which is the better shape, since `/goals` exists whether or not a
+  provider is configured. Anything wanting a tab from here has to take one from something.
+
+  `e2e/navigation.spec.ts` measures the fit rather than trusting it, and
   `e2e/pending-feedback.spec.ts` holds a duplicate of the seven-label array: both files
   change together or the second one fails.
 - **Giving a page a tab means taking it OUT of the command palette by hand.** `NAV_COMMANDS`

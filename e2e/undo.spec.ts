@@ -36,7 +36,9 @@ test.afterEach(async ({ page }) => {
   }
   await expect(tasks).toHaveCount(0)
 
-  await page.goto("/activity")
+  // `/goals` since T13 — see the note in `review.spec.ts`, where the same stale path
+  // leaked a goal for a whole suite run without failing anything.
+  await page.goto("/goals")
   await deleteGoalsMatching(page, "E2E undo goal ")
 })
 
@@ -78,7 +80,7 @@ test("deleting a milestone can be undone, and keeps its position", async ({
   // rather than a card — and a reload closes it, which is why it is reopened below.
   const detail = () => page.getByRole("dialog")
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title: goalTitle })
   await openGoalDetail(page, goalTitle)
 

@@ -43,9 +43,10 @@ async function addGoal(
     targetDate?: string
   },
 ) {
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  // One button at every state now — see `_goals.ts`. The rail had two ("Add a goal" at
+  // zero, a `+` labelled "Add goal" thereafter) and matching one silently required a goal
+  // to already exist.
+  await page.getByRole("button", { name: "New goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(fields.title)
   if (fields.current) await dialog.getByLabel("Current").fill(fields.current)
@@ -60,7 +61,7 @@ async function addGoal(
 }
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/activity")
+  await page.goto("/goals")
   const strays = goalCard(page, "E2E goal ")
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
@@ -80,7 +81,7 @@ test("a goal can be measured numerically instead of by milestones", async ({
   page,
 }) => {
   const title = `E2E goal numeric ${Date.now()}`
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title, current: "12", target: "30", unit: "books" })
 
   // The rail is the glanceable surface: the figure without the unit, which would not fit.
@@ -100,7 +101,7 @@ test("a goal with neither milestones nor a target says so, on both surfaces", as
   page,
 }) => {
   const title = `E2E goal untracked ${Date.now()}`
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title })
 
   // Not "0/0", and no progress bar pretending there is something to show.
@@ -125,7 +126,7 @@ test("a target date in the past reads as at risk, unless the goal is done", asyn
   const finished = `E2E goal finished ${stamp}`
   const past = "2020-01-15"
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, {
     title: late,
     current: "1",

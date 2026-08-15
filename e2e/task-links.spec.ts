@@ -15,10 +15,8 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   const taskTitle = `E2E linked task ${stamp}`
 
   // A goal to link to.
-  await page.goto("/activity")
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "New goal" }).click()
   const goalDialog = page.getByRole("dialog")
   await goalDialog.getByLabel("Title").fill(goalTitle)
   await goalDialog.getByRole("button", { name: "Add", exact: true }).click()
@@ -38,15 +36,16 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   // the write (and its revalidation) against the next render.
   await expect(taskDialog).toBeHidden()
 
-  // Selecting the goal scopes the list to it — which is how a goal surfaces its work since
-  // T10, in place of the read-only list that used to sit inside the card.
-  await page.goto("/activity")
-  await card
-    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
-    .click()
+  // Following the goal scopes the list to it — which is how a goal surfaces its work since
+  // T10, in place of the read-only list that used to sit inside the card. T13 made it a
+  // link rather than an in-place filter, because the card is on `/goals` now.
+  await page.goto("/goals")
+  await card.getByRole("link", { name: `Show tasks for ${goalTitle}` }).click()
   await expect(visibleCard(page, taskTitle)).toBeVisible()
 
-  // Deleting the goal detaches the task rather than deleting it.
+  // Deleting the goal detaches the task rather than deleting it. `deleteGoal` works
+  // through the card's detail dialog, so it needs the goals page.
+  await page.goto("/goals")
   await deleteGoal(page, goalTitle)
 
   await page.goto("/activity")
@@ -71,7 +70,7 @@ test("the link pickers are hidden for a repeating task", async ({ page }) => {
   const goalTitle = `E2E link goal ${stamp}`
   const eventTitle = `E2E link event ${stamp}`
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title: goalTitle })
 
   // Defaults are today at 09:00, which is all this needs — the picker only lists series.
@@ -101,6 +100,7 @@ test("the link pickers are hidden for a repeating task", async ({ page }) => {
   // it up would have the next spec's `getByRole("dialog")` resolve to this one.
   await page.keyboard.press("Escape")
   await expect(dialog).toBeHidden()
+  await page.goto("/goals")
   await deleteGoal(page, goalTitle)
 
   await page.goto("/calendar?view=day")

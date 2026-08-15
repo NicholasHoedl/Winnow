@@ -62,51 +62,64 @@ test("primary nav reaches every module", async ({ page }) => {
   }
 })
 
-test("the merged routes redirect, and their nav entries are gone", async ({
+test("the to-do routes still redirect, and To-dos has no nav entry", async ({
   page,
 }) => {
-  // T10 (ADR-0013). Both were top-level nav entries for the whole life of the app, so
-  // they are the two most likely URLs to be bookmarked or sitting in an installed shell's
+  // T10 (ADR-0013). `/todos` was a top-level nav entry for the whole life of the app, so it
+  // is among the most likely URLs to be bookmarked or sitting in an installed shell's
   // history — a 404 here would be a dead icon on a phone this repo cannot reach.
-  for (const old of ["/todos", "/goals"]) {
-    await page.goto(old)
-    await expect(page).toHaveURL(/\/activity$/)
-  }
+  //
+  // **`/goals` used to be asserted here too and is now asserted NOT to redirect**, below.
+  // T13 gave it a page again; leaving it in this loop would have been the test enforcing
+  // the merge it was written to describe.
+  await page.goto("/todos")
+  await expect(page).toHaveURL(/\/activity$/)
   await page.goto("/todos/routines")
   await expect(page).toHaveURL(/\/activity\/routines$/)
   await page.goto("/todos/habits")
   await expect(page).toHaveURL(/\/activity\/habits$/)
 
-  // And nothing still advertises them. Scoped to the nav, because "Goals" is also the
-  // rail's own heading on /activity — which is exactly where it should be instead.
   await page.goto("/")
   const nav = page.getByRole("navigation").first()
   await expect(nav.getByRole("link", { name: "To-dos" })).toHaveCount(0)
-  await expect(nav.getByRole("link", { name: "Goals" })).toHaveCount(0)
   await expect(nav.getByRole("link", { name: "Activity" })).toBeVisible()
 })
 
-test("the companion has a nav tab, directly after Activity", async ({
+test("/goals is a page again, not a redirect", async ({ page }) => {
+  // The inverse of what this file asserted from T10 until T13. Worth its own test rather
+  // than a deleted line, because the failure mode is silent and specific: the redirect
+  // lived in `next.config.ts`, which resolves BEFORE the App Router, so a `goals/page.tsx`
+  // underneath one renders for nobody and every assertion about it would pass against
+  // `/activity` instead.
+  await page.goto("/goals")
+  await expect(page).toHaveURL(/\/goals$/)
+  await expect(page.getByRole("heading", { name: "Goals" })).toBeVisible()
+
+  const nav = page.getByRole("navigation").first()
+  await expect(nav.getByRole("link", { name: "Goals", exact: true })).toBeVisible()
+})
+
+test("goals has a nav tab, directly after Activity", async ({
   page,
 }) => {
-  // The tab is CONDITIONAL — `/companion` 404s unless AI_ENABLED is set with a provider
-  // (ADR-0011), so it is spliced in at render rather than living in the static list. The
-  // e2e environment configures the stub provider, so it is expected here.
+  // The nav no longer varies by AI state. `/companion` lost its tab to Goals in T13 Phase
+  // 3 and is reachable through the palette and the dashboard button until Phase 4 deletes
+  // it; each page gates its own AI tool on `aiReady` instead, which is why `/goals` is
+  // here unconditionally — goals are not an AI feature.
   await page.goto("/")
   const nav = page.getByRole("navigation").first()
   const labels = await nav.getByRole("link").allInnerTexts()
   expect(labels).toEqual([
     "Dashboard",
     "Activity",
-    "Companion",
+    "Goals",
     "Calendar",
     "Budget",
     "Meals",
     "Review",
   ])
 
-  await nav.getByRole("link", { name: "Companion", exact: true }).click()
-  await expect(page).toHaveURL(/\/companion$/)
+  await expect(nav.getByRole("link", { name: "Companion" })).toHaveCount(0)
 })
 
 test("seven tabs still fit a 375px phone without overflowing", async ({

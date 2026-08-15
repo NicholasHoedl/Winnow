@@ -18,12 +18,20 @@ const nextConfig: NextConfig = {
       // app is installed to a home screen and the digest banner linked here, so a bare
       // 404 would be a dead icon on a device this repo can't reach to fix.
       { source: "/today", destination: "/", permanent: true },
-      // `/todos` and `/goals` merged into `/activity` (ADR-0013). Same reasoning as
-      // `/today`, and more of it: both were TOP-LEVEL NAV entries for the whole life of
-      // the app, so they are the two most likely things to be bookmarked, pinned, or
-      // sitting in an installed shell's history on a phone this repo cannot reach.
+      // `/todos` merged into `/activity` (ADR-0013). Same reasoning as `/today`, and more
+      // of it: it was a TOP-LEVEL NAV entry for the whole life of the app, so it is among
+      // the most likely things to be bookmarked, pinned, or sitting in an installed
+      // shell's history on a phone this repo cannot reach.
+      //
+      // `/goals` was here too and is not any more — see below.
       { source: "/todos", destination: "/activity", permanent: true },
-      { source: "/goals", destination: "/activity", permanent: true },
+      // `/goals` is NOT here any more: T13 gave it a page again. The line had to go before
+      // the page could exist at all — a redirect resolves ahead of the App Router, so a
+      // `goals/page.tsx` under one is dead code that never renders.
+      //
+      // Expect the 308 to outlive its removal on devices that already followed it. It was
+      // `permanent`, which browsers and an installed PWA shell cache hard and do not
+      // revalidate; clearing the site's data is the only reliable fix on a phone.
       {
         source: "/todos/routines",
         destination: "/activity/routines",

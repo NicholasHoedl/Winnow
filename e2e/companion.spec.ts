@@ -53,12 +53,12 @@ test.beforeEach(async ({ page }) => {
 })
 
 async function createGoal(page: Page, title: string) {
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, { title })
 }
 
 async function removeGoal(page: Page, title: string) {
-  await page.goto("/activity")
+  await page.goto("/goals")
   await deleteGoal(page, title)
 }
 
@@ -120,7 +120,11 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await page.getByRole("button", { name: "Apply" }).click()
 
   // Applying navigates to the result, which is also the fastest way to see it landed.
+  // `/companion` still does this in T13 Phase 3 — it is not the page the rows land on, so
+  // `useProposal` is given an `onApplied` that pushes. `/goals`, which IS their home,
+  // passes none and refreshes in place; Phase 4 deletes this page and the callback with it.
   await expect(page).toHaveURL(/\/activity/)
+  await page.goto("/goals")
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText(renamed)).toBeVisible()
@@ -136,9 +140,10 @@ test("a generated plan can be pruned, edited, and applied", async ({
   )
 
   // The setup task is a real task linked to the goal, so it still counts toward momentum.
-  await page.goto("/activity")
+  // The goal card's body is a LINK to the filtered list since T13, not an in-place filter.
+  await page.goto("/goals")
   await goalCard(page, goalTitle)
-    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
+    .getByRole("link", { name: `Show tasks for ${goalTitle}` })
     .click()
   await expect(visibleCard(page, "STUB setup task")).toBeVisible()
 
@@ -201,7 +206,7 @@ test("a discarded proposal creates nothing and leaves the queue empty", async ({
   await page.getByRole("button", { name: "Discard" }).click()
   await expect(page.getByText("Nothing proposed yet")).toBeVisible()
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText("STUB first milestone")).toHaveCount(0)

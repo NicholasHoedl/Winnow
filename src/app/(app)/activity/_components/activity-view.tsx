@@ -1,14 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Repeat, Settings2, X } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, Filter, Plus, Repeat, Settings2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
 import type { HabitStripCard } from "@/modules/habits/queries"
 import type { RoutineWithItems } from "@/modules/routines/queries"
-import { reorderGoals } from "@/modules/goals/actions"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
 import {
   clearTaskRecurrenceException,
@@ -25,12 +25,15 @@ import { bucketTasks } from "@/modules/todos/service"
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
-import { ActivityRail, RoutinesLine } from "./activity-rail"
-import { GoalChips } from "./goal-rail"
+import { RoutinesLine } from "./routines-line"
 import { HabitStrip } from "./habit-strip"
-import { GoalDetailDialog } from "./goal-detail-dialog"
-import { GoalDialog } from "./goal-dialog"
 import { ListManager } from "./list-manager"
 import { QuickAdd } from "./quick-add"
 import { RecurrenceManager } from "./recurrence-manager"
@@ -100,22 +103,17 @@ export function ActivityView({
   // dashboard card — the handler used to exist here and there, verbatim.
   const { pendingId: habitPendingId, log: logHabit } = useLogHabit()
 
-  // Goal state: which one scopes the list, which one is open in a dialog, which is being
-  // edited or created.
+  /**
+   * Which goal scopes the list — and that is now ALL this page knows about goals.
+   *
+   * Creating, editing, reordering and reading a goal moved to `/goals` in T13. What stays is
+   * the filter, because a goal is a predicate over tasks (ADR-0013) and this is the page
+   * with the tasks on it. The `?goal=` contract is unchanged, so search results and
+   * bookmarks that deep-link here still work.
+   */
   const [selectedGoalId, setSelectedGoalId] = React.useState<string | null>(
     initialGoalId,
   )
-  // The id, not the goal. Holding the object would freeze it at the moment it was clicked:
-  // adding a milestone revalidates and hands this component a fresh `goals` array, but a
-  // captured object never sees it — so the dialog would keep rendering the goal as it was
-  // before the write, and the milestone you just added would not appear until you closed
-  // and reopened it. Deriving from `goals` each render is what makes it live.
-  const [detailGoalId, setDetailGoalId] = React.useState<string | null>(null)
-  const [goalDialogOpen, setGoalDialogOpen] = React.useState(false)
-  const [editingGoal, setEditingGoal] = React.useState<GoalWithProgress | null>(
-    null,
-  )
-  const [goalOrder, setGoalOrder] = React.useState<string[] | null>(null)
   // Which routine the run dialog is for. The id, for the same reason `detailGoalId` is an
   // id: a captured routine would not see its items change underneath it.
   const [runRoutineId, setRunRoutineId] = React.useState<string | null>(null)
@@ -263,27 +261,6 @@ export function ActivityView({
     )
   }
 
-  // Same shape as the task list: hold the dropped order locally until the write lands, or
-  // the cards snap back for the duration of the transition and the drop reads as a failure.
-  function handleGoalReorder(ids: string[]) {
-    setGoalOrder(ids)
-    startTransition(async () => {
-      const result = await reorderGoals(ids)
-      if (!result.ok) toast.error(result.error)
-      setGoalOrder(null)
-    })
-  }
-
-  const orderedGoals = React.useMemo(() => {
-    if (!goalOrder) return goals
-    const rank = new Map(goalOrder.map((id, index) => [id, index]))
-    return [...goals].sort(
-      (a, b) =>
-        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-        (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-    )
-  }, [goals, goalOrder])
-
   function openCreate() {
     setEditingTask(null)
     setDialogOpen(true)
@@ -292,17 +269,6 @@ export function ActivityView({
   function openEdit(task: TaskWithSeries) {
     setEditingTask(task)
     setDialogOpen(true)
-  }
-
-  function openCreateGoal() {
-    setEditingGoal(null)
-    setGoalDialogOpen(true)
-  }
-
-  function openEditGoal(goal: GoalWithProgress) {
-    setDetailGoalId(null)
-    setEditingGoal(goal)
-    setGoalDialogOpen(true)
   }
 
   /**
@@ -321,10 +287,6 @@ export function ActivityView({
   // shows the goal as it is now rather than as it was when it was opened.
   const runRoutine = runRoutineId
     ? (routines.find((routine) => routine.id === runRoutineId) ?? null)
-    : null
-
-  const detailGoal = detailGoalId
-    ? (goals.find((goal) => goal.id === detailGoalId) ?? null)
     : null
 
   const scopedTasks = activeGoal
@@ -388,38 +350,17 @@ export function ActivityView({
         </div>
       </header>
 
-      {/* The rail is a sibling of the list, not a wrapper: on mobile the chips render in
-          the flow above the quick-add, and on desktop the grid puts them side by side. */}
-      <div className="mb-4 flex flex-col gap-3 lg:hidden">
-        <GoalChips
-          goals={orderedGoals}
-          selectedGoalId={activeGoal?.id ?? null}
-          onSelect={selectGoal}
-          onOpenDetail={(goal) => setDetailGoalId(goal.id)}
-          onCreate={openCreateGoal}
-        />
-        {/* The same line the rail renders, because a phone has no rail. `pl-0` undoes the
-            gutter that aligns it with the goal cards' drag handles — there are no handles
-            out here. */}
+      {/* One column at every width now. The `lg:grid-cols-[17.5rem_minmax(0,1fr)]` that was
+          here spent 280px on the goal rail; T13 moved goals to `/goals` and the task list
+          gets the width back. */}
+      <div className="mb-4">
         <RoutinesLine
           routines={routines}
           onRun={(routine) => setRunRoutineId(routine.id)}
-          className="pl-0 lg:hidden"
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[17.5rem_minmax(0,1fr)]">
-        <ActivityRail
-          goals={orderedGoals}
-          selectedGoalId={activeGoal?.id ?? null}
-          onSelect={selectGoal}
-          onOpenDetail={(goal) => setDetailGoalId(goal.id)}
-          onCreate={openCreateGoal}
-          onReorder={handleGoalReorder}
-          routines={routines}
-          onRunRoutine={(routine) => setRunRoutineId(routine.id)}
-        />
-
+      <div>
         <div className="min-w-0">
           <div className="mb-4">
             <QuickAdd />
@@ -447,23 +388,70 @@ export function ActivityView({
                 {item.label}
               </Button>
             ))}
+
+            {/* The goal filter, which used to be the rail: clicking a goal card scoped the
+                list. A menu rather than a row of chips because this is now the only thing
+                on the page that mentions goals, and a control that grows with the number of
+                goals is what cost the rail its place.
+
+                Hidden entirely at zero goals rather than disabled — an empty menu explains
+                nothing, and the place to make a goal is `/goals`. */}
+            {goals.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant={activeGoal ? "secondary" : "ghost"}
+                      size="sm"
+                      aria-label="Filter by goal"
+                    />
+                  }
+                >
+                  <Filter className="size-3.5" />
+                  Goal
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => selectGoal(null)}>
+                    All activity
+                  </DropdownMenuItem>
+                  {goals.map((goal) => (
+                    <DropdownMenuItem
+                      key={goal.id}
+                      onClick={() => selectGoal(goal.id)}
+                    >
+                      {goal.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {/* Says what you are looking at, and undoes it. Without this the list can be
                 short for two very different reasons — you're done, or you're filtered —
                 and nothing on screen tells them apart. */}
             {activeGoal && (
-              <Button
-                variant="ghost"
-                size="sm"
-                // Named for what it DOES, not what it shows. Its visible text is the goal
-                // title, which is also the rail card's accessible name — two buttons with
-                // one name is ambiguous to a screen reader and to a test locator alike.
-                aria-label={`Clear the ${activeGoal.title} filter`}
-                className="ml-auto"
-                onClick={() => selectGoal(null)}
-              >
-                <X className="size-4" />
-                {activeGoal.title}
-              </Button>
+              <div className="ml-auto flex items-center gap-1">
+                {/* The way back to the goal itself, which the rail used to be. Without it
+                    this page names a goal and offers no way to reach it. */}
+                <Link
+                  href="/goals"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+                >
+                  Goals
+                  <ArrowRight className="size-3" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  // Named for what it DOES, not what it shows. Its visible text is the goal
+                  // title, and naming the action keeps this unambiguous to a screen reader
+                  // and to a test locator alike.
+                  aria-label={`Clear the ${activeGoal.title} filter`}
+                  onClick={() => selectGoal(null)}
+                >
+                  <X className="size-4" />
+                  {activeGoal.title}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -560,11 +548,6 @@ export function ActivityView({
         open={listManagerOpen}
         onOpenChange={setListManagerOpen}
       />
-      <GoalDialog
-        goal={editingGoal}
-        open={goalDialogOpen}
-        onOpenChange={setGoalDialogOpen}
-      />
       {runRoutine && (
         <RunRoutineDialog
           routine={runRoutine}
@@ -573,13 +556,6 @@ export function ActivityView({
           onOpenChange={(open) => !open && setRunRoutineId(null)}
         />
       )}
-      <GoalDetailDialog
-        goal={detailGoal}
-        open={detailGoal !== null}
-        onOpenChange={(open) => !open && setDetailGoalId(null)}
-        onEdit={openEditGoal}
-      />
-
       <ConfirmDialog
         open={confirmSeries !== null}
         onOpenChange={(open) => !open && setConfirmSeries(null)}

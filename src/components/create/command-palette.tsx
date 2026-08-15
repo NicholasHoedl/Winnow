@@ -3,8 +3,8 @@
 // The ⌘K command palette: jump to any page or search across every module. Mounted once
 // in the app shell. Owns its open state and the global keyboard shortcuts:
 //   • ⌘K / Ctrl+K       toggle the palette (works even while typing)
-//   • g then a/c/b/m/r/d  go to activity / calendar / budget / meals / review / dashboard.
-//                          `t` and `g` are kept as aliases for activity (T10). `g n` is
+//   • g then a/g/c/b/m/r/d  go to activity / goals / calendar / budget / meals / review /
+//                          dashboard. `t` is kept as an alias for activity (T10). `g n` is
 //                          unambiguous with the bare `n` below: the pending-g branch
 //                          returns before it.
 // Create commands + the `n` shortcut are added in T1-S4 (they produce create-intents).
@@ -52,15 +52,18 @@ export function openCommandPalette(): void {
 
 // `g`-then-letter navigation, matching the sidebar's routes.
 //
-// `t` and `g` both survive T10's merge as aliases for `/activity`. They addressed To-dos
-// and Goals for the whole life of the app, and the muscle memory is in fingers this repo
-// cannot update; sending them somewhere sensible costs one map entry, and breaking them
-// would be a daily papercut for no gain.
+// `t` still points at `/activity`: To-dos addressed that page for the whole life of the app
+// and the muscle memory is in fingers this repo cannot update.
+//
+// **`g` points at `/goals` again**, which is a deliberate re-break. It meant Goals until T10
+// merged them, then meant Activity as a courtesy for exactly that muscle memory — and T13
+// gave Goals a page back, so the courtesy now sends `g g` to the wrong one of two pages that
+// both exist. The alias is worth less than the letter matching its page.
 const NAV_SHORTCUTS: Record<string, string> = {
   d: "/",
   a: "/activity",
   t: "/activity",
-  g: "/activity",
+  g: "/goals",
   c: "/calendar",
   b: "/budget",
   m: "/meals",

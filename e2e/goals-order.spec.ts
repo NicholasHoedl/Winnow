@@ -30,9 +30,10 @@ async function order(page: import("@playwright/test").Page) {
 }
 
 async function addGoal(page: import("@playwright/test").Page, name: string) {
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  // One button at every state now — see `_goals.ts`. The rail had two ("Add a goal" at
+  // zero, a `+` labelled "Add goal" thereafter) and matching one silently required a goal
+  // to already exist.
+  await page.getByRole("button", { name: "New goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(name)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
@@ -49,7 +50,7 @@ async function deleteGoal(page: import("@playwright/test").Page, name: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/activity")
+  await page.goto("/goals")
   const strays = goalCard(page, "E2E gorder ")
   for (let i = 0; i < 10; i++) {
     const before = await strays.count()
@@ -64,7 +65,7 @@ test.afterEach(async ({ page }) => {
 test("goals can be reordered from the keyboard, and it persists", async ({
   page,
 }) => {
-  await page.goto("/activity")
+  await page.goto("/goals")
   for (const name of NAMES) await addGoal(page, name)
 
   const before = await order(page)
@@ -98,7 +99,7 @@ test("goals can be reordered from the keyboard, and it persists", async ({
 
 test("a milestone can carry a due date, and shows it", async ({ page }) => {
   const title = `E2E gorder alpha ${STAMP}`
-  await page.goto("/activity")
+  await page.goto("/goals")
   await addGoal(page, title)
 
   // Milestones moved into the detail dialog in T10 — the rail card is a summary, and a

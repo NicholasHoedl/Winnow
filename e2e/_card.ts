@@ -36,12 +36,12 @@ export function visibleCard(page: Page, text: string | RegExp): Locator {
 }
 
 /**
- * One goal in the `/activity` rail (T10), by title.
+ * One goal card on `/goals` (T13), by title.
  *
- * Not `visibleCard`: a rail card sets a different background when it is SELECTED, and
- * `cn`'s tailwind-merge drops `bg-card` when it does — so the utility-class locator would
- * silently stop matching exactly the goal a test just clicked. Hence the explicit testid.
- * Same visibility filter, for the same streaming-SSR reason.
+ * Not `visibleCard`: `cn`'s tailwind-merge drops `bg-card` the moment a variant sets a
+ * different background, so a utility-class locator would silently stop matching. The rail
+ * this replaced did exactly that when a goal was selected. Hence the explicit testid, which
+ * survived the move for free. Same visibility filter, for the same streaming-SSR reason.
  */
 export function goalCard(page: Page, text: string | RegExp): Locator {
   return page
@@ -51,15 +51,16 @@ export function goalCard(page: Page, text: string | RegExp): Locator {
 }
 
 /**
- * A goal in EITHER presentation — the desktop rail card or the mobile chip.
+ * Kept as an alias of `goalCard`, and deliberately not deleted.
  *
- * For helpers that run at whatever viewport the test happens to be using. Asserting
- * `goalCard` after creating a goal at 375px finds nothing, because the rail is not rendered
- * there at all: two components, one goal.
+ * It existed because a goal had TWO presentations — the `lg:` rail card and the mobile chip
+ * — so a helper running at an unknown viewport had to match either. T13 moved goals to
+ * `/goals`, which renders one card at every width, and the chip is gone.
+ *
+ * The name stays because "which of the two goal elements is this" was a real question for
+ * three tranches, and a spec that still asks it should get the right answer rather than a
+ * missing import.
  */
 export function goalEntry(page: Page, text: string | RegExp): Locator {
-  return page
-    .getByTestId(/^goal-(card|chip)$/)
-    .filter({ hasText: text })
-    .filter({ visible: true })
+  return goalCard(page, text)
 }

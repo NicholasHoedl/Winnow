@@ -13,7 +13,11 @@ function card(page: Page, title: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  await page.goto("/activity")
+  // `/goals`, not `/activity`. Goal cards moved in T13 and this line did not, so the
+  // cleanup matched nothing and passed anyway — leaking a goal into every later spec. It
+  // surfaced as a 4px layout overflow on `/companion`, whose goal picker defaults to the
+  // oldest surviving goal. `deleteGoalsMatching` now refuses to run on the wrong page.
+  await page.goto("/goals")
   // "Delete goal", not "Delete" — deleting a goal cascades its milestones, so the confirm
   // names what it takes with it. That, and the dialog it now lives behind, are in _goals.
   await deleteGoalsMatching(page, new RegExp(PREFIX))
@@ -46,15 +50,14 @@ test("this week's completed work lands in the right cards", async ({
   await quickAdd.press("Enter")
   await visibleCard(page, taskTitle).getByLabel("Mark as done").click()
 
-  // --- A ticked milestone under a goal.
-  await page.goto("/activity")
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  // --- A ticked milestone under a goal, on `/goals` since T13.
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "New goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(goalTitle)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  // Milestones moved into the goal's detail dialog in T10; the rail card is a summary.
+  // Milestones moved into the goal's detail dialog in T10 and stayed there through T13;
+  // the card is a summary.
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await detail.getByPlaceholder("Add a milestone").fill(milestoneTitle)

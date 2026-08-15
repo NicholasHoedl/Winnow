@@ -58,7 +58,7 @@ test("a nav tab shows a spinner while its route loads", async ({ page }) => {
   expect(await nav.getByRole("link").allInnerTexts()).toEqual([
     "Dashboard",
     "Activity",
-    "Companion",
+    "Goals",
     "Calendar",
     "Budget",
     "Meals",

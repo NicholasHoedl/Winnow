@@ -19,10 +19,8 @@ import { goalCard, visibleCard } from "./_card"
  */
 
 async function createGoal(page: Page, title: string) {
-  await page.goto("/activity")
-  // Either label — see `_goals.ts`. "Add a goal" is the empty-state button; "Add goal"
-  // is the `+` once a goal exists.
-  await page.getByRole("button", { name: /^Add (a )?goal$/ }).click()
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "New goal" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title").fill(title)
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
@@ -49,7 +47,7 @@ async function openDetail(page: Page, title: string) {
 }
 
 async function deleteGoal(page: Page, title: string) {
-  await page.goto("/activity")
+  await page.goto("/goals")
   await openDetail(page, title)
   await page.getByRole("button", { name: "Delete", exact: true }).click()
   await page.getByRole("button", { name: "Delete goal" }).click()
@@ -73,31 +71,31 @@ test("finishing a linked task moves a stalled goal", async ({ page }) => {
   await createGoal(page, goalTitle)
   await createLinkedTask(page, taskTitle, goalTitle)
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   const card = goalCard(page, goalTitle)
 
   // A brand-new goal with one open task has something to track and nothing finished.
   await expect(card.getByText("Stalled")).toBeVisible()
   await expect(card.getByText("1 open")).toBeVisible()
 
-  // The window and the count are in the detail, not the rail.
+  // The window and the count are in the detail, not on the card.
   await openDetail(page, goalTitle)
   await expect(
     page.getByRole("dialog").getByText(/Nothing finished in the last 14 days/),
   ).toBeVisible()
   await page.keyboard.press("Escape")
 
-  // Tick it off in the task list beside the rail. Before T10 this was a special
-  // "next action" checkbox inside the goal card, because the goals page had no task list
-  // of its own — the merge makes that compromise unnecessary: select the goal and its work
-  // IS the list.
-  await card
-    .getByRole("button", { name: `Show tasks for ${goalTitle}` })
-    .click()
+  // Tick it off in the task list. Before T10 this was a special "next action" checkbox
+  // inside the goal card, because the goals page had no task list of its own; T10 made the
+  // compromise unnecessary by putting goals beside the list, and T13 separates them again
+  // WITHOUT reviving it — the card links to the filtered list instead of copying it. This
+  // click is that link, so it navigates rather than filtering in place.
+  await card.getByRole("link", { name: `Show tasks for ${goalTitle}` }).click()
+  await expect(page).toHaveURL(/\/activity\?goal=/)
   await visibleCard(page, taskTitle).getByLabel("Mark as done").click()
-  await page.reload()
 
-  await expect(card.getByLabel(`${goalTitle} is moving`)).toBeVisible()
+  await page.goto("/goals")
+  await expect(card.getByText("Moving")).toBeVisible()
   await expect(card.getByText("No open tasks")).toBeVisible()
   await openDetail(page, goalTitle)
   await expect(
@@ -140,17 +138,36 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
 
   // Attached but never logged. "Stalled" is the honest reading here — the goal is now
   // measurable, and nothing has been done. Before T12b it was not measurable at all.
-  await page.goto("/activity")
+  await page.goto("/goals")
   const card = goalCard(page, goalTitle)
   await expect(card.getByText("Stalled")).toBeVisible()
 
-  // One session flips it, logged from the strip rather than through a task.
+  // One session flips it, logged from the strip rather than through a task. The strip is
+  // on `/activity`, which is where practice is logged — the goal card only reads it.
+  await page.goto("/activity")
   await page
     .getByTestId("habit-chip")
     .filter({ hasText: habitTitle })
     .getByRole("button", { name: `Log ${habitTitle}` })
     .click()
-  await expect(card.getByLabel(`${goalTitle} is moving`)).toBeVisible()
+
+  // Load-bearing, and its absence was a flake in two consecutive runs. `.click()` waits for
+  // the click to DISPATCH, not for the Server Action behind it — and the assertion below is
+  // now on a different page, so navigating straight after the click races `logEntry` and
+  // reads a goal whose session has not been written yet. This assertion never needed it
+  // before T13: the goal card used to be on `/activity` too, so `revalidatePath` re-rendered
+  // it underneath a polling assertion and there was nothing to outrun.
+  //
+  // The toast is the honest signal, for the same reason `expect(dialog).toBeHidden()` is
+  // elsewhere in this suite: `useLogHabit` raises it inside the transition, only after
+  // `logEntry` has resolved `ok`.
+  await expect(page.getByText(`Logged ${habitTitle}`)).toBeVisible()
+
+  // Back to the card to read it. `Moving` as TEXT, not an aria-label on an icon: the rail
+  // compressed the healthy case to a bare `TrendingUp` because 280px had no room for a
+  // word, and a page does — see `goal-card.tsx`.
+  await page.goto("/goals")
+  await expect(card.getByText("Moving")).toBeVisible()
 
   // And the detail counts it the same way it counts a finished task.
   await openDetail(page, goalTitle)
@@ -200,7 +217,7 @@ test("the momentum window follows the setting", async ({ page }) => {
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
 
-  await page.goto("/activity")
+  await page.goto("/goals")
   await openDetail(page, goalTitle)
   await expect(
     page.getByRole("dialog").getByText(/in the last week/),

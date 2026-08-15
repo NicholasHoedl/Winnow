@@ -1180,3 +1180,77 @@ each running a slice of what was one component.
   throw in a route handler is a **500**, so it is now caught and answered **401** in the
   same `{ok:false,error}` shape the client already reads. "Signed out" reading as a server
   error is exactly the misleading signal this repo has lost time to before.
+
+**T13 Phase 3 — shipped**, no migration. `/goals` is a page again and the rail leaves
+`/activity`. Read ADR-0013's 2026-08-14 amendment before touching any of this: the merge's
+*insight* survives intact and only its *layout* is reversed, and the difference is what stops
+someone reviving the linked-task list T10a deleted.
+
+- **The redirect had to go first.** `next.config.ts`'s `/goals` → `/activity` 308 resolves
+  ahead of the App Router, so a `goals/page.tsx` underneath it renders for nobody. Expect the
+  308 to outlive its removal on devices that already followed it — it was `permanent`, which
+  browsers and an installed PWA shell cache hard; clearing site data is the only reliable fix
+  on a phone.
+- **The filter stayed, the trigger changed.** `selectGoal`, the `history.replaceState`, the
+  `?goal=` contract and the self-healing resolve for a dangling id are all untouched. The
+  rail card became a menu in the toolbar. `activity.spec.ts` kept its assertions and changed
+  only how it clicks, which is the evidence that this was a trigger change and not a
+  behaviour change.
+- **The goal card's body is a LINK now**, not a button — `/activity?goal=<id>`. That is the
+  one real behavioural difference and it propagated into four specs, which had to switch
+  `getByRole("button")` to `getByRole("link")` and stop expecting an in-place filter.
+- **Width the rail was costing its neighbours, returned.** T12d compressed habit chips to
+  `w-40` and collapsed routines to a single `Run…` picker *because the rail had grown to
+  724px*, and called both real losses. Habit chips are `w-48` with their cadence phrase back
+  (`3× this week` — without it `2/3` cannot be read as ahead or behind), and each routine has
+  a Run button again.
+- **The routine change contradicts T12d's own comment** ("if the picker step proves annoying,
+  the fix is to make the menu better, not to put a button back on every routine"), so it is
+  argued in the file rather than quietly reverted. T12d was right about the cause and bound
+  the wrong axis: the complaint was VERTICAL growth in a 280px sticky column. The buttons are
+  back as a horizontal scroller in the page flow, so length costs nothing vertically and is
+  contained by `overflow-x-auto` — the same mechanism the habit strip uses one row below.
+- **`data-rail` stays on goal cards despite there being no rail.** It never meant "in the
+  rail" to the thing that reads it: `visibleCard` is `div.bg-card:not([data-rail])` and the
+  attribute means "not a row in the task list". Two specs have already hung waiting for a
+  "Task actions" button on a goal matching a shared title prefix.
+- **`g` in the palette points at `/goals` again.** It meant Goals until T10 merged them, then
+  meant Activity as a courtesy to muscle memory — and with both pages existing again that
+  courtesy sends `g g` to the wrong one of two real pages.
+- **Nav arithmetic stayed even**: Goals took the Companion tab. `/companion` keeps working
+  without one, reachable through ⌘K and the dashboard button, until Phase 4 deletes it.
+  `navItemsFor()` no longer varies by AI state — each page gates its own tool on `aiReady`,
+  which is the better shape, since `/goals` exists whether or not a provider is configured.
+
+**Three latent bugs the split exposed**, none of them introduced by it. Worth listing
+together, because the shape repeats: each was invisible only because of where something
+happened to sit.
+
+1. **`-mx-1 px-1` on a horizontal scroller was a real 4px overflow all along.** The pair came
+   from `GoalChips` — margin pulls the row flush, padding keeps a focused chip's ring from
+   clipping — and `habit-strip.tsx` inherited it. It never showed while that section was a
+   grid item; moving it into a plain block was enough for `mobile-layout.spec.ts` to call it
+   a spill at 393px. I then reproduced the same mistake copying it into `routines-line.tsx`.
+   Gone from both: keep `px-1`, drop the negative margin, accept 4px of inset.
+2. **`/companion`'s left grid column had no `min-w-0`.** A grid item defaults to
+   `min-width: auto`, so it will not shrink below its content, and the goal picker's trigger
+   is `whitespace-nowrap` — one long goal title pushes the column and the page past the
+   viewport. Test data supplied the long title, but a user with a wordy goal would have found
+   it too. This is a product fix, not test hygiene.
+3. **`deleteGoalsMatching` passed vacuously on the wrong page.** `goalCard` matched nothing,
+   the loop broke on its first iteration, and `toHaveCount(0)` succeeded because zero really
+   was what was there. `review.spec.ts` cleaned up on `/activity` for a whole run, leaked a
+   goal, and the only thing that noticed was bug 2 three specs away. The helper now asserts
+   it can see the "New goal" button before concluding there is nothing to delete: **a cleanup
+   that deletes nothing and reports success is worse than one that throws.**
+
+**And one flake the split genuinely caused.** `goal-momentum.spec.ts:121` logs a habit and
+then reads the goal's momentum. That assertion was safe for three tranches because the goal
+card was on `/activity` too — `revalidatePath` re-rendered it underneath a polling assertion,
+so there was nothing to outrun. With the card on `/goals` the test navigates immediately
+after `.click()`, which dispatches the click but does **not** wait for the Server Action
+behind it, and the read raced `logEntry`. It now waits for `useLogHabit`'s toast, which is
+raised inside the transition only after the action resolves `ok` — the same reasoning as
+`expect(dialog).toBeHidden()` elsewhere in the suite. **Moving an assertion to a different
+page can turn a previously-safe click into a race**, because same-page revalidation was
+silently doing the waiting.
