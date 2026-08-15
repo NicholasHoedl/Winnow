@@ -40,8 +40,9 @@ export default async function GoalsPage() {
     <GoalsView
       goals={goals}
       pending={pending}
-      // The page renders either way, unlike `/companion`, which 404s when the feature is
-      // off: goals are not an AI feature. Only the plan tool is gated.
+      // The page renders either way: goals are not an AI feature, and only the plan tool
+      // is gated. `/companion` used to 404 outright when the companion was unconfigured,
+      // which is exactly the coupling T13 removed by dispersing the tools.
       companionEnabled={aiReady(aiSettings)}
       today={todayInZone(new Date(), timeZone)}
     />

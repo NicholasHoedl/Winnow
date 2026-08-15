@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import type { ProposalRow } from "@/modules/companion/queries"
 import {
   deleteRoutine,
   deleteRoutineItem,
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { RoutineDialog } from "./routine-dialog"
+import { RoutineTool } from "./routine-tool"
 import { type ListOption, RoutineItemDialog } from "./routine-item-dialog"
 import { RunRoutineDialog } from "./run-routine-dialog"
 
@@ -254,10 +256,15 @@ export function RoutinesView({
   routines,
   lists,
   today,
+  pending,
+  companionEnabled,
 }: {
   routines: RoutineWithItems[]
   lists: ListOption[]
   today: string
+  /** Pending `routine` proposals — the page filters by kind at the query. */
+  pending: ProposalRow[]
+  companionEnabled: boolean
 }) {
   const [open, setOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<RoutineRow | null>(null)
@@ -290,6 +297,15 @@ export function RoutinesView({
           New routine
         </Button>
       </div>
+
+      {/* Above the list: the tool proposes what the list then holds, so it reads top to
+          bottom. Gated on `aiReady`, so it simply is not here when the companion is off —
+          routines are not an AI feature and this page works without it. */}
+      {companionEnabled && (
+        <div className="mb-6">
+          <RoutineTool pending={pending} />
+        </div>
+      )}
 
       {routines.length === 0 ? (
         <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">

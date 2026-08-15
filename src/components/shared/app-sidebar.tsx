@@ -10,18 +10,12 @@ import { Button } from "@/components/ui/button"
 import { CommandPaletteTrigger } from "@/components/create/command-palette"
 import { signOutAction } from "@/app/(app)/actions"
 
-import { isNavActive, navItemsFor } from "./nav-items"
+import { isNavActive, navItems } from "./nav-items"
 import { ModeToggle } from "./mode-toggle"
 
-export function AppSidebar({
-  userName,
-  companionEnabled,
-}: {
-  userName: string
-  companionEnabled: boolean
-}) {
+export function AppSidebar({ userName }: { userName: string }) {
   const pathname = usePathname()
-  const items = navItemsFor(companionEnabled)
+  const items = navItems
   const initial = userName.charAt(0).toUpperCase() || "?"
   const settingsActive = isNavActive(pathname, "/settings")
 

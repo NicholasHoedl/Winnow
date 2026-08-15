@@ -17,39 +17,54 @@ import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
  */
 
 /**
- * Empty the pending queue before each test.
+ * Every page that hosts an AI tool, and the panel heading that proves it rendered.
  *
- * `/companion` opens whatever proposal is oldest-pending, which is correct behaviour — a
- * generation you paid for should survive a reload — and it makes these specs
+ * T13 dispersed the four jobs; `/companion` no longer exists. Kept as one spec file rather
+ * than split four ways because the FEATURE is one thing — the same hook, the same route
+ * handler, the same renderers — and splitting would have meant four copies of the queue
+ * cleaner below, which is the part most likely to rot.
+ */
+const TOOL_PAGES = [
+  ["/goals", "Plan a goal"],
+  ["/activity/routines", "Build a routine"],
+  ["/review", "Read my week"],
+  ["/budget", "Read transactions"],
+] as const
+
+/**
+ * Empty one page's pending queue before each test.
+ *
+ * Each page opens whatever proposal of ITS kind is oldest-pending, which is correct
+ * behaviour — a generation you paid for should survive a reload — and it makes these specs
  * order-dependent unless the queue starts empty. Without this, one failing test leaves a
  * proposal behind and the NEXT test opens holding it, failing for a reason that has
  * nothing to do with what it covers. That misdiagnosis cost time twice.
+ *
+ * Per-page since T13, because `getPendingProposals(kind)` means a proposal is only visible
+ * where it belongs — a stray import is invisible on `/goals` and cannot be dismissed from
+ * there. `clearAllQueues` sweeps every page for the `beforeEach`.
  */
-async function clearQueue(page: Page) {
+async function clearQueue(page: Page, route: string) {
   // Reloads each round on purpose: it has to check the SERVER's idea of what is pending,
   // not the page's. Asserting against local state after a dismiss passes whether or not
   // the write actually landed — which is exactly the bug this loop uncovered.
   for (let i = 0; i < 20; i++) {
-    await page.goto("/companion")
-    // Whatever is on screen: plans and routines offer Discard, a summary offers Done.
+    await page.goto(route)
+    // Whatever is on screen: plans, routines and imports offer Discard, a summary Done.
     const dismiss = page.getByRole("button", { name: /^(Discard|Done)$/ })
-    if ((await dismiss.count()) === 0) {
-      const queued = page.getByTestId("pending-queue").getByRole("button")
-      if ((await queued.count()) === 0) {
-        await expect(page.getByText("Nothing proposed yet")).toBeVisible()
-        return
-      }
-      await queued.first().click()
-      continue
-    }
+    if ((await dismiss.count()) === 0) return
     await dismiss.first().click()
-    await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+    await expect(dismiss).toHaveCount(0)
   }
-  throw new Error("The companion queue would not empty.")
+  throw new Error(`The pending queue on ${route} would not empty.`)
+}
+
+async function clearAllQueues(page: Page) {
+  for (const [route] of TOOL_PAGES) await clearQueue(page, route)
 }
 
 test.beforeEach(async ({ page }) => {
-  await clearQueue(page)
+  await clearAllQueues(page)
 })
 
 async function createGoal(page: Page, title: string) {
@@ -80,8 +95,11 @@ async function deleteTasksMatching(page: Page, fragment: string) {
 }
 
 async function planGoal(page: Page, goalTitle: string) {
-  await page.goto("/companion")
-  await page.getByLabel("Goal").click()
+  await page.goto("/goals")
+  // `getByRole("combobox")`, not `getByLabel("Goal")`. The tool panel is a `<section>` named
+  // "Plan a goal", and `getByLabel` matches substrings — so a label lookup for "Goal" found
+  // the region AND the select. Naming the role disambiguates without weakening anything.
+  await page.getByRole("combobox", { name: "Goal" }).click()
   await page.getByRole("option", { name: goalTitle }).click()
   // `exact`, because "Revise the plan" also matches a loose "Plan".
   await page.getByRole("button", { name: "Plan", exact: true }).click()
@@ -119,12 +137,12 @@ test("a generated plan can be pruned, edited, and applied", async ({
 
   await page.getByRole("button", { name: "Apply" }).click()
 
-  // Applying navigates to the result, which is also the fastest way to see it landed.
-  // `/companion` still does this in T13 Phase 3 — it is not the page the rows land on, so
-  // `useProposal` is given an `onApplied` that pushes. `/goals`, which IS their home,
-  // passes none and refreshes in place; Phase 4 deletes this page and the callback with it.
-  await expect(page).toHaveURL(/\/activity/)
-  await page.goto("/goals")
+  // **Applying does NOT navigate any more, and that is the assertion.** On `/companion` it
+  // pushed you to `/activity`, because the milestones and habits it created were not on the
+  // page you were looking at. They are now: this IS the goals page, `useProposal` is given
+  // no `onApplied`, and its default refreshes in place. Staying put is the whole payoff of
+  // moving the tool to its artifact, so it is worth pinning rather than assuming.
+  await expect(page).toHaveURL(/\/goals/)
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText(renamed)).toBeVisible()
@@ -184,14 +202,24 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   await expect(
     page.getByText("Creates 1 milestone, 1 habit and 0 tasks"),
   ).toBeVisible()
-  // Revised in place, not stacked: this goal has no SECOND proposal queued behind the
-  // one on screen. Scoped to this goal's title rather than asserting the queue is empty
-  // outright — the suite shares a persistent database, and a proposal abandoned by an
-  // earlier failed run would make a global assertion fail for an unrelated reason.
-  await expect(page.getByRole("button", { name: goalTitle })).toHaveCount(0)
+  // Revised in place, not stacked. This used to be asserted against `/companion`'s pending
+  // queue — "no second entry named after this goal" — and that queue does not exist now:
+  // each page opens its own kind and shows one proposal. The equivalent claim on this page
+  // is that there is exactly ONE proposal on screen, which is what a second generation
+  // would break.
+  //
+  // Counting `Apply` rather than the goal title: `/goals` renders the goal LIST beside the
+  // proposal, and every card carries "Reorder <title>" and "Open <title>" buttons, so a
+  // title-based locator matches the card and not the queue it was written for.
+  await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(1)
 
-  await page.getByRole("button", { name: "Discard" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 
   await removeGoal(page, goalTitle)
 })
@@ -203,8 +231,13 @@ test("a discarded proposal creates nothing and leaves the queue empty", async ({
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
 
-  await page.getByRole("button", { name: "Discard" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 
   await page.goto("/goals")
   await openGoalDetail(page, goalTitle)
@@ -235,7 +268,7 @@ async function deleteRoutines(page: Page, fragment: RegExp) {
 }
 
 test("a generated routine can be pruned and applied", async ({ page }) => {
-  await page.goto("/companion")
+  await page.goto("/activity/routines")
   await page.getByLabel("Routine brief").fill("a morning routine before work")
   await page.getByRole("button", { name: "Build" }).click()
   await expect(page.getByText("Proposed routine")).toBeVisible()
@@ -257,7 +290,8 @@ test("a generated routine can be pruned and applied", async ({ page }) => {
 
   await page.getByRole("button", { name: "Apply" }).click()
 
-  // Applying a routine lands on the routines page, not /activity.
+  // Still on the routines page — the tool is here, so applying does not navigate at all.
+  // It used to push here from `/companion`; the URL is the same and the reason is not.
   await expect(page).toHaveURL(/\/activity\/routines/)
   const card = visibleCard(page, "STUB morning routine")
   await expect(card).toBeVisible()
@@ -270,7 +304,7 @@ test("a generated routine can be pruned and applied", async ({ page }) => {
 test("a routine refinement replaces the proposal in place", async ({
   page,
 }) => {
-  await page.goto("/companion")
+  await page.goto("/activity/routines")
   await page.getByLabel("Routine brief").fill("a wind-down routine")
   await page.getByRole("button", { name: "Build" }).click()
   await expect(page.getByText("Proposed routine")).toBeVisible()
@@ -283,8 +317,13 @@ test("a routine refinement replaces the proposal in place", async ({
   )
   await expect(page.getByText("Creates a routine of 1 task")).toBeVisible()
 
-  await page.getByRole("button", { name: "Discard" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 })
 
 /**
@@ -319,7 +358,7 @@ test("a week is narrated read-only, with no way to apply it", async ({
   const prefix = `E2E week ${Date.now()}`
   await seedCompletedTasks(page, prefix, 3)
 
-  await page.goto("/companion")
+  await page.goto("/review")
   await page.getByRole("button", { name: "Summarise this week" }).click()
   await expect(page.getByText("Your week")).toBeVisible()
 
@@ -337,7 +376,12 @@ test("a week is narrated read-only, with no way to apply it", async ({
   ).toBeVisible()
 
   await page.getByRole("button", { name: "Done" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 
   await deleteTasksMatching(page, prefix)
 })
@@ -346,7 +390,7 @@ test("a summary refinement replaces it in place", async ({ page }) => {
   const prefix = `E2E refine week ${Date.now()}`
   await seedCompletedTasks(page, prefix, 3)
 
-  await page.goto("/companion")
+  await page.goto("/review")
   await page.getByRole("button", { name: "Summarise this week" }).click()
   await expect(page.getByText("STUB a steady week")).toBeVisible()
 
@@ -357,7 +401,12 @@ test("a summary refinement replaces it in place", async ({ page }) => {
   await expect(page.getByText("STUB a steady week")).toHaveCount(0)
 
   await page.getByRole("button", { name: "Done" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 
   await deleteTasksMatching(page, prefix)
 })
@@ -411,7 +460,7 @@ test("pasted transactions are extracted, pruned and applied", async ({
 }) => {
   const seededFood = await ensureFoodCategory(page)
 
-  await page.goto("/companion")
+  await page.goto("/budget")
   await page
     .getByLabel("Transactions to read")
     .fill("2026-07-14,TESCO,-42.10\n2026-07-16,SALARY,2400.00")
@@ -434,6 +483,7 @@ test("pasted transactions are extracted, pruned and applied", async ({
 
   await page.getByRole("button", { name: "Apply" }).click()
 
+  // Still on the budget page, for the same reason the routine test stays on its own.
   await expect(page).toHaveURL(/\/budget/)
   await expect(visibleCard(page, "STUB TESCO")).toBeVisible()
   // The pruned row was never created.
@@ -459,7 +509,7 @@ test("an import refinement asks for an extraction, not a summary", async ({
   // refinement request was built by a ternary chain that stopped at `routine`, so
   // refining an extraction asked the server for a WEEKLY SUMMARY — and the panel labelled
   // itself "Change this summary" while showing a table of transactions.
-  await page.goto("/companion")
+  await page.goto("/budget")
   await page.getByLabel("Transactions to read").fill("2026-07-14,TESCO,-42.10")
   await page.getByRole("button", { name: "Read them" }).click()
   await expect(page.getByText("Transactions found")).toBeVisible()
@@ -474,6 +524,11 @@ test("an import refinement asks for an extraction, not a summary", async ({
   await expect(page.getByText("STUB refined payee")).toBeVisible()
   await expect(page.getByRole("button", { name: "Apply" })).toBeVisible()
 
-  await page.getByRole("button", { name: "Discard" }).click()
-  await expect(page.getByText("Nothing proposed yet")).toBeVisible()
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
+  // pages have no placeholder, because the renderer simply is not rendered. Absence of the
+  // dismissal control is the same claim, made against what is actually on screen.
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
 })

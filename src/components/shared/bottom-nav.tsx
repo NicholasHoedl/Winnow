@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { LinkPending } from "@/components/shared/link-pending"
 
-import { isNavActive, navItemsFor } from "./nav-items"
+import { isNavActive, navItems } from "./nav-items"
 
-export function BottomNav({ companionEnabled }: { companionEnabled: boolean }) {
+export function BottomNav() {
   const pathname = usePathname()
-  const items = navItemsFor(companionEnabled)
+  const items = navItems
 
   return (
     <nav className="bg-background fixed inset-x-0 bottom-0 z-40 flex border-t pb-[env(safe-area-inset-bottom)] md:hidden">

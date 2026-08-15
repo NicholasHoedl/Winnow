@@ -1,8 +1,7 @@
 import Link from "next/link"
-import { CalendarPlus, ClipboardList, Sparkles } from "lucide-react"
+import { CalendarPlus, ClipboardList } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { aiReady } from "@/modules/companion/ai-settings"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getCalendars,
@@ -13,10 +12,7 @@ import { getGoals } from "@/modules/goals/queries"
 import { getHabitStrip } from "@/modules/habits/queries"
 import { getRoutineNames } from "@/modules/routines/queries"
 import { addDays, todayInZone } from "@/lib/date"
-import {
-  getAiSettings,
-  getUserPreferences,
-} from "@/modules/preferences/queries"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { formatLongDate } from "@/lib/format"
@@ -64,7 +60,6 @@ export default async function DashboardPage({
     monthData,
     goals,
     calendars,
-    aiSettings,
     habits,
     routineNames,
   ] = await Promise.all([
@@ -78,7 +73,6 @@ export default async function DashboardPage({
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(timeZone, goalMomentumDays),
     getCalendars(),
-    getAiSettings(),
     // The cheap read, same as /activity — two bounded queries for a card that shows
     // done/target and nothing else.
     getHabitStrip(),
@@ -140,19 +134,13 @@ export default async function DashboardPage({
               the whole PAGE scroll sideways — which T10a introduced by adding Companion
               here and did not catch, because only /activity was checked at that width. */}
           <div className="flex flex-wrap gap-2">
-            {/* `/review` has no nav tab — the bar is at its seven-item ceiling again — so
-                the dashboard and the palette are the only ways to reach it. Companion DOES
-                have a tab now; this button is kept as a second door from the surface you
-                land on, not because it is the only one. */}
-            {aiReady(aiSettings) && (
-              <Link
-                href="/companion"
-                className={buttonVariants({ variant: "outline", size: "sm" })}
-              >
-                <Sparkles className="size-4" />
-                Companion
-              </Link>
-            )}
+            {/* The Companion button was here until T13 deleted the page it went to. Every
+                one of its four jobs now lives on the page of the thing it produces, so
+                there is nowhere central left to link to — and nothing here is conditional
+                on the AI settings any more.
+
+                `/review` kept its button even though it gained a nav tab in T13, as a
+                second door from the surface you land on. */}
             <Link
               href="/review"
               className={buttonVariants({ variant: "outline", size: "sm" })}

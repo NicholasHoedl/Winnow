@@ -72,21 +72,17 @@ than rewritten to skip a table no longer wanted.
 
 ## 2. Where the work stands
 
-**Every tranche is shipped except T5c-b and T13.** T0–T6b; all of T7, split into T7a Notes
+**Every tranche is shipped except T5c-b.** T0–T6b; all of T7, split into T7a Notes
 → T7b Routines → T7c Habits → T7d Weekly review and finished in that order at the user's
 choosing; then T8 (goal momentum), T9a–T9d (the AI companion), T10a–T10b, T11 and T12a–T12i
 — none of which were on the roadmap. `docs/IMPROVEMENT-PLAN.md` is the master roadmap and
 its status table is current; read it rather than trusting the summary here.
 
-**T13 is IN PROGRESS and is the only unfinished work in the tree.** It moves each AI tool
-onto the page of the artifact it produces, which means `/companion` disperses and then
-disappears, `/goals` comes back as a page, and the goal rail leaves `/activity`. Four
-phases, each landing green on its own: **1** remove notes and give Review the freed nav slot
-(done) · **2** extract the companion spine with no visible change · **3** `/goals` returns
-and the rail leaves · **4** disperse the rest and delete `/companion`. If you are picking
-this up mid-flight, read the T13 section of `IMPROVEMENT-PLAN.md` first — the phase ORDER is
-load-bearing, because the nav bar is at its measured ceiling of seven and every phase has to
-pair a removal with its addition or it lands at eight.
+**T13 is shipped**, in four phases: **1** notes removed, Review took the freed nav slot ·
+**2** the companion spine extracted with no visible change · **3** `/goals` returned as a
+page and the rail left `/activity` · **4** the remaining three tools dispersed and
+`/companion` deleted. **ADR-0015 is the authority** on the arrangement and on what was
+rejected.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
@@ -217,8 +213,8 @@ it is `winnow-postgres-1`.
   exercised this app below 768px — `devices["iPhone 15"]` carries
   `defaultBrowserType: "webkit"`, which the runner honours. There is no npm script for it
   alone; use `npx playwright test --project=mobile` (~1 min warm, ~2.5 cold). It depends on `ai-setup`,
-  because `/companion` 404s when the companion is unconfigured and would fail on a missing
-  heading rather than on layout.
+  because the tool panels do not render when the companion is unconfigured — `ai.setup.ts`
+  proves readiness on `/activity/routines` now that `/companion` is gone.
   - Beware the asymmetry with the CLI: `playwright open --device="iPhone 15"` sets the
     viewport but still launches **chromium**, because `-b` defaults to it. Pass
     `-b webkit` explicitly, and do not maximise the window — a headed viewport follows the
@@ -506,39 +502,45 @@ what it must **not** delete as well as what it must.
 **ADR-0011 is the authority** on the provider and the data boundary, **ADR-0012** on why
 generation runs in a route handler. This is the short version.
 
-**What exists.** `/companion` — a two-pane page: job buttons plus a refinement box on the
-left, the proposal renderer above the pending queue on the right. Four jobs.
+**What exists — and `/companion` does NOT.** T13 deleted it; **ADR-0015 is the authority**.
+Each job now sits on the page of the artifact it produces, gated there on `aiReady`:
 
-**Its parts are no longer its own, as of T13 Phase 2.** The page still looks and behaves
-exactly as described here, but the machinery moved out so four pages can share it:
-`useProposal()` in `modules/companion/` holds the state and the apply/discard/generate
-handlers (following `use-log-habit.ts`); `components/companion/` holds `RefinementBox` and
-the four proposal renderers; `getPendingProposals(kind?)` filters; and generation is
-**`POST /api/companion/generate`**, moved out of the page's own route. If you are reading
-this to change the companion, change those, not the view. Three of them
+| Job | Page |
+|---|---|
+| Plan a goal | `/goals` |
+| Build a routine | `/activity/routines` |
+| Read my week | `/review` |
+| Read transactions | `/budget` |
+
+**The machinery is shared and lives in three places.** `useProposal()` in
+`modules/companion/` holds the state and the apply/discard/generate handlers (following
+`use-log-habit.ts`); `components/companion/` holds `ToolPanel`, `RefinementBox` and the four
+proposal renderers; `getPendingProposals(kind)` filters, which is what stops `/goals`
+auto-opening a pending import. Generation is **`POST /api/companion/generate`**. If you are
+changing the companion, change those — the per-page files are thin.
+
+**Applying does not navigate.** `onApplied` is optional and every page omits it, so the
+hook's default refreshes in place. Three of the jobs
 run end to end — generate → prune → edit inline → Apply, which writes through the modules'
 own actions and lands you on the result:
 
 - **Plan a goal** → milestones, the recurring **habits** that reach them, and at most three
-  genuine setup tasks — via `addMilestone`, `createHabit` and `createTask`, then `/activity`.
-  Reshaped in T12c; see the note below, because the old shape is what started the T12 line.
-- **Build a routine** → a routine and its items, via `createRoutine` and `addRoutineItem`,
-  then `/activity/routines`.
+  genuine setup tasks — via `addMilestone`, `createHabit` and `createTask`. Reshaped in T12c;
+  see the note below, because the old shape is what started the T12 line.
+- **Build a routine** → a routine and its items, via `createRoutine` and `addRoutineItem`.
 - **Read my week** → a narrated summary. **The odd one out: nothing to apply.** A paragraph
   is not a row, so there are no checkboxes, no Apply, and no arm in `applyProposalSchema` —
-  one Done button, which discards it.
-- **Read transactions** → rows pulled out of pasted text, via `createTransaction`, then
-  `/budget`. A dense row list rather than the spine: forty transactions are a table you
-  scan, not a sequence you read.
+  one Done button, which discards it. It sends `weekOf` from the page's own `?week=`, which
+  is the bug T13 fixed: `/companion` could not know which week you were looking at, so every
+  summary narrated the CURRENT one whatever week was on screen.
+- **Read transactions** → rows pulled out of pasted text, via `createTransaction`. A dense
+  row list rather than the spine: forty transactions are a table you scan, not a sequence
+  you read.
 
-Off by default. With the companion switched off in Settings the route renders no content
-and nothing in the app hints the feature exists. (It answers 200, not 404 — `(app)/loading.tsx`
-streams the shell before `notFound()` can set a status. Observable behaviour is the same.)
-
-**It has a nav tab now**, directly after Activity, spending the slot T10 freed (§6). It is
-gated on the same `aiReady(...)` reading as everything else about the feature, so it simply
-is not there when the companion is off. The ⌘K palette and the dashboard button still reach it too — the dashboard
-button is now a second door rather than the only one, and is kept deliberately.
+Off by default. With the companion switched off in Settings **no tool panel renders on any of
+the four pages**, and nothing in the app hints the feature exists. The pages themselves are
+unaffected — they are not AI features. `e2e/ai-settings.spec.ts` checks all four rather than
+sampling one, because "off" is now a claim about a wider surface than a single route.
 
 **The one prompt that sends your own detail.** Every other job sends titles, descriptions
 or already-summed figures; transaction import sends the text you paste, because that is

@@ -162,32 +162,33 @@ test("settings survive a reload, and the key survives a settings change", async 
   await expect(ai.getByLabel("API key")).toHaveAttribute("placeholder", /Saved/)
 })
 
-test("turning the companion off removes the route and the nav tab", async ({
-  page,
-}) => {
+test("turning the companion off removes every tool panel", async ({ page }) => {
   await page.goto("/settings")
   const ai = section(page)
   await ai.getByRole("button", { name: "Off", exact: true }).click()
   await ai.getByRole("button", { name: "Save AI settings" }).click()
   await expect(page.getByText("AI settings saved")).toBeVisible()
 
-  // Not merely hidden: the page renders nothing. This is ADR-0011's opt-in property, now
-  // owned by a setting rather than an env var.
-  const nav = page.getByRole("navigation").first()
-  await expect(nav.getByRole("link", { name: "Companion" })).toHaveCount(0)
-
-  // Asserted on CONTENT, not on the status code, and the distinction is real. There is a
-  // `src/app/(app)/loading.tsx` — a boundary around the WHOLE group, not this route — so
-  // Next streams the shell before any page component runs. By the time `notFound()` fires
-  // the response is already committed as 200.
+  // This is ADR-0011's opt-in property, now owned by a setting rather than an env var —
+  // and T13 changed WHERE it has to hold. There is no `/companion` to 404 any more; the
+  // four jobs live on four pages that exist regardless, so "off" has to mean every panel
+  // is absent from every one of them. That is a wider surface than the single route this
+  // test used to check, which is the point of asserting all four rather than a sample.
   //
-  // Measured, after an earlier version of this test asserted 404 and failed. It has always
-  // behaved this way; the docs saying "/companion 404s" were describing the intent rather
-  // than the behaviour. What the user experiences is what matters and is unchanged: no
-  // companion content, and no way to reach it.
+  // Asserted on CONTENT rather than a status code, as before. `src/app/(app)/loading.tsx`
+  // is a boundary around the WHOLE group, so Next streams the shell before any page
+  // component runs and the response commits as 200 whatever the page decides.
+  for (const [route, panel] of [
+    ["/goals", "Plan a goal"],
+    ["/activity/routines", "Build a routine"],
+    ["/review", "Read my week"],
+    ["/budget", "Read transactions"],
+  ] as const) {
+    await page.goto(route, { waitUntil: "domcontentloaded" })
+    await expect(page.getByRole("heading", { name: panel })).toHaveCount(0)
+  }
+
+  // And the page it all used to live on is gone rather than empty.
   await page.goto("/companion", { waitUntil: "domcontentloaded" })
   await expect(page.getByRole("heading", { name: "Companion" })).toHaveCount(0)
-  await expect(
-    page.getByRole("button", { name: "Plan", exact: true }),
-  ).toHaveCount(0)
 })

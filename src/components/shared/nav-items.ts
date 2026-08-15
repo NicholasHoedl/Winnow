@@ -3,7 +3,6 @@ import {
   ClipboardList,
   LayoutDashboard,
   ListTodo,
-  Sparkles,
   Target,
   Utensils,
   Wallet,
@@ -41,34 +40,17 @@ export const navItems: NavItem[] = [
 ]
 
 /**
- * The Companion, which **no longer has a tab** — Goals took its slot in T13 Phase 3.
+ * There is no `navItemsFor()` any more, and no Companion entry for it to splice in.
  *
- * Still exported, and still conditional, because the command palette and the dashboard
- * button both still reach `/companion` while it exists. It is deleted in T13 Phase 4, and
- * this constant goes with it.
+ * The nav used to vary by whether the AI companion was configured, because `/companion`
+ * was a whole PAGE that 404s when it is not — a tab for it would have been a dead link for
+ * anyone who never turned the feature on. T13 dispersed those four jobs onto the pages of
+ * the artifacts they produce and deleted that page, so nothing in the nav is conditional
+ * on AI any longer: `/goals`, `/activity/routines`, `/review` and `/budget` all exist
+ * regardless, and each gates its own tool on `aiReady` internally.
  *
- * Conditional matters for those remaining doors: `/companion` 404s unless the feature is
- * configured in Settings (ADR-0011, moved out of the environment in T11), so an
- * unconditional entry would be a dead link for anyone who never turned it on.
+ * `navItems` is the whole nav now. Import it directly.
  */
-export const COMPANION_NAV_ITEM: NavItem = {
-  href: "/companion",
-  label: "Companion",
-  icon: Sparkles,
-}
-
-/**
- * The nav as actually rendered.
- *
- * **It no longer varies**, and the parameter is kept only so the call sites can stay put
- * across Phase 4, which deletes both. Every page now gates its own AI tool on `aiReady`
- * rather than the nav gating a whole page — which is the better shape: the goals page
- * exists whether or not you have a provider configured, because goals are not an AI
- * feature.
- */
-export function navItemsFor(_companionEnabled: boolean): NavItem[] {
-  return navItems
-}
 
 export function isNavActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/"

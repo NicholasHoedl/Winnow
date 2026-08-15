@@ -34,7 +34,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
-import { COMPANION_NAV_ITEM, navItems } from "@/components/shared/nav-items"
+import { navItems } from "@/components/shared/nav-items"
 import { search } from "@/modules/search/actions"
 import { MIN_QUERY_LENGTH } from "@/modules/search/service"
 import type { SearchResult, SearchResultType } from "@/modules/search/types"
@@ -141,12 +141,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
   )
 }
 
-export function CommandPalette({
-  companionEnabled = false,
-}: {
-  /** Passed from the (app) layout, which can read the AI settings; this component cannot. */
-  companionEnabled?: boolean
-}) {
+export function CommandPalette() {
   const router = useRouter()
   const requestCreate = useCreateIntent()
   const [open, setOpen] = React.useState(false)
@@ -271,9 +266,9 @@ export function CommandPalette({
   }
 
   const q = query.trim().toLowerCase()
-  const navCommands = companionEnabled
-    ? [...NAV_COMMANDS, COMPANION_NAV_ITEM]
-    : NAV_COMMANDS
+  // No conditional entry any more: `/companion` was the only destination that could 404
+  // depending on settings, and T13 deleted it. Every command here is always reachable.
+  const navCommands = NAV_COMMANDS
   const navMatches = q
     ? navCommands.filter((c) => c.label.toLowerCase().includes(q))
     : navCommands

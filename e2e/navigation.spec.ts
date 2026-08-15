@@ -96,16 +96,16 @@ test("/goals is a page again, not a redirect", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Goals" })).toBeVisible()
 
   const nav = page.getByRole("navigation").first()
-  await expect(nav.getByRole("link", { name: "Goals", exact: true })).toBeVisible()
+  await expect(
+    nav.getByRole("link", { name: "Goals", exact: true }),
+  ).toBeVisible()
 })
 
-test("goals has a nav tab, directly after Activity", async ({
-  page,
-}) => {
-  // The nav no longer varies by AI state. `/companion` lost its tab to Goals in T13 Phase
-  // 3 and is reachable through the palette and the dashboard button until Phase 4 deletes
-  // it; each page gates its own AI tool on `aiReady` instead, which is why `/goals` is
-  // here unconditionally — goals are not an AI feature.
+test("goals has a nav tab, directly after Activity", async ({ page }) => {
+  // The nav does not vary at all any more. `/companion` was the one destination that could
+  // 404 depending on settings, so the bar had to be built conditionally around it; T13
+  // dispersed its four jobs onto the pages of their artifacts and deleted it. Every page
+  // here exists regardless and gates its own tool on `aiReady` internally.
   await page.goto("/")
   const nav = page.getByRole("navigation").first()
   const labels = await nav.getByRole("link").allInnerTexts()
@@ -126,12 +126,10 @@ test("seven tabs still fit a 375px phone without overflowing", async ({
   page,
 }) => {
   // The bar is a plain flex with `flex-1` and no overflow handling, so "it fits" is a
-  // measurement, not a style. T10 freed a slot and the Companion tab spends it — this is
-  // the check that says the ceiling is still seven and not six.
-  //
-  // Removing notes did not raise that ceiling, it only changed who spends the slot:
-  // Review took it, so the count is unchanged and this measurement still has to pass.
-  // Anything wanting a tab from here on has to take one, not add one.
+  // measurement, not a style. Every change since the bar filled has been a SWAP: T10 freed
+  // a slot and Companion spent it, T13 removed Notes and Review took that one, then gave
+  // Companion's slot to Goals when its page was deleted. The count has never moved, which
+  // is why this measurement still has to pass. Anything wanting a tab has to take one.
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto("/")
   const bar = page.locator("nav").filter({ hasText: "Dashboard" }).last()

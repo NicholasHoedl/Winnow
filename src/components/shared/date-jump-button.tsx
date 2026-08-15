@@ -48,6 +48,15 @@ export function DateJumpButton({
       <PopoverContent align="center" className="w-auto p-0">
         <Calendar
           mode="single"
+          // `required`, and it is load-bearing rather than a formality. Without it
+          // react-day-picker treats a click on the ALREADY-SELECTED day as a deselect and
+          // fires `onSelect(undefined)` — so "jump to the day I am already on" closed the
+          // popover and navigated nowhere. Silent, and invisible on 30 days out of 31,
+          // because you normally click a DIFFERENT day; `budget-date-nav.spec.ts` hardcodes
+          // the 15th and only caught it when the calendar rolled over to the 15th.
+          //
+          // This control is navigation, not a toggle: there is no "no day" to deselect to.
+          required
           captionLayout="dropdown"
           selected={anchor}
           defaultMonth={anchor}

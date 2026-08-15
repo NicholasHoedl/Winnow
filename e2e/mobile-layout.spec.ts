@@ -32,7 +32,6 @@ const ROUTES = [
   "/activity/routines",
   "/budget",
   "/calendar",
-  "/companion",
   "/goals",
   "/meals",
   "/review",

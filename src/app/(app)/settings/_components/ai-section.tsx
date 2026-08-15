@@ -164,7 +164,7 @@ export function AiSection({
   return (
     <SettingsSection
       title="AI companion"
-      description="Off unless you configure it. Every generation is a paid call to the provider you name here."
+      description="Off unless you configure it. Every generation is a paid call to the provider you name here. The tools live on the pages they act on — plan a goal on Goals, build a routine on Routines, read your week on Review, read transactions on Budget."
     >
       <form onSubmit={onSubmit}>
         <FieldGroup>
@@ -182,8 +182,9 @@ export function AiSection({
               )}
             />
             <p className="text-muted-foreground text-sm">
-              With this off, <code>/companion</code> does not exist — no nav
-              tab, no page, and nothing is ever sent anywhere.
+              With this off, the four AI tools are not rendered at all — no
+              panel on Goals, Routines, Review or Budget — and nothing is ever
+              sent anywhere. Those pages work exactly as they do now without it.
             </p>
           </Field>
 

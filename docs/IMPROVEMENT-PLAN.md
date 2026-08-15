@@ -1244,6 +1244,41 @@ happened to sit.
    it can see the "New goal" button before concluding there is nothing to delete: **a cleanup
    that deletes nothing and reports success is worse than one that throws.**
 
+**T13 Phase 4 — shipped**, no migration. The remaining three tools move to their artifacts
+and `/companion` is deleted. **ADR-0015 is the authority**; it also records what was rejected,
+which is the part most likely to be re-litigated.
+
+- **`/review` gained the `weekOf` it never sent, and that was a real bug.**
+  `buildSummaryMessages` has always taken it and `/review` has always parsed `?week=` — but
+  `/companion` did not know which week you were looking at, so every summary narrated the
+  CURRENT week. Step back three weeks, ask for a summary, get a confident paragraph about
+  this week under last month's heading. Nothing threw and no test caught it. This is the
+  clearest single argument for the tranche: the tool was missing context the artifact's own
+  page has for free.
+- **The routine builder went to `/activity/routines`, not `/activity`** as the plan's text
+  said. A routine's artifact is a routine, and routines live there; `/activity` is the task
+  list, and the builder there would have reproduced the separation T13 exists to remove.
+  `revalidateProposal`'s map points the same way.
+- **Applying no longer navigates.** `onApplied` is optional and every dispersed page omits
+  it, so the hook's default refreshes in place and leaves you looking at what you made.
+- **The shell stopped reading AI settings.** `navItemsFor()` is gone — the nav was only ever
+  conditional because `/companion` was a page that could 404 — so `(app)/layout.tsx` runs one
+  query fewer on every authenticated render, and the dashboard's Companion button went with
+  the page it pointed at.
+- **Tools sharing a page with lists is a new collision class in tests.** `getByLabel` and
+  `getByRole` match SUBSTRINGS, so `ToolPanel`'s `<section aria-label="Plan a goal">` matched
+  a lookup for "Goal", and a proposal's "Discard" matched goal cards named "Reorder E2E
+  discard …" — those specs name their goals after what they do. Every `Discard` locator is
+  `exact` now; the collision is structural rather than incidental.
+
+**A bug the calendar rolling over to the 15th exposed, unrelated to T13.**
+`date-jump-button.tsx` used react-day-picker's `mode="single"` without `required`, which
+treats a click on the ALREADY-SELECTED day as a deselect and fires `onSelect(undefined)` —
+guarded by an early return. So "jump to the day I am already on" closed the popover and
+navigated nowhere, on `/meals`, `/budget` and `/calendar` alike. Invisible on 30 days out of
+31, because you normally click a different day. `required` is the honest fix: the control is
+navigation, not a toggle, and there is no "no day" to deselect to.
+
 **And one flake the split genuinely caused.** `goal-momentum.spec.ts:121` logs a habit and
 then reads the goal's momentum. That assertion was safe for three tranches because the goal
 card was on `/activity` too — `revalidatePath` re-rendered it underneath a polling assertion,

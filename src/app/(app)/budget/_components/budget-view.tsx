@@ -89,6 +89,7 @@ export function BudgetView({
   filters,
   incomeSavings,
   trends,
+  importTool,
 }: {
   month: string
   today: string
@@ -100,6 +101,14 @@ export function BudgetView({
   // charts inside them stay server components — this view is a client component.
   incomeSavings?: React.ReactNode
   trends?: React.ReactNode
+  /**
+   * "Read transactions", or null when the companion is off.
+   *
+   * A CLIENT element unlike the two above — it holds its own state — but passed the same
+   * way, because the page is what knows whether the feature is configured and this view
+   * should not have to ask.
+   */
+  importTool?: React.ReactNode
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] =
@@ -394,6 +403,10 @@ export function BudgetView({
           </div>
         )}
       </section>
+
+      {/* Above the analysis sections and below the ledger: it proposes rows for the list
+          you just scrolled past, so it reads in that order. */}
+      {importTool && <div className="mt-6">{importTool}</div>}
 
       {incomeSavings}
       {trends}

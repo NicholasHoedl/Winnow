@@ -3,14 +3,10 @@ import { redirect } from "next/navigation"
 import { Search, Settings } from "lucide-react"
 
 import { auth } from "@/lib/auth"
-import { aiReady } from "@/modules/companion/ai-settings"
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
-import {
-  getAiSettings,
-  getUserPreferences,
-} from "@/modules/preferences/queries"
+import { getUserPreferences } from "@/modules/preferences/queries"
 import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
 import { BottomNav } from "@/components/shared/bottom-nav"
@@ -41,18 +37,17 @@ export default async function AppLayout({
   }
 
   const userName = session.user.name ?? "Account"
-  const [preferences, aiSettings, lists, goals, events] = await Promise.all([
+  // No `getAiSettings()` here any more. The shell used to read it to decide whether the
+  // Companion got a nav tab; T13 dispersed those jobs onto the pages of their artifacts and
+  // deleted that page, so the nav no longer varies by AI state and each page reads the
+  // setting itself. One query fewer on every authenticated render, and no value with no
+  // reader — which is the same anti-pattern as a column with no writer.
+  const [preferences, lists, goals, events] = await Promise.all([
     getUserPreferences(),
-    getAiSettings(),
     getLists(),
     getGoalOptions(),
     getEventOptions(),
   ])
-
-  // Whether the Companion gets a nav tab at all. Read here rather than in each nav
-  // component because the sidebar, the bottom bar and the palette must agree, and only a
-  // server component can reach the settings.
-  const companionEnabled = aiReady(aiSettings)
 
   return (
     <CreateIntentProvider>
@@ -67,7 +62,7 @@ export default async function AppLayout({
           >
             Skip to content
           </a>
-          <AppSidebar userName={userName} companionEnabled={companionEnabled} />
+          <AppSidebar userName={userName} />
 
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Mobile top bar (desktop puts the brand + toggle in the sidebar) */}
@@ -119,8 +114,8 @@ export default async function AppLayout({
             </main>
           </div>
 
-          <BottomNav companionEnabled={companionEnabled} />
-          <CommandPalette companionEnabled={companionEnabled} />
+          <BottomNav />
+          <CommandPalette />
           <GlobalCreateDialogs lists={lists} goals={goals} events={events} />
         </div>
       </PreferencesProvider>

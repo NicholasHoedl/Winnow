@@ -48,21 +48,26 @@ setup("configure the AI stub", async ({ page }) => {
     model: "stub",
   })
 
-  // Proven by its effect, not by a toast: the companion is only actually reachable once
-  // `aiReady` is satisfied, and that is what every companion spec depends on. It is also the
-  // check that would have caught both historic failures on the way IN rather than on the way
-  // out — a blank base URL fails here, loudly, instead of surfacing days later as a nav tab
-  // that quietly disappeared.
+  // Proven by its effect, not by a toast: a tool panel only renders once `aiReady` is
+  // satisfied, and that is what every companion spec depends on. It is also the check that
+  // would have caught both historic failures on the way IN rather than on the way out — a
+  // blank base URL fails here, loudly, instead of surfacing days later as a tool that had
+  // quietly stopped rendering.
   //
-  // `domcontentloaded` and a generous timeout because this is the FIRST hit on `/companion`
-  // in the run, and Turbopack compiles a route on demand — the default `load` waits for
-  // every subresource of a page being built from scratch, which overran 30s and failed the
-  // setup for a reason that had nothing to do with the settings it had just saved.
-  await page.goto("/companion", {
+  // `/activity/routines` rather than `/companion`, which T13 deleted. Any of the four tool
+  // pages would do; this one is the cheapest to render — no goals to load, no month of
+  // transactions, no weekly aggregation — and its panel is unconditional beyond `aiReady`,
+  // unlike the plan tool, which also needs a goal to exist.
+  //
+  // `domcontentloaded` and a generous timeout because this is the FIRST hit on the route in
+  // the run, and Turbopack compiles on demand — the default `load` waits for every
+  // subresource of a page being built from scratch, which overran 30s and failed the setup
+  // for a reason that had nothing to do with the settings it had just saved.
+  await page.goto("/activity/routines", {
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   })
   await expect(
-    page.getByRole("heading", { name: "Companion" }).first(),
+    page.getByRole("heading", { name: "Build a routine" }).first(),
   ).toBeVisible()
 })

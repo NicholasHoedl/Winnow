@@ -8,10 +8,13 @@ import {
   UNCATEGORIZED,
   type TransactionFilters,
 } from "@/modules/budget/service"
-import { getUserPreferences } from "@/modules/preferences/queries"
+import { aiReady } from "@/modules/companion/ai-settings"
+import { getPendingProposals } from "@/modules/companion/queries"
+import { getAiSettings, getUserPreferences } from "@/modules/preferences/queries"
 import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
+import { ImportTool } from "./_components/import-tool"
 import { IncomeSavingsSection } from "./_components/income-savings-section"
 import { TrendsSection } from "./_components/trends-section"
 
@@ -66,12 +69,17 @@ export default async function BudgetPage({
   // The summary comes from its own unfiltered read rather than being derived from the
   // rendered `transactions` array — otherwise filtering the list would silently
   // report the header stats for only the filtered subset.
-  const [categories, transactions, summary, trends] = await Promise.all([
-    getCategories(),
-    getMonthTransactions(month, filters),
-    getBudgetSummary(month),
-    getBudgetTrends(month, TREND_MONTHS),
-  ])
+  const [categories, transactions, summary, trends, aiSettings, pending] =
+    await Promise.all([
+      getCategories(),
+      getMonthTransactions(month, filters),
+      getBudgetSummary(month),
+      getBudgetTrends(month, TREND_MONTHS),
+      getAiSettings(),
+      // `import` only. Without the filter this page would auto-open whatever proposal was
+      // newest — a plan, a narrated week — because the view opens `pending[0]`.
+      getPendingProposals("import"),
+    ])
 
   return (
     <BudgetView
@@ -95,6 +103,18 @@ export default async function BudgetPage({
           categories={categories}
           currency={currency}
         />
+      }
+      // Passed as an element for the same reason the two sections above are: the page
+      // composes, the view places. Null when the companion is off, so `BudgetView` renders
+      // nothing rather than reasoning about it — a budget is not an AI feature.
+      importTool={
+        aiReady(aiSettings) ? (
+          <ImportTool
+            pending={pending}
+            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+            currency={currency}
+          />
+        ) : null
       }
     />
   )

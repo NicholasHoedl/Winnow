@@ -9,9 +9,12 @@ import { ArrowLeft, ArrowRight, Flag, ListTodo } from "lucide-react"
 import { addDays } from "@/lib/date"
 import { formatCents } from "@/modules/budget/service"
 import type { Category } from "@/modules/budget/queries"
+import type { ProposalRow } from "@/modules/companion/queries"
 import type { WeeklyReviewView } from "@/modules/review/queries"
 import { reviewHeadline } from "@/modules/review/service"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
+import { WeekSummary } from "./week-summary"
 
 /** UTC in, UTC out — these are wall-dates with no instant behind them. */
 function formatDay(date: string, opts: Intl.DateTimeFormatOptions): string {
@@ -38,9 +41,14 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function ReviewView({
   view,
   categories,
+  pending,
+  companionEnabled,
 }: {
   view: WeeklyReviewView
   categories: Category[]
+  /** Pending `summary` proposals — the page filters by kind at the query. */
+  pending: ProposalRow[]
+  companionEnabled: boolean
 }) {
   const { review, weekMoney, monthMoney, month, currency, isCurrentWeek } = view
   const { weekStart, weekEnd } = review
@@ -106,6 +114,20 @@ export function ReviewView({
           Nothing recorded this week.
         </div>
       ) : null}
+
+      {/* A client island in an otherwise read-only server page, above the figures it
+          narrates. Hidden on an empty week as well as with the companion off: `summaryReadiness`
+          would refuse it anyway, and a button whose only outcome is "there wasn't much
+          there" is worse than no button. */}
+      {companionEnabled && !review.isEmpty && (
+        <div className="mb-4">
+          <WeekSummary
+            pending={pending}
+            weekStart={weekStart}
+            isCurrentWeek={isCurrentWeek}
+          />
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>

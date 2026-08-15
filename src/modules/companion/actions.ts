@@ -39,31 +39,28 @@ const listModelsSchema = z.object({
 /**
  * Where a proposal of each kind is reviewed — the page that has to re-read after a write.
  *
- * T13 moves each job onto the page of the artifact it produces, so "the companion page"
- * stops being one place. A `Record` keyed on the enum rather than a switch: a fifth kind
- * fails to compile here instead of silently revalidating nothing.
+ * Each job lives on the page of the artifact it produces (T13), so this map IS the
+ * feature's shape rather than bookkeeping. A `Record` keyed on the enum rather than a
+ * switch: a fifth kind fails to compile here instead of silently revalidating nothing.
  *
- * `/goals` is listed before it exists (it is a 308 to `/activity` until T13 Phase 3).
- * Revalidating a path with no page is a no-op, not an error, and listing it now means the
- * map is right on the commit that gives it a page rather than one commit later.
+ * `routine` points at `/activity/routines`, not `/activity`. Running a routine creates
+ * tasks and touches the task list, but APPLYING a proposal creates the ROUTINE, and the
+ * routines page is what has to re-read to show it.
  */
 const PROPOSAL_PATH: Record<ProposalKind, string> = {
   goal_plan: "/goals",
-  routine: "/activity",
+  routine: "/activity/routines",
   summary: "/review",
   import: "/budget",
 }
 
 /**
- * Re-read every page that shows this proposal or what it just became.
+ * Re-read the page that shows this proposal, and the hubs that compose everything.
  *
- * Three paths, and each is a different claim. `/companion` is where it is reviewed TODAY
- * and goes when that page does; `PROPOSAL_PATH` is where it will be reviewed once T13
- * lands; `revalidateHubs()` covers the dashboard and the weekly review, which compose
- * every module and therefore change whenever a proposal turns into rows.
+ * There used to be a third path, `/companion`, where all four were reviewed. T13 Phase 4
+ * deleted that page; if you are looking for it, the tool moved to `PROPOSAL_PATH[kind]`.
  */
 function revalidateProposal(kind: ProposalKind): void {
-  revalidatePath("/companion")
   revalidatePath(PROPOSAL_PATH[kind])
   revalidateHubs()
 }

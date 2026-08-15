@@ -9,7 +9,7 @@ import type { GoalWithProgress } from "@/modules/goals/queries"
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
 import { PlanProposal } from "@/components/companion/plan-proposal"
-import { RefinementBox } from "@/components/companion/refinement-box"
+import { ToolPanel } from "@/components/companion/tool-panel"
 import { SortableList } from "@/components/shared/sortable-list"
 import { Button } from "@/components/ui/button"
 import {
@@ -129,65 +129,59 @@ export function GoalsView({
           Gated on the same `aiReady` reading as everything else about the companion, so it
           simply is not here when the feature is off. */}
       {companionEnabled && goals.length > 0 && (
-        <section
-          aria-label="Plan a goal"
-          className="bg-card mb-5 flex flex-col gap-3 rounded-xl border p-4"
-        >
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-medium">
-              <Sparkles className="text-brand-accent size-4" />
-              Plan a goal
-            </h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Break a goal into milestones, the practice that reaches them, and
-              anything you need to set up first. It proposes; you decide.
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Select
-              value={planGoalId}
-              onValueChange={(v) => v && setPlanGoalId(v)}
-            >
-              <SelectTrigger className="min-w-0 flex-1" aria-label="Goal">
-                <SelectValue>
-                  {(value) => goalTitleFor(value as string)}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {goals.map((goal) => (
-                  <SelectItem key={goal.id} value={goal.id}>
-                    {goal.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() =>
-                void proposal.generate({
-                  kind: "goal_plan",
-                  goalId: planGoalId,
-                })
-              }
-              disabled={busy || !planGoalId}
-              aria-busy={busy}
-            >
-              <Target className="size-4" />
-              {busy ? "Thinking…" : "Plan"}
-            </Button>
-          </div>
-
-          {active && payload?.kind === "goal_plan" && (
-            <RefinementBox
-              kind="goal_plan"
-              value={proposal.instruction}
-              onChange={proposal.setInstruction}
-              body={refineBody}
-              busy={busy}
-              onRefine={(body) => void proposal.generate(body)}
-            />
-          )}
-        </section>
+        <div className="mb-5">
+          <ToolPanel
+            icon={Sparkles}
+            title="Plan a goal"
+            description="Break a goal into milestones, the practice that reaches them, and anything you need to set up first. It proposes; you decide."
+            refine={
+              active && payload?.kind === "goal_plan"
+                ? {
+                    kind: "goal_plan" as const,
+                    value: proposal.instruction,
+                    onChange: proposal.setInstruction,
+                    body: refineBody,
+                    busy,
+                    onRefine: (body: Record<string, unknown>) =>
+                      void proposal.generate(body),
+                  }
+                : null
+            }
+          >
+            <div className="flex gap-2">
+              <Select
+                value={planGoalId}
+                onValueChange={(v) => v && setPlanGoalId(v)}
+              >
+                <SelectTrigger className="min-w-0 flex-1" aria-label="Goal">
+                  <SelectValue>
+                    {(value) => goalTitleFor(value as string)}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {goals.map((goal) => (
+                    <SelectItem key={goal.id} value={goal.id}>
+                      {goal.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={() =>
+                  void proposal.generate({
+                    kind: "goal_plan",
+                    goalId: planGoalId,
+                  })
+                }
+                disabled={busy || !planGoalId}
+                aria-busy={busy}
+              >
+                <Target className="size-4" />
+                {busy ? "Thinking…" : "Plan"}
+              </Button>
+            </div>
+          </ToolPanel>
+        </div>
       )}
 
       {/* A proposal is a lot to read, so it gets the room — above the list rather than
