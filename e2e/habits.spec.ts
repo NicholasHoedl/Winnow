@@ -206,22 +206,26 @@ test("the dashboard card shows today's practice and logs it", async ({
   await addHabit(page, title)
 
   await page.goto("/")
-  const card = page
-    .locator('[data-slot="card"]')
-    .filter({ has: page.getByText("Habits", { exact: true }) })
+  // By testid, not by heading text. The card was "Habits" until T15 merged it with the
+  // goals card into "Goals & practice"; a testid says which card this is without the test
+  // having an opinion about what it is called.
+  const card = page.getByTestId("goals-practice")
   await expect(card).toHaveCount(1)
 
-  // The count line, which is the card's answer to showing only three of however many
-  // there are. A regex because how many OTHER habits this account keeps is not this
+  // The count line. A regex because how many OTHER habits this account keeps is not this
   // test's business — only that the line states the truth in the right shape.
   await expect(card).toContainText(/\d+ of \d+ short|All met/)
 
-  // The card shows at most three rows, unmet first. A habit created seconds ago is unmet,
-  // so it is in that group — but it sorts last within it, so this assertion assumes the
-  // account has fewer than three OTHER unmet habits. If that stops being true this fails
-  // loudly and legibly, which is the right failure to have.
+  // **No longer conditional on how many habits exist.** The card used to show at most
+  // three rows, unmet first, so this assertion quietly assumed the account had fewer than
+  // three other unmet habits. T15 removed the cap: every habit is on the card, so a habit
+  // created seconds ago is always findable.
   await expect(card).toContainText(title)
   await expect(card).toContainText("0/3 this week")
+
+  // `addHabit` attaches no goal, so this one proves the grouping too: it has to land in
+  // the group for practice that serves no goal rather than under someone else's heading.
+  await expect(card).toContainText("Not tied to a goal")
 
   await card.getByRole("button", { name: `Log ${title}` }).click()
   await expect(card).toContainText("1/3 this week")

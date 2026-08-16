@@ -25,8 +25,7 @@ import {
   type DashboardCalendarView,
 } from "./_components/dashboard-calendar"
 import { DashboardTaskList } from "./_components/dashboard-task-list"
-import { GoalsSummary } from "./_components/goals-summary"
-import { HabitsCard } from "./_components/habits-card"
+import { GoalsPracticeCard } from "./_components/goals-practice-card"
 import { StatCards } from "./_components/stat-cards"
 import { TodayAgenda } from "./_components/today-agenda"
 import { Tomorrow } from "./_components/tomorrow"
@@ -87,6 +86,18 @@ export default async function DashboardPage({
 
   const name = session?.user?.name ?? "there"
   const openTasks = tasks.filter((task) => task.status === "open")
+
+  // Narrowed before it crosses into a client component. `GoalsPracticeCard` has to be a
+  // client component — a habit is loggable from it — so whatever it receives is serialised
+  // into the RSC payload, and `GoalWithProgress` carries every milestone and linked task the
+  // card never draws. Four fields go instead, which is the same call `HabitStripCard`
+  // already makes for habits.
+  const goalRows = goals.map((goal) => ({
+    id: goal.id,
+    title: goal.title,
+    progress: goal.progress,
+    stalled: goal.momentum?.stalled ?? false,
+  }))
 
   // Overdue tasks, and today's events and due tasks merged into one time-ordered list.
   // This was a separate `/today` route until it was folded in here — the two pages ran
@@ -194,13 +205,14 @@ export default async function DashboardPage({
           <Reveal delay={0.08}>
             <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
           </Reveal>
-          {/* Directly under the tasks, so *what I have to do* and *what I have to keep
-              doing* read as one pair — the same pairing /activity now makes with the strip
-              above its list. Not in the right column: that one already runs five cards
-              deep, where a sixth pushed past the fold. Renders nothing at all when there
-              are no habits. */}
+          {/* Directly under the tasks, so *what I have to do*, *what I have to keep doing*
+              and *what it is all for* read as one column — the same pairing /activity makes
+              with the strip above its list. Not in the right column: that one already ran
+              five cards deep before this merge, where a sixth pushed past the fold, and an
+              uncapped card is taller still. Renders nothing when there are no goals and no
+              habits. */}
           <Reveal delay={0.11}>
-            <HabitsCard habits={habits} />
+            <GoalsPracticeCard goals={goalRows} habits={habits} />
           </Reveal>
         </div>
 
@@ -227,7 +239,7 @@ export default async function DashboardPage({
           </Reveal>
         </div>
 
-        {/* What's next, today's numbers, and the two trackers */}
+        {/* What's next, and today's numbers */}
         <div className="flex min-w-0 flex-col gap-5">
           <Reveal delay={0.12}>
             <Tomorrow
@@ -246,9 +258,6 @@ export default async function DashboardPage({
               categories={categories}
               currency={currency}
             />
-          </Reveal>
-          <Reveal delay={0.25}>
-            <GoalsSummary goals={goals} />
           </Reveal>
         </div>
       </div>

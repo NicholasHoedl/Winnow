@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button"
  * Routines survive here by that rule: running one CREATES tasks, which the list cannot do
  * for you. Goals never had an action under it — every task a goal owns is already a row you
  * can tick — which is exactly why moving them off this page costs nothing but a glance, and
- * the glance is what `/goals` and the dashboard's `GoalsSummary` are for.
+ * the glance is what `/goals` and the dashboard's `GoalsPracticeCard` are for.
  *
  * `HANDLE_GUTTER` went with the rail. It was `pl-7`, aligning this line with the goal cards'
  * drag handles; with no goal cards on the page there is nothing to align to, and the `pl-0`

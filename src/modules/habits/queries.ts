@@ -166,6 +166,18 @@ export type HabitStripCard = {
   id: string
   title: string
   period: HabitPeriod
+  /**
+   * The goal this practice serves, or null.
+   *
+   * Carried so the dashboard can list a habit UNDER its goal. Cheap in a way the rest of
+   * this shape is not an accident about: it is a plain column on `habits`, not a windowed
+   * reading, so selecting it costs no join and does not touch the entry window below.
+   *
+   * Null covers two cases the UI treats the same: never attached, and attached to a goal
+   * that has since been deleted — `goal_id` is `ON DELETE SET NULL` because giving up a
+   * target should not delete the running (schema.ts).
+   */
+  goalId: string | null
   /** done/target for the period containing today. The only reading this shape carries. */
   now: Adherence
 }
@@ -197,8 +209,15 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
     db.query.habits.findMany({
       where: and(eq(habits.userId, userId), isNull(habits.archivedAt)),
       // `targetCount` is selected but not returned: it feeds `adherence` here and is folded
-      // into `now.target`, so the client gets the reading rather than the rule.
-      columns: { id: true, title: true, period: true, targetCount: true },
+      // into `now.target`, so the client gets the reading rather than the rule. Everything
+      // else here flows straight through via the rest-spread below.
+      columns: {
+        id: true,
+        title: true,
+        period: true,
+        targetCount: true,
+        goalId: true,
+      },
       orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
     }),
     db.query.habitEntries.findMany({
