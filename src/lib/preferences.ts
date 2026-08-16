@@ -18,6 +18,17 @@ export type Theme = "light" | "dark" | "system"
  */
 export type MomentumDays = 7 | 14 | 30
 
+/**
+ * The calendar's four views, duplicated here rather than imported.
+ *
+ * `CALENDAR_VIEWS` proper lives in `app/(app)/calendar/_components/views.ts` alongside the
+ * URL helpers that use it. This file is imported by the server validation and query layer,
+ * which must not reach into a route's `_components` — so the list is restated, and the two
+ * are kept in step by `views.ts` importing THIS type rather than the other way round.
+ */
+export type CalendarView = "month" | "week" | "day" | "agenda"
+export const CALENDAR_VIEWS: CalendarView[] = ["month", "week", "day", "agenda"]
+
 export const THEMES: Theme[] = ["light", "dark", "system"]
 export const MOMENTUM_DAYS: MomentumDays[] = [7, 14, 30]
 
@@ -30,6 +41,8 @@ export type UserPreferences = {
   digestEnabled: boolean
   goalMomentumDays: MomentumDays
   theme: Theme
+  balanceMacroTargets: boolean
+  defaultCalendarView: CalendarView
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -43,6 +56,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   digestEnabled: true,
   goalMomentumDays: 14,
   theme: "system",
+  balanceMacroTargets: true,
+  defaultCalendarView: "month",
 }
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).
@@ -80,6 +95,18 @@ export const MOMENTUM_OPTIONS: { value: MomentumDays; label: string }[] = [
   { value: 7, label: "1 week" },
   { value: 14, label: "2 weeks" },
   { value: 30, label: "1 month" },
+]
+
+export const BALANCE_TARGET_OPTIONS: { value: boolean; label: string }[] = [
+  { value: true, label: "On" },
+  { value: false, label: "Off" },
+]
+
+export const CALENDAR_VIEW_OPTIONS: { value: CalendarView; label: string }[] = [
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+  { value: "day", label: "Day" },
+  { value: "agenda", label: "Agenda" },
 ]
 
 // The runtime's full IANA zone list when available (server Node + modern

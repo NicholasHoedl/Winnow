@@ -5,14 +5,21 @@ import { and, asc, eq, inArray } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
-import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import {
+  type ActionFailure,
+  type ActionResult,
+  invalid,
+  nullify,
+} from "@/lib/action-result"
 import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
+import { getUserPreferences } from "@/modules/preferences/queries"
 
 import { fetchProductByBarcode, searchProducts } from "./off-client"
 import type { ImportedFood } from "./off-mapping"
 import { describeOffFailure } from "./off-request"
 import type { Food, MacroTargets, MealEntry, WaterLog } from "./queries"
+import { carbsForCalories } from "./service"
 import {
   copiedMealEntry,
   restorableFood,
@@ -454,22 +461,72 @@ export async function lookupBarcode(
  * Days before the earliest period keep scoring against no target, and days already
  * covered by an earlier period are untouched. That's the whole point: changing today's
  * targets no longer rewrites what last month was measured against.
+ *
+ * **This is the one place the balance rule applies**, and that is deliberate. With
+ * `balanceMacroTargets` on, carbs is DERIVED here from the other three rather than taken
+ * from the request — so a stale tab, a client with the preference cached from before it was
+ * switched off, or anything hand-rolling this RPC all land on the same answer. The dialog
+ * computes the same number, but only to show you; it does not author it.
+ *
+ * The rule is about AUTHORING a target, not about what rows may exist. `restoreMacroTargetPeriod`
+ * replays a deleted row verbatim, and the account importer writes `macro_targets` generically
+ * from `INSERT_ORDER` — both bypass this, correctly. A restore is a faithful replay, not a
+ * re-entry, and undo that silently rewrote your numbers would not be undo.
  */
-export async function setMacroTargets(input: unknown): Promise<ActionResult> {
+export type SetMacroTargetsResult =
+  /** `derivedCarbsG` is non-null when the balance rule changed what you submitted. */
+  { ok: true; derivedCarbsG: number | null } | ActionFailure
+
+export async function setMacroTargets(
+  input: unknown,
+): Promise<SetMacroTargetsResult> {
   const userId = await requireUserId()
   const parsed = macroTargetsSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
+  let values = parsed.data
+  let derivedCarbsG: number | null = null
+
+  const { balanceMacroTargets } = await getUserPreferences()
+  if (balanceMacroTargets) {
+    const fit = carbsForCalories(parsed.data)
+    if (fit.kind === "overshoot") {
+      // Rejected rather than clamped to 0. Clamping would store a row whose parts exceed
+      // its whole — breaking the very identity this is here to hold — and carbs of 0 means
+      // "untracked" everywhere else, so it would also switch off carb tracking as a side
+      // effect of a contradictory entry.
+      //
+      // The error goes on CALORIES, not on carbs: under the rule the carbs input is
+      // read-only, and pointing "fix this" at a control you cannot type in is a dead end.
+      // Calories is the figure the identity is anchored on and the first field in the form,
+      // so it is also where react-hook-form will put focus.
+      const floor = Math.ceil(parsed.data.calories + fit.byKcal)
+      return {
+        ok: false,
+        error: "Please fix the errors below.",
+        fieldErrors: {
+          calories: `Protein and fat alone come to ${floor} kcal. Raise calories to at least that, or lower protein or fat.`,
+        },
+      }
+    }
+    if (fit.kind === "fits" && fit.carbsG !== parsed.data.carbsG) {
+      values = { ...parsed.data, carbsG: fit.carbsG }
+      derivedCarbsG = fit.carbsG
+    }
+    // `skipped` falls through untouched: a 0 in calories, protein or fat means the target
+    // is deliberately partial, and the arithmetic has no business completing it.
+  }
+
   await db
     .insert(macroTargets)
-    .values({ userId, ...parsed.data })
+    .values({ userId, ...values })
     .onConflictDoUpdate({
       target: [macroTargets.userId, macroTargets.effectiveFrom],
       // $onUpdate doesn't fire on the conflict path, so bump updatedAt explicitly.
-      set: { ...parsed.data, updatedAt: new Date() },
+      set: { ...values, updatedAt: new Date() },
     })
   revalidateMeals()
-  return { ok: true }
+  return { ok: true, derivedCarbsG }
 }
 
 export type DeleteMacroTargetResult =
@@ -497,7 +554,19 @@ export async function deleteMacroTargetPeriod(
   return { ok: true, period: deleted ?? null }
 }
 
-/** Undo for {@link deleteMacroTargetPeriod}. Column list + test live in restore.ts. */
+/**
+ * Undo for {@link deleteMacroTargetPeriod}. Column list + test live in restore.ts.
+ *
+ * **Deliberately does NOT apply the balance rule**, unlike `setMacroTargets`. Undo has to
+ * give back exactly what was deleted: a period saved before the preference existed, or
+ * while it was off, is a legitimate row, and re-deriving its carbs here would mean the undo
+ * button quietly rewrote your numbers. Worse, a legacy row where protein and fat already
+ * exceed the calories would be REJECTED — you would have deleted something and then been
+ * unable to get it back, which is the one failure a reversal must not have.
+ *
+ * If a cross-field refinement is ever added to `macroTargetsSchema`, it must not be added
+ * to `restoreMacroTargetSchema` for the same reason.
+ */
 export async function restoreMacroTargetPeriod(
   period: unknown,
 ): Promise<ActionResult> {

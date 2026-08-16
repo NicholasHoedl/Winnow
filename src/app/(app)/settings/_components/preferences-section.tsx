@@ -7,6 +7,8 @@ import { toast } from "sonner"
 
 import {
   CURRENCIES,
+  BALANCE_TARGET_OPTIONS,
+  CALENDAR_VIEW_OPTIONS,
   MOMENTUM_OPTIONS,
   PRIORITY_OPTIONS,
   WEEK_START_OPTIONS,
@@ -190,6 +192,46 @@ export function PreferencesSection({
             <p className="text-muted-foreground text-xs">
               How far back a goal looks for finished work. A goal with nothing
               completed in this window reads as stalled.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Balance macro targets</FieldLabel>
+            <Controller
+              control={control}
+              name="balanceMacroTargets"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={BALANCE_TARGET_OPTIONS}
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Work out your carbs from your calories, protein and fat so the
+              grams account for the calories. Leave any of those three at 0 and
+              your targets are left alone — a 0 means you aren&apos;t tracking
+              it.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Calendar opens on</FieldLabel>
+            <Controller
+              control={control}
+              name="defaultCalendarView"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={CALENDAR_VIEW_OPTIONS}
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Which view the calendar starts on. A link with a view in it — a
+              search result, or one you bookmarked — still wins.
             </p>
           </Field>
 

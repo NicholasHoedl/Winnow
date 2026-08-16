@@ -1,0 +1,2 @@
+ALTER TABLE "user_preferences" ADD COLUMN "balance_macro_targets" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD COLUMN "default_calendar_view" text DEFAULT 'month' NOT NULL;

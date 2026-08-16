@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { CURRENCY_CODES, THEMES } from "@/lib/preferences"
+import { CALENDAR_VIEWS, CURRENCY_CODES, THEMES } from "@/lib/preferences"
 import { AI_PROVIDERS } from "@/modules/companion/ai-settings"
 
 // Robust across runtimes: constructing a formatter throws RangeError for an
@@ -14,10 +14,17 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
-// Regional/formatting preferences — the Preferences settings section owns exactly
-// these. Deliberately excludes the notification fields below: each section submits
-// its whole form, so sharing one schema would let either section overwrite the
-// other's just-saved values (Zod strips what isn't declared here).
+// The Preferences settings section owns exactly these. Deliberately excludes the
+// notification fields below: each section submits its whole form, so sharing one schema
+// would let either section overwrite the other's just-saved values (Zod strips what isn't
+// declared here).
+//
+// It began as regional/formatting only, and is now better described as **the defaults that
+// change how the app behaves for you** — `goalMomentumDays` was the first that was not
+// about formatting, and the two below are the second and third. Kept as one section rather
+// than split, because a section per preference is a settings page nobody can scan; if this
+// grows much further, split it by SUBJECT (a Nutrition section, a Calendar section) rather
+// than by whether a field formats something.
 export const userPreferencesSchema = z.object({
   timeZone: z.string().refine(isValidTimeZone, "Unknown time zone"),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]),
@@ -25,6 +32,8 @@ export const userPreferencesSchema = z.object({
   use24HourTime: z.boolean(),
   defaultTaskPriority: z.enum(["low", "medium", "high"]),
   goalMomentumDays: z.union([z.literal(7), z.literal(14), z.literal(30)]),
+  balanceMacroTargets: z.boolean(),
+  defaultCalendarView: z.enum(CALENDAR_VIEWS as [string, ...string[]]),
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 

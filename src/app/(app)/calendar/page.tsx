@@ -16,10 +16,13 @@ export default async function CalendarPage({
   searchParams: Promise<{ view?: string; date?: string; month?: string }>
 }) {
   const params = await searchParams
-  const { timeZone, weekStartsOn } = await getUserPreferences()
+  const { timeZone, weekStartsOn, defaultCalendarView } =
+    await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
 
-  const view = parseView(params.view)
+  // The preference is only the fallback: an explicit `?view=` still wins, so a bookmark or
+  // a shared link shows what it always showed regardless of whose account opens it.
+  const view = parseView(params.view, defaultCalendarView)
 
   // `?month=` predates `?date=` and is still what the dashboard mini-calendar and
   // search results link with, so it stays readable as the first of the month.

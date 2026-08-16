@@ -56,6 +56,30 @@ export const userPreferences = pgTable("user_preferences", {
   theme: text("theme").notNull().default("system"),
 
   /**
+   * Whether saving macro targets derives carbs from the other three so the grams account
+   * for the calories (`calories = 4·protein + 4·carbs + 9·fat`).
+   *
+   * A preference rather than a column on `macro_targets`, because it governs how a target
+   * is AUTHORED, not what a stored target means. Rows written before it existed, restored
+   * by undo, or brought in by an account import are all left exactly as they are — see
+   * `setMacroTargets`, which is the only place the rule applies.
+   *
+   * Defaults ON: it was asked for as "automatically enforce, with the option to disable".
+   * It stays inert for anyone who leaves a macro at 0, which this app reads as untracked,
+   * so it cannot quietly take over a partial target.
+   */
+  balanceMacroTargets: boolean("balance_macro_targets").notNull().default(true),
+
+  /**
+   * Which view `/calendar` opens on when the URL does not say.
+   *
+   * Stored as text and narrowed by Zod, the same as `theme` above — the set of views is a
+   * UI concern that should be able to grow without a migration. An explicit `?view=` still
+   * wins, so every existing link keeps working.
+   */
+  defaultCalendarView: text("default_calendar_view").notNull().default("month"),
+
+  /**
    * The AI companion's whole configuration (T11). Settings, not environment.
    *
    * These replaced `AI_*` env vars outright rather than layering over them: two sources

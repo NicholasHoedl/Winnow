@@ -70,6 +70,10 @@ export default async function DashboardPage({
     getCategories(),
     getDayEvents(today, timeZone),
     getDayEvents(nextDate, timeZone),
+    // Still fetched even though the calendar it feeds is `lg:` only. There is one server
+    // render and it has no idea how wide the viewport is, so this cannot be skipped for
+    // phones — and it sits inside this `Promise.all`, so it costs no serial latency. Not
+    // dead weight to be cleaned up.
     getMonthEvents(month, timeZone, weekStartsOn),
     getGoals(timeZone, goalMomentumDays),
     getCalendars(),
@@ -200,8 +204,17 @@ export default async function DashboardPage({
           </Reveal>
         </div>
 
-        {/* The month */}
-        <div className="flex min-w-0 flex-col gap-5">
+        {/* The month — desktop only.
+            `lg`, matching the grid above rather than the app's `md` nav breakpoint: below
+            `lg` this grid is one column, so the calendar stops being a column and becomes a
+            tall block wedged between the agenda and the stat cards, on the surface with the
+            least vertical room. `hidden lg:flex` with the flex modifiers `lg:`-prefixed is
+            the house pattern (see `activity/loading.tsx`).
+
+            `loading.tsx` carries the same visibility on its middle column. If you change
+            one, change both — a skeleton that reserves 384px the page then never fills is
+            the jump that file exists to prevent. */}
+        <div className="hidden min-w-0 lg:flex lg:flex-col lg:gap-5">
           <Reveal delay={0.1} className="flex min-h-0 flex-1 flex-col">
             <DashboardCalendar
               month={month}

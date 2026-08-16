@@ -3,29 +3,54 @@
 // (which renders the switcher and the prev/next links), so neither can drift from the
 // other's idea of what a valid view is.
 //
-// View and date are both in the URL rather than in component state or a preference:
-// a week is then linkable, survives a reload, and works with the browser's own back
-// button — none of which a `useState` toggle gives you.
+// View and date are both in the URL rather than in component state: a week is then
+// linkable, survives a reload, and works with the browser's own back button — none of which
+// a `useState` toggle gives you. What the URL does NOT say is now answered by the
+// `defaultCalendarView` preference, which only ever supplies the starting point; an explicit
+// `?view=` always wins, so every link and bookmark keeps meaning what it meant.
 
 import { addDays, dowOf, shiftMonth } from "@/lib/date"
+import type { CalendarView } from "@/lib/preferences"
 import { weekDates } from "@/modules/calendar/service"
 
 export const CALENDAR_VIEWS = ["month", "week", "day", "agenda"] as const
-export type CalendarViewKind = (typeof CALENDAR_VIEWS)[number]
 
-/** A `?view=` value, or "month" for anything unrecognised. */
-export function parseView(value: string | undefined): CalendarViewKind {
+/**
+ * The four views.
+ *
+ * Aliased to `CalendarView` in `lib/preferences.ts` rather than declared twice: that file is
+ * client-safe and imported by the server validation and query layer, which must not reach
+ * into a route's `_components`. The alias is what keeps the two lists from drifting — widen
+ * one and this stops compiling.
+ */
+export type CalendarViewKind = CalendarView
+
+/**
+ * A `?view=` value, falling back to `fallback` when it is absent or unrecognised.
+ *
+ * The fallback defaults to "month" so every call site that does not care keeps its old
+ * behaviour; `/calendar` passes the user's preference.
+ */
+export function parseView(
+  value: string | undefined,
+  fallback: CalendarViewKind = "month",
+): CalendarViewKind {
   return CALENDAR_VIEWS.includes(value as CalendarViewKind)
     ? (value as CalendarViewKind)
-    : "month"
+    : fallback
 }
 
-/** The URL for a view of a date. "month" is the default, so it stays out of the query
- *  and `/calendar` remains the canonical link to today. */
+/**
+ * The URL for a view of a date. **Always names the view, including "month".**
+ *
+ * It used to omit `view=month`, on the reasoning that month was the default and `/calendar`
+ * was therefore the canonical link to today. Making the default configurable inverts that
+ * exactly: for someone whose preference is the week, a bare `/calendar?date=…` resolves back
+ * to the WEEK — so the month button would have produced a link that could not select the
+ * month. The switcher has to be able to say "month" out loud.
+ */
 export function calendarHref(view: CalendarViewKind, date: string): string {
-  const params = new URLSearchParams()
-  if (view !== "month") params.set("view", view)
-  params.set("date", date)
+  const params = new URLSearchParams({ view, date })
   return `/calendar?${params}`
 }
 

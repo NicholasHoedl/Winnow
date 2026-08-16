@@ -84,6 +84,25 @@ page and the rail left `/activity` · **4** the remaining three tools dispersed 
 `/companion` deleted. **ADR-0015 is the authority** on the arrangement and on what was
 rejected.
 
+**T14 is shipped**, three unrelated asks in one pass, sharing migration `0036`:
+
+- **Macro targets can balance themselves.** With `balanceMacroTargets` on (the default),
+  saving a target derives carbs from calories, protein and fat so the grams account for the
+  calories. Three things about it are load-bearing and easy to undo by accident:
+  **(a)** it is skipped entirely when any of the three is 0, because a 0 means "not tracked"
+  here and enforcing would make "protein only" impossible; **(b)** the SERVER derives the
+  number — the dialog's field is read-only and deliberately *unregistered*, so the client
+  cannot author it and the two cannot disagree; **(c)** `restoreMacroTargetPeriod` and the
+  account importer bypass the rule, because undo and restore are faithful replays. It is a
+  write-path rule, not an invariant of the table.
+- **The dashboard's month calendar is `lg:` only.** `page.tsx` and `loading.tsx` carry the
+  same visibility; change one and you must change the other, or the phone flashes a 384px
+  skeleton card the page never fills.
+- **`/calendar` opens on `defaultCalendarView`.** An explicit `?view=` still wins.
+  `calendarHref` now **always** emits `view=`, including month — it used to omit it on the
+  grounds that month was the default, which inverts the moment the default is configurable:
+  with a week preference, the Month button produced a URL that resolved back to week.
+
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
 after a verified-empty pre-flight dump — the user had written nothing in it). Anything you

@@ -109,6 +109,86 @@ export type MacroTargetValues = {
   fatG: number
 }
 
+/**
+ * Atwater factors: the kcal each gram of a macronutrient is counted as.
+ *
+ * The first calorie/gram conversion in the app — every other figure here is either already
+ * kcal or already grams. Module-local rather than in `src/lib/`, following `KJ_PER_KCAL` in
+ * `off-mapping.ts`: these are facts about nutrition, and nutrition lives in this module.
+ *
+ * They are the rounded conventional values, not the precise ones (protein is nearer 4.1).
+ * Every food label in the world is computed with these, so matching labels matters more
+ * than matching a bomb calorimeter.
+ */
+export const KCAL_PER_PROTEIN_G = 4
+export const KCAL_PER_CARB_G = 4
+export const KCAL_PER_FAT_G = 9
+
+/**
+ * What carbs would have to be for a target's macros to account for its calories.
+ *
+ * A union rather than `number | null`, because "there is no answer" has two very different
+ * causes and the caller has to tell them apart: one is a target that opted out of the whole
+ * question, the other is a target that cannot be satisfied. A nullable number would let a
+ * caller treat the second as the first and silently write something wrong.
+ */
+export type CarbFit =
+  /**
+   * At least one of calories, protein or fat is 0, which this app reads as "not tracked" —
+   * see `progress()` below and the targets dialog's own copy. Deriving carbs from a target
+   * that is deliberately partial would make "I only track protein" impossible to express,
+   * so the arithmetic declines to run at all.
+   */
+  | { kind: "skipped" }
+  /** The remainder, in grams, never negative. */
+  | { kind: "fits"; carbsG: number }
+  /**
+   * Protein and fat alone already exceed the calorie target, so there is no non-negative
+   * carb figure that balances. `byKcal` is the overshoot, for a message that says how far
+   * out it is rather than just refusing.
+   */
+  | { kind: "overshoot"; byKcal: number }
+
+/** What a macro split accounts for, in kcal, by the factors above. */
+export function macroCalories(
+  macros: Pick<MacroTargetValues, "proteinG" | "carbsG" | "fatG">,
+): number {
+  return (
+    macros.proteinG * KCAL_PER_PROTEIN_G +
+    macros.carbsG * KCAL_PER_CARB_G +
+    macros.fatG * KCAL_PER_FAT_G
+  )
+}
+
+/**
+ * Carbs as the balancing term: `calories = 4·protein + 4·carbs + 9·fat`, solved for carbs.
+ *
+ * Carbs absorb the remainder rather than any other macro because protein and fat are the
+ * numbers people set deliberately — protein from bodyweight, fat from a floor — and carbs
+ * are what is left of the energy budget afterwards.
+ *
+ * Rounded to one decimal. The column is `real`, and rounding to whole grams would reintroduce
+ * up to 4 kcal of the drift this exists to remove.
+ */
+export function carbsForCalories(target: {
+  calories: number
+  proteinG: number
+  fatG: number
+}): CarbFit {
+  const { calories, proteinG, fatG } = target
+  if (calories <= 0 || proteinG <= 0 || fatG <= 0) return { kind: "skipped" }
+
+  const fromProteinAndFat =
+    proteinG * KCAL_PER_PROTEIN_G + fatG * KCAL_PER_FAT_G
+  const remaining = calories - fromProteinAndFat
+  if (remaining < 0) return { kind: "overshoot", byKcal: -remaining }
+
+  return {
+    kind: "fits",
+    carbsG: Math.round((remaining / KCAL_PER_CARB_G) * 10) / 10,
+  }
+}
+
 function progress(
   consumed: number,
   target: number | null | undefined,

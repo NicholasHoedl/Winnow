@@ -12,6 +12,7 @@ import type { Calendar, EventOccurrence } from "@/modules/calendar/queries"
 import { weekDates } from "@/modules/calendar/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { TimeGrid } from "@/components/calendar/time-grid"
+import { calendarHref } from "@/app/(app)/calendar/_components/views"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 
 // Sunday-indexed absolute day names (the week view looks these up by getUTCDay).
@@ -241,8 +242,12 @@ export function DashboardCalendar({
                 </Link>
               ))}
             </div>
+            {/* Built by `calendarHref` rather than by hand, so this cannot disagree with
+                the switcher on `/calendar` about what a month URL looks like — and so it
+                keeps working now that a bare `/calendar` means "whatever view you prefer"
+                rather than "the month". */}
             <Link
-              href={view === "week" ? "/calendar?view=week" : "/calendar"}
+              href={calendarHref(view === "week" ? "week" : "month", today)}
               className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs font-medium"
             >
               Open

@@ -13,8 +13,10 @@ import {
   setMacroTargets,
 } from "@/modules/meals/actions"
 import type { MacroTargets } from "@/modules/meals/queries"
+import { carbsForCalories } from "@/modules/meals/service"
 import { macroTargetsSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -121,10 +123,34 @@ export function TargetsDialog({
     })
   }
 
-  // useWatch rather than watch(): it subscribes to the one field and returns a value,
-  // so the React Compiler can still handle this component (watch() returns a function
-  // it has to bail out on — the four warnings elsewhere in the app are all that).
+  // useWatch rather than watch(): it subscribes to named fields and returns values, so the
+  // React Compiler can still handle this component (watch() returns a function it has to
+  // bail out on — the remaining warnings elsewhere in the app are all that).
   const startsOn = useWatch({ control, name: "effectiveFrom" })
+
+  const { balanceMacroTargets } = usePreferences()
+  const [calories, proteinG, fatG] = useWatch({
+    control,
+    name: ["calories", "proteinG", "fatG"],
+  })
+
+  /**
+   * What carbs will be once this is saved, when the balance preference is on.
+   *
+   * Only ever a PREVIEW. The carbs input below is deliberately left unregistered while
+   * balancing applies, so this component cannot author the submitted value — `setMacroTargets`
+   * derives it server-side from the other three. That is what makes the two impossible to
+   * disagree: if the preference is switched off in another tab between this page loading and
+   * this form submitting, the worst case is that the stored carbs is saved back unchanged.
+   */
+  const fit = balanceMacroTargets
+    ? carbsForCalories({
+        calories: Number(calories) || 0,
+        proteinG: Number(proteinG) || 0,
+        fatG: Number(fatG) || 0,
+      })
+    : { kind: "skipped" as const }
+  const storedCarbs = targets?.carbsG ?? 0
 
   const onSubmit = handleSubmit(async (data) => {
     const result = await setMacroTargets(data)
@@ -137,7 +163,13 @@ export function TargetsDialog({
       toast.error(result.error)
       return
     }
-    toast.success("Targets saved")
+    // Named when the rule changed what was typed. The server is authoritative here, and an
+    // authority that acts silently is one you cannot learn.
+    toast.success(
+      result.derivedCarbsG != null
+        ? `Targets saved — carbs set to ${Math.round(result.derivedCarbsG)} g`
+        : "Targets saved",
+    )
     onOpenChange(false)
   })
 
@@ -147,7 +179,10 @@ export function TargetsDialog({
         <DialogHeader>
           <DialogTitle>Daily targets</DialogTitle>
           <DialogDescription>
-            Set your daily macro goals. Leave a value at 0 to not track it.
+            Set your daily macro goals. Leave a value at 0 to not track it
+            {balanceMacroTargets
+              ? " — carbs is worked out from the other three unless one of them is 0."
+              : "."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit}>
@@ -186,13 +221,59 @@ export function TargetsDialog({
                 <FieldError errors={[errors.proteinG]} />
               </Field>
               <Field>
-                <FieldLabel htmlFor="t-carb">Carbs (g)</FieldLabel>
-                <Input
-                  id="t-carb"
-                  type="number"
-                  step="any"
-                  {...register("carbsG", numberField)}
-                />
+                <FieldLabel htmlFor="t-carb">
+                  Carbs (g)
+                  {fit.kind !== "skipped" && (
+                    <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+                      calculated
+                    </span>
+                  )}
+                </FieldLabel>
+                {fit.kind === "skipped" ? (
+                  <Input
+                    id="t-carb"
+                    type="number"
+                    step="any"
+                    {...register("carbsG", numberField)}
+                  />
+                ) : (
+                  /* readOnly, and NOT registered. `disabled` would be worse twice over:
+                     react-hook-form's `register({ disabled })` UNSETS the field from the
+                     submitted values, so the server would receive no `carbsG` at all and
+                     reject the whole form on a control you cannot type in. And leaving it
+                     registered would let this component author a derived number, which is
+                     exactly what the server is here to be the only source of. */
+                  <Input
+                    // Keyed on the value, which is not decoration. `Input` wraps Base UI's
+                    // `InputPrimitive`, and an input given a `value` but no `onChange` does
+                    // not adopt a changing one — React reconciles this branch and the
+                    // registered branch into the SAME element, so `readOnly` lands and the
+                    // displayed number stays at whatever `reset()` first put there. Keying
+                    // on the value remounts it instead. Free here: nobody types in it.
+                    key={fit.kind === "fits" ? fit.carbsG : "stored"}
+                    id="t-carb"
+                    type="number"
+                    readOnly
+                    aria-describedby="t-carb-note"
+                    value={fit.kind === "fits" ? fit.carbsG : storedCarbs}
+                  />
+                )}
+                {fit.kind === "fits" && (
+                  <p id="t-carb-note" className="text-muted-foreground text-xs">
+                    From your calories, protein and fat, so the grams account
+                    for the calories.
+                    {fit.carbsG !== storedCarbs && targets != null && (
+                      <> Currently {Math.round(storedCarbs)} g.</>
+                    )}
+                  </p>
+                )}
+                {fit.kind === "overshoot" && (
+                  <p id="t-carb-note" className="text-brand-accent text-xs">
+                    Protein and fat alone come to{" "}
+                    {Math.round(Number(calories) + fit.byKcal)} kcal — more than
+                    the calorie target, so there is nothing left for carbs.
+                  </p>
+                )}
                 <FieldError errors={[errors.carbsG]} />
               </Field>
               <Field>

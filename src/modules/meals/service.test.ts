@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  carbsForCalories,
   entryTotals,
+  macroCalories,
   type FoodOption,
   groupByMealType,
   isLikelyBarcode,
@@ -76,6 +78,65 @@ describe("groupByMealType", () => {
     expect(groups[0].entries).toHaveLength(2)
     expect(groups[0].totals.calories).toBe(300) // 100 + 200
     expect(groups[2].mealType).toBe("other")
+  })
+})
+
+describe("carbsForCalories", () => {
+  it("solves for carbs as the balancing term", () => {
+    // 2000 = 150*4 + c*4 + 60*9  ->  c = (2000 - 600 - 540) / 4 = 215
+    expect(
+      carbsForCalories({ calories: 2000, proteinG: 150, fatG: 60 }),
+    ).toEqual({ kind: "fits", carbsG: 215 })
+  })
+
+  // Each of the three independently, because "skipped" is the rule that keeps "I only
+  // track protein" expressible — a single combined case would pass even if two of the
+  // three guards were missing.
+  it.each([
+    ["calories", { calories: 0, proteinG: 150, fatG: 60 }],
+    ["protein", { calories: 2000, proteinG: 0, fatG: 60 }],
+    ["fat", { calories: 2000, proteinG: 150, fatG: 0 }],
+  ])("skips when %s is zero", (_which, target) => {
+    expect(carbsForCalories(target)).toEqual({ kind: "skipped" })
+  })
+
+  it("reports the overshoot when protein and fat alone exceed the calories", () => {
+    // 200*4 + 100*9 = 1700, against a 1500 target -> 200 kcal over.
+    expect(
+      carbsForCalories({ calories: 1500, proteinG: 200, fatG: 100 }),
+    ).toEqual({ kind: "overshoot", byKcal: 200 })
+  })
+
+  it("treats an exact fit as fits, not overshoot", () => {
+    // The boundary: protein and fat account for every calorie, so carbs is 0 — which is a
+    // real answer, not a failure. Getting this wrong would reject a legitimate zero-carb
+    // target with a message about overshooting by nothing.
+    expect(
+      carbsForCalories({ calories: 1700, proteinG: 200, fatG: 100 }),
+    ).toEqual({ kind: "fits", carbsG: 0 })
+  })
+
+  it("produces a split that adds back up to the target", () => {
+    // The property the whole feature exists for, asserted directly rather than inferred
+    // from the arithmetic above: feed the derived carbs back through `macroCalories` and
+    // the total must land on the target. Within half a kcal, because the 1dp rounding
+    // makes exact equality unavailable by construction.
+    const target = { calories: 2000, proteinG: 150, fatG: 70 }
+    const fit = carbsForCalories(target)
+    expect(fit.kind).toBe("fits")
+    if (fit.kind !== "fits") return
+    expect(macroCalories({ ...target, carbsG: fit.carbsG })).toBeCloseTo(
+      target.calories,
+      0,
+    )
+  })
+
+  it("rounds to one decimal rather than to whole grams", () => {
+    // (2001 - 600 - 540) / 4 = 215.25 -> 215.3. Whole grams would drop up to 4 kcal, which
+    // is the drift this whole feature exists to remove.
+    expect(
+      carbsForCalories({ calories: 2001, proteinG: 150, fatG: 60 }),
+    ).toEqual({ kind: "fits", carbsG: 215.3 })
   })
 })
 

@@ -253,6 +253,13 @@
       "when": 1786744490591,
       "tag": "0035_boring_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1786899793654,
+      "tag": "0036_lying_magdalene",
+      "breakpoints": true
     }
   ]
 }

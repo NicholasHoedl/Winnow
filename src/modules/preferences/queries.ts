@@ -11,6 +11,8 @@ import {
   type AiSettings,
 } from "@/modules/companion/ai-settings"
 import {
+  CALENDAR_VIEWS,
+  type CalendarView,
   DEFAULT_PREFERENCES,
   MOMENTUM_DAYS,
   type MomentumDays,
@@ -70,6 +72,16 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     theme: THEMES.includes(row.theme as Theme)
       ? (row.theme as Theme)
       : "system",
+    balanceMacroTargets: row.balanceMacroTargets,
+    // Narrowed like `theme`: the column is plain text so the view set can grow without a
+    // migration, which also means an imported row can hold a view this build has never
+    // heard of. Falling back keeps `/calendar` renderable rather than 404-ing on a value
+    // nobody can see or fix.
+    defaultCalendarView: CALENDAR_VIEWS.includes(
+      row.defaultCalendarView as CalendarView,
+    )
+      ? (row.defaultCalendarView as CalendarView)
+      : DEFAULT_PREFERENCES.defaultCalendarView,
   }
 }
 

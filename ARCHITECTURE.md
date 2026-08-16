@@ -273,7 +273,8 @@ a classic, easy-to-introduce bug.
 >
 > `user_preferences` has no section of its own: one row per user, holding the settings
 > the server must read — zone, week start, currency, time format, default task
-> priority, digest, the goal momentum window (T8), and the account's saved `theme`.
+> priority, digest, the goal momentum window (T8), the account's saved `theme`, whether
+> macro targets balance (T14), and which view the calendar opens on (T14).
 > `theme` is **mirrored, not moved**: it is applied before first paint from
 > localStorage by a blocking script in the root layout, above any session lookup, so
 > the server cannot supply it in time. The column exists so a new device adopts it and

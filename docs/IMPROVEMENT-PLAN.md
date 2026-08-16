@@ -41,7 +41,8 @@ picked up — it is **not** code-level detail yet.
 | T12g — The e2e suite gets a database of its own   | ✅ shipped        |
 | T12h — Companion settings: no URL, a model list   | ✅ shipped        |
 | T12i — Dead-code sweep, and the edits it exposed  | ✅ shipped        |
-| T13 — Tools move to their artifacts; notes goes   | 🔨 in progress    |
+| T13 — Tools move to their artifacts; notes goes   | ✅ shipped        |
+| T14 — Balanced macros, quieter phone, view default| ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
@@ -1083,7 +1084,7 @@ and turned into two different jobs, because a function with no callers is ambigu
 
 ---
 
-## Tranche 13 — Tools move to the page of the artifact they produce 🔨
+## Tranche 13 — Tools move to the page of the artifact they produce ✅
 
 **Premise.** `/companion` collected four AI jobs on one page, away from everything they act
 on. The better home for each is the page showing the thing it produces: a plan belongs with
@@ -1289,3 +1290,52 @@ raised inside the transition only after the action resolves `ok` — the same re
 `expect(dialog).toBeHidden()` elsewhere in the suite. **Moving an assertion to a different
 page can turn a previously-safe click into a race**, because same-page revalidation was
 silently doing the waiting.
+
+---
+
+## Tranche 14 — Balanced macros, a quieter phone, and a view that sticks ✅
+
+Three unrelated asks in one pass, bundled only because two of them add a preference and can
+therefore share migration `0036`.
+
+**Macro targets can balance themselves** — `calories = 4·protein + 4·carbs + 9·fat`, with
+carbs as the balancing term. `carbsForCalories()` in `meals/service.ts` is the first
+calorie↔gram conversion in the app; it returns a three-way union rather than a nullable
+number, because "no answer" has two very different causes and a caller must not be able to
+confuse them.
+
+- **Skipped when any of calories, protein or fat is 0.** A 0 means "not tracked" here
+  (`progress()` gates on `<= 0`, and the dialog says so), and enforcing over it would make
+  "I only track protein" inexpressible. The rule is the feature's whole compatibility story
+  with what was already there.
+- **The server derives it.** `setMacroTargets` reads the preference and recomputes rather
+  than trusting the request. The dialog's carbs field is read-only AND unregistered, so the
+  client physically cannot author the number — which also makes the preference-flipped-in-
+  another-tab race a no-op instead of a corruption.
+- **Overshoot is rejected, not clamped.** Clamping to 0 would store a row whose parts exceed
+  its whole, and 0 means untracked everywhere else, so it would silently switch carb tracking
+  off as a side effect of a contradictory entry. The error lands on **calories**, not carbs —
+  pointing "fix this" at a read-only control is a dead end.
+- **Undo and import bypass it**, deliberately. A legacy row where protein and fat already
+  exceed the calories would otherwise be un-restorable: you would have deleted something and
+  then been unable to get it back. Enforcement is a write-path rule, not a table invariant.
+
+**A bug the new e2e caught, worth remembering.** The computed carbs field rendered a stale
+`0`. `Input` wraps Base UI's `InputPrimitive`, and an input given `value` with no `onChange`
+does not adopt a changing one — React reconciled the read-only branch and the registered
+branch into a single element, so `readOnly` applied while the number never updated. Keyed on
+the value to force a remount. **Any computed, read-only `Input` in this codebase needs the
+same treatment.**
+
+**The dashboard's month calendar is `lg:` only.** Below that breakpoint the grid is one
+column, so it stopped being a column and became a tall block on the surface with the least
+vertical room. `loading.tsx`'s middle column carries the same visibility — that file exists
+because of a previous ~100px jump, and a skeleton reserving 384px the page never fills is the
+same mistake.
+
+**`/calendar` opens on a preference.** The trap was in `calendarHref`, which omitted
+`view=month` on the reasoning that month was the default. That inverts exactly when the
+default becomes configurable: with a week preference, the Month button produced
+`/calendar?date=…`, which resolves back to the week — the one view unreachable from the
+switcher. It now always names the view, and `parseView` takes the fallback as a parameter so
+every other call site keeps its behaviour.

@@ -39,7 +39,10 @@ export default function Loading() {
           <div className="bg-card h-64 animate-pulse rounded-xl border" />
           <div className="bg-card h-40 animate-pulse rounded-xl border" />
         </div>
-        <div className="flex flex-col gap-5">
+        {/* The calendar column, `lg:` only — mirroring the real page, which hides it below
+            that breakpoint. Without this the phone would flash a 384px card that vanishes
+            the instant the data lands, which is the same class of jump described above. */}
+        <div className="hidden lg:flex lg:flex-col lg:gap-5">
           <div className="bg-card h-96 animate-pulse rounded-xl border" />
         </div>
         <div className="flex flex-col gap-5">
