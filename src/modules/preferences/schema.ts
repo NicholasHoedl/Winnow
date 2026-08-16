@@ -80,6 +80,16 @@ export const userPreferences = pgTable("user_preferences", {
   defaultCalendarView: text("default_calendar_view").notNull().default("month"),
 
   /**
+   * How far ahead the dashboard's Slate reaches for HIGHLIGHTED events.
+   *
+   * Only highlighted ones. Today and tomorrow show everything regardless, so no setting of
+   * this can hide a row you can see now — it only decides how early a flagged event starts
+   * appearing. Widen it and the card grows a day band per flagged event; narrow it and they
+   * arrive later.
+   */
+  slateHorizonDays: integer("slate_horizon_days").notNull().default(7),
+
+  /**
    * The AI companion's whole configuration (T11). Settings, not environment.
    *
    * These replaced `AI_*` env vars outright rather than layering over them: two sources

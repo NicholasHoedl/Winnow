@@ -10,6 +10,7 @@ import {
   BALANCE_TARGET_OPTIONS,
   CALENDAR_VIEW_OPTIONS,
   MOMENTUM_OPTIONS,
+  SLATE_HORIZON_OPTIONS,
   PRIORITY_OPTIONS,
   WEEK_START_OPTIONS,
   timeZoneOptions,
@@ -141,6 +142,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={WEEK_START_OPTIONS}
+                  label="Week starts on"
                 />
               )}
             />
@@ -156,6 +158,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={TIME_FORMAT_OPTIONS}
+                  label="Time format"
                 />
               )}
             />
@@ -171,6 +174,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={PRIORITY_OPTIONS}
+                  label="Default task priority"
                 />
               )}
             />
@@ -186,6 +190,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={MOMENTUM_OPTIONS}
+                  label="Goal momentum window"
                 />
               )}
             />
@@ -205,6 +210,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={BALANCE_TARGET_OPTIONS}
+                  label="Balance macro targets"
                 />
               )}
             />
@@ -213,6 +219,27 @@ export function PreferencesSection({
               grams account for the calories. Leave any of those three at 0 and
               your targets are left alone — a 0 means you aren&apos;t tracking
               it.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Highlighted events show</FieldLabel>
+            <Controller
+              control={control}
+              name="slateHorizonDays"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={SLATE_HORIZON_OPTIONS}
+                  label="Highlighted events show"
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              How far ahead the dashboard reaches for events you&apos;ve
+              highlighted. Today and tomorrow always show everything, so this
+              only decides how early a highlighted event turns up.
             </p>
           </Field>
 
@@ -226,6 +253,7 @@ export function PreferencesSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={CALENDAR_VIEW_OPTIONS}
+                  label="Calendar opens on"
                 />
               )}
             />

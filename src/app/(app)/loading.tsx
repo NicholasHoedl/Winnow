@@ -35,9 +35,13 @@ export default function Loading() {
       {/* One column on a phone, three at `lg` — the real grid's breakpoint, so the layout
           does not reflow when the data lands. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
+        {/* ONE tall block, not the two this used to hold. Slate merged the agenda and the
+            task list into a single card, and a skeleton drawing a seam the page no longer
+            has is a 20px settle at exactly the moment the content lands. Nothing is drawn
+            for `GoalsPracticeCard` below it, which renders nothing at all for a user with
+            no goals and no habits. */}
         <div className="flex flex-col gap-5">
-          <div className="bg-card h-64 animate-pulse rounded-xl border" />
-          <div className="bg-card h-40 animate-pulse rounded-xl border" />
+          <div className="bg-card h-80 animate-pulse rounded-xl border" />
         </div>
         {/* The calendar column, `lg:` only — mirroring the real page, which hides it below
             that breakpoint. Without this the phone would flash a 384px card that vanishes
@@ -45,8 +49,10 @@ export default function Loading() {
         <div className="hidden lg:flex lg:flex-col lg:gap-5">
           <div className="bg-card h-96 animate-pulse rounded-xl border" />
         </div>
+        {/* Stat cards, then category bars. The `h-48` that led this column was `Tomorrow`,
+            which Slate absorbed. */}
         <div className="flex flex-col gap-5">
-          <div className="bg-card h-48 animate-pulse rounded-xl border" />
+          <div className="bg-card h-40 animate-pulse rounded-xl border" />
           <div className="bg-card h-40 animate-pulse rounded-xl border" />
         </div>
       </div>

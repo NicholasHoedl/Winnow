@@ -34,6 +34,7 @@ export const userPreferencesSchema = z.object({
   goalMomentumDays: z.union([z.literal(7), z.literal(14), z.literal(30)]),
   balanceMacroTargets: z.boolean(),
   defaultCalendarView: z.enum(CALENDAR_VIEWS as [string, ...string[]]),
+  slateHorizonDays: z.union([z.literal(3), z.literal(7), z.literal(14)]),
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 

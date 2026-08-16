@@ -29,12 +29,15 @@ test("dashboard shows the key sections", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: /good to see you/i }),
   ).toBeVisible()
-  // The agenda leads the page since /today was folded in; "Up next" narrowed to
-  // "Tomorrow" at the same time, because the agenda already covers today.
-  await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible()
-  await expect(page.getByText("Tomorrow").first()).toBeVisible()
+  // Slate leads the page. It replaced the agenda, "Coming up" and "Tomorrow", which were
+  // three cards splitting one question — what has a date on it? — along an arbitrary line.
+  await expect(page.getByRole("heading", { name: "Slate" })).toBeVisible()
   await expect(page.getByLabel("Quick add a task")).toBeVisible()
-  for (const label of ["Coming up", "Macros", "Budget"]) {
+  // "Today" and not "Tomorrow"/"Later": this test seeds a task due TODAY and nothing else,
+  // and Slate omits a band with nothing in it. Asserting on the other two would be asserting
+  // on whatever data the account happens to carry — which is how four specs went red at once
+  // on a sparse account, each looking like a feature had vanished.
+  for (const label of ["Today", "Macros", "Budget"]) {
     await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
   }
 

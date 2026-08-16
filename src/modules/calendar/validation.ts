@@ -30,6 +30,7 @@ export const eventInputSchema = z
     notes: z.string().trim().max(2000).or(z.literal("")).optional(),
     calendarId: z.string().uuid().or(z.literal("")),
     allDay: z.boolean(),
+    highlighted: z.boolean(),
     startDate: z.string().refine(isValidDateString, "Enter a valid date"),
     startTime: optionalTime,
     endDate: optionalDate,
@@ -88,6 +89,7 @@ export const eventExceptionSchema = z
     notes: z.string().trim().max(2000).or(z.literal("")).optional(),
     calendarId: z.string().uuid().or(z.literal("")),
     allDay: z.boolean(),
+    highlighted: z.boolean(),
     startTime: optionalTime,
     endTime: optionalTime,
   })

@@ -16,6 +16,8 @@ import {
   DEFAULT_PREFERENCES,
   MOMENTUM_DAYS,
   type MomentumDays,
+  SLATE_HORIZONS,
+  type SlateHorizonDays,
   THEMES,
   type Theme,
   type UserPreferences,
@@ -82,6 +84,13 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     )
       ? (row.defaultCalendarView as CalendarView)
       : DEFAULT_PREFERENCES.defaultCalendarView,
+    // Narrowed like `goalMomentumDays`: a plain integer column backing a three-value set,
+    // so an import or a hand-edited row can hold anything.
+    slateHorizonDays: SLATE_HORIZONS.includes(
+      row.slateHorizonDays as SlateHorizonDays,
+    )
+      ? (row.slateHorizonDays as SlateHorizonDays)
+      : DEFAULT_PREFERENCES.slateHorizonDays,
   }
 }
 

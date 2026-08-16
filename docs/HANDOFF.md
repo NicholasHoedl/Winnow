@@ -91,7 +91,7 @@ rejected.
   calories. Three things about it are load-bearing and easy to undo by accident:
   **(a)** it is skipped entirely when any of the three is 0, because a 0 means "not tracked"
   here and enforcing would make "protein only" impossible; **(b)** the SERVER derives the
-  number — the dialog's field is read-only and deliberately *unregistered*, so the client
+  number — the dialog's field is read-only and deliberately _unregistered_, so the client
   cannot author it and the two cannot disagree; **(c)** `restoreMacroTargetPeriod` and the
   account importer bypass the rule, because undo and restore are faithful replays. It is a
   write-path rule, not an invariant of the table.
@@ -102,6 +102,38 @@ rejected.
   `calendarHref` now **always** emits `view=`, including month — it used to omit it on the
   grounds that month was the default, which inverts the moment the default is configurable:
   with a week preference, the Month button produced a URL that resolved back to week.
+
+**T15 is shipped: the dashboard's goals and habits cards are one card.**
+`GoalsPracticeCard` puts each habit under the goal it serves, with unattached habits named
+as such in a trailing group. **Nothing is truncated** — the habits card capped at three with
+a `+N more`, and the goals card capped at four SILENTLY, which was worse. Losing the caps
+also retired the unmet-first re-sort, which existed only to make a cut safe.
+
+**T16 is shipped: `Slate`, and events you can highlight.** Migration `0037`.
+
+- **One card replaces three.** `today-agenda`, "Coming up" and `Tomorrow` were three
+  components answering one question — _what has a date on it?_ — split along an arbitrary
+  line, and the event row in two of them was character-identical. `buildSlate` in
+  `(app)/_lib/agenda.ts` returns `{ overdue, bands }`, a band per day out to the horizon
+  plus a trailing `Later`. It **calls `buildTodayAgenda`** for the today band rather than
+  reimplementing it, which is what keeps that function's 13 tests load-bearing.
+- **It closed a live bug rather than fixing one.** `page.tsx` filtered "Coming up" by a set
+  built from the agenda's `overdue` and `items` but never its `groups`, so a task a routine
+  created for today was drawn twice. One function assigning every task to exactly one band
+  makes that class of bug unreachable.
+- **`events.highlighted`, plus a NULLABLE `event_exceptions.highlighted` that wins when
+  set.** The `??` in the overlay merge is deliberate and not interchangeable with `||`: an
+  override of `false` un-highlights one date of a highlighted series, which is the entire
+  reason the column is nullable. `rescheduleOccurrence` deliberately does **not** write it —
+  dragging an occurrence must leave it inheriting.
+- **The horizon governs highlighted events only.** Today and tomorrow show everything, so no
+  row disappears at any `slateHorizonDays` setting; days 2..N carry only what is flagged.
+  Without that restraint the card would flood with routine calendar noise and the flag would
+  be worth nothing.
+- **Filter after `applyExceptions`, never in SQL.** `eq(events.highlighted, true)` in
+  `candidateWhere` would drop a series whose only highlighted occurrence lives in
+  `event_exceptions` — the same silent loss `calendar/queries.ts` already documents for
+  inbound reschedules.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
@@ -242,13 +274,43 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **784 unit tests across 46 files, 143 e2e,
-0 lint errors, 5 lint warnings** (2026-08-14, 11.5 minutes wall clock for the e2e, zero
-flaky).
+Current green baseline, measured on a full run: **784 unit tests across 44 files, 142 e2e,
+0 lint errors, 5 lint warnings** (2026-08-16, 11.1 minutes wall clock for the e2e, zero
+flaky). The numbers in this paragraph disagreed with each other before T16 — 784/46/143 in
+one sentence and 140 in the next — so re-measure rather than trusting a remembered figure.
 
-The 140 counts **both** Playwright projects — `chromium` plus the eleven-route `mobile`
+The e2e count is **both** Playwright projects — `chromium` plus the ten-route `mobile`
 sweep — along with the setup and teardown projects. A `--project=chromium` run will
 therefore report fewer, and that is not a regression.
+
+**A failing test costs you two red tests, and the second one lies.** T16 broke
+`goal-momentum.spec.ts` (see the `Segmented` trap below); it died at its assertion, which is
+_before_ its `deleteTask` cleanup, and left one task behind. `/activity` then had a checkbox
+on it for the first time in that run — the e2e database is truncated per run and the seed
+creates none — and `mobile-layout.spec.ts` reported a spill on `/activity`, a route the
+change never touched. Root-causing that second failure cost half an hour and ended somewhere
+unrelated. **When two specs go red and one of them is a layout sweep, fix the other one
+first and re-run before believing the sweep.**
+
+That spill was a **false positive that had been latent since July**. `Checkbox` carries
+`after:absolute after:-inset-x-3 after:-inset-y-2` — an invisible enlarged tap target — and a
+generated box anchored to a `position: relative` parent counts toward that parent's
+`scrollWidth` per spec, so a 14px checkbox reports 26. Nothing is drawn, so nothing can
+overlap, which is what `layoutFaults` means by "spill". The detector now measures how far an
+element's real content reaches (child rects and text-node rects) instead of trusting
+`scrollWidth`. **The component was left alone deliberately**: the `::after` is the touch
+target, and excluding it from `scrollWidth` while keeping it clickable means moving the
+enlargement out to every call site.
+
+**`Segmented` takes a REQUIRED `label`, and that is not decoration.** It used to render a
+bare `<div>` of toggle buttons; the `FieldLabel` above each one was associated with nothing.
+That survived only while every option string in the preferences form was unique. T16 added
+`slateHorizonDays` with "1 week" and "2 weeks" — which `goalMomentumDays` already had — and a
+screen reader started announcing "1 week, button, pressed" twice with no way to tell the
+controls apart, while `goal-momentum.spec.ts` broke on a strict-mode violation. It is now
+`role="group"` + `aria-label`, and specs scope to `getByRole("group", { name })`. **Adding a
+segmented preference whose labels collide with an existing one is a live accessibility bug,
+not just a test problem.**
 
 **Three** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
 `todos-reorder:86`, and — first seen 2026-08-13 — `calendar-reschedule.spec.ts:74` ("a block
@@ -420,8 +482,8 @@ Do not reopen these without new information:
 `/todos/routines` and `/todos/habits`.
 
 **`/goals` DOES exist again, as of T13**, and its redirect is gone. Read ADR-0013's
-2026-08-14 amendment before changing any of this: the merge's *insight* survives and only
-its *layout* was reversed. `/activity` is the task list; `/goals` is the goal list; neither
+2026-08-14 amendment before changing any of this: the merge's _insight_ survives and only
+its _layout_ was reversed. `/activity` is the task list; `/goals` is the goal list; neither
 holds a copy of the other.
 
 Four things worth knowing before touching it:
@@ -494,14 +556,19 @@ Two tranches nothing else in this file described, both hanging off one new colum
 §4 first — it is declared with **no `.references()`** and its foreign key is hand-written,
 for a schema-cycle reason that will bite you if you try to "fix" it.
 
-- **The agenda groups routine-created tasks** under the routine's name rather than mixing
-  them into the list. `buildTodayAgenda` in `(app)/_lib/agenda.ts` returns
-  `{ overdue, groups, items }`; the group is drawn as a **tinted block, not an indented
-  one**, deliberately, so the `Gutter` x-axis still lines up across every row.
-- **The agenda reorders by drag**, through the same `@dnd-kit` `SortableList` everything
+- **Routine-created tasks are grouped** under the routine's name rather than mixed into
+  the list. `buildTodayAgenda` returns `{ overdue, groups, items }` and is still the today
+  band's implementation — T16's `buildSlate` calls it rather than replacing it. The group is
+  drawn as a **tinted block, not an indented one**, deliberately, so the `Gutter` x-axis
+  still lines up across every row.
+- **Today's tasks reorder by drag**, through the same `@dnd-kit` `SortableList` everything
   else uses, with an `arrange()` order overlay applied on top of the server list while the
-  write is in flight.
-- **The Calendar link was removed from the agenda** — nobody could say what it was for.
+  write is in flight. Only today: every other band is a preview with no ordering applied.
+  The drag sends **all** of today's tasks, groups first — `reorderTasks` writes
+  `sortOrder = index` over exactly what it is given, and that column is shared with
+  `/activity`.
+- **The Calendar link was removed** — nobody could say what it was for. `dashboard-agenda`
+  asserts negatively that no `Calendar →` link comes back.
 
 **`routines.on_unfinished` (migration `0034`) is `keep` | `drop`, defaulting to `keep`** so
 every routine that existed before behaves exactly as it did. `drop` means the routine's
@@ -524,12 +591,12 @@ generation runs in a route handler. This is the short version.
 **What exists — and `/companion` does NOT.** T13 deleted it; **ADR-0015 is the authority**.
 Each job now sits on the page of the artifact it produces, gated there on `aiReady`:
 
-| Job | Page |
-|---|---|
-| Plan a goal | `/goals` |
-| Build a routine | `/activity/routines` |
-| Read my week | `/review` |
-| Read transactions | `/budget` |
+| Job               | Page                 |
+| ----------------- | -------------------- |
+| Plan a goal       | `/goals`             |
+| Build a routine   | `/activity/routines` |
+| Read my week      | `/review`            |
+| Read transactions | `/budget`            |
 
 **The machinery is shared and lives in three places.** `useProposal()` in
 `modules/companion/` holds the state and the apply/discard/generate handlers (following
@@ -771,9 +838,10 @@ still the old indigo.**
   `e2e/navigation.spec.ts` measures the fit rather than trusting it, and
   `e2e/pending-feedback.spec.ts` holds a duplicate of the seven-label array: both files
   change together or the second one fails.
+
 - **Giving a page a tab means taking it OUT of the command palette by hand.** `NAV_COMMANDS`
   in `command-palette.tsx` is `[...navItems, …four hand-written entries]`, and those four are
-  hand-written *because* they have no tab. T13 gave `/review` a tab while it was still listed
+  hand-written _because_ they have no tab. T13 gave `/review` a tab while it was still listed
   by hand, which put one page in the ⌘K "Go to" menu twice under two names. Nothing catches
   it — it typechecks, it lints, and no spec asserts that menu's contents — so check the list
   by eye whenever `navItems` changes.

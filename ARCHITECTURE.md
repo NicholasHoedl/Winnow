@@ -206,22 +206,25 @@ that scrolls:
 
 | Column | Holds                                          |
 | ------ | ---------------------------------------------- |
-| Left   | Overdue → today's agenda → "Coming up"         |
+| Left   | Slate → goals & practice                       |
 | Centre | The month grid, or the week strip, full height |
-| Right  | Tomorrow → macros/budget → categories → goals  |
+| Right  | Macros/budget → categories                     |
 
 Three things about it are load-bearing rather than cosmetic:
 
-- **"Coming up" shows only what the agenda does not**, and the filter is derived
-  from the agenda's own output rather than a second definition of "overdue" and
-  "due today". Two definitions of one boundary is how a task ends up listed
-  twice, or in neither place, the day one of them changes.
-- **`Tomorrow` is deliberately only tomorrow.** It was `UpNext` and showed today
-  as well; the agenda covers today better, and keeping both printed the same
-  events twice on one page.
+- **Slate is one card because the question is one question.** It was three —
+  the agenda, "Coming up" and `Tomorrow` — and the split had to be maintained by
+  a filter: "Coming up" showed only what the agenda did not. That filter read the
+  agenda's `overdue` and `items` but not its `groups`, so a task a routine created
+  for today was printed twice. `buildSlate` assigns every task to exactly one
+  band, which is a different thing from fixing the arithmetic.
+- **The horizon governs highlighted events only.** Today and tomorrow show
+  everything they hold; days 2..N out to `slateHorizonDays` carry only events
+  flagged `highlighted`. Showing everything out there would bury the flag in
+  routine calendar noise, and the flag is the point.
 - **Height is reached for, never forced.** The grid uses `min-h`, which fills
-  spare space but never adds any, and the agenda and task lists cap with
-  internal scroll — so no volume of data turns this back into a scrolling page.
+  spare space but never adds any, and Slate caps with internal scroll — so no
+  volume of data turns this back into a scrolling page.
   Fits without scrolling from 1366×768 up; 1280×800 overflows by ~19px, and the
   digest banner adds ~180px on the one visit a day it appears.
 
