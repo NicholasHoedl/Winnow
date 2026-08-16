@@ -29,6 +29,14 @@ export type MomentumDays = 7 | 14 | 30
 export type CalendarView = "month" | "week" | "day" | "agenda"
 export const CALENDAR_VIEWS: CalendarView[] = ["month", "week", "day", "agenda"]
 
+/**
+ * How far ahead Slate reaches for highlighted events. A closed set for the reason
+ * `MomentumDays` is one: "how early do I want to see a flagged event" has a few honest
+ * answers, not 365.
+ */
+export type SlateHorizonDays = 3 | 7 | 14
+export const SLATE_HORIZONS: SlateHorizonDays[] = [3, 7, 14]
+
 export const THEMES: Theme[] = ["light", "dark", "system"]
 export const MOMENTUM_DAYS: MomentumDays[] = [7, 14, 30]
 
@@ -43,6 +51,7 @@ export type UserPreferences = {
   theme: Theme
   balanceMacroTargets: boolean
   defaultCalendarView: CalendarView
+  slateHorizonDays: SlateHorizonDays
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -58,6 +67,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "system",
   balanceMacroTargets: true,
   defaultCalendarView: "month",
+  slateHorizonDays: 7,
 }
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).
@@ -100,6 +110,16 @@ export const MOMENTUM_OPTIONS: { value: MomentumDays; label: string }[] = [
 export const BALANCE_TARGET_OPTIONS: { value: boolean; label: string }[] = [
   { value: true, label: "On" },
   { value: false, label: "Off" },
+]
+
+// Labelled in the units people think in, like MOMENTUM_OPTIONS below.
+export const SLATE_HORIZON_OPTIONS: {
+  value: SlateHorizonDays
+  label: string
+}[] = [
+  { value: 3, label: "3 days" },
+  { value: 7, label: "1 week" },
+  { value: 14, label: "2 weeks" },
 ]
 
 export const CALENDAR_VIEW_OPTIONS: { value: CalendarView; label: string }[] = [

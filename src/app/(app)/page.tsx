@@ -5,8 +5,8 @@ import { auth } from "@/lib/auth"
 import { getBudgetSummary, getCategories } from "@/modules/budget/queries"
 import {
   getCalendars,
-  getDayEvents,
   getMonthEvents,
+  getRangeEvents,
 } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
 import { getHabitStrip } from "@/modules/habits/queries"
@@ -24,13 +24,12 @@ import {
   DashboardCalendar,
   type DashboardCalendarView,
 } from "./_components/dashboard-calendar"
-import { DashboardTaskList } from "./_components/dashboard-task-list"
+
 import { GoalsPracticeCard } from "./_components/goals-practice-card"
 import { StatCards } from "./_components/stat-cards"
-import { TodayAgenda } from "./_components/today-agenda"
-import { Tomorrow } from "./_components/tomorrow"
+import { Slate } from "./_components/slate"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
-import { buildTodayAgenda } from "./_lib/agenda"
+import { buildSlate } from "./_lib/agenda"
 
 export default async function DashboardPage({
   searchParams,
@@ -42,11 +41,16 @@ export default async function DashboardPage({
   // and no localStorage read during render. Anything unrecognised falls back to the month.
   const calendarView: DashboardCalendarView =
     (await searchParams).calendar === "week" ? "week" : "month"
-  const { timeZone, weekStartsOn, currency, use24HourTime, goalMomentumDays } =
-    await getUserPreferences()
+  const {
+    timeZone,
+    weekStartsOn,
+    currency,
+    use24HourTime,
+    goalMomentumDays,
+    slateHorizonDays,
+  } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
-  const nextDate = addDays(today, 1)
 
   const [
     session,
@@ -54,8 +58,7 @@ export default async function DashboardPage({
     macros,
     budget,
     categories,
-    dayEvents,
-    nextDayEvents,
+    slateEvents,
     monthData,
     goals,
     calendars,
@@ -67,8 +70,11 @@ export default async function DashboardPage({
     getMacroSummary(today),
     getBudgetSummary(month),
     getCategories(),
-    getDayEvents(today, timeZone),
-    getDayEvents(nextDate, timeZone),
+    // ONE ranged read where there were two single-day ones. Slate spans today through the
+    // horizon, and `getDayEvents` is only a thin wrapper over this — asking for a range is
+    // both fewer round trips and the shape the card actually wants. Half-open, so `+ 1`
+    // reaches the horizon day itself.
+    getRangeEvents(today, addDays(today, slateHorizonDays + 1), timeZone),
     // Still fetched even though the calendar it feeds is `lg:` only. There is one server
     // render and it has no idea how wide the viewport is, so this cannot be skipped for
     // phones — and it sits inside this `Promise.all`, so it costs no serial latency. Not
@@ -79,13 +85,12 @@ export default async function DashboardPage({
     // The cheap read, same as /activity — two bounded queries for a card that shows
     // done/target and nothing else.
     getHabitStrip(),
-    // Ids to names, so the agenda can head each routine's block. Not `getRoutines()`:
+    // Ids to names, so Slate can head each routine's block. Not `getRoutines()`:
     // that would fetch every routine's full item list to read one string per row.
     getRoutineNames(),
   ])
 
   const name = session?.user?.name ?? "there"
-  const openTasks = tasks.filter((task) => task.status === "open")
 
   // Narrowed before it crosses into a client component. `GoalsPracticeCard` has to be a
   // client component — a habit is loggable from it — so whatever it receives is serialised
@@ -99,27 +104,22 @@ export default async function DashboardPage({
     stalled: goal.momentum?.stalled ?? false,
   }))
 
-  // Overdue tasks, and today's events and due tasks merged into one time-ordered list.
-  // This was a separate `/today` route until it was folded in here — the two pages ran
-  // five of the same queries and differed only by this.
-  const { overdue, groups, items } = buildTodayAgenda(
+  // Everything with a date on it, in one pass: overdue, then a band per day out to the
+  // horizon, then whatever is further off than that.
+  //
+  // The whole task list goes in, not a pre-filtered slice. Three cards used to split it
+  // between them and the split leaked — the "not in the agenda" set here read `overdue` and
+  // `items` but never `groups`, so a task a routine created for today was drawn in its
+  // routine block AND again under "Coming up". One function assigning every task to exactly
+  // one band is why that class of bug is now unreachable rather than merely fixed.
+  const { overdue, bands } = buildSlate(
     tasks,
-    dayEvents,
+    slateEvents,
     new Date(),
     timeZone,
+    slateHorizonDays,
     routineNames,
   )
-
-  // What the card beside the agenda shows: the open tasks the agenda does NOT.
-  //
-  // Derived from the agenda's own output rather than re-deriving "overdue" and "due
-  // today" here — two independent definitions of the same boundary is how a task ends up
-  // listed twice, or in neither place, the day one of them changes.
-  const inAgenda = new Set<string>([
-    ...overdue.map((task) => task.id),
-    ...items.flatMap((item) => (item.kind === "task" ? [item.task.id] : [])),
-  ])
-  const upcomingTasks = openTasks.filter((task) => !inAgenda.has(task.id))
 
   return (
     // Wide, not centred-in-a-gutter. `max-w-7xl` (1280px) left ~270px dead on each side
@@ -187,23 +187,19 @@ export default async function DashboardPage({
         1600px row on four short lines and pushed everything else below the fold. It is
         the first column instead — still the first thing read, at a width its content
         actually wants — and the month grid no longer sets the height of the page on its
-        own. Each column's own components cap and scroll internally (see TodayAgenda and
-        DashboardTaskList), so no amount of data turns this back into a scrolling page.
+        own. Slate caps and scrolls internally, so no amount of data turns this back into a
+        scrolling page.
       */}
       <div className="grid grid-cols-1 gap-5 lg:min-h-[calc(100svh-12.5rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
-        {/* Today: what needs you, then the backlog it doesn't cover */}
+        {/* Everything dated, then what it is all in service of */}
         <div className="flex min-w-0 flex-col gap-5">
           <Reveal delay={0.05}>
-            <TodayAgenda
+            <Slate
               overdue={overdue}
-              groups={groups}
-              items={items}
+              bands={bands}
               calendars={calendars}
               use24Hour={use24HourTime}
             />
-          </Reveal>
-          <Reveal delay={0.08}>
-            <DashboardTaskList tasks={upcomingTasks} timeZone={timeZone} />
           </Reveal>
           {/* Directly under the tasks, so *what I have to do*, *what I have to keep doing*
               and *what it is all for* read as one column — the same pairing /activity makes
@@ -239,16 +235,11 @@ export default async function DashboardPage({
           </Reveal>
         </div>
 
-        {/* What's next, and today's numbers */}
+        {/* Today's numbers. `Tomorrow` led this column until Slate absorbed it — which is
+            also the last dashboard use of `Panel`, the branded gradient, leaving only the
+            digest banner on it. Slate stays a plain `Card` deliberately: two competing
+            "look here first" surfaces is no emphasis at all. */}
         <div className="flex min-w-0 flex-col gap-5">
-          <Reveal delay={0.12}>
-            <Tomorrow
-              date={nextDate}
-              events={nextDayEvents}
-              calendars={calendars}
-              use24Hour={use24HourTime}
-            />
-          </Reveal>
           <Reveal delay={0.15}>
             <StatCards macros={macros} budget={budget} currency={currency} />
           </Reveal>

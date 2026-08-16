@@ -66,6 +66,7 @@ export function NotificationsSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={DIGEST_OPTIONS}
+                  label="Daily digest"
                 />
               )}
             />

@@ -212,8 +212,15 @@ test("the momentum window follows the setting", async ({ page }) => {
   await createGoal(page, goalTitle)
   await createLinkedTask(page, taskTitle, goalTitle)
 
+  // Scoped to the control's own group, not the page. Two segmented controls in this form
+  // offer "1 week" and "2 weeks" — this one and the Slate horizon — so an unscoped lookup
+  // matches both and strict mode rejects it. That collision is also why `Segmented` takes a
+  // required `label`: the group had no accessible name at all until T16, which made the two
+  // indistinguishable to a screen reader as well as to this line.
+  const window = page.getByRole("group", { name: "Goal momentum window" })
+
   await page.goto("/settings")
-  await page.getByRole("button", { name: "1 week" }).click()
+  await window.getByRole("button", { name: "1 week" }).click()
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
 
@@ -227,7 +234,7 @@ test("the momentum window follows the setting", async ({ page }) => {
   // Put it back — the suite runs serially against a persistent database, so a changed
   // setting would silently retune every later assertion about the copy.
   await page.goto("/settings")
-  await page.getByRole("button", { name: "2 weeks" }).click()
+  await window.getByRole("button", { name: "2 weeks" }).click()
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
 

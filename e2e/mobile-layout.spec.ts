@@ -86,6 +86,36 @@ async function layoutFaults(page: Page): Promise<Fault[]> {
       })
     }
 
+    /**
+     * How far the element's REAL content reaches past its own left edge — children and text
+     * nodes, the things that are actually drawn.
+     *
+     * `scrollWidth` also counts generated `::before`/`::after` boxes, and an invisible one
+     * is a normal way to build a touch target: `Checkbox` carries
+     * `after:absolute after:-inset-x-3`, which reaches 12px past a 14px box and reports
+     * `scrollWidth` 26 while rendering nothing at all. That is not a spill under this file's
+     * own definition — there is no content to lie on top of a neighbour — and every checkbox
+     * on the page trips it at once, which buries whatever the run was really about.
+     *
+     * Coverage is not lost by skipping those. A child that genuinely sticks out is an
+     * element with a rect, so it is measured here; and if a child overflows its OWN box, the
+     * child is in `spilled` too and is the deeper element that gets reported anyway.
+     */
+    const contentReach = (el: HTMLElement) => {
+      const left = el.getBoundingClientRect().left
+      let reach = 0
+      for (const child of Array.from(el.children))
+        reach = Math.max(reach, child.getBoundingClientRect().right - left)
+      const range = document.createRange()
+      for (const node of Array.from(el.childNodes)) {
+        if (node.nodeType !== Node.TEXT_NODE) continue
+        range.selectNodeContents(node)
+        const rect = range.getBoundingClientRect()
+        if (rect.width > 0) reach = Math.max(reach, rect.right - left)
+      }
+      return reach
+    }
+
     const spilled: { el: HTMLElement; fault: Fault }[] = []
     for (const el of Array.from(document.body.querySelectorAll("*"))) {
       if (!(el instanceof HTMLElement)) continue
@@ -97,6 +127,8 @@ async function layoutFaults(page: Page): Promise<Fault[]> {
       // and truncated text is the intended behaviour, not a fault.
       if (getComputedStyle(el).overflowX !== "visible") continue
       if (insideScroller(el)) continue
+      // Overflow that nothing rendered accounts for. See `contentReach`.
+      if (contentReach(el) <= el.clientWidth + 1) continue
 
       spilled.push({
         el,

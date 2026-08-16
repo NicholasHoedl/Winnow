@@ -60,6 +60,18 @@ export const events = pgTable("events", {
   // Nullable to allow open-ended / point-in-time events.
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolean("all_day").notNull().default(false),
+  /**
+   * Surface this on the dashboard before its day arrives.
+   *
+   * The dashboard otherwise shows today's and tomorrow's events only. A highlighted one
+   * appears as soon as it is within `slateHorizonDays` — which is the whole point: a flight
+   * three days out is worth seeing now, and a standup is not.
+   *
+   * On the SERIES, so a one-off event needs nothing else. A recurring event would otherwise
+   * be highlighted on every occurrence forever, so `event_exceptions.highlighted` can
+   * override one date — see the note there.
+   */
+  highlighted: boolean("highlighted").notNull().default(false),
   recurrenceFreq: recurrenceFreqEnum("recurrence_freq")
     .notNull()
     .default("none"),
@@ -103,6 +115,14 @@ export const eventExceptions = pgTable(
     startAt: timestamp("start_at", { withTimezone: true }),
     endAt: timestamp("end_at", { withTimezone: true }),
     allDay: boolean("all_day"),
+    /**
+     * Null inherits the series' flag, like every override here — which is what lets you
+     * highlight ONE standup without pinning the weekly series to the dashboard for good.
+     *
+     * `false` is therefore meaningfully different from null: it un-highlights this one
+     * date of a series that is otherwise highlighted.
+     */
+    highlighted: boolean("highlighted"),
     title: text("title"),
     notes: text("notes"),
     calendarId: uuid("calendar_id").references(() => calendars.id, {

@@ -2,14 +2,16 @@ import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
 
-// Browser coverage for the dashboard's agenda: it renders the merged list and its tasks
+// Browser coverage for the dashboard's Slate: it renders the merged list and its tasks
 // stay actionable there.
 //
 // This was `today.spec.ts`, against a separate `/today` hub. That page ran five of the
-// same queries as the dashboard and differed only by this agenda, so it was folded in and
+// same queries as the dashboard and differed only by its agenda, so it was folded in and
 // the assertions came with it — the behaviour under test never changed, only its address.
+// T16 then merged that agenda with "Coming up" and "Tomorrow" into Slate, which is why the
+// region and heading below are named for it.
 
-test("the dashboard agenda lists a task due today and completes it in place", async ({
+test("the dashboard slate lists a task due today and completes it in place", async ({
   page,
 }) => {
   const title = `E2E today ${Date.now()}`
@@ -24,18 +26,19 @@ test("the dashboard agenda lists a task due today and completes it in place", as
   await expect(visibleCard(page, title)).toBeVisible()
 
   await page.goto("/")
-  // Scoped to the agenda region, not the page. A task due today is ALSO listed in the
-  // dashboard's Tasks card, so an unscoped label lookup matches two checkboxes and
-  // Playwright's strict mode rejects it — and more to the point, this spec is about the
-  // agenda specifically, so it should say so.
-  const agenda = page.getByRole("region", { name: "Agenda" })
-  await expect(page.getByRole("heading", { name: "Agenda" })).toBeVisible()
+  // Scoped to the Slate region rather than the page. The scoping is no longer strictly
+  // required — a task due today used to appear in the agenda AND in the Tasks card, so an
+  // unscoped label matched two checkboxes and Playwright's strict mode rejected it, and the
+  // merge means it now appears exactly once. Kept anyway: it costs nothing and it says what
+  // this spec is about.
+  const slate = page.getByRole("region", { name: "Slate" })
+  await expect(page.getByRole("heading", { name: "Slate" })).toBeVisible()
 
-  // Completing from the agenda flips the row (the label swaps with the state).
-  const complete = agenda.getByLabel(`Complete ${title}`)
+  // Completing from Slate flips the row (the label swaps with the state).
+  const complete = slate.getByLabel(`Complete ${title}`)
   await expect(complete).toBeVisible()
   await complete.click()
-  await expect(agenda.getByLabel(`Reopen ${title}`)).toBeVisible()
+  await expect(slate.getByLabel(`Reopen ${title}`)).toBeVisible()
 
   // Cleanup via the todos list.
   await page.goto("/activity")
@@ -133,14 +136,14 @@ test("routine tasks are grouped in the agenda, and are draggable", async ({
   await create.click()
   await expect(page.getByText("Added 2 tasks")).toBeVisible()
 
-  // --- The agenda groups them under the routine's name, in their own region.
+  // --- Slate groups them under the routine's name, in their own region.
   await page.goto("/")
   const group = page.getByRole("region", { name: routine })
   await expect(group).toBeVisible()
   for (const title of steps) await expect(group).toContainText(title)
 
-  // The link out of the agenda header is gone: it went to /calendar for no reason a
-  // reader could infer, and the nav already reaches that page.
+  // The link out of the header is gone: it went to /calendar for no reason a reader
+  // could infer, and the nav already reaches that page.
   await expect(page.getByRole("link", { name: /Calendar →/ })).toHaveCount(0)
 
   // Each task in the group carries a drag handle. The reorder ITSELF is deliberately not

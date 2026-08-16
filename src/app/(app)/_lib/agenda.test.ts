@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildTodayAgenda, type AgendaItem } from "./agenda"
+import { buildSlate, buildTodayAgenda, type AgendaItem } from "./agenda"
 
 const TZ = "America/Chicago"
 const now = new Date("2026-07-21T12:00:00Z") // Chicago today = 2026-07-21
@@ -217,5 +217,154 @@ describe("buildTodayAgenda — routine groups", () => {
       "task:call mom",
       "event:standup",
     ])
+  })
+})
+
+// --- Slate -----------------------------------------------------------------------------
+
+// Chicago today = 2026-07-21 (Tue). Tomorrow 07-22, +2 07-23 (Thu), +7 07-28.
+function sOcc(
+  date: string,
+  time: string | null,
+  highlighted = false,
+  label = `event ${date}`,
+) {
+  return { date, time, event: { highlighted }, label }
+}
+
+/** Band labels in order, so the shape of the card is one assertion. */
+function bandLabels(slate: { bands: { label: string }[] }): string[] {
+  return slate.bands.map((band) => band.label)
+}
+
+describe("buildSlate", () => {
+  it("keeps today's agenda exactly as buildTodayAgenda builds it", () => {
+    // The today band IS that function's output — this pins the delegation rather than
+    // re-testing the sort, which its own thirteen cases already cover.
+    const tasks = [task("2026-07-21", "open", "today")]
+    const occs = [sOcc("2026-07-21", "09:00", false, "standup")]
+    const slate = buildSlate(tasks, occs, now, TZ, 7)
+    const agenda = buildTodayAgenda(tasks, occs, now, TZ)
+
+    expect(slate.overdue).toEqual(agenda.overdue)
+    expect(slate.bands[0].label).toBe("Today")
+    expect(slate.bands[0].items).toEqual(agenda.items)
+  })
+
+  it("shows every event tomorrow, highlighted or not", () => {
+    // Tomorrow keeps what the old `Tomorrow` card showed. The horizon governs the days
+    // AFTER it, so no setting can empty this band.
+    const slate = buildSlate(
+      [],
+      [sOcc("2026-07-22", "09:00", false, "dull"), sOcc("2026-07-22", null, true, "flagged")],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Tomorrow"])
+    expect(shape(slate.bands[1].items)).toEqual(["event:flagged", "event:dull"])
+  })
+
+  it("shows only highlighted events beyond tomorrow", () => {
+    const slate = buildSlate(
+      [],
+      [sOcc("2026-07-23", "09:00", false, "standup"), sOcc("2026-07-23", "14:00", true, "flight")],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Thu 23"])
+    expect(shape(slate.bands[1].items)).toEqual(["event:flight"])
+  })
+
+  it("drops a highlighted event beyond the horizon", () => {
+    const occs = [sOcc("2026-07-28", null, true, "far")]
+    expect(bandLabels(buildSlate([], occs, now, TZ, 7))).toEqual([
+      "Today",
+      "Tue 28",
+    ])
+    // Same event, tighter horizon: 07-28 is seven days out, so a 3-day horizon excludes it.
+    expect(bandLabels(buildSlate([], occs, now, TZ, 3))).toEqual(["Today"])
+  })
+
+  it("reaches the horizon day itself, not one short of it", () => {
+    // "Within 7 days" includes the seventh. Off-by-one here would silently hide the last
+    // day at every setting.
+    expect(
+      bandLabels(buildSlate([], [sOcc("2026-07-24", null, true)], now, TZ, 3)),
+    ).toEqual(["Today", "Fri 24"])
+  })
+
+  it("puts tasks due within the horizon on their own day", () => {
+    const slate = buildSlate(
+      [task("2026-07-23", "open", "draft")],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Thu 23"])
+    expect(shape(slate.bands[1].items)).toEqual(["task:draft"])
+  })
+
+  it("collects far-future and undated tasks into Later", () => {
+    const slate = buildSlate(
+      [task("2026-09-12", "open", "passport"), task(null, "open", "someday")],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Later"])
+    expect(shape(slate.bands[1].items)).toEqual([
+      "task:passport",
+      "task:someday",
+    ])
+  })
+
+  it("omits a day with nothing on it", () => {
+    // Most days between here and the horizon hold nothing flagged. A column of empty
+    // dates would make the card look busy while saying nothing.
+    const slate = buildSlate([], [sOcc("2026-07-25", null, true)], now, TZ, 7)
+    expect(bandLabels(slate)).toEqual(["Today", "Sat 25"])
+  })
+
+  it("never labels a band with a year or a date range", () => {
+    // `dashboard-calendar-view.spec.ts` finds the month heading as the one `main h2`
+    // ending in four digits and the week heading as the one with an en-dash. A band label
+    // carrying either makes those locators ambiguous and fails a spec about the calendar.
+    const occs = ["2026-07-23", "2026-07-25", "2026-07-28"].map((d) =>
+      sOcc(d, null, true),
+    )
+    for (const label of bandLabels(buildSlate([], occs, now, TZ, 7))) {
+      expect(label).not.toMatch(/\d{4}$/)
+      expect(label).not.toMatch(/[–-]/)
+    }
+  })
+
+  it("still separates overdue, and keeps it out of every band", () => {
+    const slate = buildSlate(
+      [task("2026-07-01", "open", "old"), task("2026-07-21", "open", "today")],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(slate.overdue.map((t) => t.label)).toEqual(["old"])
+    expect(slate.bands.flatMap((b) => shape(b.items))).toEqual(["task:today"])
+  })
+
+  it("ignores done tasks everywhere", () => {
+    const slate = buildSlate(
+      [
+        task("2026-07-23", "done", "done-soon"),
+        task("2026-09-12", "done", "done-later"),
+      ],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today"])
   })
 })

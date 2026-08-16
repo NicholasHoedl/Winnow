@@ -405,6 +405,7 @@ type OverlayEvent = RecurringEvent & {
   title: string
   notes: string | null
   calendarId: string | null
+  highlighted: boolean
 }
 
 // A weekday (Mon–Fri) series, so exceptions have several occurrences to act on.
@@ -417,6 +418,7 @@ function oev(over: Partial<OverlayEvent> = {}): OverlayEvent {
     startAt: "2026-07-06T09:00:00Z", // Monday
     endAt: "2026-07-06T09:30:00Z",
     allDay: false,
+    highlighted: false,
     recurrenceFreq: "weekly",
     recurrenceInterval: 1,
     recurrenceWeekdays: WD.MON | WD.TUE | WD.WED | WD.THU | WD.FRI,
@@ -434,6 +436,7 @@ function exc(over: Partial<ExceptionOverlay> = {}): ExceptionOverlay {
     startAt: null,
     endAt: null,
     allDay: null,
+    highlighted: null,
     title: null,
     notes: null,
     calendarId: null,
@@ -458,6 +461,51 @@ describe("applyExceptions", () => {
       "2026-07-09",
       "2026-07-10",
     ])
+  })
+
+  it("highlights one date of an unhighlighted series", () => {
+    // The case the nullable column exists for: a weekly standup you want on the dashboard
+    // once, without pinning every future standup there.
+    const result = applyExceptions(week(), [exc({ highlighted: true })], "UTC")
+    const flagged = result.filter((o) => o.event.highlighted).map((o) => o.date)
+    expect(flagged).toEqual(["2026-07-08"])
+  })
+
+  it("un-highlights one date of a highlighted series", () => {
+    // The asymmetry `??` buys, and the reason the column is `boolean | null` rather than a
+    // plain boolean: an override of FALSE has to beat a series of TRUE. A `||` here would
+    // silently fall back to the series and this date would stay highlighted.
+    const result = applyExceptions(
+      expandOccurrences(
+        oev({ highlighted: true }),
+        "2026-07-06",
+        "2026-07-11",
+        "UTC",
+      ),
+      [exc({ highlighted: false })],
+      "UTC",
+    )
+    const flagged = result.filter((o) => o.event.highlighted).map((o) => o.date)
+    expect(flagged).toEqual([
+      "2026-07-06",
+      "2026-07-07",
+      "2026-07-09",
+      "2026-07-10",
+    ])
+  })
+
+  it("inherits the series flag on dates with no override", () => {
+    const result = applyExceptions(
+      expandOccurrences(
+        oev({ highlighted: true }),
+        "2026-07-06",
+        "2026-07-11",
+        "UTC",
+      ),
+      [exc({ title: "Renamed" })],
+      "UTC",
+    )
+    expect(result.every((o) => o.event.highlighted)).toBe(true)
   })
 
   it("reschedules only the overridden day's time", () => {

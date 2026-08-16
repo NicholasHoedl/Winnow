@@ -330,6 +330,8 @@ export type ExceptionOverlay = {
   startAt: Date | string | null
   endAt: Date | string | null
   allDay: boolean | null
+  /** Null inherits the series' flag; `false` un-highlights this one date of a series. */
+  highlighted: boolean | null
   title: string | null
   notes: string | null
   calendarId: string | null
@@ -341,6 +343,7 @@ type OverlayableEvent = RecurringEvent & {
   title: string
   notes: string | null
   calendarId: string | null
+  highlighted: boolean
 }
 
 /**
@@ -401,6 +404,9 @@ export function applyExceptions<E extends OverlayableEvent>(
       title: ex.title ?? series.title,
       notes: ex.notes ?? series.notes,
       calendarId: ex.calendarId ?? series.calendarId,
+      // `??`, so an override of `false` un-highlights this one date rather than falling
+      // back to a highlighted series. That asymmetry is the reason the column is nullable.
+      highlighted: ex.highlighted ?? series.highlighted,
     } as E
     // Derive the local time-of-day and multi-day span from the effective instants.
     // endAt may be inherited from the series anchor (a different calendar day), so use

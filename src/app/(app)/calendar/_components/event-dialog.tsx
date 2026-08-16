@@ -63,6 +63,7 @@ type EventFormValues = {
   notes?: string
   calendarId: string
   allDay: boolean
+  highlighted: boolean
   startDate: string
   startTime?: string
   endDate?: string
@@ -144,6 +145,7 @@ function emptyValues(defaultDate: string, calendarId = ""): EventFormValues {
     notes: "",
     calendarId,
     allDay: false,
+    highlighted: false,
     startDate: defaultDate,
     startTime: "09:00",
     endDate: "",
@@ -240,6 +242,10 @@ export function EventDialog({
         notes: e.notes ?? "",
         calendarId: e.calendarId ?? "",
         allDay: e.allDay,
+        // The EFFECTIVE value — `applyExceptions` has already resolved this date's
+        // override against the series, so editing one occurrence shows what that date
+        // actually does rather than what the series says.
+        highlighted: e.highlighted,
         startDate: occurrence.date,
         startTime: e.allDay ? "09:00" : (occurrence.time ?? "09:00"),
         endDate: occurrence.endDate,
@@ -264,6 +270,7 @@ export function EventDialog({
       notes: s.notes ?? "",
       calendarId: s.calendarId ?? "",
       allDay: s.allDay,
+      highlighted: s.highlighted,
       startDate: splitting ? occurrence.originalDate : start.date,
       startTime: s.allDay ? "09:00" : start.time,
       // The series' end offset, re-anchored on the split date — otherwise a multi-day
@@ -308,6 +315,7 @@ export function EventDialog({
         notes: data.notes,
         calendarId: data.calendarId,
         allDay: data.allDay,
+        highlighted: data.highlighted,
         startTime: data.startTime,
         endTime: data.endTime,
       })
@@ -451,6 +459,28 @@ export function EventDialog({
                 />
               </Field>
             )}
+
+            {/* Sits beside "All day" as a bare label rather than in a `<Field>`, matching
+                it — both are single toggles that need no error slot.
+
+                Under the "This event" scope this writes a per-date override, so a weekly
+                standup can be highlighted once without pinning every future one to the
+                dashboard. Under "This and following" or "All" it sets the series. */}
+            <Controller
+              control={control}
+              name="highlighted"
+              render={({ field }) => (
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
+                  />
+                  Highlight on the dashboard
+                </label>
+              )}
+            />
 
             <Controller
               control={control}

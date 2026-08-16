@@ -178,6 +178,7 @@ export function AiSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={ENABLED_OPTIONS}
+                  label="Companion"
                 />
               )}
             />
@@ -198,6 +199,7 @@ export function AiSection({
                   value={field.value}
                   onChange={field.onChange}
                   options={PROVIDER_OPTIONS}
+                  label="Provider"
                 />
               )}
             />

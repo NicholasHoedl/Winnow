@@ -94,6 +94,7 @@ function eventFields(d: EventInput, startAt: Date, endAt: Date | null) {
     startAt,
     endAt,
     allDay: d.allDay,
+    highlighted: d.highlighted,
     recurrenceFreq: d.recurrenceFreq,
     recurrenceInterval: d.recurrenceInterval,
     recurrenceWeekdays: d.recurrenceWeekdays,
@@ -169,6 +170,9 @@ export async function restoreEvent(ev: EventRow): Promise<ActionResult> {
       startAt: ev.startAt,
       endAt: ev.endAt,
       allDay: ev.allDay,
+      // Listed by hand because this whole object is. Leave it out and undoing a delete
+      // silently un-highlights the event — the row comes back, but not as it was.
+      highlighted: ev.highlighted,
       recurrenceFreq: ev.recurrenceFreq,
       recurrenceInterval: ev.recurrenceInterval,
       recurrenceWeekdays: ev.recurrenceWeekdays,
@@ -430,6 +434,7 @@ export async function setEventException(
     startAt,
     endAt,
     allDay: d.allDay,
+    highlighted: d.highlighted,
     title: d.title,
     notes: nullify(d.notes),
     calendarId: d.calendarId || null,
@@ -479,6 +484,9 @@ export async function rescheduleOccurrence(
   const d = parsed.data
   const { timeZone } = await getUserPreferences()
   const { startAt, endAt } = exceptionTimestamps(d, timeZone)
+  // Deliberately narrow — and `highlighted` is deliberately NOT here. Moving an occurrence
+  // says nothing about whether it is worth surfacing early, so it must keep inheriting
+  // rather than be pinned to whatever the series said at the moment of the drag.
   const fields = { canceled: false, startAt, endAt, allDay: d.allDay }
   await db
     .insert(eventExceptions)
