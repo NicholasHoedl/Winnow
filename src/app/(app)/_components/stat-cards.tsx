@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
 import type { MacroProgressSet } from "@/modules/meals/service"
 
+import { DashboardCard } from "./dashboard-card"
+
 const MACROS = [
   { key: "calories", label: "Cal", accent: "bg-cat-3" },
   { key: "protein", label: "Protein", accent: "bg-cat-1" },
@@ -12,31 +14,52 @@ const MACROS = [
   { key: "fat", label: "Fat", accent: "bg-cat-4" },
 ] as const
 
+/**
+ * One stat tile.
+ *
+ * The whole tile used to be a single `<Link>`. It cannot be any more: a collapse chevron is
+ * a `<button>`, and a button inside an anchor is invalid per the HTML content model — the
+ * browser is entitled to do whatever it likes with the nesting, and in practice clicking the
+ * chevron would navigate as well as fold.
+ *
+ * So the link moved to the header's arrow, which is where the affordance already pointed,
+ * and the tile became a `DashboardCard` like every other surface here. The trade is real and
+ * worth naming: the click target for "go to /meals" shrank from a whole tile to an icon.
+ */
 function StatShell({
+  card,
   href,
   icon,
   label,
+  collapsed,
   children,
 }: {
+  card: "macros" | "budget"
   href: string
   icon: React.ReactNode
   label: string
+  collapsed: boolean
   children: React.ReactNode
 }) {
   return (
-    <Link
-      href={href}
-      className="group bg-card hover:ring-foreground/20 ring-foreground/10 flex flex-col gap-3 rounded-xl p-4 shadow-sm ring-1 transition-[box-shadow,--tw-ring-color]"
+    <DashboardCard
+      card={card}
+      title={label}
+      icon={icon}
+      collapsed={collapsed}
+      headingClassName="text-muted-foreground text-sm font-medium"
+      actions={
+        <Link
+          href={href}
+          aria-label={`Open ${label}`}
+          className="text-muted-foreground/50 hover:text-foreground -m-1 rounded-md p-1 transition-colors"
+        >
+          <ArrowUpRight className="size-4" />
+        </Link>
+      }
     >
-      <div className="flex items-center justify-between">
-        <div className="text-muted-foreground flex items-center gap-2 text-sm font-medium">
-          {icon}
-          {label}
-        </div>
-        <ArrowUpRight className="text-muted-foreground/50 group-hover:text-foreground size-4 transition-colors" />
-      </div>
       {children}
-    </Link>
+    </DashboardCard>
   )
 }
 
@@ -55,10 +78,13 @@ export function StatCards({
   macros,
   budget,
   currency,
+  collapsed,
 }: {
   macros: { progress: MacroProgressSet }
   budget: MonthSummary
   currency: string
+  /** The two tiles fold independently, so this is a pair rather than one flag. */
+  collapsed: { macros: boolean; budget: boolean }
 }) {
   const nothingLogged = MACROS.every(
     ({ key }) => macros.progress[key].consumed === 0,
@@ -75,9 +101,11 @@ export function StatCards({
     <div className="grid gap-4 sm:grid-cols-2">
       {/* Macros */}
       <StatShell
+        card="macros"
         href="/meals"
         icon={<Utensils className="size-4" />}
         label="Macros"
+        collapsed={collapsed.macros}
       >
         {nothingLogged ? (
           <p className="text-muted-foreground flex flex-1 items-center text-sm">
@@ -107,9 +135,11 @@ export function StatCards({
 
       {/* Budget */}
       <StatShell
+        card="budget"
         href="/budget"
         icon={<Wallet className="size-4" />}
         label="Budget"
+        collapsed={collapsed.budget}
       >
         {budget.expenseCents === 0 && budget.totalBudgetedCents === 0 ? (
           <p className="text-muted-foreground flex flex-1 items-center text-sm">

@@ -37,6 +37,47 @@ export const CALENDAR_VIEWS: CalendarView[] = ["month", "week", "day", "agenda"]
 export type SlateHorizonDays = 3 | 7 | 14
 export const SLATE_HORIZONS: SlateHorizonDays[] = [3, 7, 14]
 
+/**
+ * The dashboard surfaces that can be folded to their header.
+ *
+ * `macros` and `budget` are the two stat tiles, which fold independently — they are
+ * separate tiles with separate destinations, and grouping them under one chevron would have
+ * meant inventing a heading the dashboard does not otherwise have.
+ *
+ * Adding a card here is the whole registration: the column stores whatever keys it is
+ * given and `preferencesFor` filters against this list, so an unknown key is dropped rather
+ * than trusted. That is what makes deleting a card free.
+ */
+export const DASHBOARD_CARDS = [
+  "slate",
+  "goals",
+  "calendar",
+  "macros",
+  "budget",
+  "categories",
+] as const
+export type DashboardCard = (typeof DASHBOARD_CARDS)[number]
+
+/**
+ * The collapsed-card list, reduced to keys this build actually has.
+ *
+ * The column is `jsonb`, so what comes back is genuinely `unknown` — an import, a restore
+ * from an older build, or a hand-edited row can hold anything at all. Filtering rather than
+ * failing is the point of storing a list instead of a column per card: a key for a card that
+ * has since been deleted stops matching and the rest still work, where a dropped column
+ * would have needed a migration.
+ *
+ * Deduped, because a double write should not be able to make `includes` disagree with
+ * itself, and order is not meaningful — this answers "is X folded?", nothing more.
+ */
+export function parseCollapsedCards(value: unknown): DashboardCard[] {
+  if (!Array.isArray(value)) return []
+  const known = new Set<string>(DASHBOARD_CARDS)
+  return Array.from(
+    new Set(value.filter((v): v is DashboardCard => known.has(v as string))),
+  )
+}
+
 export const THEMES: Theme[] = ["light", "dark", "system"]
 export const MOMENTUM_DAYS: MomentumDays[] = [7, 14, 30]
 
@@ -52,6 +93,7 @@ export type UserPreferences = {
   balanceMacroTargets: boolean
   defaultCalendarView: CalendarView
   slateHorizonDays: SlateHorizonDays
+  dashboardCollapsed: DashboardCard[]
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -68,6 +110,9 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   balanceMacroTargets: true,
   defaultCalendarView: "month",
   slateHorizonDays: 7,
+  // Nothing folded on a fresh install: a dashboard that arrives with cards already closed
+  // would read as broken rather than as tidy.
+  dashboardCollapsed: [],
 }
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).

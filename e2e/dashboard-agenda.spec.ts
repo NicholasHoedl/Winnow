@@ -61,10 +61,11 @@ test("logging a meal refreshes the dashboard's macro card", async ({
   page,
 }) => {
   const meal = `e2ehub${Date.now()}`
-  // The sidebar nav link also points at /meals, so filter to the stat card by its label.
-  const macroCard = page
-    .locator("a[href='/meals']")
-    .filter({ hasText: "Macros" })
+  // By `data-card`. This used to be `a[href='/meals']` filtered to the one containing
+  // "Macros", which worked only while the WHOLE tile was a single link — and it stopped
+  // being one when the collapse chevron arrived, because a button inside an anchor is
+  // invalid HTML. The link is now the header's arrow and holds no text at all.
+  const macroCard = page.locator('[data-card="macros"]')
 
   await page.goto("/")
   await expect(macroCard).toBeVisible()

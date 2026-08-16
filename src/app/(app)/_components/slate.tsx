@@ -23,8 +23,9 @@ import { occurrenceKey } from "@/modules/calendar/service"
 import { reorderTasks, toggleTaskStatus } from "@/modules/todos/actions"
 import type { TaskWithSeries } from "@/modules/todos/queries"
 import { SortableList } from "@/components/shared/sortable-list"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+
+import { DashboardCard } from "./dashboard-card"
 
 import type { AgendaGroup, SlateBand } from "../_lib/agenda"
 
@@ -180,11 +181,13 @@ export function Slate({
   bands,
   calendars,
   use24Hour,
+  collapsed,
 }: {
   overdue: TaskWithSeries[]
   bands: SlateBand<TaskWithSeries, EventOccurrence>[]
   calendars: Calendar[]
   use24Hour: boolean
+  collapsed: boolean
 }) {
   const [, startTransition] = React.useTransition()
   // An append-only id array, not a copy of the rows. The card this replaces held a full
@@ -269,119 +272,103 @@ export function Slate({
 
   if (empty) {
     return (
-      <Card data-testid="slate">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-2">
-            <h2 id="slate-heading" className="text-base font-medium">
-              Slate
-            </h2>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-center text-sm">
-            <Sparkles className="size-6 opacity-60" />
-            Nothing due and nothing scheduled. The day is yours.
-          </p>
-        </CardContent>
-      </Card>
+      <DashboardCard card="slate" title="Slate" collapsed={collapsed}>
+        <p className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-center text-sm">
+          <Sparkles className="size-6 opacity-60" />
+          Nothing due and nothing scheduled. The day is yours.
+        </p>
+      </DashboardCard>
     )
   }
 
   return (
-    <Card data-testid="slate">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-2">
-          <h2 id="slate-heading" className="text-base font-medium">
-            Slate
-          </h2>
-          {/* `All →`, never `Calendar →`. An earlier agenda header linked to /calendar for
-              no reason a reader could infer, and `dashboard-agenda.spec.ts` asserts
-              negatively that no such link comes back. */}
-          <Link
-            href="/activity"
-            className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
-          >
-            All →
-          </Link>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Named by the heading above via id — `aria-labelledby` resolves anywhere in the
-            document, so the region does not have to contain its own label. */}
-        <section
-          aria-labelledby="slate-heading"
-          className="flex max-h-[52svh] flex-col gap-4 overflow-y-auto"
+    <DashboardCard
+      card="slate"
+      title="Slate"
+      collapsed={collapsed}
+      actions={
+        /* `All →`, never `Calendar →`. An earlier agenda header linked to /calendar for no
+           reason a reader could infer, and `dashboard-agenda.spec.ts` asserts negatively
+           that no such link comes back. */
+        <Link
+          href="/activity"
+          className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
         >
-          {overdue.length > 0 && (
-            <div className="border-destructive/30 bg-destructive/[0.04] rounded-lg border p-3">
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <h3 className="text-destructive text-xs font-semibold tracking-wide uppercase">
-                  Overdue
-                </h3>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {overdue.length}
-                </span>
-              </div>
-              <ol className="flex flex-col gap-0.5">
-                {overdue.map((task) => (
-                  <li key={task.id}>
-                    <TaskRow
-                      task={task}
-                      done={isDone(task)}
-                      onToggle={() => toggle(task.id)}
-                      showDate
-                    />
-                  </li>
-                ))}
-              </ol>
+          All →
+        </Link>
+      }
+    >
+      <div className="flex max-h-[52svh] flex-col gap-4 overflow-y-auto">
+        {overdue.length > 0 && (
+          <div className="border-destructive/30 bg-destructive/[0.04] rounded-lg border p-3">
+            <div className="mb-1.5 flex items-baseline justify-between">
+              <h3 className="text-destructive text-xs font-semibold tracking-wide uppercase">
+                Overdue
+              </h3>
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {overdue.length}
+              </span>
             </div>
-          )}
+            <ol className="flex flex-col gap-0.5">
+              {overdue.map((task) => (
+                <li key={task.id}>
+                  <TaskRow
+                    task={task}
+                    done={isDone(task)}
+                    onToggle={() => toggle(task.id)}
+                    showDate
+                  />
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
-          {bands.map((band, bandIndex) => {
-            const isToday = bandIndex === 0 && band.date !== null
-            const isLater = band.date === null
-            // Today splits by kind so the tasks — and only the tasks — can be a drag list.
-            // An event's position is its TIME; there is nothing to reorder about it.
-            const events = band.items.flatMap((item) =>
-              item.kind === "event" ? [item.occurrence] : [],
-            )
-            const allDay = events.filter((occ) => occ.time === null)
-            const timed = events.filter((occ) => occ.time !== null)
-            const tasks = band.items.flatMap((item) =>
-              item.kind === "task" ? [item.task] : [],
-            )
-            const shown = isLater ? tasks.slice(0, LATER_SHOWN) : tasks
+        {bands.map((band, bandIndex) => {
+          const isToday = bandIndex === 0 && band.date !== null
+          const isLater = band.date === null
+          // Today splits by kind so the tasks — and only the tasks — can be a drag list.
+          // An event's position is its TIME; there is nothing to reorder about it.
+          const events = band.items.flatMap((item) =>
+            item.kind === "event" ? [item.occurrence] : [],
+          )
+          const allDay = events.filter((occ) => occ.time === null)
+          const timed = events.filter((occ) => occ.time !== null)
+          const tasks = band.items.flatMap((item) =>
+            item.kind === "task" ? [item.task] : [],
+          )
+          const shown = isLater ? tasks.slice(0, LATER_SHOWN) : tasks
 
-            return (
-              <div key={band.date ?? "later"}>
-                <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                  <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                    {band.label}
-                  </h3>
-                  {isLater && tasks.length > LATER_SHOWN && (
-                    <Link
-                      href="/activity"
-                      className="text-muted-foreground hover:text-foreground text-xs"
-                    >
-                      +{tasks.length - LATER_SHOWN} more
-                    </Link>
-                  )}
-                </div>
+          return (
+            <div key={band.date ?? "later"}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  {band.label}
+                </h3>
+                {isLater && tasks.length > LATER_SHOWN && (
+                  <Link
+                    href="/activity"
+                    className="text-muted-foreground hover:text-foreground text-xs"
+                  >
+                    +{tasks.length - LATER_SHOWN} more
+                  </Link>
+                )}
+              </div>
 
-                <div className="flex flex-col gap-1.5">
-                  {/* All-day events lead: they colour the whole day rather than sitting at
+              <div className="flex flex-col gap-1.5">
+                {/* All-day events lead: they colour the whole day rather than sitting at
                       a point in it, which is the same reason the time sort puts them
                       first. */}
-                  {allDay.map((occurrence) => (
-                    <EventRow
-                      key={occurrenceKey(occurrence)}
-                      occurrence={occurrence}
-                      calendars={calendars}
-                      use24Hour={use24Hour}
-                    />
-                  ))}
+                {allDay.map((occurrence) => (
+                  <EventRow
+                    key={occurrenceKey(occurrence)}
+                    occurrence={occurrence}
+                    calendars={calendars}
+                    use24Hour={use24Hour}
+                  />
+                ))}
 
-                  {/* Each routine as its own block: a heading and a tint saying these rows
+                {/* Each routine as its own block: a heading and a tint saying these rows
                       arrived together and are meant to be run together. Tinted rather than
                       indented — `Gutter` exists to put every checkbox on one x-axis, and an
                       indent here would break that for grouped rows only, which reads as a
@@ -396,77 +383,74 @@ export function Slate({
                       cannot see it either — it skips every subtree under a computed
                       `overflow-x: auto` ancestor by design. Same bleed as the `-mx-1` that
                       reached `habit-strip` and `routines-line`. */}
-                  {isToday &&
-                    band.groups.map((group) => (
-                      <section
-                        key={group.routineId}
-                        aria-label={group.name}
-                        className="bg-muted/40 rounded-md py-1.5"
-                      >
-                        <div className="text-muted-foreground mb-1 flex items-center gap-1.5 text-xs font-medium">
-                          <ListChecks className="size-3.5 shrink-0" />
-                          <span className="min-w-0 truncate">{group.name}</span>
-                          <span className="tabular-nums opacity-70">
-                            {group.tasks.length}
-                          </span>
-                        </div>
-                        <TaskList
-                          rows={arrange(group.routineId, group.tasks)}
-                          isDone={isDone}
-                          onToggle={toggle}
-                          onReorder={(ids) =>
-                            handleReorder(group.routineId, ids)
-                          }
-                        />
-                      </section>
-                    ))}
-
-                  {isToday && shown.length > 0 ? (
-                    /* Its own list, so dragging cannot move a task into or out of a
-                       routine — that would mean rewriting `routine_id`, which is a
-                       different thing to mean by a drag. */
-                    <TaskList
-                      rows={arrange(LOOSE, shown)}
-                      isDone={isDone}
-                      onToggle={toggle}
-                      onReorder={(ids) => handleReorder(LOOSE, ids)}
-                    />
-                  ) : (
-                    shown.map((task) => (
-                      <TaskRow
-                        key={task.id}
-                        task={task}
-                        done={isDone(task)}
-                        onToggle={() => toggle(task.id)}
-                        showDate={isLater}
+                {isToday &&
+                  band.groups.map((group) => (
+                    <section
+                      key={group.routineId}
+                      aria-label={group.name}
+                      className="bg-muted/40 rounded-md py-1.5"
+                    >
+                      <div className="text-muted-foreground mb-1 flex items-center gap-1.5 text-xs font-medium">
+                        <ListChecks className="size-3.5 shrink-0" />
+                        <span className="min-w-0 truncate">{group.name}</span>
+                        <span className="tabular-nums opacity-70">
+                          {group.tasks.length}
+                        </span>
+                      </div>
+                      <TaskList
+                        rows={arrange(group.routineId, group.tasks)}
+                        isDone={isDone}
+                        onToggle={toggle}
+                        onReorder={(ids) => handleReorder(group.routineId, ids)}
                       />
-                    ))
-                  )}
-
-                  {timed.map((occurrence) => (
-                    <EventRow
-                      key={occurrenceKey(occurrence)}
-                      occurrence={occurrence}
-                      calendars={calendars}
-                      use24Hour={use24Hour}
-                    />
+                    </section>
                   ))}
 
-                  {/* Reachable for today alone, which is the one band emitted whether or
+                {isToday && shown.length > 0 ? (
+                  /* Its own list, so dragging cannot move a task into or out of a
+                       routine — that would mean rewriting `routine_id`, which is a
+                       different thing to mean by a drag. */
+                  <TaskList
+                    rows={arrange(LOOSE, shown)}
+                    isDone={isDone}
+                    onToggle={toggle}
+                    onReorder={(ids) => handleReorder(LOOSE, ids)}
+                  />
+                ) : (
+                  shown.map((task) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      done={isDone(task)}
+                      onToggle={() => toggle(task.id)}
+                      showDate={isLater}
+                    />
+                  ))
+                )}
+
+                {timed.map((occurrence) => (
+                  <EventRow
+                    key={occurrenceKey(occurrence)}
+                    occurrence={occurrence}
+                    calendars={calendars}
+                    use24Hour={use24Hour}
+                  />
+                ))}
+
+                {/* Reachable for today alone, which is the one band emitted whether or
                       not it has anything in it. Said in words rather than left blank: a
                       heading with nothing under it looks like a rendering fault, and "you
                       have nothing on" is worth reading. */}
-                  {band.items.length === 0 && band.groups.length === 0 && (
-                    <p className="text-muted-foreground py-1 pl-14 text-sm">
-                      Nothing today.
-                    </p>
-                  )}
-                </div>
+                {band.items.length === 0 && band.groups.length === 0 && (
+                  <p className="text-muted-foreground py-1 pl-14 text-sm">
+                    Nothing today.
+                  </p>
+                )}
               </div>
-            )
-          })}
-        </section>
-      </CardContent>
-    </Card>
+            </div>
+          )
+        })}
+      </div>
+    </DashboardCard>
   )
 }

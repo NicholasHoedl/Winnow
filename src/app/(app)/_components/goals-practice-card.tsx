@@ -8,7 +8,8 @@ import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
+import { DashboardCard } from "./dashboard-card"
 
 import { groupPracticeByGoal } from "../_lib/goal-practice"
 
@@ -138,9 +139,11 @@ function HabitRow({
 export function GoalsPracticeCard({
   goals,
   habits,
+  collapsed,
 }: {
   goals: GoalPracticeRow[]
   habits: HabitStripCard[]
+  collapsed: boolean
 }) {
   const { pendingId, log } = useLogHabit()
 
@@ -154,72 +157,69 @@ export function GoalsPracticeCard({
   const short = habits.filter((habit) => !habit.now.met)
 
   return (
-    <Card data-testid="goals-practice">
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between gap-2 text-base">
-          <span className="min-w-0 truncate">Goals &amp; practice</span>
-          <span className="flex shrink-0 items-center gap-3">
-            {/* Two links, because the card now has two subjects and each has a page. The
-                `All →` this replaces pointed at `/activity`, which has been the wrong
-                answer for goals since T13 gave `/goals` a page again. */}
-            <Link
-              href="/goals"
-              className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
-            >
-              Goals →
-            </Link>
-            <Link
-              href="/activity/habits"
-              className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
-            >
-              Habits →
-            </Link>
-          </span>
-        </CardTitle>
-        {/* This line used to justify itself as making a 3-of-8 list trustworthy — `+N more`
-            said something was hidden, only this said whether what was hidden still needed
-            you. Nothing is hidden now, and it is still worth the row: it answers "am I
-            behind?" without reading every line, which is the question you open a dashboard
-            with. */}
+    <DashboardCard
+      card="goals"
+      title="Goals & practice"
+      collapsed={collapsed}
+      actions={
+        /* Two links, because the card has two subjects and each has a page. The `All →`
+           these replaced pointed at `/activity`, which has been the wrong answer for goals
+           since T13 gave `/goals` a page again. */
+        <>
+          <Link
+            href="/goals"
+            className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
+          >
+            Goals →
+          </Link>
+          <Link
+            href="/activity/habits"
+            className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
+          >
+            Habits →
+          </Link>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {/* Moved into the body from the header, which the shell now owns. It belongs with
+            the list anyway: it answers "am I behind?" about the rows directly beneath it,
+            and folding the card should take it away along with them. */}
         {habits.length > 0 && (
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground -mt-1 text-xs">
             {short.length === 0
               ? "All met"
               : `${short.length} of ${habits.length} short`}
           </p>
         )}
-      </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <div key={group.goal?.id ?? "unattached"}>
-              {group.goal ? (
-                <GoalHeading goal={group.goal} />
-              ) : (
-                /* Named rather than left as a nameless trailing list. These are practices
+        {groups.map((group) => (
+          <div key={group.goal?.id ?? "unattached"}>
+            {group.goal ? (
+              <GoalHeading goal={group.goal} />
+            ) : (
+              /* Named rather than left as a nameless trailing list. These are practices
                    you keep for their own sake, or ones whose goal was deleted — `goal_id`
                    is `ON DELETE SET NULL` so giving up a target keeps the running — and
                    both deserve to be told apart from a goal at a glance. */
-                <p className="text-muted-foreground text-xs font-medium">
-                  Not tied to a goal
-                </p>
-              )}
-              {group.habits.length > 0 && (
-                <div className="mt-2 flex flex-col gap-2 pl-3">
-                  {group.habits.map((habit) => (
-                    <HabitRow
-                      key={habit.id}
-                      habit={habit}
-                      pending={pendingId === habit.id}
-                      onLog={() => log(habit)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+              <p className="text-muted-foreground text-xs font-medium">
+                Not tied to a goal
+              </p>
+            )}
+            {group.habits.length > 0 && (
+              <div className="mt-2 flex flex-col gap-2 pl-3">
+                {group.habits.map((habit) => (
+                  <HabitRow
+                    key={habit.id}
+                    habit={habit}
+                    pending={pendingId === habit.id}
+                    onLog={() => log(habit)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </DashboardCard>
   )
 }

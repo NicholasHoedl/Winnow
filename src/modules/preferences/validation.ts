@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { CALENDAR_VIEWS, CURRENCY_CODES, THEMES } from "@/lib/preferences"
+import {
+  CALENDAR_VIEWS,
+  CURRENCY_CODES,
+  DASHBOARD_CARDS,
+  THEMES,
+} from "@/lib/preferences"
 import { AI_PROVIDERS } from "@/modules/companion/ai-settings"
 
 // Robust across runtimes: constructing a formatter throws RangeError for an
@@ -35,6 +40,14 @@ export const userPreferencesSchema = z.object({
   balanceMacroTargets: z.boolean(),
   defaultCalendarView: z.enum(CALENDAR_VIEWS as [string, ...string[]]),
   slateHorizonDays: z.union([z.literal(3), z.literal(7), z.literal(14)]),
+  // `dashboardCollapsed` is deliberately ABSENT.
+  //
+  // It is part of `UserPreferences`, but the settings form is not one of its writers — the
+  // chevron on each card is the only control, through `setDashboardCard`. `setUserPreferences`
+  // updates exactly the keys this schema parses, so leaving it out means saving anything on
+  // /settings cannot touch the column. Including it would have made the round trip depend on
+  // react-hook-form carrying an unregistered array through `handleSubmit`, and RHF is known
+  // here to drop fields it thinks you did not mean to submit.
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 
@@ -96,3 +109,15 @@ export const aiApiKeySchema = z.object({
   apiKey: z.string().trim().max(500),
 })
 export type AiApiKeyInput = z.infer<typeof aiApiKeySchema>
+
+/**
+ * One dashboard card, folded or unfolded.
+ *
+ * `z.enum` over the registry rather than a plain string: this value is written straight into
+ * a `jsonb` column that nothing else validates on the way in, so an unknown key would be
+ * stored happily and only get filtered back out on read — a write that silently does nothing.
+ */
+export const dashboardCardSchema = z.object({
+  card: z.enum(DASHBOARD_CARDS),
+  collapsed: z.boolean(),
+})
