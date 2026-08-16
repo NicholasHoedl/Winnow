@@ -267,6 +267,13 @@
       "when": 1786908797985,
       "tag": "0037_military_thor_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1786916199547,
+      "tag": "0038_strong_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 
+import { sql } from "drizzle-orm"
+
 import { db } from "@/db"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
@@ -12,6 +14,7 @@ import {
   aiApiKeySchema,
   aiSettingsSchema,
   appearancePreferencesSchema,
+  dashboardCardSchema,
   notificationPreferencesSchema,
   userPreferencesSchema,
 } from "./validation"
@@ -131,5 +134,60 @@ export async function setAiApiKey(input: unknown): Promise<ActionResult> {
   // a local endpoint needs none. Revalidating anyway would be a whole-layout rerender for
   // no visible difference.
   revalidatePath("/settings")
+  return { ok: true }
+}
+
+/**
+ * Fold or unfold one dashboard card.
+ *
+ * Takes the DESIRED state rather than "flip". A flip makes the outcome depend on how many
+ * clicks arrived, so a double-click, a retry, or a replayed request lands somewhere
+ * different from where the user is looking; setting a boolean is idempotent and a repeat is
+ * a no-op.
+ *
+ * **Modified in the database, never read first.** This was a read-modify-write, on the
+ * reasoning that only two tabs racing could lose an update. That was wrong, and
+ * `dashboard-collapse.spec.ts` proved it: the fold is optimistic, so one person in ONE tab
+ * can fold a second card while the first write is still in flight, and the second action
+ * then reads a row that does not yet know about the first. Folding two cards quickly left
+ * one of them expanded, and which one varied between runs.
+ *
+ * So both branches are single atomic statements:
+ *   collapse — `|| '["macros"]'`, appending to whatever is there at the moment it runs
+ *   expand   — `- 'macros'`, which removes every matching element
+ *
+ * `||` can append a key that is already present. That is deliberate rather than tolerated:
+ * `parseCollapsedCards` deduplicates on read, which turns what was a defensive test into a
+ * load-bearing one. A duplicate is only reachable by racing double-clicks and the next
+ * expand clears every copy.
+ *
+ * `revalidatePath("/")` and not `"layout"`: this changes nothing outside the dashboard.
+ */
+export async function setDashboardCard(
+  card: unknown,
+  collapsed: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = dashboardCardSchema.safeParse({ card, collapsed })
+  if (!parsed.success) return invalid(parsed.error)
+
+  const { card: key, collapsed: fold } = parsed.data
+  // In an ON CONFLICT DO UPDATE, a bare column reference is the row already stored — so
+  // this reads and writes in one statement rather than across two round trips.
+  const next = fold
+    ? sql`${userPreferences.dashboardCollapsed} || ${JSON.stringify([key])}::jsonb`
+    : sql`${userPreferences.dashboardCollapsed} - ${key}`
+
+  await db
+    .insert(userPreferences)
+    // Only reached when the user has no preferences row at all, where there is nothing to
+    // merge with and the whole list is whatever this call is asking for.
+    .values({ userId, dashboardCollapsed: fold ? [key] : [] })
+    .onConflictDoUpdate({
+      target: userPreferences.userId,
+      set: { dashboardCollapsed: next },
+    })
+
+  revalidatePath("/")
   return { ok: true }
 }

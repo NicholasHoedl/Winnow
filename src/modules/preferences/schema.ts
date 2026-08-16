@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -88,6 +89,25 @@ export const userPreferences = pgTable("user_preferences", {
    * arrive later.
    */
   slateHorizonDays: integer("slate_horizon_days").notNull().default(7),
+
+  /**
+   * Which dashboard cards are folded to their header.
+   *
+   * ONE column holding a list, not a boolean per card, and that is a deliberate break from
+   * the shape of every other preference here. The dashboard's card set churns: T13 deleted
+   * three cards, T15 merged two into one, T16 merged three more into one. A
+   * `slate_collapsed` / `goals_collapsed` scheme means a migration every time that happens
+   * and a dead column left behind on every deletion. A list costs nothing when a card is
+   * added and degrades silently when one is removed — `preferencesFor` filters against
+   * `DASHBOARD_CARDS`, so a key for a card that no longer exists simply stops matching.
+   *
+   * Collapsed is not hidden: the card keeps its header and one click brings it back. There
+   * is deliberately no settings UI — the chevron on the card is the whole control.
+   */
+  dashboardCollapsed: jsonb("dashboard_collapsed")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
 
   /**
    * The AI companion's whole configuration (T11). Settings, not environment.

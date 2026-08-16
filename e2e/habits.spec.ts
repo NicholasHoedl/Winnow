@@ -206,10 +206,12 @@ test("the dashboard card shows today's practice and logs it", async ({
   await addHabit(page, title)
 
   await page.goto("/")
-  // By testid, not by heading text. The card was "Habits" until T15 merged it with the
-  // goals card into "Goals & practice"; a testid says which card this is without the test
-  // having an opinion about what it is called.
-  const card = page.getByTestId("goals-practice")
+  // By `data-card`, not by heading text. The card was "Habits" until T15 merged it with the
+  // goals card into "Goals & practice"; an attribute says which card this is without the
+  // test having an opinion about what it is called. Every dashboard card carries one now —
+  // `DashboardCard` stamps it from the same key the collapse preference is stored under, so
+  // the locator and the stored state cannot drift apart.
+  const card = page.locator('[data-card="goals"]')
   await expect(card).toHaveCount(1)
 
   // The count line. A regex because how many OTHER habits this account keeps is not this

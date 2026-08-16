@@ -13,7 +13,7 @@ import { weekDates } from "@/modules/calendar/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { TimeGrid } from "@/components/calendar/time-grid"
 import { calendarHref } from "@/app/(app)/calendar/_components/views"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { DashboardCard } from "./dashboard-card"
 
 // Sunday-indexed absolute day names (the week view looks these up by getUTCDay).
 const ABSOLUTE_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -179,6 +179,7 @@ export function DashboardCalendar({
   byDay,
   calendars,
   view,
+  collapsed,
 }: {
   month: string
   today: string
@@ -186,6 +187,7 @@ export function DashboardCalendar({
   byDay: Record<string, EventOccurrence[]>
   calendars: Calendar[]
   view: DashboardCalendarView
+  collapsed: boolean
 }) {
   const router = useRouter()
   const { weekStartsOn, use24HourTime, timeZone } = usePreferences()
@@ -207,58 +209,60 @@ export function DashboardCalendar({
   }
 
   return (
-    <Card className="flex h-full flex-col gap-3 py-4">
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-xl font-semibold tracking-tight">
-            {view === "week" ? weekLabel(week) : monthLabel(month)}
-          </h2>
-          <div className="flex items-center gap-2">
-            {/*
-              Links, not state. The server renders the chosen view, so there is no flash
-              of the wrong one on load and no localStorage read during render — the same
-              `?view=`/`?month=` idiom /calendar already uses. It does mean the dashboard
-              opens on the month each visit; making the choice stick would mean a column
-              on `user_preferences` so the server still knows it up front.
-            */}
-            <div
-              role="group"
-              aria-label="Calendar view"
-              className="bg-muted flex items-center rounded-md p-0.5"
-            >
-              {(["month", "week"] as const).map((v) => (
-                <Link
-                  key={v}
-                  href={v === "month" ? "/" : "/?calendar=week"}
-                  aria-current={view === v ? "true" : undefined}
-                  className={cn(
-                    "rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors",
-                    view === v
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {v}
-                </Link>
-              ))}
-            </div>
-            {/* Built by `calendarHref` rather than by hand, so this cannot disagree with
-                the switcher on `/calendar` about what a month URL looks like — and so it
-                keeps working now that a bare `/calendar` means "whatever view you prefer"
-                rather than "the month". */}
-            <Link
-              href={calendarHref(view === "week" ? "week" : "month", today)}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs font-medium"
-            >
-              Open
-              <ArrowUpRight className="size-3.5" />
-            </Link>
+    <DashboardCard
+      card="calendar"
+      title={view === "week" ? weekLabel(week) : monthLabel(month)}
+      label="Calendar"
+      collapsed={collapsed}
+      className="flex h-full flex-col gap-3 py-4"
+      headingClassName="font-display text-xl font-semibold tracking-tight"
+      contentClassName="flex min-h-0 flex-1 flex-col"
+      actions={
+        <>
+          {/*
+            Links, not state. The server renders the chosen view, so there is no flash of
+            the wrong one on load and no localStorage read during render — the same
+            `?view=`/`?month=` idiom /calendar already uses. It does mean the dashboard
+            opens on the month each visit; making the choice stick would mean a column on
+            `user_preferences` so the server still knows it up front.
+          */}
+          <div
+            role="group"
+            aria-label="Calendar view"
+            className="bg-muted flex items-center rounded-md p-0.5"
+          >
+            {(["month", "week"] as const).map((v) => (
+              <Link
+                key={v}
+                href={v === "month" ? "/" : "/?calendar=week"}
+                aria-current={view === v ? "true" : undefined}
+                className={cn(
+                  "rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors",
+                  view === v
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v}
+              </Link>
+            ))}
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col">
-        {view === "week" ? (
-          /*
+          {/* Built by `calendarHref` rather than by hand, so this cannot disagree with the
+              switcher on `/calendar` about what a month URL looks like — and so it keeps
+              working now that a bare `/calendar` means "whatever view you prefer" rather
+              than "the month". */}
+          <Link
+            href={calendarHref(view === "week" ? "week" : "month", today)}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs font-medium"
+          >
+            Open
+            <ArrowUpRight className="size-3.5" />
+          </Link>
+        </>
+      }
+    >
+      {view === "week" ? (
+        /*
             The same grid /calendar?view=week renders, not a lookalike — so "where are the
             gaps" reads identically on both surfaces. `fill` is what makes it safe here:
             by default it sizes itself to 65svh, which on this height-budgeted column
@@ -268,42 +272,41 @@ export function DashboardCalendar({
             Read-only: no `onReschedule`, so blocks are not draggable at all and clicking
             anything lands you on /calendar — which is what the chips did before.
           */
-          <TimeGrid
-            dates={week}
-            byDay={byDay}
-            today={today}
-            timeZone={timeZone}
-            calendars={calendars}
-            onSelectDay={(date) =>
-              router.push(`/calendar?view=week&date=${date}`)
-            }
-            onEditEvent={(occ) =>
-              router.push(`/calendar?view=week&date=${occ.date}`)
-            }
-            fill
-            /*
+        <TimeGrid
+          dates={week}
+          byDay={byDay}
+          today={today}
+          timeZone={timeZone}
+          calendars={calendars}
+          onSelectDay={(date) =>
+            router.push(`/calendar?view=week&date=${date}`)
+          }
+          onEditEvent={(occ) =>
+            router.push(`/calendar?view=week&date=${occ.date}`)
+          }
+          fill
+          /*
               What this column can actually spare, measured rather than guessed: the
               month view sits at 0px page overflow, and matching its card height means
               the viewport minus the page header, the quick-capture bar and this card's
               own chrome. `fill` alone does not cap anything here — see its doc.
             */
-            maxHeight="calc(100svh - 21rem)"
-            hourHeight="2.25rem"
-          />
-        ) : (
-          <MonthView
-            grid={grid}
-            byDay={byDay}
-            month={month}
-            today={today}
-            headers={headers}
-            calendars={calendars}
-            use24Hour={use24HourTime}
-            onDay={onDay}
-            onEvent={onEvent}
-          />
-        )}
-      </CardContent>
-    </Card>
+          maxHeight="calc(100svh - 21rem)"
+          hourHeight="2.25rem"
+        />
+      ) : (
+        <MonthView
+          grid={grid}
+          byDay={byDay}
+          month={month}
+          today={today}
+          headers={headers}
+          calendars={calendars}
+          use24Hour={use24HourTime}
+          onDay={onDay}
+          onEvent={onEvent}
+        />
+      )}
+    </DashboardCard>
   )
 }

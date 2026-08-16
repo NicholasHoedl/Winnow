@@ -15,6 +15,7 @@ import {
   type CalendarView,
   DEFAULT_PREFERENCES,
   MOMENTUM_DAYS,
+  parseCollapsedCards,
   type MomentumDays,
   SLATE_HORIZONS,
   type SlateHorizonDays,
@@ -91,6 +92,10 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     )
       ? (row.slateHorizonDays as SlateHorizonDays)
       : DEFAULT_PREFERENCES.slateHorizonDays,
+    // Filtered, not cast. This is the one `jsonb` preference, so the column can hold any
+    // shape at all; `parseCollapsedCards` drops anything that is not a card this build
+    // knows about. See the note on the column in `schema.ts`.
+    dashboardCollapsed: parseCollapsedCards(row.dashboardCollapsed),
   }
 }
 

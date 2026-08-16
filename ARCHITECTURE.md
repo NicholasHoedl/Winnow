@@ -225,6 +225,13 @@ Three things about it are load-bearing rather than cosmetic:
 - **Height is reached for, never forced.** The grid uses `min-h`, which fills
   spare space but never adds any, and Slate caps with internal scroll — so no
   volume of data turns this back into a scrolling page.
+- **Every card folds to its header, and it sticks.** The chevron writes
+  `user_preferences.dashboard_collapsed`, so the server renders the page already
+  folded rather than flashing it open — the same reasoning as the calendar
+  toggle above. Each card sits in `DashboardCard`, a client shell holding
+  server-rendered children, which is what lets the fold be instant while
+  `CategoryBars` and the stat tiles stay server components. **ADR-0016** covers
+  why the obvious alternative does not work, and what it costs.
   Fits without scrolling from 1366×768 up; 1280×800 overflows by ~19px, and the
   digest banner adds ~180px on the one visit a day it appears.
 

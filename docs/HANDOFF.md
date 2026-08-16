@@ -900,10 +900,12 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0014) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0016) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by
 accident than to notice afterwards. **0013** explains why `/todos` and `/goals` no longer
-exist, which is the first question anyone asks after a `git pull`. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
+exist, which is the first question anyone asks after a `git pull`, and **0016** why the
+dashboard's cards are wrapped in a client shell that holds server-rendered children — which
+looks like an over-complication until you try the obvious alternative. `docs/IMPROVEMENT-PLAN.md` carries a "corrections found while
 implementing" list at the top that is worth two minutes.

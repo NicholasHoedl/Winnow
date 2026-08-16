@@ -16,6 +16,7 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { formatLongDate } from "@/lib/format"
+import type { DashboardCard } from "@/lib/preferences"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -48,6 +49,7 @@ export default async function DashboardPage({
     use24HourTime,
     goalMomentumDays,
     slateHorizonDays,
+    dashboardCollapsed,
   } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
@@ -97,6 +99,11 @@ export default async function DashboardPage({
   // into the RSC payload, and `GoalWithProgress` carries every milestone and linked task the
   // card never draws. Four fields go instead, which is the same call `HabitStripCard`
   // already makes for habits.
+  // A membership test per card rather than six booleans threaded through. `dashboardCollapsed`
+  // is already filtered to keys this build knows about (`parseCollapsedCards`), so a key left
+  // behind by a deleted card cannot fold anything by accident.
+  const folded = (card: DashboardCard) => dashboardCollapsed.includes(card)
+
   const goalRows = goals.map((goal) => ({
     id: goal.id,
     title: goal.title,
@@ -199,6 +206,7 @@ export default async function DashboardPage({
               bands={bands}
               calendars={calendars}
               use24Hour={use24HourTime}
+              collapsed={folded("slate")}
             />
           </Reveal>
           {/* Directly under the tasks, so *what I have to do*, *what I have to keep doing*
@@ -208,7 +216,11 @@ export default async function DashboardPage({
               uncapped card is taller still. Renders nothing when there are no goals and no
               habits. */}
           <Reveal delay={0.11}>
-            <GoalsPracticeCard goals={goalRows} habits={habits} />
+            <GoalsPracticeCard
+              goals={goalRows}
+              habits={habits}
+              collapsed={folded("goals")}
+            />
           </Reveal>
         </div>
 
@@ -231,6 +243,7 @@ export default async function DashboardPage({
               byDay={monthData.byDay}
               calendars={calendars}
               view={calendarView}
+              collapsed={folded("calendar")}
             />
           </Reveal>
         </div>
@@ -241,13 +254,19 @@ export default async function DashboardPage({
             "look here first" surfaces is no emphasis at all. */}
         <div className="flex min-w-0 flex-col gap-5">
           <Reveal delay={0.15}>
-            <StatCards macros={macros} budget={budget} currency={currency} />
+            <StatCards
+              macros={macros}
+              budget={budget}
+              currency={currency}
+              collapsed={{ macros: folded("macros"), budget: folded("budget") }}
+            />
           </Reveal>
           <Reveal delay={0.2}>
             <CategoryBars
               budget={budget}
               categories={categories}
               currency={currency}
+              collapsed={folded("categories")}
             />
           </Reveal>
         </div>
