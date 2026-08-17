@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { deleteEventsMatching } from "./_events"
+
 // Browser coverage for T5b-S3/S4: the week time-grid and the URL that reaches it.
 //
 // The load-bearing assertion is the POSITION one. Every other calendar view is a chip
@@ -21,29 +23,15 @@ const DAY = "2027-03-10"
 
 // Cleanup lives in afterEach rather than at the end of the body: a failing assertion
 // aborts the test, and a leaked event stays on the calendar for every later run.
-test.afterEach(async ({ page }) => {
-  // The DAY view, not the month: the time grid draws every block, so the count below
-  // always falls by one. Under the month grid's three-chip cap, deleting a visible
-  // chip promotes a hidden one and the count never moves — a cleanup loop that looks
-  // like it is working and never finishes.
-  await page.goto(`/calendar?view=day&date=${DAY}`)
-  // Wait for the page proper before counting anything. `count()` does not auto-wait,
-  // and neither does a `toHaveCount(0)` that is already true — so on a page still
-  // showing loading.tsx, this whole block passes having deleted nothing. It did
-  // exactly that once, and the events it left behind only surfaced in the database.
-  await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
-
-  const strays = page.getByRole("button").filter({ hasText: PREFIX })
-  // Bounded rather than `while`: a delete that doesn't take must fail the assertion
-  // below, not spin forever.
-  for (let i = 0; i < 20; i++) {
-    const before = await strays.count()
-    if (before === 0) break
-    await strays.first().click()
-    await page.getByRole("button", { name: "Delete" }).click()
-    await expect(strays).toHaveCount(before - 1)
-  }
-  await expect(strays).toHaveCount(0)
+//
+// It sweeps the DATABASE rather than the calendar. This used to open the day view and
+// delete up to twenty chips one at a time, and the two long comments that stood here were
+// both scars from that: the day view had to be used because the month grid's three-chip cap
+// made the count never move, and the render had to be awaited because a `toHaveCount(0)`
+// that is already true passes instantly on a page still showing `loading.tsx` — which it
+// once did, silently leaving rows behind. Neither hazard exists for a `delete` statement.
+test.afterEach(async () => {
+  await deleteEventsMatching(PREFIX)
 })
 
 /** Add an event on {@link DAY} via the dialog. */

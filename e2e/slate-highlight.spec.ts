@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { deleteEventsMatching } from "./_events"
+
 // The one thing in T16 that spans three modules: flag an event on /calendar, and it reaches
 // back from its own day to the dashboard — but only from inside the horizon that /settings
 // owns. Neither module can be tested into proving that on its own, which is the whole reason
@@ -72,15 +74,14 @@ async function addEvent(page: Page, title: string, highlighted: boolean) {
   await expect(dialog).toHaveCount(0)
 }
 
-async function deleteEvent(page: Page, title: string) {
-  // Day view, pinned by URL: the month grid would not hold this event at all in the last
-  // few days of a month, and `?view=` overrides whatever the view preference happens to be.
-  await page.goto(`/calendar?view=day&date=${DAY}`)
-  const chip = page.getByRole("button", { name: new RegExp(title) })
-  await chip.first().click()
-  await page.getByRole("button", { name: "Delete" }).click()
-  await expect(chip).toHaveCount(0)
-}
+// Both fixtures, from the database. Clicking them away meant pinning `?view=day` by URL,
+// because the month grid does not hold an event four days out in the last days of a month
+// and the view preference is itself something this suite changes — neither of which a
+// `delete` has to know about.
+test.afterEach(async () => {
+  for (const prefix of ["E2E highlight", "E2E plain"])
+    await deleteEventsMatching(prefix)
+})
 
 test("a highlighted event reaches the dashboard from inside the horizon", async ({
   page,
@@ -115,8 +116,7 @@ test("a highlighted event reaches the dashboard from inside the horizon", async 
   await page.goto("/")
   await expect(slate.getByText(flagged)).toHaveCount(0)
 
-  // --- Cleanup, then the setting back where it was found.
-  await deleteEvent(page, flagged)
-  await deleteEvent(page, plain)
+  // --- The setting back where it was found. The events go in `afterEach`, which also
+  // covers the case this cannot: an assertion above throwing before we reach here.
   await setHorizon(page, was)
 })
