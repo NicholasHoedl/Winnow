@@ -108,8 +108,9 @@ export function HabitDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit habit" : "New habit"}</DialogTitle>
           <DialogDescription>
-            How often, not which days. A habit makes no tasks and nothing goes
-            overdue — you log it when you do it.
+            How often, not which days — three runs a week on any three days. A
+            habit makes no tasks and nothing goes overdue; you log it when you
+            do it. For something due on set dates, make a repeating task.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit}>

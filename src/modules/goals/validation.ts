@@ -23,6 +23,22 @@ export const goalInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   notes: z.string().trim().max(2000).or(z.literal("")).optional(),
   targetDate: optionalDate,
+  /**
+   * The event this goal is aimed at.
+   *
+   * Same shape `habitInputSchema.goalId` uses for its optional link, and for the same
+   * reason: `""` is what an unset `<Select>` submits, so it is normalised here and the
+   * action only ever sees `string | null`.
+   *
+   * When set, `getGoals` resolves `targetDate` from the event and the typed date stops being
+   * read — but it is deliberately still ACCEPTED and stored alongside, so unlinking an event
+   * returns the goal to whatever date it had rather than silently clearing it.
+   */
+  eventId: z
+    .union([z.string().uuid("Unknown event."), z.literal("")])
+    .nullable()
+    .optional()
+    .transform((value) => (value ? value : null)),
   // Progress for a goal that isn't broken into milestones. `unit` is a display suffix
   // only — no conversion, no canonical list.
   targetValue: optionalAmount,

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Pause, Pencil, Trash2, TrendingUp } from "lucide-react"
+import { ListPlus, Pause, Pencil, Plus, Trash2, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 
 import { dueStatus } from "@/lib/date"
@@ -14,6 +14,10 @@ import {
   toggleMilestone,
 } from "@/modules/goals/actions"
 import type { GoalWithProgress, MilestoneRow } from "@/modules/goals/queries"
+import type { HabitStripCard } from "@/modules/habits/queries"
+import { periodPhrase } from "@/modules/habits/service"
+import { useLogHabit } from "@/modules/habits/use-log-habit"
+import { createTask } from "@/modules/todos/actions"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
@@ -27,6 +31,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
+import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { formatGoalDate, windowLabel } from "./goal-format"
 
@@ -46,16 +51,30 @@ import { formatGoalDate, windowLabel } from "./goal-format"
  */
 export function GoalDetailDialog({
   goal,
+  habits,
   open,
   onOpenChange,
   onEdit,
 }: {
   goal: GoalWithProgress | null
+  /**
+   * The habits serving THIS goal, already filtered by the caller.
+   *
+   * Note what this is not: a task list. ADR-0013 dropped that deliberately and it stays
+   * dropped — two lists of the same rows drift and only one can be acted on. A habit is a
+   * different thing. It has no checkbox, it appears nowhere else on this page, and logging
+   * one is the only way to move a goal whose work is a practice rather than a checklist.
+   */
+  habits: HabitStripCard[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onEdit: (goal: GoalWithProgress) => void
 }) {
   const { timeZone } = usePreferences()
+  // The same hook the dashboard card, `/activity`'s strip and the habits page use. It
+  // returns `pendingId` rather than a boolean, so logging one habit does not disable the
+  // rest — a shared flag disabled every habit at once when this was first written.
+  const { pendingId, log } = useLogHabit()
   const [newMilestone, setNewMilestone] = React.useState("")
   const [newDue, setNewDue] = React.useState("")
   const [confirmDelete, setConfirmDelete] = React.useState(false)
@@ -74,6 +93,31 @@ export function GoalDetailDialog({
     setNewMilestone("")
     setNewDue("")
     run(() => addMilestone(goal.id, { title, dueDate: newDue }))
+  }
+
+  /**
+   * Turn a milestone into a task on this goal.
+   *
+   * Undated on purpose. A milestone's `dueDate` is the date the STEP is meant to be reached;
+   * copying it onto the task would date the work by when it must be finished, which is how
+   * you end up with a list of things all overdue on the same morning. It lands in Someday
+   * and you give it a day when you plan to do it — the same shape quick-add produces.
+   */
+  function makeTask(milestone: MilestoneRow) {
+    if (!goal) return
+    startTransition(async () => {
+      const result = await createTask({
+        title: milestone.title,
+        goalId: goal.id,
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(`Added “${milestone.title}”`, {
+        description: "In Someday, linked to this goal.",
+      })
+    })
   }
 
   // Deleting a single milestone is cleanly reversible, so undo rather than confirm.
@@ -179,6 +223,48 @@ export function GoalDetailDialog({
               </div>
             )}
 
+            {/* The practice that serves this goal.
+                `habits.goal_id` has existed since T12a and this page never showed it, so a
+                goal could read "Moving" here with nothing on screen saying what was moving
+                it. Above the milestones because a habit is the thing you do repeatedly and a
+                milestone is the thing that then happens. */}
+            {habits.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                  Practice
+                </h3>
+                <ul className="flex flex-col gap-2">
+                  {habits.map((habit) => (
+                    <li key={habit.id} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{habit.title}</p>
+                        <QuotaMeter
+                          className="mt-1"
+                          name={habit.title}
+                          done={habit.now.done}
+                          target={habit.now.target}
+                          caption={periodPhrase(habit.period)}
+                        />
+                      </div>
+                      {/* Loggable in place. Sending you to `/activity/habits` to tick off
+                          the thing this goal is made of is exactly the round trip T5a's
+                          read-only task list was criticised for. */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pendingId === habit.id}
+                        aria-label={`Log ${habit.title}`}
+                        onClick={() => log(habit)}
+                      >
+                        <Plus className="size-3.5" />
+                        Log
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2">
               <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                 Milestones
@@ -236,6 +322,27 @@ export function GoalDetailDialog({
                         >
                           {formatGoalDate(milestone.dueDate)}
                         </span>
+                      )}
+                      {/* Make it a task, one way, with nothing stored pointing back.
+                          A milestone is "the next thing"; a task is a thing you do. There
+                          was no bridge between them, so breaking a milestone into work meant
+                          retyping its title on another page.
+                          **The new task links to the GOAL, not to the milestone**, and that
+                          is the whole design. T12c removed `milestoneIndex` from the
+                          companion's payload precisely because a stored position into the
+                          milestones array silently repointed every task after any milestone
+                          that was deleted. Create-and-forget gets the workflow without
+                          reviving that class of bug — and a goal is where tasks have always
+                          attached in the data model anyway. */}
+                      {!milestone.done && (
+                        <button
+                          type="button"
+                          aria-label={`Make a task from ${milestone.title}`}
+                          onClick={() => makeTask(milestone)}
+                          className="text-muted-foreground hover:text-foreground shrink-0"
+                        >
+                          <ListPlus className="size-3.5" />
+                        </button>
                       )}
                       <button
                         type="button"

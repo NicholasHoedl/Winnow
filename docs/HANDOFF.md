@@ -443,10 +443,32 @@ the button focused and opens nothing. It now clicks until the dialog is actually
 **If a spec starts failing right after a teardown is made faster, look for a click that
 assumes its own effect** rather than putting the slack back.
 
-**Three** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
-`todos-reorder:86`, and — first seen 2026-08-13 — `calendar-reschedule.spec.ts:74` ("a block
-can be dragged to another day and time, and it sticks"). They pass on retry and a full run
-therefore exits 0.
+**Four** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
+`todos-reorder:86`, `calendar-reschedule.spec.ts:74` ("a block can be dragged to another day
+and time, and it sticks") — first seen 2026-08-13 — and, first seen 2026-08-17,
+**`todos-reorder:59`** ("a task can be dragged to a new position, and it persists"). They
+pass on retry and a full run therefore exits 0.
+
+The fourth is worth writing down with its shape, because it is the most interesting of them
+and because it is a DIFFERENT test in the same file as the second. It failed like this:
+
+```
+line 79   await expect.poll(…)   → passed   the optimistic order shows the drag
+line 82   await page.reload()
+line 83   expect(order[0])       → failed   the reloaded order is unchanged
+```
+
+Line 82's own comment says it is there to prove "the order came from the server, not from
+local state" — so the assertion did exactly its job. What it cannot tell you is WHICH of two
+things happened: the reload beat the in-flight `reorderTasks` Server Action, or the write
+genuinely did not land. Passing on retry points at the race, and that is a hypothesis rather
+than a diagnosis — **nobody has read the trace yet.** If you are picking this up, that is the
+first thing to do, because the second possibility is a real bug in the one interaction the
+dashboard and `/activity` share.
+
+Note the asymmetry that makes the race plausible: `expect.poll` retries until the OPTIMISTIC
+state matches, which can be satisfied before the action resolves, and `page.reload()` then
+fires immediately. The keyboard test below it (`:86`, already flaky) has the same structure.
 
 The third one is worth noting for how it was found: it was the ONLY flake in that run, and
 the two chronic ones did not fire. That is precisely the case the advice below exists for, so

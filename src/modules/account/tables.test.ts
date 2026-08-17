@@ -69,6 +69,10 @@ describe("references", () => {
 
   it("finds the links across module boundaries", () => {
     expect(refs("events")).toEqual(["calendarId->calendars"])
+    // goals → events, added with `goals.event_id`. Worth pinning by name because it is the
+    // link that moved `goals` out of the standalone list below, and because it is the one
+    // reference in this graph pointing at a table from a module that knows nothing about it.
+    expect(refs("goals")).toEqual(["eventId->events"])
     expect(refs("eventExceptions").sort()).toEqual([
       "calendarId->calendars",
       "eventId->events",
@@ -80,7 +84,11 @@ describe("references", () => {
   })
 
   it("leaves the standalone tables with no references", () => {
-    for (const key of ["lists", "calendars", "categories", "goals", "foods"]) {
+    // `goals` was in this list until it gained `event_id`. It failing was the guard doing
+    // its job: a goal is no longer insertable before the events table on a restore, and
+    // INSERT_ORDER's topological sort is what now has to place it — which the test above
+    // checks over the derived graph rather than against a written-down sequence.
+    for (const key of ["lists", "calendars", "categories", "foods"]) {
       expect(refs(key)).toEqual([])
     }
   })

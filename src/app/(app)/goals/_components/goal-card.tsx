@@ -1,8 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { ChevronRight, ListTodo, Pause, TrendingUp } from "lucide-react"
+import {
+  CalendarDays,
+  ChevronRight,
+  ListTodo,
+  Pause,
+  Repeat,
+  TrendingUp,
+} from "lucide-react"
 
+import { formatLongDate } from "@/lib/format"
 import type { GoalWithProgress } from "@/modules/goals/queries"
 import { Progress } from "@/components/ui/progress"
 
@@ -75,9 +83,19 @@ function MomentumMark({ goal }: { goal: GoalWithProgress }) {
  */
 export function GoalCard({
   goal,
+  practiceCount,
   onOpenDetail,
 }: {
   goal: GoalWithProgress
+  /**
+   * How many habits serve this goal.
+   *
+   * A count rather than the habits themselves, because the card is a summary and the detail
+   * dialog is where they can be read and logged. Before this existed a goal with three
+   * practices behind it looked identical to one with none — on a page whose own subtitle
+   * says it shows "whether it's moving", while the only thing moving it was invisible.
+   */
+  practiceCount: number
   onOpenDetail: () => void
 }) {
   const open = openTaskCount(goal)
@@ -106,10 +124,35 @@ export function GoalCard({
         <div className="mt-2 max-w-md">
           <ProgressFigure goal={goal} />
         </div>
-        <p className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
-          <ListTodo className="size-3.5" />
-          {open === 0 ? "No open tasks" : `${open} open`}
-        </p>
+        {/* What this goal has behind it, and when it is due. `flex-wrap` because three
+            facts at 393px do not fit on one line and a goal title can be long. */}
+        <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+          <span className="flex items-center gap-1">
+            <ListTodo className="size-3.5" />
+            {open === 0 ? "No open tasks" : `${open} open`}
+          </span>
+          {practiceCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Repeat className="size-3.5" />
+              {practiceCount === 1
+                ? "1 practice"
+                : `${practiceCount} practices`}
+            </span>
+          )}
+          {/* `targetDate` is already resolved: when the goal names an event, `getGoals`
+              replaced the stored date with that event's day, so this reads one field either
+              way. `targetEvent` only says WHY, which is worth saying — a date you cannot
+              trace back to anything is the thing this link exists to fix. */}
+          {goal.targetDate && (
+            <span className="flex items-center gap-1">
+              <CalendarDays className="size-3.5" />
+              {formatLongDate(goal.targetDate)}
+              {goal.targetEvent && (
+                <span className="truncate">· {goal.targetEvent.title}</span>
+              )}
+            </span>
+          )}
+        </div>
       </Link>
       <button
         type="button"
