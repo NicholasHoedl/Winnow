@@ -45,7 +45,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Progress } from "@/components/ui/progress"
+import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { HabitDialog } from "./habit-dialog"
 
@@ -196,16 +196,16 @@ function HabitPanel({
           </DropdownMenu>
         </div>
 
-        <div className="mt-2 flex items-center gap-2">
-          <Progress
-            value={now.percent}
-            aria-hidden
-            className="h-1.5 max-w-56 flex-1"
-          />
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {now.done}/{now.target} {periodPhrase(habit.period)}
-          </span>
-        </div>
+        {/* Segments, not a continuous fill. A smooth 66% reads as a quantity you are
+            partway through accumulating; two boxes of three reads as what it is — two logs
+            made and one to go. */}
+        <QuotaMeter
+          className="mt-2 max-w-72"
+          name={habit.title}
+          done={now.done}
+          target={now.target}
+          caption={periodPhrase(habit.period)}
+        />
 
         <p className="text-muted-foreground mt-1 text-xs tabular-nums">
           Streak {streak.current} · best {streak.best} ·{" "}

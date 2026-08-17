@@ -8,6 +8,7 @@ import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
 import { Button } from "@/components/ui/button"
+import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { DashboardCard } from "./dashboard-card"
 
@@ -96,11 +97,18 @@ function HabitRow({
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm">{habit.title}</p>
-        {/* Wording pinned by the e2e — "0/3 this week", "0/1 today". `habits/service.ts`
-            carries the same warning at `periodPhrase`. */}
-        <p className="text-muted-foreground text-xs tabular-nums">
-          {habit.now.done}/{habit.now.target} {periodPhrase(habit.period)}
-        </p>
+        {/* One box per log you owe, filled as you make them. This card showed "2/3 this
+            week" as bare text and no bar at all — the only habit surface that did — so it
+            gains a bar and loses a number in the same stroke. The cadence stays: boxes say
+            how many are left, not whether you have the rest of today or the rest of the
+            month to make them. */}
+        <QuotaMeter
+          className="mt-1"
+          name={habit.title}
+          done={habit.now.done}
+          target={habit.now.target}
+          caption={periodPhrase(habit.period)}
+        />
       </div>
       {/* A habit gets no checkbox, here or anywhere (ADR-0013's amendment). A quota is not
           done-or-not-done, and the moment a tick appears it is either duplicating this

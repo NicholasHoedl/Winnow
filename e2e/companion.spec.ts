@@ -2,6 +2,7 @@ import { test, expect, type Page } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
+import { announces, meter } from "./_habits"
 
 /**
  * Browser coverage for T9a: generating a plan, pruning and editing it, and applying it.
@@ -151,11 +152,13 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await page.keyboard.press("Escape")
 
   // The assertion the whole T12 line exists for: the companion proposed a PRACTICE, and it
-  // landed as a real habit at the edited rate — not as a dated checklist item.
+  // landed as a real habit at the edited rate — not as a dated checklist item. Read off the
+  // quota meter, because that rate is no longer written as text anywhere: a habit's quota is
+  // drawn as one box per log you owe, and what the meter announces carries the numbers now.
   await page.goto("/activity/habits")
-  await expect(visibleCard(page, "STUB practice")).toContainText(
-    "0/2 this week",
-  )
+  await expect(
+    meter(visibleCard(page, "STUB practice"), "STUB practice"),
+  ).toHaveAttribute("aria-valuetext", announces(0, 2, "this week"))
 
   // The setup task is a real task linked to the goal, so it still counts toward momentum.
   // The goal card's body is a LINK to the filtered list since T13, not an in-place filter.
