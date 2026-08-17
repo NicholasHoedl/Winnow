@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "./_test"
 
+import { deleteEventsMatching } from "./_events"
+
 // The .ics download and the token-authenticated subscribe feed (T5c-a).
 //
 // The assertions that matter here are the negative ones: the feed must work with NO
@@ -24,21 +26,10 @@ async function createEvent(page: Page, title: string) {
   ).toBeVisible()
 }
 
-async function deleteEvent(page: Page, title: string) {
-  await page.goto(DAY_VIEW)
-  // Wait for the view before counting: an assertion that "there are none" passes
-  // instantly on a page that hasn't rendered yet, which is how three cleanups in T5b
-  // passed while leaving rows behind.
-  await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
-
-  const chip = page.getByRole("button").filter({ hasText: title })
-  if ((await chip.count()) === 0) return
-  await chip.first().click()
-  await page.getByRole("button", { name: "Delete" }).click()
-  await expect(page.getByRole("button").filter({ hasText: title })).toHaveCount(
-    0,
-  )
-}
+// The feed's fixtures, swept from the database. The `try/finally` each test wraps its body
+// in stays: it is what guarantees cleanup runs when an assertion throws, and that property
+// is worth more than the two lines it costs.
+const PREFIX = "E2E feed"
 
 /** The subscribe URL as the settings page renders it. */
 async function feedUrl(page: Page): Promise<string> {
@@ -68,7 +59,7 @@ test("the signed-in download serves the calendar as iCalendar", async ({
     expect(body).toContain(`SUMMARY:${title}`)
     expect(body.trimEnd().endsWith("END:VCALENDAR")).toBe(true)
   } finally {
-    await deleteEvent(page, title)
+    await deleteEventsMatching(PREFIX)
   }
 })
 
@@ -93,7 +84,7 @@ test("the feed serves the same calendar with no session at all", async ({
     expect(response.headers()["set-cookie"]).toBeUndefined()
   } finally {
     await anonymous.close()
-    await deleteEvent(page, title)
+    await deleteEventsMatching(PREFIX)
   }
 })
 

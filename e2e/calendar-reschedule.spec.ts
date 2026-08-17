@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { deleteEventsMatching } from "./_events"
+
 // Browser coverage for T5b-S6: drag-to-reschedule in the week grid.
 //
 // The load-bearing assertion is the RELOAD, twice over. A drop paints optimistically
@@ -19,29 +21,11 @@ const PREFIX = "E2E move"
 const DAY = "2027-04-14"
 const NEXT_DAY = "2027-04-15"
 
-test.afterEach(async ({ page }) => {
-  // The day view, and only after the page has actually rendered — see
-  // e2e/calendar-week.spec.ts, where a cleanup that ran too early deleted nothing and
-  // reported success. Both days are swept because the point of the test is to move
-  // events between them.
-  for (const date of [DAY, NEXT_DAY]) {
-    await page.goto(`/calendar?view=day&date=${date}`)
-    await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
-    const strays = page.getByRole("button").filter({ hasText: PREFIX })
-    for (let i = 0; i < 10; i++) {
-      const before = await strays.count()
-      if (before === 0) break
-      await strays.first().click()
-      const dialog = page.getByRole("dialog")
-      // Wait for it before reaching inside. Nothing below auto-waits usefully once the
-      // locator is wrong, and "Delete" without `exact` would also match the recurring
-      // scopes' "Delete from here".
-      await expect(dialog).toBeVisible()
-      await dialog.getByRole("button", { name: "Delete", exact: true }).click()
-      await expect(strays).toHaveCount(before - 1)
-    }
-    await expect(strays).toHaveCount(0)
-  }
+// One statement, and no day loop. Sweeping the UI meant visiting both days — the whole
+// point of these tests is that an event moves between them — and the `LIKE` does not care
+// where an event ended up, which is the one thing a drag test can least afford to assume.
+test.afterEach(async () => {
+  await deleteEventsMatching(PREFIX)
 })
 
 async function addEvent(page: Page, title: string) {

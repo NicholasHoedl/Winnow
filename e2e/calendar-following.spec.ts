@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { deleteEventsMatching } from "./_events"
+
 // Browser coverage for T5b-S7/S8: "this and following".
 //
 // This is also the FIRST test of the split transaction. Its three writes — truncate the
@@ -18,36 +20,15 @@ const D1 = "2027-09-09"
 const D2 = "2027-09-10" // the split point
 const D4 = "2027-09-12"
 
-test.afterEach(async ({ page }) => {
-  // A split leaves TWO series behind, and each one only appears on the days it covers,
-  // so cleanup sweeps the whole span rather than a single day.
-  for (const date of [D0, D1, D2, D4]) {
-    await page.goto(`/calendar?view=day&date=${date}`)
-    await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
-    const strays = page.getByRole("button").filter({ hasText: PREFIX })
-    for (let i = 0; i < 8; i++) {
-      const before = await strays.count()
-      if (before === 0) break
-      await strays.first().click()
-      const dialog = page.getByRole("dialog")
-      // Wait for it before probing. `count()` below does NOT auto-wait, so losing that
-      // race silently skips the scope switch, leaves the dialog on "This event", and
-      // the footer then reads "Skip this day" — at which point the exact-"Delete"
-      // locator waits out its timeout against a dialog that is right there.
-      await expect(dialog).toBeVisible()
-      // A recurring occurrence opens on "This event", where Delete only skips the day.
-      const all = dialog.getByRole("button", {
-        name: "All events",
-        exact: true,
-      })
-      if (await all.count()) await all.click()
-      await dialog.getByRole("button", { name: "Delete", exact: true }).click()
-      // Deleting a series can clear several days at once, so assert progress rather
-      // than a particular decrement.
-      await expect.poll(() => strays.count()).toBeLessThan(before)
-    }
-    await expect(strays).toHaveCount(0)
-  }
+// One statement, in the database. This used to sweep the UI — four day-view navigations
+// because a split leaves two series covering different days, and per day up to eight rounds
+// of open, switch scope to "All events", Delete, re-count. It was the most expensive teardown
+// in the suite and the first thing to time out whenever the machine was busy, which turned
+// every real failure here into two: the test, and then a 60s `afterEach` timeout on the extra
+// strays the failure had left behind. See `_events.ts` for why skipping the UI costs no
+// coverage.
+test.afterEach(async () => {
+  await deleteEventsMatching(PREFIX)
 })
 
 /** A daily series at 09:00–10:00 starting on {@link D0}. */
