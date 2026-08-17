@@ -36,10 +36,7 @@ test.afterEach(async ({ page }) => {
   }
   await expect(tasks).toHaveCount(0)
 
-  // `/goals` since T13 — see the note in `review.spec.ts`, where the same stale path
-  // leaked a goal for a whole suite run without failing anything.
-  await page.goto("/goals")
-  await deleteGoalsMatching(page, "E2E undo goal ")
+  await deleteGoalsMatching("E2E undo goal ")
 })
 
 test("deleting a task can be undone", async ({ page }) => {

@@ -1,4 +1,5 @@
 import "dotenv/config"
+import { Client } from "pg"
 
 /**
  * The database the e2e suite is allowed to destroy.
@@ -65,5 +66,30 @@ export function assertSafeToDestroy(): void {
     throw new Error(
       "Refusing to run: the e2e database and DATABASE_URL are the same connection string.",
     )
+  }
+}
+
+/**
+ * Run something against the test database, with the safety rail in front of it.
+ *
+ * Exists so that `assertSafeToDestroy` is called by CONSTRUCTION rather than by each
+ * caller remembering to. The rail is the only thing standing between a fixture sweep and
+ * the real database if `DATABASE_URL` is ever edited badly, and a check you have to
+ * remember is a check that eventually is not made.
+ *
+ * A connection per call, deliberately: teardown runs a handful of times per spec and a
+ * pool would be a lifecycle to manage — one that Playwright's worker teardown gives no
+ * obvious place to close.
+ */
+export async function withTestDb<T>(
+  fn: (client: Client) => Promise<T>,
+): Promise<T> {
+  assertSafeToDestroy()
+  const client = new Client({ connectionString: TEST_DATABASE_URL })
+  await client.connect()
+  try {
+    return await fn(client)
+  } finally {
+    await client.end()
   }
 }

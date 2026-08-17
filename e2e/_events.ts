@@ -1,6 +1,4 @@
-import { Client } from "pg"
-
-import { TEST_DATABASE_URL, assertSafeToDestroy } from "./_test-db"
+import { withTestDb } from "./_test-db"
 
 /**
  * Remove test events straight from the database, rather than by driving the calendar.
@@ -24,14 +22,7 @@ import { TEST_DATABASE_URL, assertSafeToDestroy } from "./_test-db"
  * null rather than being deleted with it.
  */
 export async function deleteEventsMatching(prefix: string): Promise<number> {
-  // The same rail `global-setup.ts` uses, for the same reason — this connects with a
-  // derived URL, and derivation can be wrong. Refusing to run beats deleting from the
-  // real database because a `.env` edit went unnoticed.
-  assertSafeToDestroy()
-
-  const client = new Client({ connectionString: TEST_DATABASE_URL })
-  await client.connect()
-  try {
+  return withTestDb(async (client) => {
     // Prefix-anchored and parameterised. Every spec here titles its fixtures
     // `${PREFIX} something ${Date.now()}`, so anchoring cannot reach a title that merely
     // mentions the prefix somewhere in the middle.
@@ -40,7 +31,5 @@ export async function deleteEventsMatching(prefix: string): Promise<number> {
       [`${prefix}%`],
     )
     return rowCount ?? 0
-  } finally {
-    await client.end()
-  }
+  })
 }

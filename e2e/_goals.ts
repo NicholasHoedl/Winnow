@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test"
 
 import { goalCard } from "./_card"
+import { withTestDb } from "./_test-db"
 
 /**
  * Creating, opening and deleting a goal on `/goals`.
@@ -63,40 +64,33 @@ export async function deleteGoal(page: Page, title: string) {
 }
 
 /**
- * Delete every goal whose title contains `fragment`, for `afterEach` cleanup.
+ * Delete every goal whose title contains `fragment`, straight from the database.
  *
- * Counts BEFORE each delete: reading the count afterwards asserts `n === n - 1` against a
- * list that has already shrunk, which is unsatisfiable — the same trap that hung
- * `deleteTasksMatching` in companion.spec.ts.
+ * **Takes no `page`, and that is the point.** This used to walk `/goals`, opening each
+ * card's detail dialog and confirming, which made it silently vacuous anywhere else:
+ * `goalCard` matched nothing, the loop broke on its first iteration, and `toHaveCount(0)`
+ * passed because zero really was what was on the page. A cleanup that deletes nothing and
+ * reports success is worse than one that throws — it leaks a row into every spec that
+ * follows.
+ *
+ * That was not hypothetical. T13 moved goal cards from `/activity` to `/goals`;
+ * `review.spec.ts` kept cleaning up on `/activity`, leaked a goal for a whole run, and the
+ * only thing that noticed was a 4px layout overflow on `/companion`, whose goal picker
+ * defaults to the oldest surviving goal. The fix at the time was a guard asserting the
+ * "New goal" button was visible before concluding there was nothing to delete. Needing no
+ * page at all is the better answer: there is no wrong page to be on.
+ *
+ * `strpos` rather than `LIKE`, so the fragment keeps the CONTAINS semantics `hasText` gave
+ * it and no caller has to think about `%` or `_` meaning something. Deleting a goal takes
+ * its milestones with it and detaches linked tasks and habits — `on delete cascade` and
+ * `on delete set null` respectively — exactly as deleting one through the UI does.
  */
-export async function deleteGoalsMatching(
-  page: Page,
-  fragment: string | RegExp,
-) {
-  /**
-   * Prove we are somewhere goal cards can exist, BEFORE concluding there are none.
-   *
-   * Without this the helper is silently vacuous on the wrong page: `goalCard` matches
-   * nothing, the loop breaks on its first iteration, and `toHaveCount(0)` passes because
-   * zero really is what is there. A cleanup that deletes nothing and reports success is
-   * worse than one that throws — it leaks a row into every spec that runs after it.
-   *
-   * That is not hypothetical. T13 moved goal cards from `/activity` to `/goals`;
-   * `review.spec.ts` kept cleaning up on `/activity`, leaked a goal for a whole run, and
-   * the only thing that noticed was a 4px layout overflow on `/companion` — whose goal
-   * picker defaults to the oldest surviving goal.
-   */
-  await expect(page.getByRole("button", { name: "New goal" })).toBeVisible()
-
-  const strays = goalCard(page, fragment)
-  for (let i = 0; i < 10; i++) {
-    const before = await strays.count()
-    if (before === 0) break
-    const title = (await strays.first().innerText()).split("\n")[0]
-    await openGoalDetail(page, title)
-    await page.getByRole("button", { name: "Delete", exact: true }).click()
-    await page.getByRole("button", { name: "Delete goal" }).click()
-    await expect(strays).toHaveCount(before - 1)
-  }
-  await expect(strays).toHaveCount(0)
+export async function deleteGoalsMatching(fragment: string): Promise<number> {
+  return withTestDb(async (client) => {
+    const { rowCount } = await client.query(
+      "delete from goals where strpos(title, $1) > 0",
+      [fragment],
+    )
+    return rowCount ?? 0
+  })
 }
