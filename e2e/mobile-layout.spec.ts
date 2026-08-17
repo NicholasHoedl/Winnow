@@ -65,10 +65,20 @@ async function layoutFaults(page: Page): Promise<Fault[]> {
     // `quick-pick-strip` and the calendar-feed URL all deliberately hold content wider
     // than themselves, and everything inside them inherits that intent — so the whole
     // subtree is excluded rather than just the scrolling element.
-    const scrolls = (el: Element) => {
-      const overflowX = getComputedStyle(el).overflowX
-      return overflowX === "auto" || overflowX === "scroll"
-    }
+    //
+    // Read off the CLASS LIST, not the computed style, and that distinction is the whole
+    // point. `overflow-y: auto` computes `overflow-x` to `auto` as well — the CSS overflow
+    // spec promotes a `visible` that is paired with a non-`visible` — so a computed check
+    // calls every VERTICAL scroller a horizontal one and excludes everything inside it.
+    // Slate's routine block sat in an `overflow-y-auto` section and hid an 8px negative-
+    // margin bleed behind exactly that, through the whole of T16. Every deliberate
+    // horizontal scroller in `src/` names `overflow-x-auto` outright, and this codebase is
+    // Tailwind-only, so the class list is the honest record of intent.
+    const X_SCROLL =
+      /(^|\s)(overflow-x-(auto|scroll)|overflow-(auto|scroll))(\s|$)/
+    const scrolls = (el: Element) =>
+      // SVG elements carry an `SVGAnimatedString` here rather than a string.
+      typeof el.className === "string" && X_SCROLL.test(el.className)
     const insideScroller = (el: Element) => {
       for (let p = el.parentElement; p; p = p.parentElement)
         if (scrolls(p)) return true
@@ -125,7 +135,15 @@ async function layoutFaults(page: Page): Promise<Fault[]> {
       if (el.scrollWidth <= el.clientWidth + 1) continue
       // `overflow-x: hidden` or `clip` is a deliberate crop — `truncate` compiles to it,
       // and truncated text is the intended behaviour, not a fault.
-      if (getComputedStyle(el).overflowX !== "visible") continue
+      const overflowX = getComputedStyle(el).overflowX
+      if (overflowX === "hidden" || overflowX === "clip") continue
+      // `auto` and `scroll` are NOT skipped here, only on an element that asked for
+      // horizontal scrolling by name. This line used to read `!== "visible"`, which skipped
+      // them too — and since `overflow-y: auto` computes `overflow-x` to `auto`, every
+      // vertical scroller excused its own horizontal overflow. That is the second half of
+      // the blind spot that hid Slate's 8px bleed; narrowing `insideScroller` alone left
+      // this one reporting nothing.
+      if (scrolls(el)) continue
       if (insideScroller(el)) continue
       // Overflow that nothing rendered accounts for. See `contentReach`.
       if (contentReach(el) <= el.clientWidth + 1) continue
