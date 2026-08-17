@@ -1,11 +1,25 @@
 import { test, expect } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
-import { addGoal, deleteGoal } from "./_goals"
+import { deleteEventsMatching } from "./_events"
+import { addGoal, deleteGoal, deleteGoalsMatching } from "./_goals"
 
 // Browser coverage for T2-S2: linking a task to a goal from the task dialog, seeing it
 // on the goal card, and confirming a goal delete DETACHES its tasks instead of removing
 // them (the ON DELETE set null FK from S1).
+
+// Both tests' fixtures, swept whether they finished or not. Two goal fragments because
+// `strpos` matches a substring rather than a prefix: "E2E goal" is not inside
+// "E2E link goal", so one does not cover the other.
+//
+// The goal delete inside the first test STAYS in the UI. It is not cleanup — that a goal
+// delete detaches its tasks instead of removing them is the whole assertion, and this hook
+// finding nothing left to sweep is the correct outcome there.
+test.afterEach(async () => {
+  for (const fragment of ["E2E goal ", "E2E link goal "])
+    await deleteGoalsMatching(fragment)
+  await deleteEventsMatching("E2E link event")
+})
 
 test("link a task to a goal, then detach it by deleting the goal", async ({
   page,
@@ -96,17 +110,9 @@ test("the link pickers are hidden for a repeating task", async ({ page }) => {
   await expect(dialog.getByLabel("Goal")).toHaveCount(0)
   await expect(dialog.getByLabel("Event")).toHaveCount(0)
 
-  // Cleanup. The dialog is still open on a half-filled form, so close it first — leaving
-  // it up would have the next spec's `getByRole("dialog")` resolve to this one.
+  // The dialog is still open on a half-filled form, so close it. This is NOT fixture
+  // cleanup and does not belong in the hook above — leaving it up would have the next
+  // spec's `getByRole("dialog")` resolve to this one.
   await page.keyboard.press("Escape")
   await expect(dialog).toBeHidden()
-  await page.goto("/goals")
-  await deleteGoal(page, goalTitle)
-
-  await page.goto("/calendar?view=day")
-  await page.getByRole("button").filter({ hasText: eventTitle }).first().click()
-  await page.getByRole("button", { name: "Delete" }).click()
-  await expect(
-    page.getByRole("button").filter({ hasText: eventTitle }),
-  ).toHaveCount(0)
 })
