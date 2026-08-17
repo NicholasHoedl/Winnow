@@ -2,6 +2,7 @@ import { test, expect, type Page } from "./_test"
 
 import { visibleCard } from "./_card"
 import { addGoal, deleteGoalsMatching } from "./_goals"
+import { announces, meter } from "./_habits"
 
 /**
  * Browser coverage for T10: the merged Activity page (ADR-0013).
@@ -275,10 +276,14 @@ test("a habit is logged from the strip, at every width", async ({ page }) => {
   // Still no checkbox, and still for a reason — see the block comment above.
   await expect(chip.getByRole("checkbox")).toHaveCount(0)
   // Exactly one: the log control. No chevron and no title link, which is what keeps a tap
-  // on a phone unambiguous.
+  // on a phone unambiguous. The quota meter beside it is a `progressbar`, not a control —
+  // it reports, it cannot be operated — so it does not count against this.
   await expect(chip.getByRole("button")).toHaveCount(1)
   await chip.getByRole("button", { name: `Log ${HABIT}` }).click()
-  await expect(chip).toContainText("1/3")
+  await expect(meter(chip, HABIT)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
 
   // The load-bearing negative: a habit creates NO task. Before T12a this same title would
   // have been a row in the list beside the rail.
@@ -295,7 +300,10 @@ test("a habit is logged from the strip, at every width", async ({ page }) => {
   await page.goto("/activity")
   await expect(chip).toBeVisible()
   await chip.getByRole("button", { name: `Log ${HABIT}` }).click()
-  await expect(chip).toContainText("2/3")
+  await expect(meter(chip, HABIT)).toHaveAttribute(
+    "aria-valuetext",
+    announces(2, 3, "this week"),
+  )
 
   // Two horizontal scrollers now share this screen — the goal chips and this strip — which
   // is the specific risk the placement manages. Neither may push the page sideways.

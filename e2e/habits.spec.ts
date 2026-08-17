@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "./_test"
 import { visibleCard } from "./_card"
+import { announces, meter } from "./_habits"
 
 /**
  * Browser coverage for T12a: a habit is a quota and a log.
@@ -94,22 +95,34 @@ test("the streak turns over at the target, not at the first log", async ({
   const card = () => visibleCard(page, title)
   const log = () => card().getByRole("button", { name: `Log ${title}` })
 
-  await expect(card()).toContainText("0/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 3, "this week"),
+  )
   await expect(card()).toContainText("Streak 0")
 
   // The assertion this whole tranche exists for. Two of three is real progress and NOT a
   // streak — no previous Winnow primitive could express the difference, because a
   // recurring task is done or it isn't.
   await log().click()
-  await expect(card()).toContainText("1/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
   await expect(card()).toContainText("Streak 0")
 
   await log().click()
-  await expect(card()).toContainText("2/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(2, 3, "this week"),
+  )
   await expect(card()).toContainText("Streak 0")
 
   await log().click()
-  await expect(card()).toContainText("3/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(3, 3, "this week"),
+  )
   await expect(card()).toContainText("Streak 1")
 })
 
@@ -124,13 +137,21 @@ test("an overshoot is counted honestly and does not overflow the bar", async ({
 
   await log().click()
   await log().click()
-  await expect(card()).toContainText("2/2 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(2, 2, "this week"),
+  )
   await expect(card()).toContainText("Streak 1")
 
   // A third session against a target of two is a true thing to have done, so `done` keeps
-  // counting. The bar clamps at 100% — 150% of a progress bar is a rendering bug.
+  // counting — and the meter now GROWS to show it, a third box in the accent colour beside
+  // the two it owed. It used to be a continuous bar clamped at 100%, which drew 3-of-2
+  // identically to 2-of-2 and threw away the only interesting thing about the row.
   await log().click()
-  await expect(card()).toContainText("3/2 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(3, 2, "this week"),
+  )
   await expect(card()).toContainText("Streak 1")
 })
 
@@ -144,12 +165,18 @@ test("a log can be undone, and takes exactly the entry it made", async ({
   await card()
     .getByRole("button", { name: `Log ${title}` })
     .click()
-  await expect(card()).toContainText("1/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
 
   // `exact`, because the fixture title contains the word "undo" and a substring match
   // would also find this habit's own "Log …" and "… actions" buttons.
   await page.getByRole("button", { name: "Undo", exact: true }).click()
-  await expect(card()).toContainText("0/3 this week")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 3, "this week"),
+  )
 })
 
 test("a daily habit counts days, not weeks", async ({ page }) => {
@@ -158,12 +185,18 @@ test("a daily habit counts days, not weeks", async ({ page }) => {
 
   const card = () => visibleCard(page, title)
   // "today", not "this week" — the period is the unit, and the copy has to say which.
-  await expect(card()).toContainText("0/1 today")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 1, "today"),
+  )
 
   await card()
     .getByRole("button", { name: `Log ${title}` })
     .click()
-  await expect(card()).toContainText("1/1 today")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 1, "today"),
+  )
   await expect(card()).toContainText("Streak 1")
 })
 
@@ -183,14 +216,25 @@ test("the strip logs the same habit the page shows", async ({ page }) => {
   await page.goto("/activity")
   const chip = page.getByTestId("habit-chip").filter({ hasText: title })
   await expect(chip).toHaveCount(1)
-  await expect(chip).toContainText("0/3")
+  await expect(meter(chip, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 3, "this week"),
+  )
 
   await chip.getByRole("button", { name: `Log ${title}` }).click()
-  await expect(chip).toContainText("1/3")
+  await expect(meter(chip, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
 
-  // Same row underneath, not a second tally kept somewhere else.
+  // Same row underneath, not a second tally kept somewhere else. The strip used to carry
+  // the cadence on its own line above a bare `1/3`; both surfaces state the whole thing the
+  // same way now, which is what lets this compare them at all.
   await page.goto("/activity/habits")
-  await expect(visibleCard(page, title)).toContainText("1/3 this week")
+  await expect(meter(visibleCard(page, title), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
 })
 
 /**
@@ -223,14 +267,20 @@ test("the dashboard card shows today's practice and logs it", async ({
   // three other unmet habits. T15 removed the cap: every habit is on the card, so a habit
   // created seconds ago is always findable.
   await expect(card).toContainText(title)
-  await expect(card).toContainText("0/3 this week")
+  await expect(meter(card, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 3, "this week"),
+  )
 
   // `addHabit` attaches no goal, so this one proves the grouping too: it has to land in
   // the group for practice that serves no goal rather than under someone else's heading.
   await expect(card).toContainText("Not tied to a goal")
 
   await card.getByRole("button", { name: `Log ${title}` }).click()
-  await expect(card).toContainText("1/3 this week")
+  await expect(meter(card, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(1, 3, "this week"),
+  )
 })
 
 /**
@@ -269,5 +319,8 @@ test("an archived habit can be brought back", async ({ page }) => {
 
   // Its readings survived the round trip: the quota is the one it was created with, and
   // the entries were never touched, so nothing had to be re-entered.
-  await expect(visibleCard(page, title)).toContainText("0/3")
+  await expect(meter(visibleCard(page, title), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 3, "this week"),
+  )
 })

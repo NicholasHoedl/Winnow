@@ -6,7 +6,7 @@ import { ArrowRight, Plus } from "lucide-react"
 import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
+import { QuotaMeter } from "@/components/ui/quota-meter"
 
 /**
  * Today's practice, above the list of today's tasks.
@@ -102,23 +102,18 @@ export function HabitStrip({
             className="bg-card w-48 shrink-0 snap-start rounded-lg border p-2.5"
           >
             <p className="truncate text-sm font-medium">{habit.title}</p>
-            {/* The cadence, which T12d dropped for width. Without it the figure below is
-                ambiguous in the way that matters most: `2/3` says nothing about whether you
-                have the rest of today or the rest of the month to finish it, and that is
-                the whole difference between "fine" and "behind". */}
-            <p className="text-muted-foreground mt-0.5 text-[0.6875rem]">
-              {habit.now.target}× {periodPhrase(habit.period)}
-            </p>
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <Progress
-                value={habit.now.percent}
-                aria-hidden
-                className="h-1 min-w-0 flex-1"
-              />
-              <span className="text-muted-foreground shrink-0 text-[0.6875rem] tabular-nums">
-                {habit.now.done}/{habit.now.target}
-              </span>
-            </div>
+            {/* The cadence used to be its own line above the bar, because `2/3` says
+                nothing about whether you have the rest of today or the rest of the month to
+                finish it — the difference between "fine" and "behind". It is the meter's
+                caption now, which says the same thing in one row instead of two and buys
+                back the vertical space T12d was short of. */}
+            <QuotaMeter
+              className="mt-1.5"
+              name={habit.title}
+              done={habit.now.done}
+              target={habit.now.target}
+              caption={periodPhrase(habit.period)}
+            />
             {/* Full width rather than the rail's icon square: this is now the primary
                 logging surface on a phone, and a 160px target is worth the row. Disabled
                 only for ITS OWN habit — a shared flag would grey out the whole strip and
