@@ -272,8 +272,10 @@ a classic, easy-to-introduce bug.
 > (T7b, `routines` + `routine_items`), **habits** (T12a, `habits` + `habit_entries` — a
 > quota and a log; see ADR-0014, which supersedes ADR-0009), **review** (T7d — no tables;
 > a pure projection of four other modules) and **companion** (T9a, the AI proposal store —
-> `ai_proposals`). There are 27 user-owned tables across 14 modules, at 35 migrations
-> (`0000`–`0032`). Do not infer from silence here that something does not exist.
+> `ai_proposals`). There are **26 user-owned tables across 13 modules, at 39 migrations**
+> (`0000`–`0038`). Do not infer from silence here that something does not exist. The table
+> figure is the one `src/modules/account/tables.test.ts` asserts EXACTLY — it was 27 until
+> T13 dropped `notes` — so that test is the authority and this line follows it.
 >
 > Habits are the one entry above whose description **reversed**. Between T7c and T12a the
 > module had no tables at all: every repeating task was implicitly a habit, and streaks were
@@ -284,7 +286,10 @@ a classic, easy-to-introduce bug.
 > `user_preferences` has no section of its own: one row per user, holding the settings
 > the server must read — zone, week start, currency, time format, default task
 > priority, digest, the goal momentum window (T8), the account's saved `theme`, whether
-> macro targets balance (T14), and which view the calendar opens on (T14).
+> macro targets balance (T14), which view the calendar opens on (T14), how far ahead Slate
+> reaches for highlighted events (T16), and which dashboard cards are folded (T17 —
+> `dashboard_collapsed`, the one column here holding a LIST rather than a single setting;
+> ADR-0016 explains why).
 > `theme` is **mirrored, not moved**: it is applied before first paint from
 > localStorage by a blocking script in the root layout, above any session lookup, so
 > the server cannot supply it in time. The column exists so a new device adopts it and
@@ -482,22 +487,23 @@ which are overdue, and a way through.
 
 **events**
 
-| field                   | type                                       | notes                                      |
-| ----------------------- | ------------------------------------------ | ------------------------------------------ |
-| id                      | uuid (pk)                                  |                                            |
-| user_id                 | uuid (fk → users)                          |                                            |
-| calendar_id             | uuid, nullable (fk → calendars, cascade)   | deleting a calendar takes its events       |
-| title                   | text, required                             |                                            |
-| notes                   | text, nullable                             |                                            |
-| start_at                | timestamptz                                | the ANCHOR instant — see the model below   |
-| end_at                  | timestamptz, nullable                      | nullable to allow open-ended/point events  |
-| all_day                 | boolean                                    |                                            |
-| recurrence_freq         | enum(none, daily, weekly, monthly, yearly) |                                            |
-| recurrence_interval     | int, default 1                             | e.g. every 2 weeks                         |
-| recurrence_weekdays     | int, default 0                             | 7-bit BYDAY mask; 0 = the anchor's weekday |
-| recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                 |
-| recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null              |
-| created_at / updated_at | timestamptz                                |                                            |
+| field                   | type                                       | notes                                        |
+| ----------------------- | ------------------------------------------ | -------------------------------------------- |
+| id                      | uuid (pk)                                  |                                              |
+| user_id                 | uuid (fk → users)                          |                                              |
+| calendar_id             | uuid, nullable (fk → calendars, cascade)   | deleting a calendar takes its events         |
+| title                   | text, required                             |                                              |
+| notes                   | text, nullable                             |                                              |
+| start_at                | timestamptz                                | the ANCHOR instant — see the model below     |
+| end_at                  | timestamptz, nullable                      | nullable to allow open-ended/point events    |
+| all_day                 | boolean                                    |                                              |
+| highlighted             | boolean, not null, default false           | T16 — reaches the dashboard ahead of its day |
+| recurrence_freq         | enum(none, daily, weekly, monthly, yearly) |                                              |
+| recurrence_interval     | int, default 1                             | e.g. every 2 weeks                           |
+| recurrence_weekdays     | int, default 0                             | 7-bit BYDAY mask; 0 = the anchor's weekday   |
+| recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                   |
+| recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null                |
+| created_at / updated_at | timestamptz                                |                                              |
 
 **These five columns map onto an RRULE on the way out, and only on the way out**
 (`modules/calendar/ical.ts`, T5c-a). Four things the schema leaves implicit have
@@ -548,17 +554,18 @@ in a week beginning Tuesday while an identical one-off was not.
 
 **event_exceptions** — per-occurrence overrides and skips
 
-| field                   | type                                      | notes                          |
-| ----------------------- | ----------------------------------------- | ------------------------------ |
-| id                      | uuid (pk)                                 |                                |
-| user_id                 | uuid (fk → users)                         |                                |
-| event_id                | uuid (fk → events, ON DELETE cascade)     |                                |
-| original_date           | date, not null                            | the RECURRENCE-ID — see below  |
-| canceled                | boolean, not null, default false          | "skip this day"                |
-| start_at / end_at       | timestamptz, nullable                     | null = inherit from the series |
-| all_day / title / notes | nullable                                  | null = inherit                 |
-| calendar_id             | uuid, nullable (fk → calendars, set null) |                                |
-| created_at / updated_at | timestamptz                               |                                |
+| field                   | type                                      | notes                                                                                               |
+| ----------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| id                      | uuid (pk)                                 |                                                                                                     |
+| user_id                 | uuid (fk → users)                         |                                                                                                     |
+| event_id                | uuid (fk → events, ON DELETE cascade)     |                                                                                                     |
+| original_date           | date, not null                            | the RECURRENCE-ID — see below                                                                       |
+| canceled                | boolean, not null, default false          | "skip this day"                                                                                     |
+| start_at / end_at       | timestamptz, nullable                     | null = inherit from the series                                                                      |
+| all_day / title / notes | nullable                                  | null = inherit                                                                                      |
+| highlighted             | boolean, NULLABLE                         | null = inherit; `false` un-highlights one date of a highlighted series, which is why it is nullable |
+| calendar_id             | uuid, nullable (fk → calendars, set null) |                                                                                                     |
+| created_at / updated_at | timestamptz                               |                                                                                                     |
 
 Plus `unique(event_id, original_date)`, which makes re-saving the same day an
 upsert rather than a duplicate.

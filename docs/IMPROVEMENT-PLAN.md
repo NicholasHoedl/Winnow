@@ -7,45 +7,56 @@ picked up — it is **not** code-level detail yet.
 
 ## Status
 
-| Tranche                                           | State             |
-| ------------------------------------------------- | ----------------- |
-| T0 — Foundations, cohesion & safety               | ✅ shipped        |
-| T1 — Frictionless capture & navigation            | ✅ shipped        |
-| T2 — One product: links, Today hub, reminders     | ✅ shipped        |
-| T3 — Depth: Budget                                | ✅ shipped        |
-| T4 — Depth: Meals                                 | ✅ shipped        |
-| T5a — Depth: to-dos + goals                       | ✅ shipped        |
-| T5b — Depth: calendar (grid, drag, split)         | ✅ shipped        |
-| T5c-a — Calendar: iCal export + feed              | ✅ shipped        |
-| T5c-b — Calendar: event reminders (Web Push)      | after hosting     |
-| T6a — Robustness: data durability                 | ✅ shipped        |
-| T6b — Robustness: offline fallback                | ✅ shipped        |
-| T7a — Net-new: Notes / Journal                    | ⤳ removed in T13  |
-| T7b — Net-new: Routines / templates               | ✅ shipped        |
-| T7c — Net-new: Habits / streaks                   | ⤳ retired by T12a |
-| T7d — Net-new: Weekly review                      | ✅ shipped        |
-| T8 — Goal momentum from linked tasks              | ✅ shipped        |
-| T9a — AI companion: shell + goal planning         | ✅ shipped        |
-| T9b — companion: routines                         | ✅ shipped        |
-| T9c — companion: weekly synthesis                 | ✅ shipped        |
-| T9d — companion: transaction import               | ✅ shipped        |
-| T10a — Activity: /todos and /goals merged         | ✅ shipped        |
-| T10b — Activity: routines and habits in rail      | ✅ shipped        |
-| T11 — AI configured from Settings, not env        | ✅ shipped        |
-| T12a — Habits: a quota and a log                  | ✅ shipped        |
-| T12b — Goal momentum counts habit sessions        | ✅ shipped        |
-| T12c — Companion proposes habits, not dates       | ✅ shipped        |
-| T12d — Activity revisited for the habit primitive | ✅ shipped        |
-| T12e — Agenda groups routine work, and reorders   | ✅ shipped        |
-| T12f — A routine can drop its own stale tasks     | ✅ shipped        |
-| T12g — The e2e suite gets a database of its own   | ✅ shipped        |
-| T12h — Companion settings: no URL, a model list   | ✅ shipped        |
-| T12i — Dead-code sweep, and the edits it exposed  | ✅ shipped        |
-| T13 — Tools move to their artifacts; notes goes   | ✅ shipped        |
-| T14 — Balanced macros, quieter phone, view default| ✅ shipped        |
+| Tranche                                            | State             |
+| -------------------------------------------------- | ----------------- |
+| T0 — Foundations, cohesion & safety                | ✅ shipped        |
+| T1 — Frictionless capture & navigation             | ✅ shipped        |
+| T2 — One product: links, Today hub, reminders      | ✅ shipped        |
+| T3 — Depth: Budget                                 | ✅ shipped        |
+| T4 — Depth: Meals                                  | ✅ shipped        |
+| T5a — Depth: to-dos + goals                        | ✅ shipped        |
+| T5b — Depth: calendar (grid, drag, split)          | ✅ shipped        |
+| T5c-a — Calendar: iCal export + feed               | ✅ shipped        |
+| T5c-b — Calendar: event reminders (Web Push)       | after hosting     |
+| T6a — Robustness: data durability                  | ✅ shipped        |
+| T6b — Robustness: offline fallback                 | ✅ shipped        |
+| T7a — Net-new: Notes / Journal                     | ⤳ removed in T13  |
+| T7b — Net-new: Routines / templates                | ✅ shipped        |
+| T7c — Net-new: Habits / streaks                    | ⤳ retired by T12a |
+| T7d — Net-new: Weekly review                       | ✅ shipped        |
+| T8 — Goal momentum from linked tasks               | ✅ shipped        |
+| T9a — AI companion: shell + goal planning          | ✅ shipped        |
+| T9b — companion: routines                          | ✅ shipped        |
+| T9c — companion: weekly synthesis                  | ✅ shipped        |
+| T9d — companion: transaction import                | ✅ shipped        |
+| T10a — Activity: /todos and /goals merged          | ✅ shipped        |
+| T10b — Activity: routines and habits in rail       | ✅ shipped        |
+| T11 — AI configured from Settings, not env         | ✅ shipped        |
+| T12a — Habits: a quota and a log                   | ✅ shipped        |
+| T12b — Goal momentum counts habit sessions         | ✅ shipped        |
+| T12c — Companion proposes habits, not dates        | ✅ shipped        |
+| T12d — Activity revisited for the habit primitive  | ✅ shipped        |
+| T12e — Agenda groups routine work, and reorders    | ✅ shipped        |
+| T12f — A routine can drop its own stale tasks      | ✅ shipped        |
+| T12g — The e2e suite gets a database of its own    | ✅ shipped        |
+| T12h — Companion settings: no URL, a model list    | ✅ shipped        |
+| T12i — Dead-code sweep, and the edits it exposed   | ✅ shipped        |
+| T13 — Tools move to their artifacts; notes goes    | ✅ shipped        |
+| T14 — Balanced macros, quieter phone, view default | ✅ shipped        |
+| T15 — Goals and habits become one dashboard card   | ✅ shipped        |
+| T16 — Slate, and events you can highlight          | ✅ shipped        |
+| T17 — Dashboard cards fold to their header         | ✅ shipped        |
+| T18 — A habit's quota is one box per log           | ✅ shipped        |
 
 **T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
 but T12b and T12c sit ahead of both, since they finish what T12a started.
+
+**T13 onward were not on this roadmap, and are not described below.** They came from the
+user looking at a screen and saying what was wrong with it, one tranche at a time, and the
+sections in this file stop at T13's four phases. **`docs/HANDOFF.md` §2 is the record of
+T14–T18** — what shipped, which migration each carried, and the decisions worth not
+re-litigating. This file remains the authority for T0–T13 and for the corrections list at
+the top.
 
 **T10** was not on this roadmap either. `/todos` and `/goals` had been describing the same
 rows from opposite ends since T2 gave tasks a `goalId`, and each had grown a compromise to
@@ -1094,16 +1105,16 @@ budget. So `/companion` disperses and then disappears.
 Two consequences follow. **Goals needs a page again** — plans have to land somewhere, and
 `/goals` has been a permanent 308 to `/activity` since ADR-0013 merged them. And with the
 goal rail leaving `/activity`, the width it occupied returns to the habit and routine
-surfaces that T12d compressed *because* the rail had grown to 724px.
+surfaces that T12d compressed _because_ the rail had grown to 724px.
 
 **Nav arithmetic is the binding constraint, and it drives the phase order.** Seven is a
 measured ceiling, not a round number. The bar is at seven now, so **each phase must pair a
 removal with its addition** or it lands at eight mid-way and breaks the ceiling:
 
-| | |
-|---|---|
+|        |                                                                              |
+| ------ | ---------------------------------------------------------------------------- |
 | Before | Dashboard · Activity · **Companion** · Calendar · Budget · Meals · **Notes** |
-| After  | Dashboard · Activity · **Goals** · Calendar · Budget · Meals · **Review** |
+| After  | Dashboard · Activity · **Goals** · Calendar · Budget · Meals · **Review**    |
 
 Four phases: **1.** remove notes, Review takes the slot · **2.** extract the companion spine
 with no visible change · **3.** `/goals` returns and the rail leaves `/activity` · **4.**
@@ -1117,7 +1128,7 @@ before the next starts.
   The user chose the permanent option knowingly over exporting first; a pre-flight
   `scripts/backup.sh` dump confirmed the table held **0 rows**, so nothing was destroyed.
 - **`account/tables.test.ts` fired, which is the whole point of it.** It pins the backup
-  surface at an *exact* count rather than a floor, so the table going 27 → 26 failed the
+  surface at an _exact_ count rather than a floor, so the table going 27 → 26 failed the
   suite and forced the number to be re-typed by hand. Its comment argued only the
   add-a-table direction; removal proves it works both ways.
 - **Review takes the freed nav slot** rather than the bar shrinking to six. `/review` had
@@ -1126,7 +1137,7 @@ before the next starts.
   to the dashboard does. The dashboard button stays; a second door is the established call.
 - **Promoting a page to a tab means removing it from the palette by hand**, and this is the
   trap the phase actually hit. `NAV_COMMANDS` is `[...navItems, …four hand-written entries]`,
-  and `/review` was one of the four — listed there precisely *because* it had no tab. Adding
+  and `/review` was one of the four — listed there precisely _because_ it had no tab. Adding
   it to `navItems` put one page in the ⌘K "Go to" menu twice under two names ("Review" and
   "Weekly review"), which reads as two pages. Nothing catches this: it typechecks, it lints,
   and no spec asserts the menu's contents.
@@ -1138,8 +1149,8 @@ before the next starts.
   the file was restored" stopped being the same sentence.
 - **ADR-0011's §2 lost its subject and had to be vacated, not marked satisfied.** "Journal
   and note content never leaves the machine" cannot be honoured by deleting the journal. The
-  amendment restates the enforcement half generally — *prompt payloads are built from named
-  fields, never spread from raw rows* — which is strictly stronger, since free text now
+  amendment restates the enforcement half generally — _prompt payloads are built from named
+  fields, never spread from raw rows_ — which is strictly stronger, since free text now
   lives in `goals.notes`, `tasks.notes` and `events.notes`, all reachable from modules the
   companion reads by design.
 - **Journal-aware retrospectives are cancelled, not deferred.** They were ADR-0011's single
@@ -1184,7 +1195,7 @@ each running a slice of what was one component.
 
 **T13 Phase 3 — shipped**, no migration. `/goals` is a page again and the rail leaves
 `/activity`. Read ADR-0013's 2026-08-14 amendment before touching any of this: the merge's
-*insight* survives intact and only its *layout* is reversed, and the difference is what stops
+_insight_ survives intact and only its _layout_ is reversed, and the difference is what stops
 someone reviving the linked-task list T10a deleted.
 
 - **The redirect had to go first.** `next.config.ts`'s `/goals` → `/activity` 308 resolves
@@ -1201,8 +1212,8 @@ someone reviving the linked-task list T10a deleted.
   one real behavioural difference and it propagated into four specs, which had to switch
   `getByRole("button")` to `getByRole("link")` and stop expecting an in-place filter.
 - **Width the rail was costing its neighbours, returned.** T12d compressed habit chips to
-  `w-40` and collapsed routines to a single `Run…` picker *because the rail had grown to
-  724px*, and called both real losses. Habit chips are `w-48` with their cadence phrase back
+  `w-40` and collapsed routines to a single `Run…` picker _because the rail had grown to
+  724px_, and called both real losses. Habit chips are `w-48` with their cadence phrase back
   (`3× this week` — without it `2/3` cannot be read as ahead or behind), and each routine has
   a Run button again.
 - **The routine change contradicts T12d's own comment** ("if the picker step proves annoying,
