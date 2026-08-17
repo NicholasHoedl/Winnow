@@ -45,8 +45,7 @@ test.afterEach(async ({ page }) => {
     await page.reload()
     await page.getByRole("button", { name: "All", exact: true }).click()
   }
-  await page.goto("/goals")
-  await deleteGoalsMatching(page, "E2E act ")
+  await deleteGoalsMatching("E2E act ")
 })
 
 test("the goal filter scopes the list, and the URL remembers which", async ({

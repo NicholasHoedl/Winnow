@@ -76,8 +76,27 @@ async function openWithScope(
   scope: string,
 ) {
   await page.goto(`/calendar?view=day&date=${date}`)
-  await page.getByRole("button", { name: new RegExp(title) }).click()
   const dialog = page.getByRole("dialog")
+
+  // Click until the dialog is actually OPEN, rather than clicking once and assuming.
+  //
+  // A click can be delivered to markup whose React handler is not attached yet: the button
+  // takes focus, nothing else happens, and the next line then waits out the full test
+  // timeout against a dialog that was never opened. That is exactly what the failure
+  // snapshots showed — the event button `[active]`, and no dialog node anywhere in the
+  // tree. `quick-add-burst.spec.ts` documents the same hazard for its form.
+  //
+  // It surfaced when this file's teardown stopped driving the UI. Four day-view
+  // navigations per test used to leave the browser warm and hydrated and put seconds
+  // between tests; a `delete` returns in about ten milliseconds. The race was always here —
+  // `countOn` above gates on the page being ready and this did not — and the slow teardown
+  // was only hiding it. Restoring slack in an unrelated hook would hide it again rather
+  // than fix it.
+  await expect(async () => {
+    await page.getByRole("button", { name: new RegExp(title) }).click()
+    await expect(dialog).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
+
   await dialog.getByRole("button", { name: scope, exact: true }).click()
   return dialog
 }

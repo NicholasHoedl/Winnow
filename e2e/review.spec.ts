@@ -13,14 +13,12 @@ function card(page: Page, title: string) {
 }
 
 test.afterEach(async ({ page }) => {
-  // `/goals`, not `/activity`. Goal cards moved in T13 and this line did not, so the
-  // cleanup matched nothing and passed anyway — leaking a goal into every later spec. It
-  // surfaced as a 4px layout overflow on `/companion`, whose goal picker defaults to the
-  // oldest surviving goal. `deleteGoalsMatching` now refuses to run on the wrong page.
-  await page.goto("/goals")
-  // "Delete goal", not "Delete" — deleting a goal cascades its milestones, so the confirm
-  // names what it takes with it. That, and the dialog it now lives behind, are in _goals.
-  await deleteGoalsMatching(page, new RegExp(PREFIX))
+  // No navigation first. This used to need `/goals` — goal cards moved there in T13 and
+  // this line did not, so the cleanup matched nothing and passed anyway, leaking a goal
+  // into every later spec. It surfaced as a 4px layout overflow on `/companion`, whose goal
+  // picker defaults to the oldest surviving goal. The helper takes no page now, so there is
+  // no wrong one to be on.
+  await deleteGoalsMatching(PREFIX)
 
   await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
