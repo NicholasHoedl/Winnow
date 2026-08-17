@@ -1,11 +1,17 @@
 import { z } from "zod"
 
 import {
+  CALENDAR_CARD_VIEWS,
   CALENDAR_VIEWS,
   CURRENCY_CODES,
   DASHBOARD_CARDS,
+  DATE_FORMATS,
+  MEAL_TYPES,
   THEMES,
+  VOLUME_UNITS,
+  WEIGHT_UNITS,
 } from "@/lib/preferences"
+import { navItems } from "@/components/shared/nav-items"
 import { AI_PROVIDERS } from "@/modules/companion/ai-settings"
 
 // Robust across runtimes: constructing a formatter throws RangeError for an
@@ -40,6 +46,24 @@ export const userPreferencesSchema = z.object({
   balanceMacroTargets: z.boolean(),
   defaultCalendarView: z.enum(CALENDAR_VIEWS as [string, ...string[]]),
   slateHorizonDays: z.union([z.literal(3), z.literal(7), z.literal(14)]),
+  dateFormat: z.enum(DATE_FORMATS),
+  weightUnit: z.enum(WEIGHT_UNITS),
+  volumeUnit: z.enum(VOLUME_UNITS),
+  dashboardCalendarView: z.enum(CALENDAR_CARD_VIEWS),
+  // Validated against the nav itself rather than a duplicated list of paths. A hand-written
+  // copy here would be a second thing to keep in step with `navItems`, and the failure would
+  // be a landing page that saves and then 404s.
+  landingPage: z.enum(
+    navItems.map((item) => item.href) as [string, ...string[]],
+  ),
+  // Null is Other — a real choice rather than an unset field.
+  //
+  // No `.transform()` here, deliberately, and it is worth saying why since the link pickers
+  // elsewhere do use one. Every other field in THIS schema has an input type identical to
+  // its output, which is what lets the settings form be typed `useForm<UserPreferencesInput>`
+  // against `z.infer`. A transform makes the two differ and the resolver stops type-checking
+  // against the form. The Select emits `null` directly instead.
+  defaultMealType: z.enum(MEAL_TYPES).nullable(),
   // `dashboardCollapsed` is deliberately ABSENT.
   //
   // It is part of `UserPreferences`, but the settings form is not one of its writers — the

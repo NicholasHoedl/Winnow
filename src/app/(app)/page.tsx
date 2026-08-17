@@ -37,11 +37,6 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ calendar?: string }>
 }) {
-  // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
-  // than in client state so the server renders the right one — no flash of the wrong view,
-  // and no localStorage read during render. Anything unrecognised falls back to the month.
-  const calendarView: DashboardCalendarView =
-    (await searchParams).calendar === "week" ? "week" : "month"
   const {
     timeZone,
     weekStartsOn,
@@ -50,7 +45,21 @@ export default async function DashboardPage({
     goalMomentumDays,
     slateHorizonDays,
     dashboardCollapsed,
+    dashboardCalendarView,
   } = await getUserPreferences()
+  // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
+  // than in client state so the server renders the right one — no flash of the wrong view,
+  // and no localStorage read during render.
+  //
+  // An explicit `?calendar=` still wins; without one this falls back to the saved preference
+  // rather than always to month. Same precedence `/calendar` uses for `defaultCalendarView`
+  // (T14), and the same trap that fixed: while month was hard-coded as the fallback, a Week
+  // button that omitted the parameter produced a URL resolving straight back to month.
+  const requested = (await searchParams).calendar
+  const calendarView: DashboardCalendarView =
+    requested === "week" || requested === "month"
+      ? requested
+      : dashboardCalendarView
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
 

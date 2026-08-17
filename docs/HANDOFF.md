@@ -415,6 +415,16 @@ controls apart, while `goal-momentum.spec.ts` broke on a strict-mode violation. 
 segmented preference whose labels collide with an existing one is a live accessibility bug,
 not just a test problem.**
 
+**And scoping to the group is only half of it — the group name needs `exact: true`.** Adding
+`dashboardCalendarView` in 2026-08-17 gave the form a second Month/Week control, and
+`settings-defaults.spec.ts` broke exactly as T16 predicted. Scoping it to
+`getByRole("group", { name: "Calendar opens on" })` did **not** fix it: Playwright matches an
+accessible name by SUBSTRING unless told otherwise, and the new label —
+"Dashboard calendar opens on" — CONTAINS the old one, so the group lookup resolved to two
+groups and failed identically. The lesson is narrower than "scope to the group": scope to the
+group **and match its name exactly**, because preference labels are naturally one another's
+prefixes. `segmented()` in that spec is the helper to copy.
+
 **Fixture teardown goes through the DATABASE, not the UI.** `e2e/_events.ts`, `_goals.ts`
 and `_tasks.ts` each expose a `delete…Matching(fragment)` built on `withTestDb` in
 `_test-db.ts`, which calls `assertSafeToDestroy` by construction so no caller has to

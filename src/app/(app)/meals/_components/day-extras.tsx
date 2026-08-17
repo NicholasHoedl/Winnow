@@ -12,11 +12,23 @@ import {
   setBodyWeight,
 } from "@/modules/meals/actions"
 import type { BodyWeight, WaterLog } from "@/modules/meals/queries"
+import {
+  fromDisplayVolume,
+  fromDisplayWeight,
+  toDisplayVolume,
+  toDisplayWeight,
+  volumePresets,
+  volumeUnitLabel,
+  weightUnitLabel,
+} from "@/lib/format"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-/** A glass, a large glass, a bottle. Imperial by decision — see the T4 plan. */
-const PRESETS_FL_OZ = [8, 12, 16]
+// `PRESETS_FL_OZ` lived here and was imperial "by decision — see the T4 plan". It is
+// `volumePresets(unit)` now: a glass, a large glass and a bottle, expressed as round numbers
+// in whichever unit is being displayed rather than as the 236.6/354.9/473.2 that converting
+// the imperial three would produce. A preset exists to be tapped without thinking.
 
 /** 48 reads better than 48.0, but 12.5 must keep its half. */
 function num(value: number): string {
@@ -27,9 +39,18 @@ function num(value: number): string {
 
 function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
   const [pending, startTransition] = React.useTransition()
-  const total = logs.reduce((sum, log) => sum + log.amountFlOz, 0)
+  const { volumeUnit } = usePreferences()
+  const unitLabel = volumeUnitLabel(volumeUnit)
+  // Summed in STORAGE units and converted once, not converted per row and then summed —
+  // the second rounds every log before adding them up.
+  const total = toDisplayVolume(
+    logs.reduce((sum, log) => sum + log.amountFlOz, 0),
+    volumeUnit,
+  )
 
-  function add(amountFlOz: number) {
+  /** Takes a DISPLAYED amount and converts on the way in; storage stays fl oz. */
+  function add(displayed: number) {
+    const amountFlOz = fromDisplayVolume(displayed, volumeUnit)
     startTransition(async () => {
       const result = await logWater({ date, amountFlOz })
       if (!result.ok) toast.error(result.error)
@@ -73,13 +94,13 @@ function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
           {num(total)}
           <span className="text-muted-foreground text-xs font-normal">
             {" "}
-            fl oz
+            {unitLabel}
           </span>
         </span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {PRESETS_FL_OZ.map((amount) => (
+        {volumePresets(volumeUnit).map((amount) => (
           <Button
             key={amount}
             type="button"
@@ -88,7 +109,7 @@ function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
             disabled={pending}
             onClick={() => add(amount)}
           >
-            +{amount} fl oz
+            +{amount} {unitLabel}
           </Button>
         ))}
       </div>
@@ -103,10 +124,10 @@ function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
               onClick={() => remove(log)}
               // Every log is individually removable rather than only the most recent:
               // water_logs is a row per tap precisely so a mis-tap is one plain delete.
-              aria-label={`Remove ${num(log.amountFlOz)} fl oz`}
+              aria-label={`Remove ${num(toDisplayVolume(log.amountFlOz, volumeUnit))} ${unitLabel}`}
               className="text-muted-foreground hover:bg-accent hover:text-foreground flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs tabular-nums transition-colors disabled:opacity-50"
             >
-              {num(log.amountFlOz)}
+              {num(toDisplayVolume(log.amountFlOz, volumeUnit))}
               <X aria-hidden className="size-3" />
             </button>
           ))}
@@ -124,20 +145,24 @@ function WeightCard({
   weight: BodyWeight | null
 }) {
   const [pending, startTransition] = React.useTransition()
-  // Seeded from the day's row. The parent keys this component by date, so moving to
-  // another day remounts it — without that the input would keep showing the previous
-  // day's weight, which `unique(user_id, date)` would then happily overwrite.
+  const { weightUnit } = usePreferences()
+  // Seeded from the day's row, in the DISPLAYED unit. The parent keys this component by
+  // date, so moving to another day remounts it — without that the input would keep showing
+  // the previous day's weight, which `unique(user_id, date)` would then happily overwrite.
   const [value, setValue] = React.useState(
-    weight ? String(weight.weightLb) : "",
+    weight ? num(toDisplayWeight(weight.weightLb, weightUnit)) : "",
   )
 
   function save(event: React.FormEvent) {
     event.preventDefault()
-    const weightLb = Number(value.trim())
-    if (!value.trim() || Number.isNaN(weightLb)) {
-      toast.error("Enter a weight in pounds.")
+    const entered = Number(value.trim())
+    if (!value.trim() || Number.isNaN(entered)) {
+      toast.error(`Enter a weight in ${weightUnitLabel(weightUnit)}.`)
       return
     }
+    // Converted back on the way in — the exact inverse of the seed above, so the stored
+    // column stays pounds whatever the account is displaying.
+    const weightLb = fromDisplayWeight(entered, weightUnit)
     startTransition(async () => {
       const result = await setBodyWeight({ date, weightLb })
       if (!result.ok) {
@@ -191,7 +216,9 @@ function WeightCard({
           onChange={(event) => setValue(event.target.value)}
           className="tabular-nums"
         />
-        <span className="text-muted-foreground text-xs">lb</span>
+        <span className="text-muted-foreground text-xs">
+          {weightUnitLabel(weightUnit)}
+        </span>
         <Button type="submit" size="sm" disabled={pending}>
           Save
         </Button>
