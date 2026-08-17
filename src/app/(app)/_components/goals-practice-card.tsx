@@ -165,30 +165,7 @@ export function GoalsPracticeCard({
   const short = habits.filter((habit) => !habit.now.met)
 
   return (
-    <DashboardCard
-      card="goals"
-      title="Goals & practice"
-      collapsed={collapsed}
-      actions={
-        /* Two links, because the card has two subjects and each has a page. The `All →`
-           these replaced pointed at `/activity`, which has been the wrong answer for goals
-           since T13 gave `/goals` a page again. */
-        <>
-          <Link
-            href="/goals"
-            className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
-          >
-            Goals →
-          </Link>
-          <Link
-            href="/activity/habits"
-            className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
-          >
-            Habits →
-          </Link>
-        </>
-      }
-    >
+    <DashboardCard card="goals" title="Goals & practice" collapsed={collapsed}>
       <div className="flex flex-col gap-4">
         {/* Moved into the body from the header, which the shell now owns. It belongs with
             the list anyway: it answers "am I behind?" about the rows directly beneath it,
@@ -227,6 +204,32 @@ export function GoalsPracticeCard({
             )}
           </div>
         ))}
+
+        {/* The two links, moved down out of the header.
+
+            They were `actions`, and between them and the title the header wanted more room
+            than the dashboard's left column has: "Goals & practice" rendered as
+            "Goals & pr..." at 1280px. Shortening the words would have bought a dozen pixels
+            and left the same fault one longer word away.
+
+            Below the list is also where they belong. This card has two subjects, and these
+            are the way out to each — a destination after the content, not a control that
+            competes with the heading. Same move the "N short" line above made, and for the
+            same reason: the header holds the name and the fold, and nothing else. */}
+        <div className="flex items-center gap-4 border-t pt-3">
+          <Link
+            href="/goals"
+            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          >
+            Goals →
+          </Link>
+          <Link
+            href="/activity/habits"
+            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          >
+            Habits →
+          </Link>
+        </div>
       </div>
     </DashboardCard>
   )

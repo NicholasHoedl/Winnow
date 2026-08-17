@@ -208,9 +208,6 @@ export function BudgetView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Budget
           </h1>
-          <p className="text-muted-foreground text-sm">
-            Track income and spending by category.
-          </p>
         </div>
         <div className="flex gap-2">
           <Button

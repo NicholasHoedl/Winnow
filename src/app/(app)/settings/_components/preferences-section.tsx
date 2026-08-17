@@ -67,10 +67,7 @@ export function PreferencesSection({
   })
 
   return (
-    <SettingsSection
-      title="Preferences"
-      description="Regional formatting and defaults."
-    >
+    <SettingsSection title="Preferences">
       <form onSubmit={onSubmit}>
         <FieldGroup>
           <Field>

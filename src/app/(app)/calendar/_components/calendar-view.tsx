@@ -266,7 +266,6 @@ export function CalendarView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Calendar
           </h1>
-          <p className="text-muted-foreground text-sm">Your events.</p>
         </div>
         {/* `flex-wrap` here, not only on the header. The header already wrapped, but this
             row was a single unbreakable flex child of it — four view links plus two

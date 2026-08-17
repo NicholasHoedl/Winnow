@@ -178,9 +178,13 @@ export function ReviewView({
               />
             </div>
             <p className="text-muted-foreground mt-3 text-xs">
+              {/* Second sentence removed. It read "Each day is scored against the target
+                  that was in force then" — a description of historical target versioning,
+                  which is a fact about how this was built rather than about your week. The
+                  first sentence says what the figure means, which is the whole job. */}
               {review.macros.daysWithTarget === 0
                 ? "No macro target was in force this week."
-                : "Within 10% of the day's calorie target. Each day is scored against the target that was in force then."}
+                : "Within 10% of the day's calorie target."}
             </p>
           </CardContent>
         </Card>
@@ -242,10 +246,14 @@ export function ReviewView({
           </CardHeader>
           <CardContent>
             {review.milestones.length === 0 && review.goalTasks.length === 0 ? (
+              /* The second sentence is gone, and it was the clearest example in the app of
+                 the UI explaining its own construction to the person who built it: it said
+                 that work completed before this page existed carries no timestamp, which is
+                 a note about `milestones.completed_at` being forward-only (T7d). True, still
+                 recorded in that column's own comment, and not something an empty state
+                 should be telling anyone. */
               <p className="text-muted-foreground text-sm">
-                Nothing finished toward a goal this week. Anything completed
-                before this page existed has no timestamp, so it can&apos;t
-                appear here.
+                Nothing finished toward a goal this week.
               </p>
             ) : (
               /* Milestones first, then the tasks that fed a goal. Both are "goal

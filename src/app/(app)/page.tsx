@@ -144,12 +144,18 @@ export default async function DashboardPage({
             <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
               {formatLongDate(today)}
             </p>
+            {/* No tagline under this any more.
+
+                "Here's your day at a glance" described the page to someone seeing it for the
+                first time, on the surface its owner opens several times a day, forever. The
+                same pass removed the equivalent line from Activity, Calendar, Budget, Meals
+                and Settings, and kept the ones that say something the heading does not —
+                Goals naming momentum, Routines defining what a routine is, Appearance
+                explaining that the setting follows the account. The test is whether a reader
+                who already knows what the page is would lose anything. */}
             <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight xl:text-4xl">
               Good to see you, {name}
             </h1>
-            <p className="text-muted-foreground text-sm [@media(max-height:820px)]:hidden">
-              Here&apos;s your day at a glance.
-            </p>
           </div>
           {/* `flex-wrap` is load-bearing, not tidying. The header above wraps, but this
               inner row did not, so a fourth button ran to 440px on a 375px phone and made

@@ -182,9 +182,6 @@ export function MealsView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Meals
           </h1>
-          <p className="text-muted-foreground text-sm">
-            Log what you eat, track your macros.
-          </p>
         </div>
         <div className="flex gap-2">
           <Button

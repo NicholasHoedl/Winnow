@@ -29,9 +29,6 @@ export function SettingsView({
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           Settings
         </h1>
-        <p className="text-muted-foreground text-sm">
-          Manage your account, appearance, and preferences.
-        </p>
       </header>
 
       <div className="flex flex-col gap-8">

@@ -322,9 +322,6 @@ export function ActivityView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Activity
           </h1>
-          <p className="text-muted-foreground text-sm">
-            What needs doing, and what it&apos;s for.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button

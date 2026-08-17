@@ -70,7 +70,12 @@ export function QuickCapture() {
       <input
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Quick add a task — try “pay rent friday” or “call mom tomorrow”"
+        // One example, not two. The pair ran to 62 characters and clipped mid-word on a
+        // phone — `try “pay rent frida` — on the app's primary capture surface. A
+        // placeholder cannot be made responsive from CSS, so the length has to work at the
+        // narrowest width rather than the widest. One example still teaches that a date can
+        // be typed in the sentence, which is the only thing this hint is for.
+        placeholder="Quick add — try “pay rent friday”"
         aria-label="Quick add a task"
         className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
       />
