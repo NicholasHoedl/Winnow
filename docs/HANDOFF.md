@@ -327,10 +327,17 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **801 unit tests across 46 files, 144 e2e,
-0 lint errors, 5 lint warnings** (2026-08-17, 11.5 minutes wall clock for the e2e). The
+Current baseline, measured on a full run: **801 unit tests across 46 files, 164 e2e,
+0 lint errors, 5 lint warnings** (2026-08-17, 11.4 minutes wall clock for the e2e). The
 numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
 the next — so re-measure rather than trusting a remembered figure.
+
+**Two of those 164 are RED on purpose right now**, and it is worth knowing which before you
+debug them: `desktop-layout.spec.ts` reports three spills on `/` at both 1280px and 1366px —
+the Macros and Budget card headers, and the budget tile's `$…of $…` row, which renders with
+no space. The sweep that finds them was added before the fix, deliberately, so the fix could
+be verified rather than eyeballed. If you are reading this and they are still red, the fix
+has not landed yet; if they are green, delete this paragraph.
 
 **Wall clock is the triage signal, and it is not reliable on this machine.** Full runs on
 2026-08-17 came in at 11.4, 11.5, 11.9, 16.7, 26.9 and 46.7 minutes, and one ran 10.1 HOURS
@@ -340,9 +347,15 @@ machine — so before debugging a failure, compare the clock to ~12 minutes. The
 is just as real: one of those slow runs also hid three genuine breakages, so "the machine
 was slow" is a reason to re-run, never a reason to dismiss.
 
-The e2e count is **both** Playwright projects — `chromium` plus the ten-route `mobile`
-sweep — along with the setup and teardown projects. A `--project=chromium` run will
-therefore report fewer, and that is not a regression.
+The e2e count is **all three** Playwright projects — `chromium`, the ten-route `mobile`
+sweep, and `desktop-layout`, which runs the same ten routes at 1280px and 1366px — along
+with the setup and teardown projects. A `--project=chromium` run will therefore report
+fewer, and that is not a regression.
+
+**The two layout sweeps share one detector**, `e2e/_layout.ts`. It was inside
+`mobile-layout.spec.ts` until it needed a second caller, and the extraction is the point:
+the detector had been aimed at 393px for its whole life, so every spill at laptop width went
+unseen. If you widen what it catches, both sweeps get it.
 
 **A negative margin is the most repeated bug in this codebase — four times and counting.**
 `-mx-1` reached `habit-strip` and `routines-line` in T13, `-mx-2` sat in Slate's routine
