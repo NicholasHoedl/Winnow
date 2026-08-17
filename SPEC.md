@@ -18,9 +18,12 @@ Last updated: 2026-07-21
 > - **Barcode lookups and a nutrition database** are listed out of scope. Both shipped
 >   (Open Food Facts, ADR-0005).
 > - **Recurring-event exceptions** are listed out of scope. They shipped in T5b.
-> - **Notes/journal, routines, habits and the weekly review** are absent entirely — they are
->   T7 and T12a, neither of which was on any plan when this was written. Habits in particular
->   are now a quota and a log rather than a kind of task (ADR-0014).
+> - **Routines, habits and the weekly review** are absent entirely — they are T7 and T12a,
+>   neither of which was on any plan when this was written. Habits in particular are now a
+>   quota and a log rather than a kind of task (ADR-0014), drawn as one box per log you owe.
+>   A **notes/journal** module also shipped in T7a and was then **deleted in T13**, table and
+>   all — so this document is closer to the truth on that one point than any note written
+>   between the two.
 > - **To-dos and Goals are one page**, `/activity`, not the separate modules §7 describes
 >   (ADR-0013).
 >

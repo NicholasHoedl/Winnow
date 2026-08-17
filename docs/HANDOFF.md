@@ -65,7 +65,7 @@ unverified on the device they were built for:
 
 Corollary: statements like "migration 0020 is pending on the server" are wrong. The
 database is empty of production data because there is no production. The **first** deploy
-runs all 36 migrations from scratch plus `scripts/seed-user.ts`. A first deploy therefore
+runs all 39 migrations from scratch plus `scripts/seed-user.ts`. A first deploy therefore
 runs `0022`, which CREATES the notes table, and later `0035`, which drops it again. That is
 correct and deliberate: migration history is append-only, so the sequence is replayed rather
 than rewritten to skip a table no longer wanted.
@@ -135,6 +135,49 @@ also retired the unmet-first re-sort, which existed only to make a cut safe.
   `event_exceptions` — the same silent loss `calendar/queries.ts` already documents for
   inbound reschedules.
 
+**T17 is shipped: every dashboard card folds to its header, and remembers.** Migration
+`0038`. **ADR-0016 is the authority**, including on what it costs.
+
+- **`user_preferences.dashboard_collapsed` is `jsonb` holding a LIST of folded card keys**,
+  and it is the only preference here that is not one column per setting. The dashboard's
+  card set churns faster than anything else in the app — T13 deleted three cards, T15 merged
+  two, T16 merged three more — so a column per card means a migration every time and a dead
+  column on every deletion. `parseCollapsedCards` filters what comes back against
+  `DASHBOARD_CARDS`, so a key for a card that no longer exists stops matching instead of
+  erroring, and deleting a card stays a one-file change.
+- **`DashboardCard` is a client shell holding SERVER-RENDERED children.** That is the whole
+  design: the fold is instant instead of waiting on a Server Action plus
+  `revalidatePath("/")` to redraw the page, and `CategoryBars` and the stat tiles stay
+  server components. A chevron as a small client island in each card cannot do this, because
+  nothing on the client would own the content. Read ADR-0016 before "simplifying" it.
+- **The write is a single atomic statement each way** — `|| '["macros"]'::jsonb` to fold,
+  `- 'macros'` to unfold. Not defensive: the fold is optimistic, so one person in one tab
+  can start a second write before the first commits. `parseCollapsedCards` deduplicating on
+  read is **load-bearing** because of it.
+- **The settings form is deliberately NOT a writer.** `dashboardCollapsed` is absent from
+  `userPreferencesSchema`, so saving anything on `/settings` cannot touch the column. The
+  chevron is the only control; there is no second surface to keep in step.
+- **The stat tiles stopped being whole-tile links** — a `<button>` inside an `<a>` is
+  invalid, so the link moved to the header arrow. A real regression in click target, and the
+  one part of T17 a user could reasonably dislike.
+
+**T18 is shipped: a habit's quota is drawn as one box per log.** No migration.
+
+`QuotaMeter` (`components/ui/quota-meter.tsx`) replaces the `2/3 this week` text and the
+continuous bar on all three habit surfaces — the dashboard card, `/activity`'s strip and
+`/activity/habits`. A continuous bar was the wrong shape for the thing: a 66% fill implies a
+quantity you are partway through accumulating, when what you have is two logs made and one
+to go. ADR-0014 already said a habit is a quota and a log; this is that idea drawn.
+
+- **Exceeding the target GROWS the meter**, surplus segments in the accent colour, rather
+  than clamping. A clamped bar drew 3-of-2 identically to 2-of-2.
+- **Above twelve segments it falls back to a continuous bar and brings the numbers back**,
+  because thirty slivers are not countable and a bar with no figure beside it says nothing.
+- **The numbers are gone from the DOM**, so the meter is a `progressbar` carrying the count
+  in `aria-valuetext` — otherwise a screen reader gets nothing. The specs assert on that,
+  which tests the number and its accessibility together. Hunting for the old text is how
+  three assertions were missed; `e2e/_habits.ts` is where the locator lives now.
+
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
 after a verified-empty pre-flight dump — the user had written nothing in it). Anything you
@@ -159,17 +202,21 @@ The T12 line is what most of §5 now describes:
 | **T12h**      | Companion settings derive the base URL and fetch the model list, instead of asking you to type both.                                                       |
 | **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
-So the roadmap has run out of code that can be written without a deployment. **Hosting is
-now the only thing standing between this app and being used.**
+**The ROADMAP has run out of code that can be written without a deployment — the work has
+not.** T13 through T18 are six tranches shipped since, none of them on any plan: they came
+from the user looking at a screen and saying what was wrong with it. Read that as the shape
+of the work now, not as a backlog waiting to be worked through. **Hosting is still the only
+thing standing between this app and being used**, and everything in the table below is
+blocked on it.
 
-| Next up                                   | Why                                                                                                                                                                                                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**. |
-| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                             |
-| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                        |
-| **The AI companion — complete**           | **T9a–T9d shipped**, reshaped by T12c and reconfigured by T11 and T12h. See §5, ADR-0011 and ADR-0012.                                                                                                                                                   |
-| **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d and again by T13. `/todos` merged into `/activity`; `/goals` un-merged back to its own page and the rail is gone. Habits are a strip. See §5 and ADR-0013 with both amendments.                                 |
-| **Mobile — measured, not finished**       | T12i's follow-up added a `mobile` Playwright project that renders all eleven routes in WebKit at 393px. Nine were already clean; two faults were found and fixed. What it cannot see, and the open decisions it surfaced, are in §6.                     |
+| Next up                                   | Why                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**.                                                               |
+| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                                                                                           |
+| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                                                                                      |
+| **The AI companion — complete**           | **T9a–T9d shipped**, reshaped by T12c and reconfigured by T11 and T12h. See §5, ADR-0011 and ADR-0012.                                                                                                                                                                                                                 |
+| **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d and again by T13. `/todos` merged into `/activity`; `/goals` un-merged back to its own page and the rail is gone. Habits are a strip. See §5 and ADR-0013 with both amendments.                                                                                               |
+| **Mobile — measured, not finished**       | A `mobile` Playwright project renders every `(app)` route in WebKit at 393px — **ten** since T13 deleted `/notes`; it was eleven when T12i's follow-up added it, and nine of those were already clean. It was also BLIND to anything inside a vertical scroller until T18 (see §4). What it still cannot see is in §6. |
 
 ### Hosting: what is already known
 
@@ -180,7 +227,7 @@ Decided with the user, so do not re-litigate:
 
 - **Clone the repo on the desktop and build there.** This replaced an earlier plan to build
   on the laptop, `docker save` to a `.tar` and carry it over. The change is not cosmetic:
-  the PC needed the checkout regardless — 35 migrations, `scripts/seed-user.ts`, and
+  the PC needed the checkout regardless — the migrations, `scripts/seed-user.ts`, and
   `backup.sh` all run from the deploy directory — so shipping a tar only ever saved the
   build, at the cost of a manual transfer.
 - One consequence: **`docker-compose.prod.yml`'s `up -d --build` usage line is now
@@ -274,10 +321,18 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **784 unit tests across 44 files, 142 e2e,
-0 lint errors, 5 lint warnings** (2026-08-16, 11.1 minutes wall clock for the e2e, zero
-flaky). The numbers in this paragraph disagreed with each other before T16 — 784/46/143 in
-one sentence and 140 in the next — so re-measure rather than trusting a remembered figure.
+Current green baseline, measured on a full run: **801 unit tests across 46 files, 144 e2e,
+0 lint errors, 5 lint warnings** (2026-08-17, 11.5 minutes wall clock for the e2e). The
+numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
+the next — so re-measure rather than trusting a remembered figure.
+
+**Wall clock is the triage signal, and it is not reliable on this machine.** Full runs on
+2026-08-17 came in at 11.4, 11.5, 11.9, 16.7, 26.9 and 46.7 minutes, and one ran 10.1 HOURS
+because the machine slept overnight. A slow run produces timeout failures that look exactly
+like real ones — three separate times that day a scattered red run turned out to be the
+machine — so before debugging a failure, compare the clock to ~12 minutes. The reverse trap
+is just as real: one of those slow runs also hid three genuine breakages, so "the machine
+was slow" is a reason to re-run, never a reason to dismiss.
 
 The e2e count is **both** Playwright projects — `chromium` plus the ten-route `mobile`
 sweep — along with the setup and teardown projects. A `--project=chromium` run will
@@ -330,6 +385,34 @@ controls apart, while `goal-momentum.spec.ts` broke on a strict-mode violation. 
 `role="group"` + `aria-label`, and specs scope to `getByRole("group", { name })`. **Adding a
 segmented preference whose labels collide with an existing one is a live accessibility bug,
 not just a test problem.**
+
+**Fixture teardown goes through the DATABASE, not the UI.** `e2e/_events.ts`, `_goals.ts`
+and `_tasks.ts` each expose a `delete…Matching(fragment)` built on `withTestDb` in
+`_test-db.ts`, which calls `assertSafeToDestroy` by construction so no caller has to
+remember it. `deleteGoalsMatching` and `deleteTasksMatching` take **no `page`** — that is
+the fix, not an omission. The UI versions swept a specific page and were silently vacuous
+anywhere else, which is how `review.spec.ts` leaked a goal for a whole run after T13 moved
+goal cards to `/goals`.
+
+Two rules when extending it:
+
+- **A delete that is the ASSERTION stays in the UI.** `calendar.spec.ts` is literally
+  "create and delete a calendar event"; `task-links.spec.ts` covers a goal delete detaching
+  its tasks. Both keep driving the real dialog. `calendar.spec` has a teardown hook as a
+  SAFETY NET beside it, because its event sits on today — the one date every dashboard spec
+  reads.
+- **`strpos` for goals and tasks, prefix `LIKE` for events.** The goal and task helpers kept
+  the CONTAINS semantics `visibleCard(page, fragment)` gave them, deliberately: changing the
+  matching rule at the same time as the mechanism risks a fragment that no longer matches,
+  which fails silently and is exactly this helper's known failure mode.
+
+**Removing that teardown exposed a race it had been hiding.** Four navigations per test left
+the browser warm and hydrated and put seconds between tests; a `delete` returns in about ten
+milliseconds. `calendar-following`'s `openWithScope` went straight from `goto` to `click`
+and assumed the dialog opened — a click delivered before React attaches its handler leaves
+the button focused and opens nothing. It now clicks until the dialog is actually open.
+**If a spec starts failing right after a teardown is made faster, look for a click that
+assumes its own effect** rather than putting the slack back.
 
 **Three** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
 `todos-reorder:86`, and — first seen 2026-08-13 — `calendar-reschedule.spec.ts:74` ("a block
@@ -820,7 +903,9 @@ still the old indigo.**
 ## 6. Known caveats worth stating before someone finds them
 
 - The dashboard **opens on the month view each visit** — the month/week toggle keeps its
-  state in the URL. Making it stick means a `user_preferences` column.
+  state in the URL, so the server renders the chosen view with no flash. Making it stick
+  means a `user_preferences` column, which is a smaller job than it sounds now that T14 did
+  exactly that for `/calendar`'s own view and T17 did it for which cards are folded.
 - **The dashboard's week view is the real `TimeGrid`**, the same component `/calendar`
   renders, but read-only: no `onReschedule`, so nothing drags, and clicks navigate. It
   needs BOTH `fill` and `maxHeight` — `fill` alone caps nothing, because `h-full` needs a
@@ -864,16 +949,12 @@ still the old indigo.**
   by hand, which put one page in the ⌘K "Go to" menu twice under two names. Nothing catches
   it — it typechecks, it lints, and no spec asserts that menu's contents — so check the list
   by eye whenever `navItems` changes.
-- **The Companion tab is conditional and is NOT in `navItems`.** `/companion` renders
-  nothing unless the companion is configured in Settings, so `navItemsFor(companionEnabled)`
-  splices the tab in at render. The `(app)` layout resolves `aiReady(await getAiSettings())`
-  once and passes it to the sidebar, the bottom nav and the palette — those three must
-  agree, which is why they share one `COMPANION_NAV_ITEM`.
 - **Mobile is measured now, but only in the ways a desktop can measure it.**
-  `e2e/mobile-layout.spec.ts` renders all eleven `(app)` routes at 393px and fails on two
+  `e2e/mobile-layout.spec.ts` renders all **ten** `(app)` routes at 393px and fails on two
   things: a _blowout_ (the document scrolls sideways) and a _spill_ (content wider than its
   own box, where an ancestor's fixed width means the page does not scroll and the text
-  simply lies over its neighbour). The second is the one no viewport check catches. It
+  simply lies over its neighbour). The second is the one no viewport check catches, and it
+  was itself blind to everything inside a vertical scroller until T18 — see §4. It
   **seeds a five-figure transaction on purpose** — a sweep over whatever the account happens
   to hold measures the account, not the layout.
   Three things it structurally cannot see, all of which need real hardware: Safari's

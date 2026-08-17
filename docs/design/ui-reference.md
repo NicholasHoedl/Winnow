@@ -1,5 +1,13 @@
 # Winnow — UI Design References
 
+> **Historical, like `SPEC.md` and `ROADMAP.md`. Preserved as written, not maintained.**
+> The phases it points at — 0.3, 4 and 5 — all shipped long ago, and the app has since been
+> through a warm repaint (post-T7) and a dashboard that has been rebuilt three times. Read
+> it for the direction that was aimed at, not as a description of what is on screen.
+>
+> For what the UI actually is now: `ARCHITECTURE.md` §1.3 for the responsive and theming
+> rules, §2.1 for the dashboard, and `docs/HANDOFF.md` §5 for the colour scheme.
+
 Visual references to consult when building the UI (the responsive shell in
 Phase 0.3, the Calendar module in Phase 4, and the Phase 5 visual-design pass).
 These are **directional references**, not pixel specs to clone — see
@@ -19,6 +27,7 @@ building in 0.3, and its calendar treatment maps directly onto the Phase 4
 module.
 
 ### Layout
+
 - **Two panes:** a fixed **dark (near-black) left sidebar** + a **light main
   content area**. Generous rounded corners (~12–16px), soft shadows, lots of
   whitespace, friendly medium contrast.
@@ -27,6 +36,7 @@ module.
   is what the phone shows.
 
 ### Sidebar (top → bottom)
+
 - **Profile block:** avatar + name + role, plus a notification bell with a
   count badge.
 - **Mini month calendar:** weekday headers, prev/next chevrons, **today marked
@@ -39,6 +49,7 @@ module.
   (yellow), Work (blue), Health (pink).
 
 ### Main area
+
 - **Big month/year title** (e.g. "December, 2023").
 - **Month / Week / Day** segmented toggle; **‹ Today ›** navigation on the right.
 - **Week strip:** Sun–Sat columns with date numbers; the **selected day is a
@@ -48,6 +59,7 @@ module.
   some carry a **thumbnail image** with a download affordance.
 
 ### Add-event popover
+
 - White rounded card anchored to a grid slot. Contents: **title input**; icon
   rows for **date**, **time** (two start/end dropdowns), **location**;
   **category tag pills** (Design, Personal project, Developer task); an
@@ -57,11 +69,13 @@ module.
   the quick-add flows across modules.
 
 ### Color system (event/category encoding)
+
 - Soft pastels encode category/type: **lavender-purple, mint green, sky blue,
   butter yellow, pink**, plus plain **white** cards. Category color is the main
   encoding device (echoed in the sidebar Categories bars).
 
 ### Style language to carry over
+
 - Rounded, card-based surfaces; soft elevation; airy spacing.
 - Clear type hierarchy: large bold headers, small muted labels.
 - Dark sidebar as an anchoring "chrome" against a light working canvas.
@@ -87,6 +101,6 @@ for **one dominant color + a single sharp accent** and specific fonts
 (Bricolage Grotesque / Fraunces / JetBrains Mono). Use this reference primarily
 for **layout, structure, and interaction patterns**; the exact palette gets
 reconciled in the **Phase 5 design pass** — most likely by keeping a
-color-coded category system as the *accent* language while committing to one
+color-coded category system as the _accent_ language while committing to one
 dominant brand color for the shell/chrome, rather than cloning the five-pastel
 scheme wholesale.
