@@ -283,6 +283,25 @@ The e2e count is **both** Playwright projects — `chromium` plus the ten-route 
 sweep — along with the setup and teardown projects. A `--project=chromium` run will
 therefore report fewer, and that is not a regression.
 
+**A negative margin is the most repeated bug in this codebase — four times and counting.**
+`-mx-1` reached `habit-strip` and `routines-line` in T13, `-mx-2` sat in Slate's routine
+block through T16, and `-mr-1` on the collapse chevron in T17. Every one is the same shape:
+the negative margin pulls a container in while the child's border box keeps its full width,
+so the child overflows its parent's content box and something scrolls sideways. They are
+usually reached for to make a tint or a control bleed past the text it sits beside.
+
+**`mobile-layout.spec.ts` could not see two of the four, and that is now fixed.** It read
+`overflow-x` off the computed style in two places — once for the element and once for its
+ancestors — and `overflow-y: auto` computes `overflow-x` to `auto` as well, because the CSS
+overflow spec promotes a `visible` paired with a non-`visible`. So every VERTICAL scroller
+looked like a deliberate horizontal one, excused its own overflow, and excluded everything
+inside it. Deliberate horizontal scrollers are now recognised by naming `overflow-x-auto` in
+the class list, which is the honest record of intent in a Tailwind-only codebase.
+
+That was verified by injecting a bleeding element and watching the sweep report it —
+**narrowing the ancestor check alone changed nothing**, because the element's own check was
+still swallowing it, and a green run would have been mistaken for a working guard.
+
 **A failing test costs you two red tests, and the second one lies.** T16 broke
 `goal-momentum.spec.ts` (see the `Segmented` trap below); it died at its assertion, which is
 _before_ its `deleteTask` cleanup, and left one task behind. `/activity` then had a checkbox
