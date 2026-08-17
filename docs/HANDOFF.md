@@ -241,13 +241,19 @@ Decided with the user, so do not re-litigate:
   was up — and ADR-0011 removed it by moving to a hosted API. The user chose to build
   before deploying; hosting is still the only thing between this app and being used.
 
-Two gaps still unresolved:
+**The Docker-Desktop gap is closed** (2026-08-17). It was: Docker Desktop is a Windows GUI
+app tied to a login session, so the stack stayed down after a Windows Update reboot until
+someone logged in — which falsified ADR-0002's always-on premise rather than being a config
+detail. The answer is **Docker Engine inside WSL2, not Docker Desktop**, with systemd in the
+distro and a Task Scheduler trigger at *system startup* rather than logon. ADR-0002's
+amendment has the reasoning and rejected alternatives; `deploy.md` §0 has the procedure, and
+it now runs before everything else. The trap worth keeping in mind: Docker Desktop's own
+"WSL2 backend" setting does **not** fix this — the backend is only where containers run, and
+the lifecycle still belongs to the GUI process.
 
-1. **Docker Desktop on Windows is tied to a login session.** After a Windows Update reboot
-   the stack stays down until someone logs in. ADR-0002 assumed an always-on machine, so
-   this is a broken assumption rather than a config detail. Settle it before building — if
-   the answer is "run under WSL2 as a service" it changes the first step, not a later one.
-2. **Postgres is not published** in `docker-compose.prod.yml` (correct for security), so
+One gap still unresolved:
+
+1. **Postgres is not published** in `docker-compose.prod.yml` (correct for security), so
    `pnpm db:migrate` from the host cannot reach it. Needs a temporary port publish for the
    first migrate + seed, then removal. The runbook spells this out.
 
@@ -1000,7 +1006,7 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0016) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0018) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by
