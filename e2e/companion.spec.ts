@@ -3,6 +3,7 @@ import { test, expect, type Page } from "./_test"
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
 import { announces, meter } from "./_habits"
+import { deleteTasksMatching } from "./_tasks"
 
 /**
  * Browser coverage for T9a: generating a plan, pruning and editing it, and applying it.
@@ -79,22 +80,6 @@ async function removeGoal(page: Page, title: string) {
 }
 
 /** Tasks survive their goal's deletion (ON DELETE set null), so clean them separately. */
-async function deleteTasksMatching(page: Page, fragment: string) {
-  await page.goto("/activity")
-  await page.getByRole("button", { name: "All", exact: true }).click()
-  for (;;) {
-    const rows = visibleCard(page, fragment)
-    // Counted BEFORE the delete. Reading it afterwards asserts `n === n - 1` against a
-    // list that has already shrunk, which is unsatisfiable — latent while this only ever
-    // removed one row, and a hang the moment a caller passed a prefix matching three.
-    const before = await rows.count()
-    if (before === 0) break
-    await rows.first().getByRole("button", { name: "Task actions" }).click()
-    await page.getByRole("menuitem", { name: "Delete" }).click()
-    await expect(rows).toHaveCount(before - 1)
-  }
-}
-
 async function planGoal(page: Page, goalTitle: string) {
   await page.goto("/goals")
   // `getByRole("combobox")`, not `getByLabel("Goal")`. The tool panel is a `<section>` named
@@ -178,7 +163,7 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await expect(visibleCard(page, "STUB practice")).toHaveCount(0)
 
   await removeGoal(page, goalTitle)
-  await deleteTasksMatching(page, "STUB setup task")
+  await deleteTasksMatching("STUB setup task")
 })
 
 test("a refinement replaces the proposal rather than stacking another", async ({
@@ -386,7 +371,7 @@ test("a week is narrated read-only, with no way to apply it", async ({
     page.getByRole("button", { name: /^(Discard|Done)$/ }),
   ).toHaveCount(0)
 
-  await deleteTasksMatching(page, prefix)
+  await deleteTasksMatching(prefix)
 })
 
 test("a summary refinement replaces it in place", async ({ page }) => {
@@ -411,7 +396,7 @@ test("a summary refinement replaces it in place", async ({ page }) => {
     page.getByRole("button", { name: /^(Discard|Done)$/ }),
   ).toHaveCount(0)
 
-  await deleteTasksMatching(page, prefix)
+  await deleteTasksMatching(prefix)
 })
 
 /**
