@@ -37,6 +37,65 @@ export const userPreferences = pgTable("user_preferences", {
   currency: text("currency").notNull().default("USD"),
   // Render times as 24h when true, else 12h with am/pm.
   use24HourTime: boolean("use_24_hour_time").notNull().default(false),
+
+  /**
+   * Which way round a date reads: `mdy` → "Aug 17, 2026", `dmy` → "17 Aug 2026".
+   *
+   * Currency has been configurable since T0 and dates never were — `"en-US"` was hardcoded
+   * at 22 call sites — so an account could be set to GBP in Europe/London and still read
+   * American dates. This closes that, and nothing else: it is a FORMAT, not a locale.
+   * Month names stay English, because a real locale picker means translated month names,
+   * translated weekday headers in the calendar grid, and a list of locales to maintain —
+   * a different job with a different scope.
+   *
+   * Two values rather than three. An ISO option was considered and dropped: nearly every
+   * date in this app is rendered with `month: "short"`, where `en-CA` and `en-US` produce
+   * identical output, so it would have been a setting that visibly did nothing on all but a
+   * couple of screens.
+   *
+   * **Defaults to `mdy`, which is exactly the behaviour before this column existed.** That
+   * is what makes the 22-file sweep provably behaviour-preserving — the e2e suite asserts on
+   * rendered date strings, so a green run is the proof that none of them moved.
+   */
+  dateFormat: text("date_format").notNull().default("mdy"),
+
+  /**
+   * Units for the two figures that carry one.
+   *
+   * `body_weights.weight_lb` and `water_logs.amount_fl_oz` bake the unit into the COLUMN
+   * name, so the stored figure is always pounds and always fluid ounces. These convert at
+   * the display layer rather than migrating the data — a stored unit that changes meaning
+   * when a preference flips is how a weight history silently becomes wrong.
+   */
+  weightUnit: text("weight_unit").notNull().default("lb"),
+  volumeUnit: text("volume_unit").notNull().default("floz"),
+
+  /**
+   * Which view the dashboard's calendar card opens on.
+   *
+   * The third time this pattern has appeared — `defaultCalendarView` for `/calendar` (T14)
+   * and `dashboardCollapsed` for which cards are folded (T17). The card's month/week toggle
+   * lives in the URL so the server renders the right one with no flash; this is what the URL
+   * falls back to.
+   */
+  dashboardCalendarView: text("dashboard_calendar_view")
+    .notNull()
+    .default("month"),
+
+  /**
+   * Where signing in lands you.
+   *
+   * A path, validated against the nav on the way in, so a route that is later deleted cannot
+   * strand the account on a 404 — the same degrade-quietly reasoning `parseCollapsedCards`
+   * uses for a card key that no longer exists.
+   */
+  landingPage: text("landing_page").notNull().default("/"),
+
+  /**
+   * Which meal the quick-add files an entry under. Null means Other, which is what every
+   * quick-added entry has always been — so null is both the default and a real choice.
+   */
+  defaultMealType: text("default_meal_type"),
   // Pre-selected priority when creating a new task.
   defaultTaskPriority: priorityEnum("default_task_priority")
     .notNull()

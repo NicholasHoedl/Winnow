@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S6.
@@ -49,7 +51,7 @@ test("searching the food database writes nothing to the library", async ({
   await page.goto("/meals")
 
   // Count the library before.
-  await page.getByRole("button", { name: "Food library" }).click()
+  await pageAction(page, "Food library")
   const libraryRows = page.locator("li").filter({ has: page.locator("button") })
   const before = await libraryRows.count()
 

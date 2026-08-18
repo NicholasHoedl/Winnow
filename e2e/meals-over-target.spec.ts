@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S9. Two things, and the second is the one that was actually
@@ -26,7 +28,7 @@ test("going past a target is shown, and announced truthfully", async ({
   await page.goto(`/meals?date=${DAY}`)
 
   // A small target starting on this day, so the period applies here and nowhere earlier.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await page.getByLabel("Applies from").fill(DAY)
   await page.getByLabel("Calories").fill("1000")
   await page.getByRole("button", { name: "Save", exact: true }).click()
@@ -61,7 +63,7 @@ test("going past a target is shown, and announced truthfully", async ({
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(row).toHaveCount(0)
   await page.reload()
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   const remove = page.getByRole("button", {
     name: `Delete targets from ${DAY}`,
   })

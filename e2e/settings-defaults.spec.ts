@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { pageAction } from "./_menu"
+
 // Two preferences that change what another page DOES, rather than how it formats something:
 // `defaultCalendarView` decides which view `/calendar` opens on, and `balanceMacroTargets`
 // decides whether saving macro targets derives carbs from the other three.
@@ -25,22 +27,51 @@ async function savePreferences(page: Page) {
   await expect(page.getByText("Preferences saved")).toBeVisible()
 }
 
-/** The label of whichever option in `names` is currently selected. */
-async function selected(page: Page, names: string[]): Promise<string> {
+/**
+ * One `Segmented` control, by its accessible name.
+ *
+ * Scoped to the GROUP rather than to the form, which is the whole reason `Segmented` takes a
+ * required `label` and renders `role="group"` + `aria-label`. Two preferences may legitimately
+ * offer the same option words — `goalMomentumDays` and `slateHorizonDays` both say "1 week",
+ * and `defaultCalendarView` and `dashboardCalendarView` both say "Month" — so a form-scoped
+ * `getByRole("button", { name: "Month" })` is a strict-mode violation waiting for the next
+ * preference to be added. It waited for exactly that and then fired.
+ *
+ * **`exact: true` is load-bearing on the GROUP too**, not just on the buttons. Playwright
+ * matches an accessible name by SUBSTRING by default, and the labels here are one another's
+ * prefixes: "Dashboard calendar opens on" contains "Calendar opens on", so the un-exact
+ * lookup resolved to both controls and failed identically to the form-scoped version it
+ * replaced. Scoping fixed the wrong half first.
+ */
+function segmented(page: Page, label: string) {
+  return preferencesForm(page).getByRole("group", { name: label, exact: true })
+}
+
+/** The label of whichever option in `names` is currently selected, within one control. */
+async function selected(
+  page: Page,
+  label: string,
+  names: string[],
+): Promise<string> {
   for (const name of names) {
-    const pressed = await preferencesForm(page)
+    const pressed = await segmented(page, label)
       .getByRole("button", { name, exact: true })
       .getAttribute("aria-pressed")
     if (pressed === "true") return name
   }
-  throw new Error(`None of ${names.join(", ")} is selected`)
+  throw new Error(`None of ${names.join(", ")} is selected in ${label}`)
 }
 
 test("the calendar opens on the view you chose", async ({ page }) => {
   await page.goto("/settings")
-  const was = await selected(page, ["Month", "Week", "Day", "Agenda"])
+  const was = await selected(page, "Calendar opens on", [
+    "Month",
+    "Week",
+    "Day",
+    "Agenda",
+  ])
 
-  await preferencesForm(page)
+  await segmented(page, "Calendar opens on")
     .getByRole("button", { name: "Week", exact: true })
     .click()
   await savePreferences(page)
@@ -70,7 +101,7 @@ test("the calendar opens on the view you chose", async ({ page }) => {
   ).toHaveAttribute("aria-current", "page")
 
   await page.goto("/settings")
-  await preferencesForm(page)
+  await segmented(page, "Calendar opens on")
     .getByRole("button", { name: was, exact: true })
     .click()
   await savePreferences(page)
@@ -82,17 +113,20 @@ test("balancing derives carbs from calories, protein and fat", async ({
   const DATE = "2019-04-01" // Far enough back to own its own target period.
 
   await page.goto("/settings")
-  const balanceForm = preferencesForm(page)
+  // Scoped to its own control for the same reason as the calendar test above: "On" / "Off"
+  // are the least distinctive option words in the whole form, and are one addition away from
+  // colliding with something.
+  const balance = segmented(page, "Balance macro targets")
   const wasOn =
-    (await balanceForm
+    (await balance
       .getByRole("button", { name: "On", exact: true })
       .getAttribute("aria-pressed")) === "true"
 
-  await balanceForm.getByRole("button", { name: "On", exact: true }).click()
+  await balance.getByRole("button", { name: "On", exact: true }).click()
   await savePreferences(page)
 
   await page.goto(`/meals?date=${DATE}`)
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
 
   // 2000 = 150*4 + c*4 + 60*9  ->  c = (2000 - 600 - 540) / 4 = 215
   await page.getByLabel("Applies from").fill(DATE)
@@ -111,7 +145,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
   // Protein and fat alone exceeding the calories is refused rather than clamped to 0 —
   // clamping would store a row whose parts exceed its whole, and carbs of 0 means
   // "untracked" everywhere else.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await page.getByLabel("Applies from").fill(DATE)
   await page.getByLabel("Calories").fill("500")
   await page.getByRole("button", { name: "Save", exact: true }).click()
@@ -120,18 +154,18 @@ test("balancing derives carbs from calories, protein and fat", async ({
 
   // With it off, carbs is yours to type again.
   await page.goto("/settings")
-  await preferencesForm(page)
+  await segmented(page, "Balance macro targets")
     .getByRole("button", { name: "Off", exact: true })
     .click()
   await savePreferences(page)
 
   await page.goto(`/meals?date=${DATE}`)
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await expect(page.getByLabel("Carbs (g)")).not.toHaveAttribute("readonly", "")
   await page.getByRole("button", { name: "Cancel" }).click()
 
   // Clean up: remove the period this test created, then put the preference back.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   const row = page
     .locator("li")
     .filter({ hasText: /From 1 Apr 2019/ })
@@ -144,7 +178,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
 
   if (wasOn) {
     await page.goto("/settings")
-    await preferencesForm(page)
+    await segmented(page, "Balance macro targets")
       .getByRole("button", { name: "On", exact: true })
       .click()
     await savePreferences(page)

@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 import { visibleCard } from "./_card"
 
 // Browser coverage for T4-S10: duplicating a day, and undoing it.
@@ -40,7 +42,7 @@ test("a day can be copied onto another, and the copy undone", async ({
   // --- Copy them onto the next day.
   await page.goto(`/meals?date=${DEST}`)
   await expect(rows(first)).toHaveCount(0)
-  await page.getByRole("button", { name: "Copy a day" }).click()
+  await pageAction(page, "Copy a day")
   await page.getByLabel("Copy from").fill(SOURCE)
   await page.getByRole("button", { name: "Copy", exact: true }).click()
 

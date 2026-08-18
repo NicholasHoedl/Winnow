@@ -241,13 +241,19 @@ Decided with the user, so do not re-litigate:
   was up — and ADR-0011 removed it by moving to a hosted API. The user chose to build
   before deploying; hosting is still the only thing between this app and being used.
 
-Two gaps still unresolved:
+**The Docker-Desktop gap is closed** (2026-08-17). It was: Docker Desktop is a Windows GUI
+app tied to a login session, so the stack stayed down after a Windows Update reboot until
+someone logged in — which falsified ADR-0002's always-on premise rather than being a config
+detail. The answer is **Docker Engine inside WSL2, not Docker Desktop**, with systemd in the
+distro and a Task Scheduler trigger at *system startup* rather than logon. ADR-0002's
+amendment has the reasoning and rejected alternatives; `deploy.md` §0 has the procedure, and
+it now runs before everything else. The trap worth keeping in mind: Docker Desktop's own
+"WSL2 backend" setting does **not** fix this — the backend is only where containers run, and
+the lifecycle still belongs to the GUI process.
 
-1. **Docker Desktop on Windows is tied to a login session.** After a Windows Update reboot
-   the stack stays down until someone logs in. ADR-0002 assumed an always-on machine, so
-   this is a broken assumption rather than a config detail. Settle it before building — if
-   the answer is "run under WSL2 as a service" it changes the first step, not a later one.
-2. **Postgres is not published** in `docker-compose.prod.yml` (correct for security), so
+One gap still unresolved:
+
+1. **Postgres is not published** in `docker-compose.prod.yml` (correct for security), so
    `pnpm db:migrate` from the host cannot reach it. Needs a temporary port publish for the
    first migrate + seed, then removal. The runbook spells this out.
 
@@ -321,8 +327,8 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **801 unit tests across 46 files, 144 e2e,
-0 lint errors, 5 lint warnings** (2026-08-17, 11.5 minutes wall clock for the e2e). The
+Current green baseline, measured on a full run: **801 unit tests across 46 files, 164 e2e,
+0 lint errors, 5 lint warnings** (2026-08-17, 10.5 minutes wall clock for the e2e). The
 numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
 the next — so re-measure rather than trusting a remembered figure.
 
@@ -334,9 +340,32 @@ machine — so before debugging a failure, compare the clock to ~12 minutes. The
 is just as real: one of those slow runs also hid three genuine breakages, so "the machine
 was slow" is a reason to re-run, never a reason to dismiss.
 
-The e2e count is **both** Playwright projects — `chromium` plus the ten-route `mobile`
-sweep — along with the setup and teardown projects. A `--project=chromium` run will
-therefore report fewer, and that is not a regression.
+The e2e count is **all three** Playwright projects — `chromium`, the ten-route `mobile`
+sweep, and `desktop-layout`, which runs the same ten routes at 1280px and 1366px — along
+with the setup and teardown projects. A `--project=chromium` run will therefore report
+fewer, and that is not a regression.
+
+**The two layout sweeps share one detector**, `e2e/_layout.ts`. It was inside
+`mobile-layout.spec.ts` until it needed a second caller, and the extraction is the point:
+the detector had been aimed at 393px for its whole life, so every spill at laptop width went
+unseen. If you widen what it catches, both sweeps get it.
+
+**A viewport breakpoint cannot answer a question about a column, and `sm:` inside a narrow
+column is the second most repeated shape after the negative margin.** `StatCards` used
+`sm:grid-cols-2` to decide whether its two tiles sit side by side. `sm:` asks whether the
+WINDOW is at least 640px, which on a laptop it always is — but those tiles live in the
+dashboard's right column, `minmax(0,1fr)` of a three-column grid, so about 290px at 1280px.
+Each tile got 129px for a header needing 134.
+
+Two things about it are worth carrying forward. First, **nothing truncated to absorb it**:
+the `h2` carries `min-w-0 flex-1 truncate` and still sat at full width, because `CardHeader`
+is a grid and an auto-sized track resolves to its item's max-content and is never squeezed.
+Reading the CSS predicted the opposite twice; a probe measuring the real box model settled it
+in one run, which is the same lesson `_layout.ts`'s own docstring opens with.
+
+Second, **the narrow fix was a trap.** A `min-w-0` on that row lets the track shrink, clears
+the detector, and leaves 13px for the heading — a passing test and a worse UI. The fix is a
+container query (`@container` + `@sm:`), because the question was always about the column.
 
 **A negative margin is the most repeated bug in this codebase — four times and counting.**
 `-mx-1` reached `habit-strip` and `routines-line` in T13, `-mx-2` sat in Slate's routine
@@ -386,6 +415,16 @@ controls apart, while `goal-momentum.spec.ts` broke on a strict-mode violation. 
 segmented preference whose labels collide with an existing one is a live accessibility bug,
 not just a test problem.**
 
+**And scoping to the group is only half of it — the group name needs `exact: true`.** Adding
+`dashboardCalendarView` in 2026-08-17 gave the form a second Month/Week control, and
+`settings-defaults.spec.ts` broke exactly as T16 predicted. Scoping it to
+`getByRole("group", { name: "Calendar opens on" })` did **not** fix it: Playwright matches an
+accessible name by SUBSTRING unless told otherwise, and the new label —
+"Dashboard calendar opens on" — CONTAINS the old one, so the group lookup resolved to two
+groups and failed identically. The lesson is narrower than "scope to the group": scope to the
+group **and match its name exactly**, because preference labels are naturally one another's
+prefixes. `segmented()` in that spec is the helper to copy.
+
 **Fixture teardown goes through the DATABASE, not the UI.** `e2e/_events.ts`, `_goals.ts`
 and `_tasks.ts` each expose a `delete…Matching(fragment)` built on `withTestDb` in
 `_test-db.ts`, which calls `assertSafeToDestroy` by construction so no caller has to
@@ -414,10 +453,32 @@ the button focused and opens nothing. It now clicks until the dialog is actually
 **If a spec starts failing right after a teardown is made faster, look for a click that
 assumes its own effect** rather than putting the slack back.
 
-**Three** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
-`todos-reorder:86`, and — first seen 2026-08-13 — `calendar-reschedule.spec.ts:74` ("a block
-can be dragged to another day and time, and it sticks"). They pass on retry and a full run
-therefore exits 0.
+**Four** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
+`todos-reorder:86`, `calendar-reschedule.spec.ts:74` ("a block can be dragged to another day
+and time, and it sticks") — first seen 2026-08-13 — and, first seen 2026-08-17,
+**`todos-reorder:59`** ("a task can be dragged to a new position, and it persists"). They
+pass on retry and a full run therefore exits 0.
+
+The fourth is worth writing down with its shape, because it is the most interesting of them
+and because it is a DIFFERENT test in the same file as the second. It failed like this:
+
+```
+line 79   await expect.poll(…)   → passed   the optimistic order shows the drag
+line 82   await page.reload()
+line 83   expect(order[0])       → failed   the reloaded order is unchanged
+```
+
+Line 82's own comment says it is there to prove "the order came from the server, not from
+local state" — so the assertion did exactly its job. What it cannot tell you is WHICH of two
+things happened: the reload beat the in-flight `reorderTasks` Server Action, or the write
+genuinely did not land. Passing on retry points at the race, and that is a hypothesis rather
+than a diagnosis — **nobody has read the trace yet.** If you are picking this up, that is the
+first thing to do, because the second possibility is a real bug in the one interaction the
+dashboard and `/activity` share.
+
+Note the asymmetry that makes the race plausible: `expect.poll` retries until the OPTIMISTIC
+state matches, which can be satisfied before the action resolves, and `page.reload()` then
+fires immediately. The keyboard test below it (`:86`, already flaky) has the same structure.
 
 The third one is worth noting for how it was found: it was the ONLY flake in that run, and
 the two chronic ones did not fire. That is precisely the case the advice below exists for, so
@@ -459,6 +520,33 @@ written by hand in migration `0033`. Two consequences travel with that:
 
 If you ever need a real declared reference, the fix is to move `priorityEnum` (and `lists`)
 somewhere neutral so routines stops importing todos — not to add the import and hope.
+
+**A client hook called from a server component is invisible to `tsc` AND to lint.** Only the
+e2e suite catches it, and that is the whole argument for running the suite on work that looks
+purely mechanical. Threading a `useDateLocale()` through the date formatters produced *0
+typecheck errors, 0 lint errors and 38 failing e2e* on the first attempt, and 9 on the second
+— every one of them `Attempted to call useDateLocale() from the server`.
+
+The reason it took two rounds is worth more than the bug. The guard used to find the offenders
+was `head -1 <file> | grep -q '"use client"'`, and `review-view.tsx` opens with:
+
+```
+// Read-only, so this is a server component — no "use client" on this
+```
+
+So a file that says in its first line that it is a server component was classified as a client
+one, by a check that matched the quoted string inside that sentence. **Grepping for a
+directive will find it in prose.** The honest check takes the first non-blank, non-comment
+line and requires it to BE the directive:
+
+```
+first = first line that is not blank and does not start with // or * or /*
+ok    = first in ('"use client"', "'use client'")
+```
+
+Three server components were caught this way — `trends-section.tsx`,
+`weight-trend-section.tsx` and `review-view.tsx`. All three now take `locale` as a prop from
+their page, which is the shape the parents already used for `currency`.
 
 **React's streaming staging div.** Fizz emits each completed Suspense boundary as
 `<div hidden id="S:n">` plus a `$RC(...)` script that relocates the content. In between,
@@ -927,6 +1015,23 @@ still the old indigo.**
   this number tracks what is in the database rather than being fixed. The Journal card was
   measured and found **not** to contribute — hiding it left both numbers identical — so its
   removal in T13 did not improve this, and the figures above still stand.
+- **Page width is a four-step scale, and a new page picks from it rather than inventing a
+  fifth.** The widths were ad hoc — six different values across ten surfaces — which is what
+  made `/goals` use 60% of a 1440px canvas while the dashboard clipped at 1280. The tiers, and
+  what each is for:
+
+  | Tier | Class | For |
+  | --- | --- | --- |
+  | Form | `max-w-3xl` | one column of fields or entries — Settings, Meals, Budget |
+  | List | `max-w-5xl` | a list plus its controls — Calendar, Review, Routines, Habits, Goals |
+  | Board | `max-w-7xl` | genuinely multi-column — Activity |
+  | Full | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920 |
+
+  `/goals` was `max-w-4xl`, the only value off the scale, and is now List like every other
+  page of its shape. Deliberately NOT abstracted into a constant: Tailwind is the vocabulary
+  here and a `PAGE_WIDTH.list` indirection would buy nothing a table cannot say. What matters
+  is that the next page reads this before picking a number.
+
 - **Nav is seven items and does NOT vary any more**, and seven is the measured ceiling.
   `bottom-nav.tsx` is a plain flex with `flex-1` and no overflow handling; seven labels fit
   a 375px phone with nothing to spare, and an eighth needs a More sheet or a scroller first.
@@ -1000,7 +1105,7 @@ still the old indigo.**
 
 ## 7. Where the reasoning lives
 
-`docs/adr/` (0001–0016) records why non-obvious choices were made — read 0006 (dependency
+`docs/adr/` (0001–0018) records why non-obvious choices were made — read 0006 (dependency
 bar), 0007 (hand-written service worker) and 0008 (feed token, floating time) before
 touching those areas, and **0011 before writing a single line of the AI companion**: it
 sets a hard boundary on what may leave the machine, and that is far easier to violate by

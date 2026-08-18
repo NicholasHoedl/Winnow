@@ -40,13 +40,14 @@ export async function createGoal(input: unknown): Promise<ActionResult> {
   const parsed = goalInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, targetDate, targetValue, currentValue, unit } =
+  const { title, notes, targetDate, eventId, targetValue, currentValue, unit } =
     parsed.data
   await db.insert(goals).values({
     userId,
     title,
     notes: nullify(notes),
     targetDate: nullify(targetDate),
+    eventId,
     targetValue: targetValue ?? null,
     currentValue: currentValue ?? null,
     unit: nullify(unit),
@@ -65,7 +66,7 @@ export async function updateGoal(
   const parsed = goalInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, targetDate, targetValue, currentValue, unit } =
+  const { title, notes, targetDate, eventId, targetValue, currentValue, unit } =
     parsed.data
   await db
     .update(goals)
@@ -73,6 +74,7 @@ export async function updateGoal(
       title,
       notes: nullify(notes),
       targetDate: nullify(targetDate),
+      eventId,
       targetValue: targetValue ?? null,
       currentValue: currentValue ?? null,
       unit: nullify(unit),

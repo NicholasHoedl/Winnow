@@ -28,6 +28,9 @@
 # The e2e suite's own build output — its dev server runs with NEXT_DIST_DIR set so it
 # does not race this one. See playwright.config.ts.
 /.next-e2e/
+# And the production suite's, for the same reason: it runs a real `next build`, which
+# without its own directory overwrites the dev cache above. See playwright.prod.config.ts.
+/.next-e2e-prod/
 /out/
 
 # production

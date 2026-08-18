@@ -40,6 +40,7 @@ import {
   type Lane,
   type Span,
 } from "./grid-geometry"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /** Where a drop lands: the column's day plus the snapped time. */
 export type Reschedule = { date: string; time: string }
@@ -142,8 +143,8 @@ function hourLabel(hour: number, use24Hour: boolean): string {
 }
 
 /** "Wednesday 15 July" — the spoken form of a column, for event labels. */
-function spokenDate(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
+function spokenDate(date: string, locale: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -158,6 +159,7 @@ function eventLabel(
   occ: EventOccurrence,
   date: string,
   use24Hour: boolean,
+  locale: string,
 ): string {
   const when = occ.time
     ? occ.endTime
@@ -170,7 +172,7 @@ function eventLabel(
       : occ.endDate !== date
         ? ", continues"
         : ""
-  return `${occ.event.title}, ${when}, ${spokenDate(date)}${continues}`
+  return `${occ.event.title}, ${when}, ${spokenDate(date, locale)}${continues}`
 }
 
 /**
@@ -219,6 +221,7 @@ export function TimeGrid({
   /** Height of one hour row. Lower it where vertical space is tight. */
   hourHeight?: string
 }) {
+  const locale = useDateLocale()
   const { use24HourTime } = usePreferences()
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
@@ -308,8 +311,8 @@ export function TimeGrid({
 
   const describe = React.useCallback(
     (to: Reschedule) =>
-      `${spokenDate(to.date)} at ${formatTime(to.time, use24HourTime)}`,
-    [use24HourTime],
+      `${spokenDate(to.date, locale)} at ${formatTime(to.time, use24HourTime)}`,
+    [use24HourTime, locale],
   )
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -427,7 +430,7 @@ export function TimeGrid({
                     key={`${occ.seriesEvent.id}::${occ.date}-${i}`}
                     type="button"
                     onClick={() => onEditEvent?.(occ)}
-                    aria-label={eventLabel(occ, date, use24HourTime)}
+                    aria-label={eventLabel(occ, date, use24HourTime, locale)}
                     className={cn(
                       "text-foreground truncate rounded border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
                       accent.tint,
@@ -639,6 +642,7 @@ function EventBlock({
   draggable: boolean
   onEditEvent?: (occ: EventOccurrence) => void
 }) {
+  const locale = useDateLocale()
   const { top, height } = spanFractions(span)
   const accent = accentForCalendar(
     occ.event.calendarId,
@@ -655,7 +659,7 @@ function EventBlock({
       {...attributes}
       {...listeners}
       onClick={() => onEditEvent?.(occ)}
-      aria-label={eventLabel(occ, date, use24Hour)}
+      aria-label={eventLabel(occ, date, use24Hour, locale)}
       style={{
         top: `${top * 100}%`,
         height: `${height * 100}%`,

@@ -12,11 +12,12 @@ import { usePreferences } from "@/components/preferences/preferences-provider"
 import { useCreateIntent } from "@/components/create/create-intent"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 // Short, human date for the confirmation toast ("Sat, Jul 26").
-function formatDue(date: string): string {
+function formatDue(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -30,6 +31,7 @@ function formatDue(date: string): string {
  * title. Falls back to today's date when no date phrase is present.
  */
 export function QuickCapture() {
+  const locale = useDateLocale()
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
   const { timeZone } = usePreferences()
@@ -52,7 +54,7 @@ export function QuickCapture() {
       const result = await createTask({ title, dueDate })
       if (result.ok) {
         toast.success(`Added “${title}”`, {
-          description: `Due ${formatDue(dueDate)}`,
+          description: `Due ${formatDue(dueDate, locale)}`,
         })
       } else {
         toast.error(result.error)
@@ -70,7 +72,12 @@ export function QuickCapture() {
       <input
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Quick add a task — try “pay rent friday” or “call mom tomorrow”"
+        // One example, not two. The pair ran to 62 characters and clipped mid-word on a
+        // phone — `try “pay rent frida` — on the app's primary capture surface. A
+        // placeholder cannot be made responsive from CSS, so the length has to work at the
+        // narrowest width rather than the widest. One example still teaches that a date can
+        // be typed in the sentence, which is the only thing this hint is for.
+        placeholder="Quick add — try “pay rent friday”"
         aria-label="Quick add a task"
         className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
       />

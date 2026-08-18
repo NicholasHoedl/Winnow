@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 // Browser coverage for T1-S6 meals capture: the NL quick-add bar, one-tap re-log, and the
 // in-dialog food-search (Enter selects a food, does not submit the form).
 
@@ -77,7 +79,7 @@ test("food-search fills the form from a library food (Enter selects, no submit)"
   // Cleanup the library food too — it outlives the entry, so leaving it behind
   // grows the library by one row on every run and eventually pushes this
   // dialog's submit button past the bottom of the viewport.
-  await page.getByRole("button", { name: "Food library" }).click()
+  await pageAction(page, "Food library")
   const removeFood = page.getByRole("button", { name: `Delete ${food}` })
   await removeFood.click()
   await expect(removeFood).toHaveCount(0)
@@ -101,7 +103,7 @@ test("a library food can be edited, and past entries keep their snapshot", async
   await expect(entry).toBeVisible()
   await expect(entry).toContainText("250 kcal")
 
-  await page.getByRole("button", { name: "Food library" }).click()
+  await pageAction(page, "Food library")
   await page.getByRole("button", { name: `Edit ${food}` }).click()
   await expect(page.getByLabel("Calories", { exact: true })).toHaveValue("250")
   await page.getByLabel("Calories", { exact: true }).fill("400")
@@ -126,7 +128,7 @@ test("a library food can be edited, and past entries keep their snapshot", async
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(page.locator(rows(food))).toHaveCount(0)
 
-  await page.getByRole("button", { name: "Food library" }).click()
+  await pageAction(page, "Food library")
   const removeFood = page.getByRole("button", { name: `Delete ${food}` })
   await removeFood.click()
   await expect(removeFood).toHaveCount(0)

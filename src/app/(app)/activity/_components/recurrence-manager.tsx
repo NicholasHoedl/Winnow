@@ -58,8 +58,12 @@ export function RecurrenceManager({
           <DialogHeader>
             <DialogTitle>Repeating tasks</DialogTitle>
             <DialogDescription>
-              Every repeating task, including ones with nothing due right now.
-              Stopping one keeps the instances you already completed.
+              Which days, not how often — a repeating task lands on the dates
+              you set and goes overdue if you miss one. For a rate you keep,
+              three runs a week on any three days, make a habit instead.
+              <br />
+              Every repeating task is listed here, including ones with nothing
+              due right now. Stopping one keeps the instances you completed.
             </DialogDescription>
           </DialogHeader>
 

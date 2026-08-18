@@ -48,6 +48,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 // Which slice of a recurring series an edit/delete targets.
 export type EditScope = "this" | "following" | "all"
@@ -128,10 +129,10 @@ function monthlyLabels(date: string): {
 }
 
 /** "Sat, Jul 25" for a single occurrence's date (parsed as UTC to avoid drift). */
-function formatOccurrenceDate(date: string): string {
+function formatOccurrenceDate(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
   if (!y || !m || !d) return date
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -175,6 +176,7 @@ export function EventDialog({
   onOpenChange: (open: boolean) => void
   onDelete: (occurrence: EventOccurrence, scope: EditScope) => void
 }) {
+  const locale = useDateLocale()
   const isEdit = !!occurrence
   const isRecurring =
     !!occurrence && occurrence.seriesEvent.recurrenceFreq !== "none"
@@ -373,9 +375,9 @@ export function EventDialog({
             {!occurrence
               ? "Add an event to your calendar."
               : scope === "this"
-                ? `Editing ${formatOccurrenceDate(occurrence.date)} only — other days are unchanged.`
+                ? `Editing ${formatOccurrenceDate(occurrence.date, locale)} only — other days are unchanged.`
                 : scope === "following"
-                  ? `From ${formatOccurrenceDate(occurrence.originalDate)} onwards. Earlier days keep the current settings.`
+                  ? `From ${formatOccurrenceDate(occurrence.originalDate, locale)} onwards. Earlier days keep the current settings.`
                   : "Changes apply to the whole series."}
           </DialogDescription>
         </DialogHeader>

@@ -98,7 +98,29 @@ export function StatCards({
     budget.expenseCents > budget.totalBudgetedCents
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    /**
+     * A CONTAINER query, not `sm:`, and that swap is the whole fix for a spill the suite
+     * could not see until `desktop-layout.spec.ts` existed.
+     *
+     * These two tiles live in the dashboard's right column — `minmax(0,1fr)` of a three-
+     * column grid, so about 290px at 1280 and 330px at 1440. `sm:grid-cols-2` asks whether
+     * the WINDOW is at least 640px, which it always is on a laptop, and then hands each tile
+     * ~129px. Measured: the header needs 134 of them — icon 16, gap 8, the word "Macros" 50,
+     * gap 8, the link and chevron 52 — inside a 97px content box.
+     *
+     * Nothing truncated to absorb it, either, which is the part worth remembering. The `h2`
+     * carries `min-w-0 flex-1 truncate` and still sat at its full width, because `CardHeader`
+     * is a grid and its auto-sized track was resolved to the row's max-content and never
+     * squeezed. A `min-w-0` on the row would have let it shrink, and would have left 13px for
+     * the heading — technically not a spill, and unreadable.
+     *
+     * So the question was never how to make 134px fit in 97. It was that a viewport
+     * breakpoint was answering a question about a column. `@sm` is 24rem, so the tiles go
+     * side by side only where there is genuinely room for two, and stack into the full column
+     * width everywhere else — which is also where the macro grid below stops being four
+     * figures in 57px each.
+     */
+    <div className="@container grid gap-4 @sm:grid-cols-2">
       {/* Macros */}
       <StatShell
         card="macros"
@@ -117,10 +139,30 @@ export function StatCards({
               const m = macros.progress[key]
               return (
                 <div key={key}>
-                  <div className="flex items-baseline justify-between text-xs">
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className="tabular-nums">
+                  {/* `gap-x-2`, and the label allowed to truncate rather than shove. With
+                      `justify-between` alone these two meet in the middle at narrow widths
+                      and render as `Carbs115` — the same collision the budget tile below had
+                      as `$985.70of`, which is what it has always looked like on a 1280px
+                      laptop. A gap the label cannot eat is the fix; truncating the WORD is
+                      preferable to truncating the number. */}
+                  <div className="flex items-baseline justify-between gap-x-2 text-xs">
+                    <span className="text-muted-foreground truncate">
+                      {label}
+                    </span>
+                    {/* The target beside the figure, matching what the budget tile has
+                        always done. `1215` alone cannot answer "am I on track", which is the
+                        only question this tile exists for — and the two tiles sat side by
+                        side disagreeing about whether a denominator was worth showing.
+                        A null target means untracked (the app reads 0 that way throughout),
+                        so it shows the bare figure rather than inventing `/ 0`. */}
+                    <span className="shrink-0 tabular-nums">
                       {Math.round(m.consumed)}
+                      {m.target ? (
+                        <span className="text-muted-foreground">
+                          {" / "}
+                          {Math.round(m.target)}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                   <div className="mt-1">
@@ -147,7 +189,12 @@ export function StatCards({
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            <div className="flex items-baseline justify-between">
+            {/* `flex-wrap` and a gap, because money must never be the thing that gets
+                clipped. `justify-between` puts these at opposite ends while there is room
+                and butts them together when there is not — which rendered
+                `$12,345.67of $0.00` at 1280px, with the figure itself cut off at the card
+                edge. Wrapping costs a line in the rare case and keeps every digit. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
               <span className="text-lg font-semibold tabular-nums">
                 {formatCents(budget.expenseCents, currency)}
               </span>

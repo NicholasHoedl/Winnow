@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S5: skipping ONE cycle of a repeating task.
@@ -16,7 +18,7 @@ import { visibleCard } from "./_card"
 // learned about water logs, with a longer tail.
 test.afterEach(async ({ page }) => {
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Repeating tasks" }).click()
+  await pageAction(page, "Repeating tasks")
   const dialog = page.getByRole("dialog")
   const strays = dialog.getByRole("button", { name: /^Stop repeating E2E / })
   // Bounded rather than `while`: a button that fails to remove its rule must end the loop
@@ -86,7 +88,7 @@ async function stopRepeating(
   page: import("@playwright/test").Page,
   title: string,
 ) {
-  await page.getByRole("button", { name: "Repeating tasks" }).click()
+  await pageAction(page, "Repeating tasks")
   const dialog = page.getByRole("dialog")
   await expect(dialog.getByText(title)).toBeVisible()
   await dialog.getByRole("button", { name: `Stop repeating ${title}` }).click()

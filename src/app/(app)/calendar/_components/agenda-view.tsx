@@ -18,10 +18,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
-function formatDayHeading(date: string, today: string): string {
+function formatDayHeading(date: string, today: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  const label = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  const label = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -45,6 +46,7 @@ export function AgendaView({
   onEditEvent: (occ: EventOccurrence) => void
   onDelete: (event: EventRow) => void
 }) {
+  const locale = useDateLocale()
   const { use24HourTime } = usePreferences()
   const groups: { date: string; items: EventOccurrence[] }[] = []
   for (const occ of occurrences.filter((o) => o.date.slice(0, 7) === month)) {
@@ -69,7 +71,7 @@ export function AgendaView({
       {groups.map((group) => (
         <section key={group.date}>
           <h2 className="mb-2 text-sm font-semibold">
-            {formatDayHeading(group.date, today)}
+            {formatDayHeading(group.date, today, locale)}
           </h2>
           <div className="flex flex-col gap-2">
             {group.items.map((occ, i) => (
@@ -77,8 +79,11 @@ export function AgendaView({
                 key={`${occ.event.id}-${i}`}
                 className={cn(
                   "bg-card flex items-center gap-3 rounded-lg border border-l-2 p-3",
-                  accentForCalendar(occ.event.calendarId, calendars, occ.event.id)
-                    .border,
+                  accentForCalendar(
+                    occ.event.calendarId,
+                    calendars,
+                    occ.event.id,
+                  ).border,
                 )}
               >
                 <span className="text-muted-foreground w-16 shrink-0 text-xs tabular-nums">

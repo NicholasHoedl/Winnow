@@ -157,11 +157,11 @@ export type Slate<T, E> = {
  * an en-dash. A band label carrying either makes those locators ambiguous and fails a spec
  * about the calendar, not about this.
  */
-function bandLabel(date: string): string {
+function bandLabel(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
   // Assembled rather than asking for `{ weekday, day }` together, which en-US renders as
   // "23 Thu" — the locale orders those two the other way round when no month is present.
-  const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     timeZone: "UTC",
   })
@@ -199,6 +199,13 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   timeZone: string,
   horizonDays: number,
   routineNames: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Defaulted, unlike `formatLongDate`'s required one, and only because twelve tests in
+   * `agenda.test.ts` call this positionally and none of them is about formatting — they
+   * assert which BAND a row lands in. The one production caller (`(app)/page.tsx`) passes it
+   * explicitly, so the default is reached by tests and nothing else.
+   */
+  locale = "en-US",
 ): Slate<T, E> {
   const today = todayInZone(now, timeZone)
   // Inclusive of the horizon itself: "within 7 days" reaches the seventh day, not the sixth.
@@ -246,7 +253,7 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
     if (items.length === 0) continue
     bands.push({
       date,
-      label: isTomorrow ? "Tomorrow" : bandLabel(date),
+      label: isTomorrow ? "Tomorrow" : bandLabel(date, locale),
       items,
       groups: [],
     })

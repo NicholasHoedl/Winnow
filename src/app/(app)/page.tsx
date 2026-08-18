@@ -16,6 +16,7 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { formatLongDate } from "@/lib/format"
+import { dateLocale } from "@/lib/preferences"
 import type { DashboardCard } from "@/lib/preferences"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
@@ -31,17 +32,13 @@ import { StatCards } from "./_components/stat-cards"
 import { Slate } from "./_components/slate"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
 import { buildSlate } from "./_lib/agenda"
+import { FirstRun } from "./_components/first-run"
 
 export default async function DashboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ calendar?: string }>
 }) {
-  // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
-  // than in client state so the server renders the right one — no flash of the wrong view,
-  // and no localStorage read during render. Anything unrecognised falls back to the month.
-  const calendarView: DashboardCalendarView =
-    (await searchParams).calendar === "week" ? "week" : "month"
   const {
     timeZone,
     weekStartsOn,
@@ -50,7 +47,22 @@ export default async function DashboardPage({
     goalMomentumDays,
     slateHorizonDays,
     dashboardCollapsed,
+    dashboardCalendarView,
+    dateFormat,
   } = await getUserPreferences()
+  // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
+  // than in client state so the server renders the right one — no flash of the wrong view,
+  // and no localStorage read during render.
+  //
+  // An explicit `?calendar=` still wins; without one this falls back to the saved preference
+  // rather than always to month. Same precedence `/calendar` uses for `defaultCalendarView`
+  // (T14), and the same trap that fixed: while month was hard-coded as the fallback, a Week
+  // button that omitted the parameter produced a URL resolving straight back to month.
+  const requested = (await searchParams).calendar
+  const calendarView: DashboardCalendarView =
+    requested === "week" || requested === "month"
+      ? requested
+      : dashboardCalendarView
   const today = todayInZone(new Date(), timeZone)
   const month = today.slice(0, 7)
 
@@ -104,6 +116,29 @@ export default async function DashboardPage({
   // behind by a deleted card cannot fold anything by accident.
   const folded = (card: DashboardCard) => dashboardCollapsed.includes(card)
 
+  /**
+   * Has this account got anything at all?
+   *
+   * Every source the dashboard draws from, because "empty" has to mean empty — a user who
+   * has only logged meals should not be told to start. `budget.totalBudgetedCents` is in
+   * there as well as the spend, since setting a budget and spending nothing is a real state.
+   *
+   * Cheap: all of these are already awaited above for the cards, so this adds no query.
+   */
+  const isFirstRun =
+    tasks.length === 0 &&
+    goals.length === 0 &&
+    habits.length === 0 &&
+    slateEvents.length === 0 &&
+    // `.occurrences`, not `.byDay` — that one is a Record, so `.size` is undefined and
+    // the check would have been silently true forever. Two windows (the Slate horizon and
+    // the visible month); an account holding only a far-future event sees this card once.
+    monthData.occurrences.length === 0 &&
+    budget.expenseCents === 0 &&
+    budget.incomeCents === 0 &&
+    budget.totalBudgetedCents === 0 &&
+    macros.progress.calories.consumed === 0
+
   const goalRows = goals.map((goal) => ({
     id: goal.id,
     title: goal.title,
@@ -126,6 +161,7 @@ export default async function DashboardPage({
     timeZone,
     slateHorizonDays,
     routineNames,
+    dateLocale(dateFormat),
   )
 
   return (
@@ -142,14 +178,20 @@ export default async function DashboardPage({
         <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
-              {formatLongDate(today)}
+              {formatLongDate(today, dateLocale(dateFormat))}
             </p>
+            {/* No tagline under this any more.
+
+                "Here's your day at a glance" described the page to someone seeing it for the
+                first time, on the surface its owner opens several times a day, forever. The
+                same pass removed the equivalent line from Activity, Calendar, Budget, Meals
+                and Settings, and kept the ones that say something the heading does not —
+                Goals naming momentum, Routines defining what a routine is, Appearance
+                explaining that the setting follows the account. The test is whether a reader
+                who already knows what the page is would lose anything. */}
             <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight xl:text-4xl">
               Good to see you, {name}
             </h1>
-            <p className="text-muted-foreground text-sm [@media(max-height:820px)]:hidden">
-              Here&apos;s your day at a glance.
-            </p>
           </div>
           {/* `flex-wrap` is load-bearing, not tidying. The header above wraps, but this
               inner row did not, so a fourth button ran to 440px on a 375px phone and made
@@ -187,6 +229,15 @@ export default async function DashboardPage({
           <QuickCapture />
         </div>
       </Reveal>
+
+      {/* Below the quick-add, not above it: the fastest way to stop this card being true is
+          the box directly above, and putting guidance in front of the control it describes
+          would push that control down the page on the one visit it matters most. */}
+      {isFirstRun && (
+        <Reveal delay={0.06}>
+          <FirstRun />
+        </Reveal>
+      )}
 
       {/*
         Three columns of roughly equal height rather than one tall centre column.

@@ -99,7 +99,9 @@ export function RoutineDialog({
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit routine" : "New routine"}</DialogTitle>
           <DialogDescription>
-            A named set of tasks you can spin up in one go.
+            A named set of tasks you can spin up in one go. Nothing here repeats
+            on its own — you run it when the occasion comes round, and it makes
+            the tasks then.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit}>

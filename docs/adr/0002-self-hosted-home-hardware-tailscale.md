@@ -53,3 +53,52 @@ reverse proxy exposed to the internet, or port-forwarding.
   Tailscale avoids entirely for a single-user tool. Worth revisiting only
   if the user later wants access from a device that can't join the
   tailnet, or wants uptime independent of their home network/power.
+
+## Amendment: "always-on" needs Docker Engine in WSL2, not Docker Desktop (2026-08-17)
+
+The decision above says **always-on home hardware** and treats that as a property of the
+machine. On the chosen host — a Windows 11 desktop — it is not. It is a property of how
+Docker is installed, and the obvious installation breaks it.
+
+**Docker Desktop is a Windows GUI application tied to a login session.** After a Windows
+Update reboot the containers stay down until somebody logs into the desktop. That is not a
+configuration detail to be tuned later; it falsifies the assumption this ADR is built on.
+An organizer that is unavailable every patch Tuesday until you walk to the machine is not
+the thing described above, and the failure lands precisely when it is least visible — you
+reach for it on a phone, from elsewhere, and it is simply not there.
+
+The subtlety that makes this worth writing down: **using Docker Desktop's WSL2 _backend_
+does not fix it.** The backend is where the containers run; the lifecycle still belongs to
+the Windows GUI process, which still belongs to the login session. Choosing "WSL2 backend"
+in Docker Desktop's settings looks like it addresses this and does not.
+
+**The decision: skip Docker Desktop.** Install Docker Engine natively inside a WSL2
+distribution, and give it a lifecycle that does not involve a human logging in:
+
+1. `systemd=true` under `[boot]` in `/etc/wsl.conf` inside the distro.
+2. Docker Engine installed in the distro, `systemctl enable docker`.
+3. A Task Scheduler task triggered **at system startup** — not at logon — that starts the
+   distro, so systemd comes up and `docker` with it.
+
+`docs/runbooks/deploy.md` carries the procedure.
+
+### Consequences
+
+- The compose stack survives a reboot with nobody logged in, which is what this ADR always
+  claimed and did not previously have.
+- Docker Desktop's licensing question disappears along with Docker Desktop.
+- **More setup, and setup that only a human can do.** It needs elevation, and it is the
+  first thing in the deploy that has no fallback if it goes wrong — hence its position as
+  the first blocking item rather than a step buried mid-runbook.
+- The trigger is at *system startup*, and that distinction is the whole point. A logon
+  trigger reproduces the original problem exactly while appearing to solve it.
+
+### Alternatives Considered
+
+- **Windows auto-login.** Would work, and leaves a machine holding the user's finances,
+  calendar and daily schedule unlocked at its own console. Rejected: this ADR's premise is
+  data ownership, and physical access is part of that.
+- **Accept manual restarts.** Rejected. It is the option that quietly kills daily use — the
+  app is down exactly when it is reached for, and the habit the §10 soak exists to build
+  does not survive that.
+

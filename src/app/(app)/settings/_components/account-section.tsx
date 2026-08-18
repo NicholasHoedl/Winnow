@@ -13,7 +13,12 @@ import {
   type ProfileInput,
 } from "@/modules/account/validation"
 import { Button } from "@/components/ui/button"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 
@@ -69,8 +74,12 @@ function ProfileForm({
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input id="email" type="email" value={email} disabled readOnly />
+          {/* "can't be changed here" implied a somewhere-else. There isn't one: there is no
+              sign-up, no reset flow, and `scripts/seed-user.ts` is the only thing that has
+              ever created an account. The phrasing was inherited from products that have
+              account management; this one says what is actually true. */}
           <p className="text-muted-foreground text-xs">
-            Your sign-in email can&apos;t be changed here.
+            Your sign-in email is fixed.
           </p>
         </Field>
         <div>
@@ -139,7 +148,9 @@ function PasswordForm() {
             <FieldError errors={[errors.newPassword]} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="confirmPassword">Confirm new password</FieldLabel>
+            <FieldLabel htmlFor="confirmPassword">
+              Confirm new password
+            </FieldLabel>
             <Input
               id="confirmPassword"
               type="password"
@@ -167,10 +178,7 @@ export function AccountSection({
   email: string
 }) {
   return (
-    <SettingsSection
-      title="Account"
-      description="Your profile and sign-in credentials."
-    >
+    <SettingsSection title="Account">
       <div className="flex flex-col gap-6">
         <ProfileForm defaultName={defaultName} email={email} />
         <Separator />

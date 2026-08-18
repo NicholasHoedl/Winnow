@@ -8,6 +8,7 @@ import { logMeal } from "@/modules/meals/actions"
 import { restoreIfEmpty } from "@/lib/forms"
 import type { Food } from "@/modules/meals/queries"
 import { parseMealQuickAdd } from "@/modules/meals/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -19,6 +20,7 @@ import { Input } from "@/components/ui/input"
 export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
+  const { defaultMealType } = usePreferences()
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -38,7 +40,15 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
     setText("")
 
     startTransition(async () => {
-      const result = await logMeal({ ...parsed, date })
+      const result = await logMeal({
+        ...parsed,
+        // A meal type typed into the text ALWAYS wins — `parseMealQuickAdd` returns `""`
+        // when it found none, and only then does the preference apply. Otherwise setting a
+        // default would quietly override "lunch 600cal", which is the one case where the
+        // user said which meal it was.
+        mealType: parsed.mealType || (defaultMealType ?? ""),
+        date,
+      })
       if (!result.ok) {
         toast.error(result.error)
         setText(restoreIfEmpty(trimmed))

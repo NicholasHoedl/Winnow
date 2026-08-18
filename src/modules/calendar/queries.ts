@@ -1,6 +1,6 @@
 import "server-only"
 import { cache } from "react"
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, lte, isNull, lt, or } from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays } from "@/lib/date"
@@ -318,12 +318,42 @@ export async function getFeedToken(): Promise<string> {
  * a task to an event (T2). Series-level: one row per event, not per occurrence.
  *
  * `cache()`: the app shell's always-mounted task dialog and /activity both need it.
+ *
+ * **Bounded, and it was not.** This is awaited in `(app)/layout.tsx`, so every event's id,
+ * title and start date shipped in the RSC payload of EVERY authenticated page — to feed a
+ * picker that is usually closed — and the set only ever grew. Two bounds now, doing
+ * different jobs:
+ *
+ * - A WINDOW. A picker exists to attach a task to something you are dealing with, and that
+ *   is not a meeting from four years ago. Two years back and five forward covers a mortgage
+ *   payment or a birthday recurring far out, which is exactly the far-future case ADR-0008
+ *   cares about, while dropping the archive.
+ * - A CAP, as the backstop the window is not. Someone importing a full calendar could put
+ *   thousands of rows inside two years, and the payload is the thing being protected.
+ *
+ * The consequence is real and worth stating: an event outside the window cannot be picked.
+ * That is a deliberate trade against shipping an unbounded list on every page load, and if
+ * it ever bites, the answer is a searchable picker rather than a wider window.
  */
+const EVENT_OPTION_WINDOW_YEARS_BACK = 2
+const EVENT_OPTION_WINDOW_YEARS_AHEAD = 5
+const EVENT_OPTION_CAP = 500
+
 export const getEventOptions = cache(async (): Promise<EventOption[]> => {
   const userId = await requireUserId()
+  const now = new Date()
+  const from = new Date(now)
+  from.setFullYear(from.getFullYear() - EVENT_OPTION_WINDOW_YEARS_BACK)
+  const to = new Date(now)
+  to.setFullYear(to.getFullYear() + EVENT_OPTION_WINDOW_YEARS_AHEAD)
   return db.query.events.findMany({
-    where: eq(events.userId, userId),
+    where: and(
+      eq(events.userId, userId),
+      gte(events.startAt, from),
+      lte(events.startAt, to),
+    ),
     columns: { id: true, title: true, startAt: true, allDay: true },
     orderBy: [desc(events.startAt)],
+    limit: EVENT_OPTION_CAP,
   })
 })

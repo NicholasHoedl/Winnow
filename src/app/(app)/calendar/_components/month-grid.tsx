@@ -9,7 +9,27 @@ import { usePreferences } from "@/components/preferences/preferences-provider"
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const MAX_CHIPS = 3
 
-function chipLabel(occ: EventOccurrence, use24Hour: boolean): string {
+/**
+ * What the chip SAYS, and the title comes first.
+ *
+ * It used to lead with the time, which meant that in a month cell — about 62px wide at
+ * 1440px and narrower on a phone — every chip truncated to the clock and nothing else:
+ * `6:0…`, `2:0…`, `10:0…`. A grid full of times you already know are today, tomorrow and
+ * Friday, and not one of them saying what it is.
+ *
+ * Ordering it title-first makes truncation degrade in the useful direction: a wide cell
+ * still shows both, a narrow one keeps as much of the name as fits, and the time is the part
+ * that falls off — recoverable from the tooltip below, from the chip's position in the day's
+ * order, and from opening it.
+ */
+function chipText(occ: EventOccurrence, use24Hour: boolean): string {
+  return occ.time
+    ? `${occ.event.title} ${formatTime(occ.time, use24Hour)}`
+    : occ.event.title
+}
+
+/** The hover tooltip, where there is room, so time-first still reads best. */
+function chipTooltip(occ: EventOccurrence, use24Hour: boolean): string {
   return occ.time
     ? `${formatTime(occ.time, use24Hour)} ${occ.event.title}`
     : occ.event.title
@@ -87,14 +107,14 @@ export function MonthGrid({
                         e.stopPropagation()
                         onEditEvent(occ)
                       }}
-                      title={chipLabel(occ, use24HourTime)}
+                      title={chipTooltip(occ, use24HourTime)}
                       className={cn(
                         "text-foreground truncate rounded border-l-2 px-1 py-0.5 text-left text-[0.7rem] leading-tight transition-opacity hover:opacity-80",
                         accent.tint,
                         accent.border,
                       )}
                     >
-                      {chipLabel(occ, use24HourTime)}
+                      {chipText(occ, use24HourTime)}
                     </button>
                   )
                 })}

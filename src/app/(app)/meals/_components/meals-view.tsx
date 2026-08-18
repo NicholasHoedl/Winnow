@@ -10,6 +10,7 @@ import {
   Library,
   Plus,
   Target,
+  MoreVertical,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -34,6 +35,12 @@ import {
   sumMicros,
 } from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
 
 import { CopyDayDialog } from "./copy-day-dialog"
@@ -45,6 +52,7 @@ import { MealEntryItem } from "./meal-entry-item"
 import { MealQuickAdd } from "./meal-quick-add"
 import { QuickPickStrip } from "./quick-pick-strip"
 import { TargetsDialog } from "./targets-dialog"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 function shiftDate(date: string, delta: number): string {
   const [year, month, day] = date.split("-").map(Number)
@@ -53,10 +61,10 @@ function shiftDate(date: string, delta: number): string {
     .slice(0, 10)
 }
 
-function formatDay(date: string, today: string): string {
+function formatDay(date: string, today: string, locale: string): string {
   if (date === today) return "Today"
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -92,6 +100,7 @@ export function MealsView({
   /** Server-read: whether the Open Food Facts integration is on for this install. */
   offEnabled: boolean
 }) {
+  const locale = useDateLocale()
   const [logOpen, setLogOpen] = React.useState(false)
   const [editingEntry, setEditingEntry] = React.useState<MealEntry | null>(null)
   const [foodsOpen, setFoodsOpen] = React.useState(false)
@@ -182,35 +191,38 @@ export function MealsView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Meals
           </h1>
-          <p className="text-muted-foreground text-sm">
-            Log what you eat, track your macros.
-          </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Copy a day"
-            onClick={() => setCopyOpen(true)}
-          >
-            <CopyPlus className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Food library"
-            onClick={() => setFoodsOpen(true)}
-          >
-            <Library className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Set targets"
-            onClick={() => setTargetsOpen(true)}
-          >
-            <Target className="size-4" />
-          </Button>
+          {/* One named menu instead of a row of bare icons — see the note on /activity. A
+              phone has no hover, so the glyph is all you get, and none of these is guessable
+              from it. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Meals actions"
+                />
+              }
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCopyOpen(true)}>
+                <CopyPlus className="size-4" />
+                Copy a day
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFoodsOpen(true)}>
+                <Library className="size-4" />
+                Food library
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTargetsOpen(true)}>
+                <Target className="size-4" />
+                Set targets
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             Log food
@@ -231,7 +243,7 @@ export function MealsView({
           </LinkPending>
         </Link>
         <span className="min-w-28 text-center text-sm font-medium">
-          {formatDay(date, today)}
+          {formatDay(date, today, locale)}
         </span>
         <Link
           href={`/meals?date=${shiftDate(date, 1)}`}

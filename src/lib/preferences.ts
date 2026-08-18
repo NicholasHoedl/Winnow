@@ -94,6 +94,12 @@ export type UserPreferences = {
   defaultCalendarView: CalendarView
   slateHorizonDays: SlateHorizonDays
   dashboardCollapsed: DashboardCard[]
+  dateFormat: DateFormat
+  weightUnit: WeightUnit
+  volumeUnit: VolumeUnit
+  dashboardCalendarView: CalendarCardView
+  landingPage: string
+  defaultMealType: MealType | null
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -113,7 +119,74 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   // Nothing folded on a fresh install: a dashboard that arrives with cards already closed
   // would read as broken rather than as tidy.
   dashboardCollapsed: [],
+  // `mdy` is what every date in the app rendered as before this setting existed. Keeping it
+  // as the default is what makes adding the setting a no-op for an existing account.
+  dateFormat: "mdy",
+  weightUnit: "lb",
+  volumeUnit: "floz",
+  dashboardCalendarView: "month",
+  landingPage: "/",
+  defaultMealType: null,
 }
+
+/**
+ * How a date reads. A FORMAT, not a locale — month names stay English either way; see the
+ * column comment in `preferences/schema.ts` for why a locale picker is a different job.
+ */
+export const DATE_FORMATS = ["mdy", "dmy"] as const
+export type DateFormat = (typeof DATE_FORMATS)[number]
+
+export const DATE_FORMAT_OPTIONS: readonly {
+  value: DateFormat
+  label: string
+}[] = [
+  { value: "mdy", label: "Aug 17, 2026" },
+  { value: "dmy", label: "17 Aug 2026" },
+]
+
+/**
+ * The BCP-47 tag each format resolves to.
+ *
+ * `en-GB` is doing one job here: putting the day first. Both tags produce English month
+ * names, which is the point — this setting changes the ORDER, not the language.
+ */
+export function dateLocale(format: DateFormat): string {
+  return format === "dmy" ? "en-GB" : "en-US"
+}
+
+export const WEIGHT_UNITS = ["lb", "kg"] as const
+export type WeightUnit = (typeof WEIGHT_UNITS)[number]
+export const WEIGHT_UNIT_OPTIONS: readonly {
+  value: WeightUnit
+  label: string
+}[] = [
+  { value: "lb", label: "Pounds (lb)" },
+  { value: "kg", label: "Kilograms (kg)" },
+]
+
+export const VOLUME_UNITS = ["floz", "ml"] as const
+export type VolumeUnit = (typeof VOLUME_UNITS)[number]
+export const VOLUME_UNIT_OPTIONS: readonly {
+  value: VolumeUnit
+  label: string
+}[] = [
+  { value: "floz", label: "Fluid ounces (fl oz)" },
+  { value: "ml", label: "Millilitres (ml)" },
+]
+
+/** The dashboard calendar card's two views. Narrower than `/calendar`'s four. */
+export const CALENDAR_CARD_VIEWS = ["month", "week"] as const
+export type CalendarCardView = (typeof CALENDAR_CARD_VIEWS)[number]
+export const CALENDAR_CARD_VIEW_OPTIONS: readonly {
+  value: CalendarCardView
+  label: string
+}[] = [
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+]
+
+export const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const
+export type MealType = (typeof MEAL_TYPES)[number]
 
 // Curated ISO 4217 codes (money is stored as integer cents regardless of code).
 export const CURRENCIES: { code: string; label: string }[] = [

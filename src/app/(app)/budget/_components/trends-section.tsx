@@ -16,9 +16,9 @@ import {
 const TOP_CATEGORIES = 4
 
 /** 'YYYY-MM' → "Jul". Parsed as UTC so the label never shifts by an offset. */
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
   const [year, m] = month.split("-").map(Number)
-  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(locale, {
     month: "short",
     timeZone: "UTC",
   })
@@ -61,14 +61,21 @@ export function TrendsSection({
   trends,
   categories,
   currency,
+  locale,
 }: {
   trends: MonthlySummary[]
   categories: Category[]
   currency: string
+  /**
+   * A PROP, not `useDateLocale()`. This renders on the server — the whole point of it, so
+   * its SVG chart stays a server component — and a hook cannot be called there. The page
+   * reads the preference and passes it, exactly as it already does for `currency`.
+   */
+  locale: string
 }) {
   if (trends.length === 0) return null
 
-  const labels = trends.map((t) => monthLabel(t.month))
+  const labels = trends.map((t) => monthLabel(t.month, locale))
   const money = (cents: number) => formatCents(cents, currency)
   const tick = (cents: number) => compactMoney(cents, currency)
 

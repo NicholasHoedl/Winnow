@@ -9,8 +9,17 @@ import {
   uuid,
 } from "drizzle-orm/pg-core"
 
-// Relative import (not "@/db/schema") so drizzle-kit resolves it without aliases.
+// Relative imports (not "@/db/schema") so drizzle-kit resolves them without aliases.
+//
+// goals → calendar is acyclic, and that is checked rather than assumed: `calendar/schema.ts`
+// imports `users` and nothing else. This matters because the pair todos/routines could NOT
+// do the same — `tasks.routine_id` is declared as a bare `uuid()` with its foreign key
+// hand-written in migration 0033, because routines imports `priorityEnum` from todos EAGERLY
+// and a todos → routines import would make whichever module ESM evaluates second see it as
+// `undefined`, crashing drizzle-kit itself. Nothing here imports goals, so `.references()`
+// is safe and drizzle-kit can see the constraint (see docs/HANDOFF.md §4).
 import { users } from "../../db/schema"
+import { events } from "../calendar/schema"
 
 /**
  * Long-term goals. Progress comes from milestones where they exist, and otherwise from the
@@ -24,6 +33,26 @@ export const goals = pgTable("goals", {
   title: text("title").notNull(),
   notes: text("notes"),
   targetDate: date("target_date", { mode: "string" }),
+  /**
+   * The event this goal is aimed at, if it is aimed at one.
+   *
+   * "Run a half marathon" has a race day, and that day was being typed twice — once into the
+   * calendar as an event, once into `target_date` above — with nothing connecting them, so
+   * moving the race left the goal quietly pointing at the old date.
+   *
+   * **When set, it WINS over `target_date` on read.** `getGoals` resolves the effective date
+   * from the linked occurrence, so the event is the single place the date lives and every
+   * consumer — the card, the detail dialog, `planWarnings` — keeps reading one field and
+   * needs no change. `target_date` stays as the manual answer for a goal with no event.
+   *
+   * `set null`, matching `tasks.event_id` and `habits.goal_id`: deleting the event must not
+   * delete the goal. What it costs is that the goal silently falls back to `target_date`,
+   * which may be stale or null — the same attribution loss ADR-0014 accepted for a habit
+   * whose goal is deleted.
+   */
+  eventId: uuid("event_id").references(() => events.id, {
+    onDelete: "set null",
+  }),
   /**
    * Numeric progress for a goal that isn't broken into milestones — "12 of 30 books",
    * "8 of 20 lbs". `real` rather than integer because plenty of goals are measured in

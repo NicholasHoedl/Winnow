@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 // Browser coverage for T3-S2: the budgets dialog saves a whole month in one atomic
 // call, and can seed a month from the previous one.
 //
@@ -15,7 +17,7 @@ test("budgets save in one call and copy forward from the previous month", async 
   const category = `E2E budget ${Date.now()}`
 
   await page.goto("/budget")
-  await page.getByRole("button", { name: "Manage categories" }).click()
+  await pageAction(page, "Manage categories")
   const categoryDialog = page.getByRole("dialog")
   await categoryDialog.getByLabel("Name").fill(category)
   await categoryDialog.getByRole("button", { name: "Add category" }).click()
@@ -24,28 +26,28 @@ test("budgets save in one call and copy forward from the previous month", async 
 
   // Set a budget for it in month A.
   await page.goto(`/budget?month=${MONTH_A}`)
-  await page.getByRole("button", { name: "Set budgets" }).click()
+  await pageAction(page, "Set budgets")
   await page.getByRole("dialog").getByLabel(category).fill("123")
   await page.getByRole("button", { name: "Save budgets" }).click()
   await expect(page.getByText("Budgets saved")).toBeVisible()
 
   // Reopening proves it round-tripped.
-  await page.getByRole("button", { name: "Set budgets" }).click()
+  await pageAction(page, "Set budgets")
   await expect(page.getByRole("dialog").getByLabel(category)).toHaveValue("123")
   await page.keyboard.press("Escape")
 
   // Month B starts empty; copying pulls month A's budget forward.
   await page.goto(`/budget?month=${MONTH_B}`)
-  await page.getByRole("button", { name: "Set budgets" }).click()
+  await pageAction(page, "Set budgets")
   await page.getByRole("button", { name: "Copy last month" }).click()
   await expect(page.getByText(/Copied \d+ budget/)).toBeVisible()
 
-  await page.getByRole("button", { name: "Set budgets" }).click()
+  await pageAction(page, "Set budgets")
   await expect(page.getByRole("dialog").getByLabel(category)).toHaveValue("123")
   await page.keyboard.press("Escape")
 
   // Cleanup — deleting the category cascades both budgets away with it.
-  await page.getByRole("button", { name: "Manage categories" }).click()
+  await pageAction(page, "Manage categories")
   await page.getByRole("button", { name: `Delete ${category}` }).click()
   await page.getByRole("button", { name: "Delete category" }).click()
   await expect(page.getByText(category)).toHaveCount(0)

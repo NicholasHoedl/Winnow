@@ -28,7 +28,10 @@ import { addDays } from "@/lib/date"
 import { occurrenceKey } from "@/modules/calendar/service"
 import { movedSpan } from "@/components/calendar/grid-geometry"
 import { TimeGrid, type Reschedule } from "@/components/calendar/time-grid"
-import { usePreferences } from "@/components/preferences/preferences-provider"
+import {
+  useDateLocale,
+  usePreferences,
+} from "@/components/preferences/preferences-provider"
 
 import { AgendaView } from "./agenda-view"
 import { CalendarManager } from "./calendar-manager"
@@ -78,6 +81,7 @@ export function CalendarView({
   calendars: Calendar[]
 }) {
   const { weekStartsOn } = usePreferences()
+  const locale = useDateLocale()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingOccurrence, setEditingOccurrence] =
     React.useState<EventOccurrence | null>(null)
@@ -266,7 +270,6 @@ export function CalendarView({
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Calendar
           </h1>
-          <p className="text-muted-foreground text-sm">Your events.</p>
         </div>
         {/* `flex-wrap` here, not only on the header. The header already wrapped, but this
             row was a single unbreakable flex child of it — four view links plus two
@@ -291,13 +294,18 @@ export function CalendarView({
               </Link>
             ))}
           </div>
+          {/* A word rather than a menu: this page has exactly ONE secondary action, and a
+              dropdown wrapping a single item is more chrome than the icon it replaced. The
+              `aria-label` stays and still wins as the accessible name, so the visible text
+              can be the short form. */}
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
             aria-label="Manage calendars"
             onClick={() => setManagerOpen(true)}
           >
             <Layers className="size-4" />
+            Calendars
           </Button>
           <Button onClick={() => openCreate()}>
             <CalendarPlus className="size-4" />
@@ -351,7 +359,7 @@ export function CalendarView({
           </LinkPending>
         </Link>
         <span className="min-w-52 text-center text-sm font-medium">
-          {viewTitle(view, date, weekStartsOn)}
+          {viewTitle(view, date, weekStartsOn, locale)}
         </span>
         <Link
           href={calendarHref(view, shiftForView(view, date, 1))}

@@ -2,7 +2,7 @@ import { test as base, expect } from "@playwright/test"
 
 export { expect }
 // Re-exported so a spec can take everything it needs from one place.
-export type { Page, Locator } from "@playwright/test"
+export type { Browser, Page, Locator } from "@playwright/test"
 
 /**
  * The suite's `test`, with one thing added: a navigation never returns while React is

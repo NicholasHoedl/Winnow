@@ -78,10 +78,11 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      // The mobile sweep is excluded rather than allowed to run here too: at desktop width
-      // its assertions pass trivially, so it would cost a second full pass over eleven
-      // routes to prove nothing.
-      testIgnore: /mobile-layout\.spec\.ts/,
+      // Both layout sweeps are excluded rather than allowed to run here too. The mobile one
+      // because at desktop width its assertions pass trivially; the desktop one because this
+      // project is where rows are created and deleted, and a sweep interleaved with that
+      // measures the debris rather than the layout. Each has its own project below.
+      testIgnore: /(mobile|desktop)-layout\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/user.json",
@@ -106,6 +107,27 @@ export default defineConfig({
       testMatch: /mobile-layout\.spec\.ts/,
       use: {
         ...devices["iPhone 15"],
+        storageState: "e2e/.auth/user.json",
+      },
+      dependencies: ["setup", "ai-setup"],
+    },
+    /**
+     * The same sweep at laptop widths.
+     *
+     * The detector these two share was aimed at 393px for its whole life, so every spill at
+     * 1280px went unseen — including a clipped currency figure in the dashboard's budget
+     * tile. Widening the aim is the entire change; see `e2e/desktop-layout.spec.ts`.
+     *
+     * Chromium, not WebKit: the phone project pays for a second engine because Safari is
+     * what ships on the target device, and at laptop width the browser is whatever the user
+     * opens. The viewport is set per test rather than here, because this one sweeps two
+     * widths and a project carries only one.
+     */
+    {
+      name: "desktop-layout",
+      testMatch: /desktop-layout\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/user.json",
       },
       dependencies: ["setup", "ai-setup"],

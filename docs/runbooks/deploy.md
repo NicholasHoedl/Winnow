@@ -25,7 +25,7 @@ Claude Code cannot install these, and should not try.
 
 | What | Why |
 | --- | --- |
-| **Docker Desktop** (WSL2 backend) | Runs the stack. See the open question below before relying on it. |
+| **WSL2 with Docker Engine inside it — *not* Docker Desktop** | Runs the stack, and keeps running it after a reboot with nobody logged in. **Do §0 first**; the obvious install is the broken one here. |
 | **Tailscale**, signed in | The only ingress. ADR-0002. |
 | **Node 22 + pnpm** (`corepack enable`) | `drizzle-kit` is a dev dependency and is **not** in the runtime image, so migrations and the seed run from the host, not from a container. |
 | **Git** | To clone. |
@@ -34,6 +34,53 @@ If you would rather not install Node on the desktop, migrations can run from a t
 `node:22-slim` container with the repo mounted and joined to the compose network. That
 avoids the host toolchain and the temporary port publish in step 4 — at the cost of a
 longer command and no `pnpm` cache. Decide before step 4; it changes that step only.
+
+## 0. Docker, the way this host actually needs it
+
+**Human only, needs elevation, and it comes first because everything after it assumes a
+Docker that is running.**
+
+Do not install Docker Desktop. It is a Windows GUI application tied to a login session, so
+after a Windows Update reboot the stack stays down until somebody logs into the desktop —
+which falsifies the always-on assumption ADR-0002 is built on. Selecting Docker Desktop's
+"WSL2 backend" does **not** fix this: the backend is only where containers run, and the
+lifecycle still belongs to the GUI process. See ADR-0002's 2026-08-17 amendment.
+
+Install Docker Engine inside a WSL2 distribution instead, and give it a lifecycle with no
+human in it:
+
+1. Install WSL2 and a distro (Ubuntu is fine), then inside it add to `/etc/wsl.conf`:
+
+   ```ini
+   [boot]
+   systemd=true
+   ```
+
+   Then `wsl --shutdown` from Windows so the distro restarts with systemd as PID 1.
+
+2. Install Docker Engine in the distro following Docker's own instructions for that
+   distribution — the `docker-ce` packages, not `docker.io`, and not Docker Desktop. Then:
+
+   ```bash
+   sudo systemctl enable --now docker
+   sudo usermod -aG docker "$USER"
+   ```
+
+   Log out and back into the distro for the group to take effect.
+
+3. Make the distro start with Windows. Task Scheduler → Create Task:
+   - Trigger: **At startup** — *not* "At log on". This is the entire point; a logon trigger
+     reproduces the original problem while looking like a fix.
+   - Action: `wsl.exe -d <distro> -- /bin/true` (starting the distro is enough; systemd
+     brings Docker up behind it).
+   - Check **Run whether user is logged on or not**.
+
+4. Verify the thing you actually care about: reboot with nobody logged in, wait, then from
+   another machine on the tailnet confirm the stack answers. Do this **before** step 5's
+   HTTPS work, so a failure here is isolated from a failure there.
+
+Everything from here on — `docker compose`, `pnpm`, the repo — lives **inside the distro**,
+not on the Windows side.
 
 ## 1. Clone
 
@@ -77,7 +124,7 @@ The app publishes on `127.0.0.1:3000` only — deliberately. Nothing on the LAN 
 
 ## 4. Migrate and seed — the one-time awkward step
 
-The database starts empty and needs all **35 migrations** plus the account. But
+The database starts empty and needs all **39 migrations** plus the account. But
 `docker-compose.prod.yml` publishes **no** port for Postgres, which is correct for
 security and means your shell cannot reach it.
 
@@ -140,25 +187,14 @@ the real name.
 A backup script is not a backup until a restore has been proven. Do the drill in
 `backup-restore.md` on this machine, not on the laptop.
 
-## Open question you should settle before step 3
-
-**Docker Desktop on Windows is tied to a login session.** After a Windows Update reboot the
-stack stays down until someone logs in. ADR-0002 assumed an always-on machine, so this is a
-broken assumption rather than a configuration detail — the whole point of a self-hosted
-organizer is that it is there when you reach for it.
-
-Options, none yet chosen: run the stack under WSL2 as a systemd service; enable Windows
-auto-login (weakens physical security); or accept it and restart manually. If the answer is
-WSL2-as-a-service, it changes step 3 rather than being a later fix — which is why this is
-here and not at the bottom.
-
 ## What Claude Code can and cannot do here
 
 **Can:** clone, write `.env` scaffolding without secrets, run every `docker compose` and
 `pnpm` command, read logs and diagnose failures, edit the compose file for step 4 and put it
 back, run the verification checks it can reach from the desktop, and fix this runbook.
 
-**Cannot, and should not attempt:** install Docker Desktop or Tailscale; sign into Tailscale;
-toggle MagicDNS or HTTPS in the admin console; type any password, `AUTH_SECRET` or
-`SEED_USER_PASSWORD`; or confirm the from-outside-the-tailnet check, which by definition
-needs a device that is not on it.
+**Cannot, and should not attempt:** any of §0 — installing WSL2 or Docker Engine, editing
+`/etc/wsl.conf`, or creating the Task Scheduler entry, all of which need elevation on your
+machine; install or sign into Tailscale; toggle MagicDNS or HTTPS in the admin console; type
+any password, `AUTH_SECRET` or `SEED_USER_PASSWORD`; or confirm the from-outside-the-tailnet
+check, which by definition needs a device that is not on it.

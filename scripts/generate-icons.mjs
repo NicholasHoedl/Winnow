@@ -5,9 +5,19 @@ import { mkdir, writeFile } from "node:fs/promises"
 import sharp from "sharp"
 
 // Must track --primary in globals.css. Re-run this script after changing it — nothing
-// regenerates the icons automatically, and src/app/favicon.ico is not produced here at
-// all and has to be replaced by hand.
-const BRAND = "#577f67"
+// regenerates the icons automatically.
+//
+// This was `#577f67` — deep_teal's own value — for the whole life of the project, under
+// this same comment claiming it tracked `--primary`. It did not: globals.css records
+// `--primary` being darkened to #456652 specifically because #577f67 measured 4.22:1 on
+// linen and failed AA. So every icon was generated from the shade the app had rejected.
+// Nothing enforces the link between these two files; the comment above is the whole
+// mechanism, which is why it drifted.
+//
+// src/app/favicon.ico used to be listed here as "not produced by this script and replaced
+// by hand". It is gone — Next auto-links the icon.svg and apple-icon.png written below,
+// and sharp cannot emit .ico, so maintaining one by hand bought nothing.
+const BRAND = "#456652"
 
 // Mark paths, centered ~ (256, 256).
 const mark = `

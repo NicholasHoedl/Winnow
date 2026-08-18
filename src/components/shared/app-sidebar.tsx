@@ -36,11 +36,12 @@ export function AppSidebar({ userName }: { userName: string }) {
           <span className="bg-sidebar-primary text-sidebar-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
             {initial}
           </span>
+          {/* The name alone. "Personal space" sat under it, and there is no other kind of
+              space — it is a label from a multi-tenant product, in an app that will only
+              ever have one tenant. Nothing replaces it: a workspace switcher with one
+              workspace is chrome pretending to be a control. */}
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{userName}</p>
-            <p className="text-sidebar-foreground/55 truncate text-xs">
-              Personal space
-            </p>
           </div>
         </div>
       </div>

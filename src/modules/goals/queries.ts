@@ -6,6 +6,7 @@ import {
   count,
   eq,
   gte,
+  inArray,
   isNotNull,
   isNull,
   lt,
@@ -17,7 +18,9 @@ import { db } from "@/db"
 import { addDays, todayInZone } from "@/lib/date"
 import { requireUserId } from "@/lib/session"
 // habits → goals at the schema level, so this direction is safe: `goals/schema.ts` imports
-// nothing but `users`, and nothing here reaches back into habits' own queries.
+// `users` and `events` and nothing else, and nothing here reaches back into habits' own
+// queries.
+import { events } from "@/modules/calendar/schema"
 import { habitEntries, habits } from "@/modules/habits/schema"
 import { tasks } from "@/modules/todos/schema"
 
@@ -39,6 +42,15 @@ export type LinkedTask = Pick<
 >
 
 export type GoalWithProgress = GoalRow & {
+  /**
+   * The event this goal is aimed at, resolved — or null.
+   *
+   * Note that `targetDate` on this row is the EFFECTIVE date: when a goal names an event,
+   * `getGoals` overwrites the stored column with the event's own day, so nothing downstream
+   * has to know the link exists. This field is only for saying *why* the date is what it is,
+   * and for linking through to the event.
+   */
+  targetEvent: { id: string; title: string } | null
   milestones: MilestoneRow[]
   progress: GoalProgress
   /**
@@ -149,6 +161,38 @@ export async function getGoals(
         ),
     ])
 
+  /**
+   * The events any goal is aimed at.
+   *
+   * A second round trip rather than a join, and only when a goal actually names one — most
+   * accounts will skip it entirely. Joining would have meant a left join on the goals query
+   * for a column that is null on nearly every row.
+   *
+   * `startAt` is the SERIES start for a recurring event. A goal aimed at a repeating event is
+   * an odd thing to want ("run a half marathon" happens once), and resolving "which
+   * occurrence" would mean pulling in `applyExceptions` and the whole overlay — so the first
+   * occurrence is the deliberate answer rather than an oversight.
+   */
+  const targetEventIds = [
+    ...new Set(
+      goalRows
+        .map((goal) => goal.eventId)
+        .filter((id): id is string => id !== null),
+    ),
+  ]
+  const targetEvents = targetEventIds.length
+    ? await db.query.events.findMany({
+        // `userId` as well as the id list: the ids come from this user's own goals, but a
+        // scoped read costs nothing and keeps the pattern uniform across this file.
+        where: and(
+          eq(events.userId, userId),
+          inArray(events.id, targetEventIds),
+        ),
+        columns: { id: true, title: true, startAt: true },
+      })
+    : []
+  const eventById = new Map(targetEvents.map((event) => [event.id, event]))
+
   const totals = new Map(taskTotals.map((row) => [row.goalId, row.total]))
 
   // One row per (habit, in-window entry), or one row with a null date for a habit with
@@ -172,8 +216,21 @@ export async function getGoals(
     const items = milestoneRows.filter((m) => m.goalId === goal.id)
     const linked = taskRows.filter((t) => t.goalId === goal.id)
     const linkedTaskTotal = totals.get(goal.id) ?? 0
+    // The linked event WINS over the stored `target_date`, and resolving it here rather than
+    // at each call site is the whole point: the card, the detail dialog and the companion's
+    // `planWarnings` all keep reading one field and none of them needed changing. A goal with
+    // no event, or whose event has been deleted (`set null`), falls back to what was typed.
+    const targetEvent = goal.eventId
+      ? (eventById.get(goal.eventId) ?? null)
+      : null
     return {
       ...goal,
+      targetDate: targetEvent
+        ? todayInZone(targetEvent.startAt, timeZone)
+        : goal.targetDate,
+      targetEvent: targetEvent
+        ? { id: targetEvent.id, title: targetEvent.title }
+        : null,
       milestones: items,
       // The goal carries the numeric columns; milestones still take precedence.
       progress: goalProgress(items, goal),
@@ -202,12 +259,24 @@ export async function getGoals(
 /** Lightweight goal list (id + title) for pickers — used in the always-mounted task
  * dialog, so it skips getGoals()'s milestone/progress computation (T2). `cache()` for the
  * same reason as getLists: the shell's dialog and the page can both want it in one render. */
+/**
+ * A CEILING, not a filter — unlike `getEventOptions`' window.
+ *
+ * Goals are naturally few: they are things a person is working toward, not a log, so no real
+ * account reaches this. It exists because this is awaited in `(app)/layout.tsx` and therefore
+ * rides in every authenticated page's RSC payload, and "naturally few" is an assumption about
+ * behaviour rather than a property of the schema. A restore from a generated file would
+ * otherwise put the whole set on every page.
+ */
+const GOAL_OPTION_CAP = 500
+
 export const getGoalOptions = cache(async (): Promise<GoalOption[]> => {
   const userId = await requireUserId()
   return db.query.goals.findMany({
     where: eq(goals.userId, userId),
     columns: { id: true, title: true },
     orderBy: [asc(goals.createdAt)],
+    limit: GOAL_OPTION_CAP,
   })
 })
 

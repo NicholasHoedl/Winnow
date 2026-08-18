@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 // Browser coverage for T4-S8, and the reason the whole step exists: macro_targets used
 // to hold ONE row per user, so raising your calorie goal silently re-scored every day
 // you had ever logged. Targets are now effective-dated, and a past day keeps whatever
@@ -22,7 +24,7 @@ const CALORIES = String(3000 + (Date.now() % 900))
 
 /** Remove every period except the backfilled one, so a prior failure can't skew this. */
 async function clearAddedPeriods(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   for (;;) {
     const extra = page
       .getByRole("button", { name: /^Delete targets from / })
@@ -50,7 +52,7 @@ test("a new target period leaves earlier days on their old targets", async ({
   await expect(summary).toContainText("Calories")
 
   // Open a period starting the day AFTER the one we're looking at.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await page.getByLabel("Applies from").fill(NEWER)
   await page.getByLabel("Calories").fill(CALORIES)
   await page.getByRole("button", { name: "Save", exact: true }).click()
@@ -68,7 +70,7 @@ test("a new target period leaves earlier days on their old targets", async ({
   await expect(summary).toContainText(CALORIES)
 
   // Removing the period hands the later day back to the earlier targets.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await page
     .getByRole("button", { name: `Delete targets from ${NEWER}` })
     .click()

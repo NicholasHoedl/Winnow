@@ -14,6 +14,7 @@ import { usePreferences } from "@/components/preferences/preferences-provider"
 import { TimeGrid } from "@/components/calendar/time-grid"
 import { calendarHref } from "@/app/(app)/calendar/_components/views"
 import { DashboardCard } from "./dashboard-card"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 // Sunday-indexed absolute day names (the week view looks these up by getUTCDay).
 const ABSOLUTE_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -22,10 +23,10 @@ const MONTH_MAX_CHIPS = 2
 export type DashboardCalendarView = "month" | "week"
 
 /** e.g. "Aug 3 – 9" — and "Jul 28 – Aug 3" when the week straddles two months. */
-function weekLabel(dates: string[]): string {
+function weekLabel(dates: string[], locale: string): string {
   const fmt = (d: string, withMonth: boolean) => {
     const [y, m, day] = d.split("-").map(Number)
-    return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-US", {
+    return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString(locale, {
       ...(withMonth ? { month: "short" } : {}),
       day: "numeric",
       timeZone: "UTC",
@@ -42,9 +43,9 @@ function chipLabel(occ: EventOccurrence, use24Hour: boolean): string {
     : occ.event.title
 }
 
-function monthLabel(month: string): string {
+function monthLabel(month: string, locale: string): string {
   const [y, m] = month.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(locale, {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
@@ -189,6 +190,7 @@ export function DashboardCalendar({
   view: DashboardCalendarView
   collapsed: boolean
 }) {
+  const locale = useDateLocale()
   const router = useRouter()
   const { weekStartsOn, use24HourTime, timeZone } = usePreferences()
   const headers = [
@@ -211,7 +213,9 @@ export function DashboardCalendar({
   return (
     <DashboardCard
       card="calendar"
-      title={view === "week" ? weekLabel(week) : monthLabel(month)}
+      title={
+        view === "week" ? weekLabel(week, locale) : monthLabel(month, locale)
+      }
       label="Calendar"
       collapsed={collapsed}
       className="flex h-full flex-col gap-3 py-4"

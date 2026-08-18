@@ -17,16 +17,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { WeekSummary } from "./week-summary"
 
 /** UTC in, UTC out — these are wall-dates with no instant behind them. */
-function formatDay(date: string, opts: Intl.DateTimeFormatOptions): string {
+function formatDay(
+  date: string,
+  opts: Intl.DateTimeFormatOptions,
+  locale: string,
+): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     ...opts,
     timeZone: "UTC",
   })
 }
 
-function formatMonth(month: string): string {
-  return formatDay(`${month}-01`, { month: "long", year: "numeric" })
+function formatMonth(month: string, locale: string): string {
+  return formatDay(`${month}-01`, { month: "long", year: "numeric" }, locale)
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -43,12 +47,18 @@ export function ReviewView({
   categories,
   pending,
   companionEnabled,
+  locale,
 }: {
   view: WeeklyReviewView
   categories: Category[]
   /** Pending `summary` proposals — the page filters by kind at the query. */
   pending: ProposalRow[]
   companionEnabled: boolean
+  /**
+   * A PROP, not `useDateLocale()`. This file's own first line says it: read-only, so it is a
+   * server component and a hook cannot run here. The page reads the preference and passes it.
+   */
+  locale: string
 }) {
   const { review, weekMoney, monthMoney, month, currency, isCurrentWeek } = view
   const { weekStart, weekEnd } = review
@@ -61,9 +71,10 @@ export function ReviewView({
     .filter((row) => row.spentCents > 0)
     .sort((a, b) => b.spentCents - a.spentCents)
 
-  const range = `${formatDay(weekStart, { month: "short", day: "numeric" })} – ${formatDay(
+  const range = `${formatDay(weekStart, { month: "short", day: "numeric" }, locale)} – ${formatDay(
     weekEnd,
     { month: "short", day: "numeric", year: "numeric" },
+    locale,
   )}`
 
   return (
@@ -140,9 +151,13 @@ export function ReviewView({
               {review.tasks.busiestDay && (
                 <Stat
                   label="Busiest day"
-                  value={formatDay(review.tasks.busiestDay, {
-                    weekday: "long",
-                  })}
+                  value={formatDay(
+                    review.tasks.busiestDay,
+                    {
+                      weekday: "long",
+                    },
+                    locale,
+                  )}
                 />
               )}
             </div>
@@ -178,9 +193,13 @@ export function ReviewView({
               />
             </div>
             <p className="text-muted-foreground mt-3 text-xs">
+              {/* Second sentence removed. It read "Each day is scored against the target
+                  that was in force then" — a description of historical target versioning,
+                  which is a fact about how this was built rather than about your week. The
+                  first sentence says what the figure means, which is the whole job. */}
               {review.macros.daysWithTarget === 0
                 ? "No macro target was in force this week."
-                : "Within 10% of the day's calorie target. Each day is scored against the target that was in force then."}
+                : "Within 10% of the day's calorie target."}
             </p>
           </CardContent>
         </Card>
@@ -222,7 +241,7 @@ export function ReviewView({
                 a figure that was actually set. */}
             <div className="border-t pt-3">
               <p className="text-muted-foreground text-xs">
-                {formatMonth(month)} vs budget
+                {formatMonth(month, locale)} vs budget
               </p>
               <p className="text-sm tabular-nums">
                 {monthMoney.totalBudgetedCents === 0
@@ -242,10 +261,14 @@ export function ReviewView({
           </CardHeader>
           <CardContent>
             {review.milestones.length === 0 && review.goalTasks.length === 0 ? (
+              /* The second sentence is gone, and it was the clearest example in the app of
+                 the UI explaining its own construction to the person who built it: it said
+                 that work completed before this page existed carries no timestamp, which is
+                 a note about `milestones.completed_at` being forward-only (T7d). True, still
+                 recorded in that column's own comment, and not something an empty state
+                 should be telling anyone. */
               <p className="text-muted-foreground text-sm">
-                Nothing finished toward a goal this week. Anything completed
-                before this page existed has no timestamp, so it can&apos;t
-                appear here.
+                Nothing finished toward a goal this week.
               </p>
             ) : (
               /* Milestones first, then the tasks that fed a goal. Both are "goal

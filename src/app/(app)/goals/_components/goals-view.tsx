@@ -20,17 +20,36 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+import type { EventOption } from "@/modules/calendar/queries"
+import type { HabitStripCard } from "@/modules/habits/queries"
+
 import { GoalCard } from "./goal-card"
 import { GoalDetailDialog } from "./goal-detail-dialog"
 import { GoalDialog } from "./goal-dialog"
 
 export function GoalsView({
   goals,
+  habits,
+  events,
   pending,
   companionEnabled,
   today,
 }: {
   goals: GoalWithProgress[]
+  /**
+   * Every unarchived habit, in the cheap shape.
+   *
+   * `getHabitStrip`, not `getHabitsView` — four fields and ~37 days of entries rather than
+   * 400 days and a thirteen-column row. Safe for the same reason `/activity` and `/` are:
+   * everything drawn here is `adherence` for the CURRENT period, which is identical under
+   * every window containing today. A streak would need the wide read.
+   *
+   * Passed whole and filtered per goal at the point of use, rather than grouped here: the
+   * detail dialog wants one goal's practice, and the card wants a count.
+   */
+  habits: HabitStripCard[]
+  /** For the goal dialog's target-date link. */
+  events: EventOption[]
   /** Pending `goal_plan` proposals only — the page filters by kind at the query. */
   pending: ProposalRow[]
   companionEnabled: boolean
@@ -109,7 +128,7 @@ export function GoalsView({
     : null
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 lg:p-6">
+    <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
@@ -220,6 +239,9 @@ export function GoalsView({
           renderItem={(goal) => (
             <GoalCard
               goal={goal}
+              practiceCount={
+                habits.filter((habit) => habit.goalId === goal.id).length
+              }
               onOpenDetail={() => setDetailGoalId(goal.id)}
             />
           )}
@@ -228,11 +250,18 @@ export function GoalsView({
 
       <GoalDialog
         goal={editingGoal}
+        events={events}
         open={goalDialogOpen}
         onOpenChange={setGoalDialogOpen}
       />
       <GoalDetailDialog
         goal={detailGoal}
+        // Filtered here rather than in the dialog so the dialog takes exactly what it draws.
+        habits={
+          detailGoal
+            ? habits.filter((habit) => habit.goalId === detailGoal.id)
+            : []
+        }
         open={detailGoal !== null}
         onOpenChange={(open) => !open && setDetailGoalId(null)}
         onEdit={openEditGoal}

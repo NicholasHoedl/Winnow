@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useForm } from "react-hook-form"
+import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
 import { createGoal, updateGoal } from "@/modules/goals/actions"
+import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalRow } from "@/modules/goals/queries"
 import { goalInputSchema } from "@/modules/goals/validation"
 import { Button } from "@/components/ui/button"
@@ -25,11 +26,27 @@ import {
 } from "@/components/ui/field"
 import { optionalNumberField } from "@/lib/forms"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+/** A Select item cannot carry an empty value — the same sentinel task-dialog uses. */
+const NO_EVENT = "__none__"
 
 type GoalFormValues = {
   title: string
   notes?: string
   targetDate?: string
+  // `string | null`, matching `habitInputSchema.goalId` rather than the task dialog's
+  // `eventId`. Both shapes exist in this codebase: the task one leaves `""` for the action
+  // to `nullify()`, this one normalises in the schema's own transform. What matters is that
+  // the form type matches the schema it is resolved against — mixing them is a type error at
+  // the resolver, which is where this was caught.
+  eventId?: string | null
   // Nullable, not `?: number` — a cleared input has to mean "not tracked", and
   // `optionalNumberField` maps empty to null rather than 0 or NaN.
   targetValue?: number | null
@@ -39,16 +56,20 @@ type GoalFormValues = {
 
 export function GoalDialog({
   goal,
+  events,
   open,
   onOpenChange,
 }: {
   goal: GoalRow | null
+  /** Every event, for the target-date link. Already fetched by the (app) layout. */
+  events: EventOption[]
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!goal
   const {
     register,
+    control,
     handleSubmit,
     reset,
     setError,
@@ -59,6 +80,7 @@ export function GoalDialog({
       title: "",
       notes: "",
       targetDate: "",
+      eventId: "",
       targetValue: null,
       currentValue: null,
       unit: "",
@@ -72,6 +94,7 @@ export function GoalDialog({
         title: goal.title,
         notes: goal.notes ?? "",
         targetDate: goal.targetDate ?? "",
+        eventId: goal.eventId ?? "",
         targetValue: goal.targetValue,
         currentValue: goal.currentValue,
         unit: goal.unit ?? "",
@@ -81,6 +104,7 @@ export function GoalDialog({
         title: "",
         notes: "",
         targetDate: "",
+        eventId: "",
         targetValue: null,
         currentValue: null,
         unit: "",
@@ -135,6 +159,53 @@ export function GoalDialog({
               <Input id="g-target" type="date" {...register("targetDate")} />
               <FieldError errors={[errors.targetDate]} />
             </Field>
+
+            {/* The date, but owned by the calendar.
+                "Run a half marathon" has a race day, and that day was being typed twice —
+                here and as an event — with nothing keeping the two in step. Linking one
+                makes the event the single place it lives: `getGoals` resolves this goal's
+                target date from the event, so moving the race moves the goal.
+                The typed date above is still stored and still shown while no event is
+                chosen, so unlinking returns the goal to it rather than clearing it. */}
+            {events.length > 0 && (
+              <Field>
+                <FieldLabel htmlFor="g-event">
+                  Or take the date from an event
+                </FieldLabel>
+                <Controller
+                  control={control}
+                  name="eventId"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? field.value : NO_EVENT}
+                      onValueChange={(value) =>
+                        field.onChange(value === NO_EVENT ? "" : value)
+                      }
+                    >
+                      <SelectTrigger id="g-event" className="w-full">
+                        {/* A function child, not a bare <SelectValue/>: base-ui renders the
+                            raw value otherwise, which here would be a uuid. */}
+                        <SelectValue>
+                          {(value) =>
+                            events.find((e) => e.id === value)?.title ??
+                            "No event"
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_EVENT}>No event</SelectItem>
+                        {events.map((event) => (
+                          <SelectItem key={event.id} value={event.id}>
+                            {event.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FieldError errors={[errors.eventId]} />
+              </Field>
+            )}
 
             {/* Progress for a goal you don't break into milestones. Left blank, the goal
                 simply isn't tracked numerically — `optionalNumberField` is what keeps an

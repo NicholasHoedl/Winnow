@@ -8,14 +8,21 @@ import { toast } from "sonner"
 import {
   CURRENCIES,
   BALANCE_TARGET_OPTIONS,
+  CALENDAR_CARD_VIEW_OPTIONS,
   CALENDAR_VIEW_OPTIONS,
+  DATE_FORMAT_OPTIONS,
+  MEAL_TYPES,
   MOMENTUM_OPTIONS,
   SLATE_HORIZON_OPTIONS,
   PRIORITY_OPTIONS,
+  VOLUME_UNIT_OPTIONS,
   WEEK_START_OPTIONS,
+  WEIGHT_UNIT_OPTIONS,
   timeZoneOptions,
   type UserPreferences,
 } from "@/lib/preferences"
+import { navItems } from "@/components/shared/nav-items"
+
 import { setUserPreferences } from "@/modules/preferences/actions"
 import {
   userPreferencesSchema,
@@ -33,6 +40,17 @@ import {
 
 import { Segmented } from "./segmented"
 import { SettingsSection } from "./settings-section"
+
+/** A Select item cannot carry an empty value — the same sentinel the link pickers use. */
+const NO_MEAL_TYPE = "__none__"
+
+const MEAL_TYPE_LABELS: Record<string, string> = {
+  other: "Other",
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+}
 
 const TIME_FORMAT_OPTIONS: readonly { value: boolean; label: string }[] = [
   { value: false, label: "12-hour" },
@@ -67,10 +85,7 @@ export function PreferencesSection({
   })
 
   return (
-    <SettingsSection
-      title="Preferences"
-      description="Regional formatting and defaults."
-    >
+    <SettingsSection title="Preferences">
       <form onSubmit={onSubmit}>
         <FieldGroup>
           <Field>
@@ -160,6 +175,146 @@ export function PreferencesSection({
                   options={TIME_FORMAT_OPTIONS}
                   label="Time format"
                 />
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Date format</FieldLabel>
+            <Controller
+              control={control}
+              name="dateFormat"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={DATE_FORMAT_OPTIONS}
+                  label="Date format"
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Which way round a date reads. Month names stay English either way
+              — this changes the order, not the language.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Weight</FieldLabel>
+            <Controller
+              control={control}
+              name="weightUnit"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={WEIGHT_UNIT_OPTIONS}
+                  label="Weight"
+                />
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Water</FieldLabel>
+            <Controller
+              control={control}
+              name="volumeUnit"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={VOLUME_UNIT_OPTIONS}
+                  label="Water"
+                />
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Both are converted for display only. What is stored never changes,
+              so switching back and forth cannot alter a figure you logged.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Start on</FieldLabel>
+            <Controller
+              control={control}
+              name="landingPage"
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={(v) => v && field.onChange(v)}
+                >
+                  <SelectTrigger id="landing-trigger" className="w-full">
+                    <SelectValue>
+                      {(val) =>
+                        navItems.find((item) => item.href === val)?.label ??
+                        "Dashboard"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {navItems.map((item) => (
+                      <SelectItem key={item.href} value={item.href}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-muted-foreground text-xs">
+              Where signing in takes you.
+            </p>
+          </Field>
+
+          <Field>
+            <FieldLabel>Dashboard calendar opens on</FieldLabel>
+            <Controller
+              control={control}
+              name="dashboardCalendarView"
+              render={({ field }) => (
+                <Segmented
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={CALENDAR_CARD_VIEW_OPTIONS}
+                  label="Dashboard calendar opens on"
+                />
+              )}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel>Quick-added meals go to</FieldLabel>
+            <Controller
+              control={control}
+              name="defaultMealType"
+              render={({ field }) => (
+                <Select
+                  value={field.value ? field.value : NO_MEAL_TYPE}
+                  onValueChange={(v) =>
+                    field.onChange(v === NO_MEAL_TYPE ? null : v)
+                  }
+                >
+                  <SelectTrigger id="meal-type-trigger" className="w-full">
+                    <SelectValue>
+                      {(val) =>
+                        MEAL_TYPE_LABELS[val as string] ??
+                        MEAL_TYPE_LABELS.other
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_MEAL_TYPE}>
+                      {MEAL_TYPE_LABELS.other}
+                    </SelectItem>
+                    {MEAL_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {MEAL_TYPE_LABELS[type]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             />
           </Field>
