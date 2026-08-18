@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
+import { serverWrite } from "./_server-write"
 
 // Browser coverage for T5a-S7: manual reorder.
 //
@@ -62,6 +63,11 @@ test("a task can be dragged to a new position, and it persists", async ({
   const before = await somedayOrder(page)
   expect(before).toHaveLength(3)
 
+  // Armed BEFORE the drag, awaited before the reload below. See `_server-write.ts`: the
+  // poll further down reads the optimistic paint and passes while the write is still in
+  // flight, and the reload then aborts it.
+  const written = serverWrite(page)
+
   // Drag the LAST one to the top.
   const handle = page.getByRole("button", { name: `Reorder ${before[2]}` })
   const target = page.getByRole("button", { name: `Reorder ${before[0]}` })
@@ -78,7 +84,9 @@ test("a task can be dragged to a new position, and it persists", async ({
 
   await expect.poll(async () => (await somedayOrder(page))[0]).toBe(before[2])
 
-  // The order came from the server, not from local state.
+  // The order came from the server, not from local state — which is only true once the
+  // write has actually landed.
+  await written
   await page.reload()
   expect((await somedayOrder(page))[0]).toBe(before[2])
 })
@@ -86,6 +94,9 @@ test("a task can be dragged to a new position, and it persists", async ({
 test("the same reorder is possible from the keyboard", async ({ page }) => {
   const before = await somedayOrder(page)
   expect(before).toHaveLength(3)
+
+  // Same reason as the drag test above.
+  const written = serverWrite(page)
 
   // Space lifts, ArrowDown moves, Space drops — dnd-kit's keyboard sensor. The waits are
   // load-bearing: the sensor needs a tick between the lift and the move, and pressing
@@ -99,6 +110,7 @@ test("the same reorder is possible from the keyboard", async ({ page }) => {
   await page.keyboard.press("Space")
 
   await expect.poll(async () => (await somedayOrder(page))[0]).toBe(before[1])
+  await written
   await page.reload()
   expect((await somedayOrder(page))[0]).toBe(before[1])
 })

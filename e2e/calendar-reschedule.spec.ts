@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
 import { deleteEventsMatching } from "./_events"
+import { serverWrite } from "./_server-write"
 
 // Browser coverage for T5b-S6: drag-to-reschedule in the week grid.
 //
@@ -69,6 +70,9 @@ test("a block can be dragged to another day and time, and it sticks", async ({
   // block's own column rather than guessed, so this holds at any viewport and whatever
   // the hour-row height resolves to.
   const block = page.getByRole("button", { name: new RegExp(title) })
+  // Armed before the drag, awaited before the reload. See `_server-write.ts`.
+  const written = serverWrite(page)
+
   const box = (await block.boundingBox())!
   const { columnWidth, hourHeight } = await block.evaluate((node) => {
     const column = (node as HTMLElement).offsetParent as HTMLElement
@@ -96,6 +100,11 @@ test("a block can be dragged to another day and time, and it sticks", async ({
     .toBeCloseTo(11 / 24, 2)
 
   // THE point of the test: it came from the database, not from the optimistic paint.
+  //
+  // Which the poll above cannot establish on its own — it reads the optimistic paint, so it
+  // passes while `rescheduleOccurrence` is still in flight, and the reload then aborts that
+  // write. `written` is armed before the drag; see `_server-write.ts`.
+  await written
   await page.reload()
   const after = await placement(page, title)
   expect(after.top).toBeCloseTo(11 / 24, 2)

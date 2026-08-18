@@ -453,38 +453,48 @@ the button focused and opens nothing. It now clicks until the dialog is actually
 **If a spec starts failing right after a teardown is made faster, look for a click that
 assumes its own effect** rather than putting the slack back.
 
-**Four** e2e have now been seen flaky and none has been solved: `quick-add-burst:42`,
-`todos-reorder:86`, `calendar-reschedule.spec.ts:74` ("a block can be dragged to another day
-and time, and it sticks") — first seen 2026-08-13 — and, first seen 2026-08-17,
-**`todos-reorder:59`** ("a task can be dragged to a new position, and it persists"). They
-pass on retry and a full run therefore exits 0.
-
-The fourth is worth writing down with its shape, because it is the most interesting of them
-and because it is a DIFFERENT test in the same file as the second. It failed like this:
+**Three of the four known flakes were ONE bug, and it is fixed.** `todos-reorder:59`,
+`todos-reorder:86` and `calendar-reschedule:74` were listed here as separate unsolved flakes
+from 2026-08-13. They shared a single shape:
 
 ```
-line 79   await expect.poll(…)   → passed   the optimistic order shows the drag
-line 82   await page.reload()
-line 83   expect(order[0])       → failed   the reloaded order is unchanged
+await expect.poll(…)   // reads the OPTIMISTIC DOM, so it passes immediately
+await page.reload()    // aborts the write that has not landed yet
+expect(…)              // asserts the server agrees. Sometimes it did not.
 ```
 
-Line 82's own comment says it is there to prove "the order came from the server, not from
-local state" — so the assertion did exactly its job. What it cannot tell you is WHICH of two
-things happened: the reload beat the in-flight `reorderTasks` Server Action, or the write
-genuinely did not land. Passing on retry points at the race, and that is a hypothesis rather
-than a diagnosis — **nobody has read the trace yet.** If you are picking this up, that is the
-first thing to do, because the second possibility is a real bug in the one interaction the
-dashboard and `/activity` share.
+`handleReorder` paints synchronously (`setPendingOrder(ids)`) and writes inside a transition,
+so the poll is satisfied while `reorderTasks` is still in flight; the reload then aborts the
+POST. `calendar-reschedule` even carried a comment stating the intent it could not enforce —
+_"THE point of the test: it came from the database, not from the optimistic paint."_
 
-Note the asymmetry that makes the race plausible: `expect.poll` retries until the OPTIMISTIC
-state matches, which can be satisfied before the action resolves, and `page.reload()` then
-fires immediately. The keyboard test below it (`:86`, already flaky) has the same structure.
+**This was proved, not inferred.** Holding the Server Action open for two seconds and
+reloading immediately loses the reorder every time; the order is byte-identical before and
+after. Meanwhile **24 straight repeats of the spec never reproduced it** — so repetition was
+never going to find this, and a rare race is not a rare bug. If you are chasing something
+like it again, build the experiment rather than running the test more times.
 
-The third one is worth noting for how it was found: it was the ONLY flake in that run, and
-the two chronic ones did not fire. That is precisely the case the advice below exists for, so
-it is now a worked example rather than a hypothetical. Treat a non-zero flaky count as a
-triage item rather than a pass, and **do not assume a new flake is one of these three without
-reading its trace.**
+The fix is `serverWrite(page)` in `e2e/_server-write.ts`: arm it BEFORE the interaction, await
+it after the optimistic assertion, then reload. It matches the `Next-Action` header rather
+than method-and-path, because a Server Action posts to the page's own route and a looser
+predicate would resolve on a navigation.
+
+**There was nothing in the DOM to wait on instead**, and that is the part worth carrying:
+`reorderTasks` returns `{ ok: true }` with no toast, and clearing the pending order is
+visually a no-op once the server agrees. The app gives a successful write no signal at all.
+
+**The app behaviour underneath is real and is NOT fixed.** Drag a task and navigate within a
+few hundred milliseconds and the reorder is silently lost — no error, no indication. Same
+family as the disabled-submit trap in §4: an action that appears to work and does not. Low
+stakes for a reorder, and re-dragging fixes it, so it was left alone deliberately rather than
+missed. Anything higher-stakes that writes optimistically should not copy this pattern.
+
+**One flake remains and is genuinely unsolved: `quick-add-burst:42`.** It has no reload and no
+optimistic-then-navigate shape, so none of the above applies to it. Treat a non-zero flaky
+count as a triage item rather than a pass, and **do not assume a new flake is that one without
+reading its trace** — the traces live in `test-results/` and are cleared at the start of every
+run, so capture one the same day or you will be reconstructing it from a log line, which is
+what happened here.
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
 Playwright starts alongside the app on port 3100. **`e2e/ai.setup.ts` points the app at it
