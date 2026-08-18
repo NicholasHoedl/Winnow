@@ -259,12 +259,24 @@ export async function getGoals(
 /** Lightweight goal list (id + title) for pickers — used in the always-mounted task
  * dialog, so it skips getGoals()'s milestone/progress computation (T2). `cache()` for the
  * same reason as getLists: the shell's dialog and the page can both want it in one render. */
+/**
+ * A CEILING, not a filter — unlike `getEventOptions`' window.
+ *
+ * Goals are naturally few: they are things a person is working toward, not a log, so no real
+ * account reaches this. It exists because this is awaited in `(app)/layout.tsx` and therefore
+ * rides in every authenticated page's RSC payload, and "naturally few" is an assumption about
+ * behaviour rather than a property of the schema. A restore from a generated file would
+ * otherwise put the whole set on every page.
+ */
+const GOAL_OPTION_CAP = 500
+
 export const getGoalOptions = cache(async (): Promise<GoalOption[]> => {
   const userId = await requireUserId()
   return db.query.goals.findMany({
     where: eq(goals.userId, userId),
     columns: { id: true, title: true },
     orderBy: [asc(goals.createdAt)],
+    limit: GOAL_OPTION_CAP,
   })
 })
 

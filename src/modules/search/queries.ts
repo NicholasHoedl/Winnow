@@ -8,10 +8,10 @@ import { requireUserId } from "@/lib/session"
 
 import { events } from "@/modules/calendar/schema"
 import { transactions } from "@/modules/budget/schema"
-import { goals } from "@/modules/goals/schema"
+import { goals, milestones } from "@/modules/goals/schema"
 import { habits } from "@/modules/habits/schema"
 import { foods } from "@/modules/meals/schema"
-import { tasks } from "@/modules/todos/schema"
+import { subtasks, tasks } from "@/modules/todos/schema"
 
 import {
   escapeLike,
@@ -44,6 +44,8 @@ export async function searchEverything(
     txnRows,
     goalRows,
     habitRows,
+    milestoneRows,
+    subtaskRows,
   ] = await Promise.all([
     db.query.tasks.findMany({
       where: and(
@@ -105,6 +107,35 @@ export async function searchEverything(
       ),
       columns: { id: true, title: true },
       orderBy: [desc(habits.updatedAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    /**
+     * Milestones and subtasks: the two kinds of free text you type that nothing else here
+     * covers. A milestone is the step you named on a goal, a subtask the step you named on a
+     * task, and neither was findable — so the only way back to one was remembering which
+     * parent it hung off.
+     *
+     * Note what is still deliberately absent, and why the list stops here. Routine ITEMS
+     * follow routines out for the reason stated above — a template is navigation, not a
+     * record. Lists are the same: a handful of names, already on screen at `/activity`.
+     * Meal ENTRIES are snapshots of a food, and `foods` is already searched, so including
+     * them would return the same name once per day it was eaten.
+     *
+     * Title only. Neither table has a notes column, so there is nothing to snippet.
+     */
+    db.query.milestones.findMany({
+      where: and(
+        eq(milestones.userId, userId),
+        ilike(milestones.title, pattern),
+      ),
+      columns: { id: true, title: true, dueDate: true, done: true },
+      orderBy: [desc(milestones.createdAt)],
+      limit: PER_MODULE_LIMIT,
+    }),
+    db.query.subtasks.findMany({
+      where: and(eq(subtasks.userId, userId), ilike(subtasks.title, pattern)),
+      columns: { id: true, title: true, done: true },
+      orderBy: [desc(subtasks.sortOrder)],
       limit: PER_MODULE_LIMIT,
     }),
   ])
@@ -174,6 +205,29 @@ export async function searchEverything(
       href: "/activity/habits",
       score: scoreResult(q, r.title),
     })),
+    // A milestone lives inside its goal's detail dialog, so `/goals` is as close as a URL
+    // gets — the same shape as a task pointing at `/activity` rather than at itself.
+    ...milestoneRows.map(
+      (r): SearchResult => ({
+        type: "milestone",
+        id: r.id,
+        title: r.title,
+        date: r.dueDate,
+        href: "/goals",
+        score: scoreResult(q, r.title),
+        ...(r.done ? { subtitle: "Done" } : {}),
+      }),
+    ),
+    ...subtaskRows.map(
+      (r): SearchResult => ({
+        type: "subtask",
+        id: r.id,
+        title: r.title,
+        href: "/activity",
+        score: scoreResult(q, r.title),
+        ...(r.done ? { subtitle: "Done" } : {}),
+      }),
+    ),
   ]
 
   return rankAndCap(results)

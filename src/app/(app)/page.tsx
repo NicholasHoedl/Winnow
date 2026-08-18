@@ -32,6 +32,7 @@ import { StatCards } from "./_components/stat-cards"
 import { Slate } from "./_components/slate"
 import { NewTaskButton, QuickCapture } from "./_components/quick-capture"
 import { buildSlate } from "./_lib/agenda"
+import { FirstRun } from "./_components/first-run"
 
 export default async function DashboardPage({
   searchParams,
@@ -114,6 +115,29 @@ export default async function DashboardPage({
   // is already filtered to keys this build knows about (`parseCollapsedCards`), so a key left
   // behind by a deleted card cannot fold anything by accident.
   const folded = (card: DashboardCard) => dashboardCollapsed.includes(card)
+
+  /**
+   * Has this account got anything at all?
+   *
+   * Every source the dashboard draws from, because "empty" has to mean empty — a user who
+   * has only logged meals should not be told to start. `budget.totalBudgetedCents` is in
+   * there as well as the spend, since setting a budget and spending nothing is a real state.
+   *
+   * Cheap: all of these are already awaited above for the cards, so this adds no query.
+   */
+  const isFirstRun =
+    tasks.length === 0 &&
+    goals.length === 0 &&
+    habits.length === 0 &&
+    slateEvents.length === 0 &&
+    // `.occurrences`, not `.byDay` — that one is a Record, so `.size` is undefined and
+    // the check would have been silently true forever. Two windows (the Slate horizon and
+    // the visible month); an account holding only a far-future event sees this card once.
+    monthData.occurrences.length === 0 &&
+    budget.expenseCents === 0 &&
+    budget.incomeCents === 0 &&
+    budget.totalBudgetedCents === 0 &&
+    macros.progress.calories.consumed === 0
 
   const goalRows = goals.map((goal) => ({
     id: goal.id,
@@ -205,6 +229,15 @@ export default async function DashboardPage({
           <QuickCapture />
         </div>
       </Reveal>
+
+      {/* Below the quick-add, not above it: the fastest way to stop this card being true is
+          the box directly above, and putting guidance in front of the control it describes
+          would push that control down the page on the one visit it matters most. */}
+      {isFirstRun && (
+        <Reveal delay={0.06}>
+          <FirstRun />
+        </Reveal>
+      )}
 
       {/*
         Three columns of roughly equal height rather than one tall centre column.

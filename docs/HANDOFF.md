@@ -1015,6 +1015,23 @@ still the old indigo.**
   this number tracks what is in the database rather than being fixed. The Journal card was
   measured and found **not** to contribute — hiding it left both numbers identical — so its
   removal in T13 did not improve this, and the figures above still stand.
+- **Page width is a four-step scale, and a new page picks from it rather than inventing a
+  fifth.** The widths were ad hoc — six different values across ten surfaces — which is what
+  made `/goals` use 60% of a 1440px canvas while the dashboard clipped at 1280. The tiers, and
+  what each is for:
+
+  | Tier | Class | For |
+  | --- | --- | --- |
+  | Form | `max-w-3xl` | one column of fields or entries — Settings, Meals, Budget |
+  | List | `max-w-5xl` | a list plus its controls — Calendar, Review, Routines, Habits, Goals |
+  | Board | `max-w-7xl` | genuinely multi-column — Activity |
+  | Full | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920 |
+
+  `/goals` was `max-w-4xl`, the only value off the scale, and is now List like every other
+  page of its shape. Deliberately NOT abstracted into a constant: Tailwind is the vocabulary
+  here and a `PAGE_WIDTH.list` indirection would buy nothing a table cannot say. What matters
+  is that the next page reads this before picking a number.
+
 - **Nav is seven items and does NOT vary any more**, and seven is the measured ceiling.
   `bottom-nav.tsx` is a plain flex with `flex-1` and no overflow handling; seven labels fit
   a 375px phone with nothing to spare, and an eighth needs a More sheet or a scroller first.

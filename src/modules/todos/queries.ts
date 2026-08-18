@@ -211,11 +211,15 @@ const dropExpiredRoutineTasks = cache(
 )
 
 /** `cache()`: the app shell's always-mounted task dialog and the page both need the lists. */
+/** A ceiling for the same reason `getGoalOptions` has one — see the note there. */
+const LIST_CAP = 500
+
 export const getLists = cache(async (): Promise<List[]> => {
   const userId = await requireUserId()
   return db.query.lists.findMany({
     where: eq(lists.userId, userId),
     orderBy: [asc(lists.sortOrder), asc(lists.createdAt)],
+    limit: LIST_CAP,
   })
 })
 

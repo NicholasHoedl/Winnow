@@ -13,6 +13,8 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   CalendarDays,
+  CornerDownRight,
+  Flag,
   Flame,
   ListChecks,
   ListTodo,
@@ -79,6 +81,10 @@ const RESULT_ICON: Record<SearchResultType, LucideIcon> = {
   food: Utensils,
   transaction: Wallet,
   goal: Target,
+  // A milestone is a marker on the way to a goal; a subtask is a step nested under a task,
+  // which is what the indent arrow says at a glance.
+  milestone: Flag,
+  subtask: CornerDownRight,
   // The same flame the Habits nav command uses — one icon, one meaning.
   habit: Flame,
 }
@@ -89,6 +95,8 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
   food: "Food",
   transaction: "Transaction",
   goal: "Goal",
+  milestone: "Milestone",
+  subtask: "Subtask",
   habit: "Habit",
 }
 
@@ -120,7 +128,10 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New event", icon: CalendarDays, href: "/calendar" },
   { label: "New transaction", icon: Wallet, href: "/budget" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
-  { label: "New goal", icon: Target, href: "/activity" },
+  // `/goals`, not `/activity`. This pointed at the merged page from T10 and was left
+  // behind when T13 gave goals their own page back — so the one command in this menu for
+  // making a goal took you to the task list.
+  { label: "New goal", icon: Target, href: "/goals" },
   { label: "New routine", icon: ListChecks, href: "/activity/routines" },
   // `href`, not a `CreateKind`. A kind means a globally-mounted dialog in the app shell for
   // the whole app's lifetime, which is a lot to carry for a rare action — every other

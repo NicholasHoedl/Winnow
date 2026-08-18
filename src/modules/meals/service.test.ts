@@ -253,6 +253,31 @@ describe("parseMealQuickAdd — explicit macros", () => {
   })
 })
 
+describe("parseMealQuickAdd — a macro token must be a whole word", () => {
+  it("does not read macros out of the middle of a name", () => {
+    // The regression this guards: the macro patterns ended at a word boundary but did not
+    // start at one, so `abc278c` matched `278c` from inside the name and logged 278 carbs
+    // while losing that part of the name. Above 100000 the action rejected the whole entry
+    // with "Please fix the errors below.", which reads exactly like a dropped entry.
+    // `null` is the right answer, and it is the improvement. A name with no macro token in
+    // it and no library match is genuinely unparseable, so the quick-add says so — where
+    // before it silently logged 278 carbs under a mangled name. An explicit "couldn't parse
+    // that" is recoverable; a wrong entry you did not notice is not.
+    expect(parseMealQuickAdd("abc278c", FOODS)).toBeNull()
+  })
+
+  it("still reads a macro that IS a whole word", () => {
+    // The other half: the fix must not cost the feature it guards.
+    const parsed = parseMealQuickAdd("snack 200cal 12p 8c 3f", FOODS)
+    expect(parsed).toMatchObject({
+      calories: 200,
+      proteinG: 12,
+      carbsG: 8,
+      fatG: 3,
+    })
+  })
+})
+
 describe("parseMealQuickAdd — library food match", () => {
   const banana = {
     name: "Banana",

@@ -250,10 +250,19 @@ export type ParsedMeal = {
 const QTY_OP_FIRST = /(?:^|\s)[x×*]\s?(\d+(?:\.\d+)?)(?=\s|$)/i
 const QTY_NUM_FIRST = /(?:^|\s)(\d+(?:\.\d+)?)\s?[x×](?=\s|$)/i
 // Macro tokens. Calories REQUIRE "cal"/"kcal" so a bare "c" is unambiguously carbs.
-const MACRO_CALORIES = /(\d+(?:\.\d+)?)\s?k?cals?\b/i
-const MACRO_PROTEIN = /(\d+(?:\.\d+)?)\s?p(?:rotein)?\b/i
-const MACRO_CARBS = /(\d+(?:\.\d+)?)\s?c(?:arbs?)?\b/i
-const MACRO_FAT = /(\d+(?:\.\d+)?)\s?f(?:at)?\b/i
+//
+// **The leading word boundary is a bug fix, not tidying.** These ended at a boundary but did
+// not start at one, so digits-then-letter could be matched from INSIDE a word: a food named
+// `abc278c` parsed as 278 carbs and lost that part of its own name. Above 100000 the action
+// then rejected the whole entry with "Please fix the errors below.", which reads exactly like
+// a dropped entry and cost real time to tell apart from a capture bug.
+//
+// It works because `c` and `2` are both word characters, so there is no boundary between
+// them — while a genuine `600cal` after a space still matches.
+const MACRO_CALORIES = /\b(\d+(?:\.\d+)?)\s?k?cals?\b/i
+const MACRO_PROTEIN = /\b(\d+(?:\.\d+)?)\s?p(?:rotein)?\b/i
+const MACRO_CARBS = /\b(\d+(?:\.\d+)?)\s?c(?:arbs?)?\b/i
+const MACRO_FAT = /\b(\d+(?:\.\d+)?)\s?f(?:at)?\b/i
 const LEADING_MEAL_TYPE = /^(breakfast|lunch|dinner|snack)\b/i
 
 // Blank a span with spaces so indices are preserved and later regexes can't re-see it.

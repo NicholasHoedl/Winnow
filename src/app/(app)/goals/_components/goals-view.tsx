@@ -128,7 +128,7 @@ export function GoalsView({
     : null
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 lg:p-6">
+    <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
