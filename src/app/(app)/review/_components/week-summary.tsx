@@ -7,10 +7,11 @@ import { useProposal } from "@/modules/companion/use-proposal"
 import { SummaryProposal } from "@/components/companion/summary-proposal"
 import { ToolPanel } from "@/components/companion/tool-panel"
 import { Button } from "@/components/ui/button"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /** "Jul 27" from the date a review was generated for. */
-function weekLabel(createdAt: Date): string {
-  return createdAt.toLocaleDateString("en-US", {
+function weekLabel(createdAt: Date, locale: string): string {
+  return createdAt.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -44,6 +45,7 @@ export function WeekSummary({
   weekStart: string
   isCurrentWeek: boolean
 }) {
+  const locale = useDateLocale()
   // No `onApplied`: a summary has nothing to create, so there is nowhere to go.
   const proposal = useProposal({ pending })
   const { busy, active, payload } = proposal
@@ -95,7 +97,7 @@ export function WeekSummary({
         <SummaryProposal
           key={proposal.version}
           payload={payload.payload}
-          weekLabel={weekLabel(new Date(active.createdAt))}
+          weekLabel={weekLabel(new Date(active.createdAt), locale)}
           pending={busy}
           onDone={proposal.done}
         />

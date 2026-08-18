@@ -28,10 +28,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
-function formatDue(dueDate: string): string {
+function formatDue(dueDate: string, locale: string): string {
   const [year, month, day] = dueDate.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
@@ -54,6 +55,7 @@ export function TaskItem({
   /** Skip just this cycle. Only offered for a generated instance. */
   onSkip: (task: TaskWithSeries) => void
 }) {
+  const locale = useDateLocale()
   const done = task.status === "done"
   const status = dueStatus(task.dueDate, new Date(), timeZone)
   const series = task.series
@@ -121,7 +123,7 @@ export function TaskItem({
                         ? "Overdue"
                         : status === "due-today"
                           ? "Due today"
-                          : formatDue(task.dueDate)}
+                          : formatDue(task.dueDate, locale)}
                     </Badge>
                   )}
                   {series && (

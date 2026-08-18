@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { DashboardCard } from "./dashboard-card"
 
 import type { AgendaGroup, SlateBand } from "../_lib/agenda"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /** Key for the ungrouped tasks in the local order overlay. Not a valid uuid, so it can
  *  never collide with a routine id. */
@@ -38,9 +39,9 @@ const LATER_SHOWN = 10
 
 /** "12 Sep" — the one date formatter, where there used to be two byte-identical copies
  *  under two names in two files. */
-function shortDate(date: string): string {
+function shortDate(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
@@ -70,6 +71,7 @@ function TaskRow({
   /** The Later band only, where a row's day is the whole reason it is down there. */
   showDate?: boolean
 }) {
+  const locale = useDateLocale()
   return (
     <div className="hover:bg-accent flex items-center gap-2.5 rounded-md py-1.5 pr-2 transition-colors">
       <Gutter>
@@ -90,7 +92,7 @@ function TaskRow({
       </Link>
       {showDate && task.dueDate && !done && (
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {shortDate(task.dueDate)}
+          {shortDate(task.dueDate, locale)}
         </span>
       )}
     </div>

@@ -17,10 +17,13 @@ export function windowLabel(days: number): string {
   return `the last ${days} days`
 }
 
-/** A plain `YYYY-MM-DD` rendered as "Aug 30, 2026", read as a calendar date, not an instant. */
-export function formatGoalDate(date: string): string {
+/**
+ * A plain `YYYY-MM-DD` rendered as "Aug 30, 2026" (or "30 Aug 2026"), read as a calendar
+ * date, not an instant. `locale` is required for the reason `formatLongDate`'s is.
+ */
+export function formatGoalDate(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",

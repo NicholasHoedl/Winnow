@@ -16,6 +16,7 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
 import { formatLongDate } from "@/lib/format"
+import { dateLocale } from "@/lib/preferences"
 import type { DashboardCard } from "@/lib/preferences"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
@@ -46,6 +47,7 @@ export default async function DashboardPage({
     slateHorizonDays,
     dashboardCollapsed,
     dashboardCalendarView,
+    dateFormat,
   } = await getUserPreferences()
   // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
   // than in client state so the server renders the right one — no flash of the wrong view,
@@ -135,6 +137,7 @@ export default async function DashboardPage({
     timeZone,
     slateHorizonDays,
     routineNames,
+    dateLocale(dateFormat),
   )
 
   return (
@@ -151,7 +154,7 @@ export default async function DashboardPage({
         <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
-              {formatLongDate(today)}
+              {formatLongDate(today, dateLocale(dateFormat))}
             </p>
             {/* No tagline under this any more.
 

@@ -18,11 +18,12 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
-function formatDue(date: string | null): string {
+function formatDue(date: string | null, locale: string): string {
   if (!date) return "No due date"
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -48,6 +49,7 @@ export function RunRoutineDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const locale = useDateLocale()
   const [anchorDate, setAnchorDate] = React.useState(today)
   const [pending, startTransition] = React.useTransition()
 
@@ -122,7 +124,7 @@ export function RunRoutineDialog({
               >
                 <span className="min-w-0 truncate">{task.title}</span>
                 <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                  {formatDue(task.dueDate)}
+                  {formatDue(task.dueDate, locale)}
                 </span>
               </li>
             ))}

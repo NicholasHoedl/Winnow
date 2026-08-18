@@ -67,8 +67,12 @@ export function shiftForView(
   return `${shiftMonth(date.slice(0, 7), delta)}-01`
 }
 
-function formatDay(date: string, options: Intl.DateTimeFormatOptions): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
+function formatDay(
+  date: string,
+  options: Intl.DateTimeFormatOptions,
+  locale: string,
+): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString(locale, {
     ...options,
     timeZone: "UTC",
   })
@@ -79,14 +83,21 @@ export function viewTitle(
   view: CalendarViewKind,
   date: string,
   weekStartsOn = 0,
+  // Defaulted for the same reason `weekStartsOn` above is: this file's helpers are called
+  // positionally. `calendar-view.tsx` is the only caller and passes it.
+  locale = "en-US",
 ): string {
   if (view === "day") {
-    return formatDay(date, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })
+    return formatDay(
+      date,
+      {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      },
+      locale,
+    )
   }
   if (view === "week") {
     const week = weekDates(date, weekStartsOn)
@@ -95,19 +106,27 @@ export function viewTitle(
     // boundary → "26 July – 1 August 2026"; across a year → both years spelled out.
     const sameYear = start.slice(0, 4) === end.slice(0, 4)
     const sameMonth = sameYear && start.slice(0, 7) === end.slice(0, 7)
-    const from = formatDay(start, {
-      day: "numeric",
-      month: sameMonth ? undefined : "long",
-      year: sameYear ? undefined : "numeric",
-    })
-    const to = formatDay(end, {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    })
+    const from = formatDay(
+      start,
+      {
+        day: "numeric",
+        month: sameMonth ? undefined : "long",
+        year: sameYear ? undefined : "numeric",
+      },
+      locale,
+    )
+    const to = formatDay(
+      end,
+      {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      },
+      locale,
+    )
     return `${from} – ${to}`
   }
-  return formatDay(date, { month: "long", year: "numeric" })
+  return formatDay(date, { month: "long", year: "numeric" }, locale)
 }
 
 /** Whether `date` is the period the view would show for `today` — used to decide if a

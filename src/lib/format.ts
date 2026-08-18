@@ -1,10 +1,17 @@
 // Client-safe display formatters keyed off user preferences.
 
-/** A 'YYYY-MM-DD' → "Monday, July 21". Parsed as UTC so the wall date is shown
- * verbatim, never shifted by the viewer's own offset. */
-export function formatLongDate(date: string): string {
+/**
+ * A 'YYYY-MM-DD' → "Monday, July 21". Parsed as UTC so the wall date is shown verbatim,
+ * never shifted by the viewer's own offset.
+ *
+ * `locale` is required rather than defaulted, and that is the point: a default would have
+ * let the twenty-odd call sites that used to hardcode `"en-US"` keep doing so silently.
+ * Client components get it from `useDateLocale()`; server ones from `dateLocale(dateFormat)`
+ * on the preferences they already read.
+ */
+export function formatLongDate(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",

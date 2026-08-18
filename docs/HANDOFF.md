@@ -521,6 +521,33 @@ written by hand in migration `0033`. Two consequences travel with that:
 If you ever need a real declared reference, the fix is to move `priorityEnum` (and `lists`)
 somewhere neutral so routines stops importing todos — not to add the import and hope.
 
+**A client hook called from a server component is invisible to `tsc` AND to lint.** Only the
+e2e suite catches it, and that is the whole argument for running the suite on work that looks
+purely mechanical. Threading a `useDateLocale()` through the date formatters produced *0
+typecheck errors, 0 lint errors and 38 failing e2e* on the first attempt, and 9 on the second
+— every one of them `Attempted to call useDateLocale() from the server`.
+
+The reason it took two rounds is worth more than the bug. The guard used to find the offenders
+was `head -1 <file> | grep -q '"use client"'`, and `review-view.tsx` opens with:
+
+```
+// Read-only, so this is a server component — no "use client" on this
+```
+
+So a file that says in its first line that it is a server component was classified as a client
+one, by a check that matched the quoted string inside that sentence. **Grepping for a
+directive will find it in prose.** The honest check takes the first non-blank, non-comment
+line and requires it to BE the directive:
+
+```
+first = first line that is not blank and does not start with // or * or /*
+ok    = first in ('"use client"', "'use client'")
+```
+
+Three server components were caught this way — `trends-section.tsx`,
+`weight-trend-section.tsx` and `review-view.tsx`. All three now take `locale` as a prop from
+their page, which is the shape the parents already used for `currency`.
+
 **React's streaming staging div.** Fizz emits each completed Suspense boundary as
 `<div hidden id="S:n">` plus a `$RC(...)` script that relocates the content. In between,
 the DOM holds everything **twice**, and Playwright's strict mode counts both — so a loose

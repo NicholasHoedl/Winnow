@@ -12,11 +12,12 @@ import { usePreferences } from "@/components/preferences/preferences-provider"
 import { useCreateIntent } from "@/components/create/create-intent"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 // Short, human date for the confirmation toast ("Sat, Jul 26").
-function formatDue(date: string): string {
+function formatDue(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -30,6 +31,7 @@ function formatDue(date: string): string {
  * title. Falls back to today's date when no date phrase is present.
  */
 export function QuickCapture() {
+  const locale = useDateLocale()
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
   const { timeZone } = usePreferences()
@@ -52,7 +54,7 @@ export function QuickCapture() {
       const result = await createTask({ title, dueDate })
       if (result.ok) {
         toast.success(`Added “${title}”`, {
-          description: `Due ${formatDue(dueDate)}`,
+          description: `Due ${formatDue(dueDate, locale)}`,
         })
       } else {
         toast.error(result.error)

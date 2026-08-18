@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { RecurrenceFields } from "@/components/shared/recurrence-fields"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 const NO_LIST = "none"
 // Sentinel for the optional goal/event links (a Select item can't carry an empty value).
@@ -54,17 +55,18 @@ function eventLabel(
   event: EventOption,
   timeZone: string,
   use24Hour: boolean,
+  locale: string,
 ): string {
   const start = new Date(event.startAt)
   // No year: the popup is only as wide as the trigger and clips overflow, so every
   // character has to earn its place — the time is what tells same-day series apart.
-  const date = start.toLocaleDateString("en-US", {
+  const date = start.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     timeZone,
   })
   if (event.allDay) return `${event.title} · ${date}`
-  const time = start.toLocaleTimeString("en-US", {
+  const time = start.toLocaleTimeString(locale, {
     hour: "numeric",
     minute: "2-digit",
     hour12: !use24Hour,
@@ -165,6 +167,7 @@ export function TaskDialog({
   initialTitle?: string
   initialDueDate?: string
 }) {
+  const locale = useDateLocale()
   const isEdit = !!task
   const isRecurring = !!task?.series
   const { defaultTaskPriority, timeZone, use24HourTime } = usePreferences()
@@ -503,7 +506,12 @@ export function TaskDialog({
                               {(value) => {
                                 const match = events.find((e) => e.id === value)
                                 return match
-                                  ? eventLabel(match, timeZone, use24HourTime)
+                                  ? eventLabel(
+                                      match,
+                                      timeZone,
+                                      use24HourTime,
+                                      locale,
+                                    )
                                   : "No event"
                               }}
                             </SelectValue>
@@ -512,7 +520,12 @@ export function TaskDialog({
                             <SelectItem value={NO_LINK}>No event</SelectItem>
                             {events.map((event) => (
                               <SelectItem key={event.id} value={event.id}>
-                                {eventLabel(event, timeZone, use24HourTime)}
+                                {eventLabel(
+                                  event,
+                                  timeZone,
+                                  use24HourTime,
+                                  locale,
+                                )}
                               </SelectItem>
                             ))}
                           </SelectContent>

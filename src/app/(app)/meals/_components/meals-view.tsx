@@ -45,6 +45,7 @@ import { MealEntryItem } from "./meal-entry-item"
 import { MealQuickAdd } from "./meal-quick-add"
 import { QuickPickStrip } from "./quick-pick-strip"
 import { TargetsDialog } from "./targets-dialog"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 function shiftDate(date: string, delta: number): string {
   const [year, month, day] = date.split("-").map(Number)
@@ -53,10 +54,10 @@ function shiftDate(date: string, delta: number): string {
     .slice(0, 10)
 }
 
-function formatDay(date: string, today: string): string {
+function formatDay(date: string, today: string, locale: string): string {
   if (date === today) return "Today"
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -92,6 +93,7 @@ export function MealsView({
   /** Server-read: whether the Open Food Facts integration is on for this install. */
   offEnabled: boolean
 }) {
+  const locale = useDateLocale()
   const [logOpen, setLogOpen] = React.useState(false)
   const [editingEntry, setEditingEntry] = React.useState<MealEntry | null>(null)
   const [foodsOpen, setFoodsOpen] = React.useState(false)
@@ -228,7 +230,7 @@ export function MealsView({
           </LinkPending>
         </Link>
         <span className="min-w-28 text-center text-sm font-medium">
-          {formatDay(date, today)}
+          {formatDay(date, today, locale)}
         </span>
         <Link
           href={`/meals?date=${shiftDate(date, 1)}`}

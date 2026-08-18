@@ -7,9 +7,9 @@ import type { ChartSeries } from "@/components/charts/types"
 import type { WeeklyWeight } from "@/modules/meals/service"
 
 /** 'YYYY-MM-DD' → "7/20". Parsed as UTC so the label never shifts by an offset. */
-function weekLabel(date: string): string {
+function weekLabel(date: string, locale: string): string {
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     month: "numeric",
     day: "numeric",
     timeZone: "UTC",
@@ -21,7 +21,14 @@ function lb(value: number): string {
   return String(Number(value.toFixed(1)))
 }
 
-export function WeightTrendSection({ points }: { points: WeeklyWeight[] }) {
+export function WeightTrendSection({
+  points,
+  locale,
+}: {
+  points: WeeklyWeight[]
+  /** A prop, not a hook — this renders on the server. See `TrendsSection`. */
+  locale: string
+}) {
   // Nothing logged: stay quiet. The weigh-in card sits directly above, so there's no
   // discovery problem to solve with an empty box here.
   if (points.length === 0) return null
@@ -38,7 +45,7 @@ export function WeightTrendSection({ points }: { points: WeeklyWeight[] }) {
     )
   }
 
-  const labels = points.map((point) => weekLabel(point.weekStart))
+  const labels = points.map((point) => weekLabel(point.weekStart, locale))
   const series: ChartSeries[] = [
     {
       name: "Weight",

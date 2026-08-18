@@ -13,10 +13,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
-function formatDate(date: string): string {
+function formatDate(date: string, locale: string): string {
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
@@ -38,6 +39,7 @@ export function TransactionItem({
    *  which clears seriesId and takes this menu item away with it. */
   onStopRepeating: (tx: TransactionWithSeries) => void
 }) {
+  const locale = useDateLocale()
   const { currency } = usePreferences()
   const isIncome = transaction.type === "income"
   const isRepeating = transaction.seriesId !== null
@@ -48,7 +50,7 @@ export function TransactionItem({
   const details: string[] = []
   if (payee && description) details.push(description)
   if (title !== categoryName) details.push(categoryName)
-  details.push(formatDate(transaction.date))
+  details.push(formatDate(transaction.date, locale))
   const subtitle = details.join(" · ")
 
   return (

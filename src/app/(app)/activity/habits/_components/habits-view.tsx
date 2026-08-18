@@ -48,6 +48,7 @@ import {
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { HabitDialog } from "./habit-dialog"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /**
  * When a habit was retired, in the local zone.
@@ -57,8 +58,8 @@ import { HabitDialog } from "./habit-dialog"
  * `archivedAt` is a real timestamp, so it wants the opposite treatment — read it where
  * the user is, or a habit archived this evening reads as tomorrow.
  */
-function formatArchivedAt(at: Date): string {
-  return at.toLocaleDateString("en-US", {
+function formatArchivedAt(at: Date, locale: string): string {
+  return at.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -67,9 +68,9 @@ function formatArchivedAt(at: Date): string {
 
 /** A wall-date formatted for a hover title. Parsed and formatted in UTC — the string has
  *  no instant behind it, so local parsing would shift it a day west of Greenwich. */
-function formatDay(date: string): string {
+function formatDay(date: string, locale: string): string {
   const [y, m, d] = date.split("-").map(Number)
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -99,6 +100,7 @@ function HabitPanel({
   archiving: boolean
   onDelete: (habit: HabitRow) => void
 }) {
+  const locale = useDateLocale()
   // Renamed on the way out of `card`: destructuring it as `window` shadows the global one
   // inside this component, so a later edit reaching for `window.matchMedia` would get a
   // habit's adherence figures and no error worth reading.
@@ -117,7 +119,7 @@ function HabitPanel({
       // precision the data does not have, and everything not-done stays one flat track so
       // a rest day does not read as a failure.
       className: count > 0 ? accent.fill : "fill-muted",
-      title: `${formatDay(cell.date)}${count > 0 ? ` — ${count}` : ""}`,
+      title: `${formatDay(cell.date, locale)}${count > 0 ? ` — ${count}` : ""}`,
     }
   })
 
@@ -242,6 +244,7 @@ export function HabitsView({
   /** Retired habits, so archiving is something you can undo — see `getArchivedHabits`. */
   archived: ArchivedHabit[]
 }) {
+  const locale = useDateLocale()
   const days = dateRange(from, to)
   const [dialogOpen, setDialogOpen] = React.useState(false)
   // Kept when the dialog closes so its contents don't swap mid-exit-animation.
@@ -389,7 +392,7 @@ export function HabitsView({
                       {habit.title}
                     </p>
                     <p className="text-muted-foreground text-xs">
-                      Archived {formatArchivedAt(habit.archivedAt)}
+                      Archived {formatArchivedAt(habit.archivedAt, locale)}
                     </p>
                   </div>
                   <Button

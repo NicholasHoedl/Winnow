@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 
 import { formatLongDate } from "@/lib/format"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 import type { GoalWithProgress } from "@/modules/goals/queries"
 import { Progress } from "@/components/ui/progress"
 
@@ -99,6 +100,7 @@ export function GoalCard({
   onOpenDetail: () => void
 }) {
   const open = openTaskCount(goal)
+  const locale = useDateLocale()
   return (
     <div
       // A stable hook, because the obvious one moves: the suite's `visibleCard` matches
@@ -146,7 +148,7 @@ export function GoalCard({
           {goal.targetDate && (
             <span className="flex items-center gap-1">
               <CalendarDays className="size-3.5" />
-              {formatLongDate(goal.targetDate)}
+              {formatLongDate(goal.targetDate, locale)}
               {goal.targetEvent && (
                 <span className="truncate">· {goal.targetEvent.title}</span>
               )}

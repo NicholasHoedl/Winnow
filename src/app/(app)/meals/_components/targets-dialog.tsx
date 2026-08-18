@@ -33,6 +33,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 type TargetsFormValues = {
   calories: number
@@ -43,9 +44,9 @@ type TargetsFormValues = {
 }
 
 /** "2026-03-01" → "1 Mar 2026". Parsed as UTC, like every other date label here. */
-function periodLabel(date: string): string {
+function periodLabel(date: string, locale: string): string {
   const [year, month, day] = date.split("-").map(Number)
-  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, month - 1, day)).toLocaleDateString(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -69,6 +70,7 @@ export function TargetsDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const locale = useDateLocale()
   const [pending, startTransition] = React.useTransition()
   const {
     register,
@@ -195,7 +197,7 @@ export function TargetsDialog({
               <p className="text-muted-foreground text-xs">
                 {startsOn === date
                   ? "Days before this keep their previous targets."
-                  : `These targets start on ${periodLabel(startsOn)} — earlier days are unchanged.`}
+                  : `These targets start on ${periodLabel(startsOn, locale)} — earlier days are unchanged.`}
               </p>
               <FieldError errors={[errors.effectiveFrom]} />
             </Field>
@@ -305,7 +307,7 @@ export function TargetsDialog({
                               starting on a date anyone chose. */}
                           {period.effectiveFrom === "1970-01-01"
                             ? "From the start"
-                            : `From ${periodLabel(period.effectiveFrom)}`}
+                            : `From ${periodLabel(period.effectiveFrom, locale)}`}
                         </span>
                         <span className="text-muted-foreground text-xs">
                           {Math.round(period.calories)} kcal ·{" "}

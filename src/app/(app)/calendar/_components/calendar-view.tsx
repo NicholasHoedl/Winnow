@@ -28,7 +28,10 @@ import { addDays } from "@/lib/date"
 import { occurrenceKey } from "@/modules/calendar/service"
 import { movedSpan } from "@/components/calendar/grid-geometry"
 import { TimeGrid, type Reschedule } from "@/components/calendar/time-grid"
-import { usePreferences } from "@/components/preferences/preferences-provider"
+import {
+  useDateLocale,
+  usePreferences,
+} from "@/components/preferences/preferences-provider"
 
 import { AgendaView } from "./agenda-view"
 import { CalendarManager } from "./calendar-manager"
@@ -78,6 +81,7 @@ export function CalendarView({
   calendars: Calendar[]
 }) {
   const { weekStartsOn } = usePreferences()
+  const locale = useDateLocale()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingOccurrence, setEditingOccurrence] =
     React.useState<EventOccurrence | null>(null)
@@ -350,7 +354,7 @@ export function CalendarView({
           </LinkPending>
         </Link>
         <span className="min-w-52 text-center text-sm font-medium">
-          {viewTitle(view, date, weekStartsOn)}
+          {viewTitle(view, date, weekStartsOn, locale)}
         </span>
         <Link
           href={calendarHref(view, shiftForView(view, date, 1))}

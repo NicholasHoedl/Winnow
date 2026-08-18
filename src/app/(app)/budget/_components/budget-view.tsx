@@ -41,10 +41,11 @@ import { CategoryManager } from "./category-manager"
 import { TransactionDialog } from "./transaction-dialog"
 import { TransactionFilters } from "./transaction-filters"
 import { TransactionItem } from "./transaction-item"
+import { useDateLocale } from "@/components/preferences/preferences-provider"
 
-function formatMonth(month: string): string {
+function formatMonth(month: string, locale: string): string {
   const [year, m] = month.split("-").map(Number)
-  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString("en-US", {
+  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(locale, {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
@@ -110,6 +111,7 @@ export function BudgetView({
    */
   importTool?: React.ReactNode
 }) {
+  const locale = useDateLocale()
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] =
     React.useState<TransactionWithSeries | null>(null)
@@ -246,7 +248,7 @@ export function BudgetView({
           </LinkPending>
         </Link>
         <span className="min-w-40 text-center text-sm font-medium">
-          {formatMonth(month)}
+          {formatMonth(month, locale)}
         </span>
         <Link
           href={`/budget?month=${shiftMonth(month, 1)}`}

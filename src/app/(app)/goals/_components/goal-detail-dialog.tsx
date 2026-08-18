@@ -18,7 +18,10 @@ import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
 import { createTask } from "@/modules/todos/actions"
-import { usePreferences } from "@/components/preferences/preferences-provider"
+import {
+  useDateLocale,
+  usePreferences,
+} from "@/components/preferences/preferences-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -71,6 +74,7 @@ export function GoalDetailDialog({
   onEdit: (goal: GoalWithProgress) => void
 }) {
   const { timeZone } = usePreferences()
+  const locale = useDateLocale()
   // The same hook the dashboard card, `/activity`'s strip and the habits page use. It
   // returns `pendingId` rather than a boolean, so logging one habit does not disable the
   // rest — a shared flag disabled every habit at once when this was first written.
@@ -158,10 +162,10 @@ export function GoalDetailDialog({
             <DialogDescription>
               {goal.targetDate
                 ? urgency === "overdue" && !complete
-                  ? `Past target · ${formatGoalDate(goal.targetDate)}`
+                  ? `Past target · ${formatGoalDate(goal.targetDate, locale)}`
                   : urgency === "due-today" && !complete
                     ? "Target today"
-                    : `Target ${formatGoalDate(goal.targetDate)}`
+                    : `Target ${formatGoalDate(goal.targetDate, locale)}`
                 : "No target date."}
             </DialogDescription>
           </DialogHeader>
@@ -320,7 +324,7 @@ export function GoalDetailDialog({
                               : "text-muted-foreground",
                           )}
                         >
-                          {formatGoalDate(milestone.dueDate)}
+                          {formatGoalDate(milestone.dueDate, locale)}
                         </span>
                       )}
                       {/* Make it a task, one way, with nothing stored pointing back.

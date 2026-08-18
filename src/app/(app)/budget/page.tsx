@@ -10,7 +10,11 @@ import {
 } from "@/modules/budget/service"
 import { aiReady } from "@/modules/companion/ai-settings"
 import { getPendingProposals } from "@/modules/companion/queries"
-import { getAiSettings, getUserPreferences } from "@/modules/preferences/queries"
+import {
+  getAiSettings,
+  getUserPreferences,
+} from "@/modules/preferences/queries"
+import { dateLocale } from "@/lib/preferences"
 import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
@@ -45,7 +49,7 @@ export default async function BudgetPage({
   }>
 }) {
   const params = await searchParams
-  const { timeZone, currency } = await getUserPreferences()
+  const { timeZone, currency, dateFormat } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone) // YYYY-MM-DD
   const currentMonth = today.slice(0, 7) // YYYY-MM
   const month =
@@ -102,6 +106,7 @@ export default async function BudgetPage({
           trends={trends}
           categories={categories}
           currency={currency}
+          locale={dateLocale(dateFormat)}
         />
       }
       // Passed as an element for the same reason the two sections above are: the page
