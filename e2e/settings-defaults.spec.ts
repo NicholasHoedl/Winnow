@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { pageAction } from "./_menu"
+
 // Two preferences that change what another page DOES, rather than how it formats something:
 // `defaultCalendarView` decides which view `/calendar` opens on, and `balanceMacroTargets`
 // decides whether saving macro targets derives carbs from the other three.
@@ -124,7 +126,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
   await savePreferences(page)
 
   await page.goto(`/meals?date=${DATE}`)
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
 
   // 2000 = 150*4 + c*4 + 60*9  ->  c = (2000 - 600 - 540) / 4 = 215
   await page.getByLabel("Applies from").fill(DATE)
@@ -143,7 +145,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
   // Protein and fat alone exceeding the calories is refused rather than clamped to 0 —
   // clamping would store a row whose parts exceed its whole, and carbs of 0 means
   // "untracked" everywhere else.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await page.getByLabel("Applies from").fill(DATE)
   await page.getByLabel("Calories").fill("500")
   await page.getByRole("button", { name: "Save", exact: true }).click()
@@ -158,12 +160,12 @@ test("balancing derives carbs from calories, protein and fat", async ({
   await savePreferences(page)
 
   await page.goto(`/meals?date=${DATE}`)
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   await expect(page.getByLabel("Carbs (g)")).not.toHaveAttribute("readonly", "")
   await page.getByRole("button", { name: "Cancel" }).click()
 
   // Clean up: remove the period this test created, then put the preference back.
-  await page.getByRole("button", { name: "Set targets" }).click()
+  await pageAction(page, "Set targets")
   const row = page
     .locator("li")
     .filter({ hasText: /From 1 Apr 2019/ })

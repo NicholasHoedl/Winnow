@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "./_test"
 
+import { pageAction } from "./_menu"
+
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
 import { announces, meter } from "./_habits"
@@ -417,7 +419,7 @@ test("a summary refinement replaces it in place", async ({ page }) => {
  */
 async function ensureFoodCategory(page: Page): Promise<boolean> {
   await page.goto("/budget")
-  await page.getByRole("button", { name: "Manage categories" }).click()
+  await pageAction(page, "Manage categories")
   const dialog = page.getByRole("dialog")
   await expect(dialog).toBeVisible()
 
@@ -436,7 +438,7 @@ async function ensureFoodCategory(page: Page): Promise<boolean> {
 
 async function removeFoodCategory(page: Page) {
   await page.goto("/budget")
-  await page.getByRole("button", { name: "Manage categories" }).click()
+  await pageAction(page, "Manage categories")
   await page.getByRole("button", { name: "Delete Food" }).click()
   await page.getByRole("button", { name: "Delete category" }).click()
   await expect(page.getByText("Food", { exact: true })).toHaveCount(0)

@@ -9,6 +9,7 @@ import {
   FolderCog,
   Plus,
   Wallet,
+  MoreVertical,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -33,6 +34,12 @@ import {
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
 
 import { BudgetQuickAdd } from "./budget-quick-add"
@@ -212,22 +219,32 @@ export function BudgetView({
           </h1>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Manage categories"
-            onClick={() => setCategoriesOpen(true)}
-          >
-            <FolderCog className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Set budgets"
-            onClick={() => setBudgetsOpen(true)}
-          >
-            <Wallet className="size-4" />
-          </Button>
+          {/* One named menu instead of a row of bare icons — see the note on /activity. A
+              phone has no hover, so the glyph is all you get, and none of these is guessable
+              from it. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Budget actions"
+                />
+              }
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCategoriesOpen(true)}>
+                <FolderCog className="size-4" />
+                Manage categories
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBudgetsOpen(true)}>
+                <Wallet className="size-4" />
+                Set budgets
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             Add

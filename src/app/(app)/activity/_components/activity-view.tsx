@@ -2,7 +2,15 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Filter, Plus, Repeat, Settings2, X } from "lucide-react"
+import {
+  ArrowRight,
+  Filter,
+  MoreVertical,
+  Plus,
+  Repeat,
+  Settings2,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
@@ -323,23 +331,36 @@ export function ActivityView({
             Activity
           </h1>
         </div>
+        {/* Secondary actions behind one named menu, rather than a row of bare icons.
+            On a phone there is no hover, so an icon is the only thing you get and
+            "repeating tasks" is not guessable from a loop glyph — while on any width the
+            row of them was chrome standing between the heading and the list. One trigger
+            costs less room AND says what everything inside it does. Same shape as the
+            per-row "Task actions" menu this page already uses. */}
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Repeating tasks"
-            onClick={() => setRulesOpen(true)}
-          >
-            <Repeat className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Manage lists"
-            onClick={() => setListManagerOpen(true)}
-          >
-            <Settings2 className="size-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Activity actions"
+                />
+              }
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setRulesOpen(true)}>
+                <Repeat className="size-4" />
+                Repeating tasks
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setListManagerOpen(true)}>
+                <Settings2 className="size-4" />
+                Manage lists
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             New task

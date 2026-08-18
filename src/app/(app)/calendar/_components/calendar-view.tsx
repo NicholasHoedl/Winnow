@@ -294,13 +294,18 @@ export function CalendarView({
               </Link>
             ))}
           </div>
+          {/* A word rather than a menu: this page has exactly ONE secondary action, and a
+              dropdown wrapping a single item is more chrome than the icon it replaced. The
+              `aria-label` stays and still wins as the accessible name, so the visible text
+              can be the short form. */}
           <Button
             variant="outline"
-            size="icon"
+            size="sm"
             aria-label="Manage calendars"
             onClick={() => setManagerOpen(true)}
           >
             <Layers className="size-4" />
+            Calendars
           </Button>
           <Button onClick={() => openCreate()}>
             <CalendarPlus className="size-4" />

@@ -10,6 +10,7 @@ import {
   Library,
   Plus,
   Target,
+  MoreVertical,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -34,6 +35,12 @@ import {
   sumMicros,
 } from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { DateJumpButton } from "@/components/shared/date-jump-button"
 
 import { CopyDayDialog } from "./copy-day-dialog"
@@ -186,30 +193,36 @@ export function MealsView({
           </h1>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Copy a day"
-            onClick={() => setCopyOpen(true)}
-          >
-            <CopyPlus className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Food library"
-            onClick={() => setFoodsOpen(true)}
-          >
-            <Library className="size-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Set targets"
-            onClick={() => setTargetsOpen(true)}
-          >
-            <Target className="size-4" />
-          </Button>
+          {/* One named menu instead of a row of bare icons — see the note on /activity. A
+              phone has no hover, so the glyph is all you get, and none of these is guessable
+              from it. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Meals actions"
+                />
+              }
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setCopyOpen(true)}>
+                <CopyPlus className="size-4" />
+                Copy a day
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFoodsOpen(true)}>
+                <Library className="size-4" />
+                Food library
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTargetsOpen(true)}>
+                <Target className="size-4" />
+                Set targets
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             Log food

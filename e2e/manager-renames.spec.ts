@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { pageAction } from "./_menu"
+
 /**
  * The two "manager" dialogs can now rename what they list.
  *
@@ -17,7 +19,7 @@ test("a list can be renamed, and keeps its tasks", async ({ page }) => {
   const after = `${before} renamed`
 
   await page.goto("/activity")
-  await page.getByRole("button", { name: "Manage lists" }).click()
+  await pageAction(page, "Manage lists")
   const dialog = page.getByRole("dialog")
 
   await dialog.getByLabel("New list name").fill(before)
@@ -50,7 +52,7 @@ test("a category can be renamed, but not switched between income and expense", a
   const after = `${before} renamed`
 
   await page.goto("/budget")
-  await page.getByRole("button", { name: "Manage categories" }).click()
+  await pageAction(page, "Manage categories")
   const dialog = page.getByRole("dialog")
 
   await dialog.getByLabel("Name").fill(before)
