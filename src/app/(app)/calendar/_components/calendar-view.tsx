@@ -28,6 +28,7 @@ import { addDays } from "@/lib/date"
 import { occurrenceKey } from "@/modules/calendar/service"
 import { movedSpan } from "@/components/calendar/grid-geometry"
 import { TimeGrid, type Reschedule } from "@/components/calendar/time-grid"
+import { useWriteGuard } from "@/components/shared/use-write-guard"
 import {
   useDateLocale,
   usePreferences,
@@ -91,7 +92,10 @@ export function CalendarView({
   const [hiddenIds, setHiddenIds] = React.useState<ReadonlySet<string>>(
     () => new Set<string>(),
   )
-  const [, startTransition] = React.useTransition()
+  // `isPending` is wanted now, for drag-to-reschedule: it is true exactly while an
+  // optimistic write is open, which is the window a hard navigation would throw away.
+  const [writing, startTransition] = React.useTransition()
+  useWriteGuard(writing)
 
   const isVisible = (occ: EventOccurrence) =>
     !occ.event.calendarId || !hiddenIds.has(occ.event.calendarId)

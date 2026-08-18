@@ -22,6 +22,7 @@ import {
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { HabitStripCard } from "@/modules/habits/queries"
+import { useWriteGuard } from "@/components/shared/use-write-guard"
 
 import { GoalCard } from "./goal-card"
 import { GoalDetailDialog } from "./goal-detail-dialog"
@@ -62,7 +63,10 @@ export function GoalsView({
   )
   const [goalOrder, setGoalOrder] = React.useState<string[] | null>(null)
   const [planGoalId, setPlanGoalId] = React.useState(goals[0]?.id ?? "")
-  const [, startTransition] = React.useTransition()
+  // `isPending` is wanted now, for the goal list's reorder: it is true exactly while an
+  // optimistic write is open, which is the window a hard navigation would throw away.
+  const [writing, startTransition] = React.useTransition()
+  useWriteGuard(writing)
 
   /**
    * No `onApplied`, and that is the whole point of moving this here.

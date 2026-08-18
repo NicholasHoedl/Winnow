@@ -29,6 +29,7 @@ import { DashboardCard } from "./dashboard-card"
 
 import type { AgendaGroup, SlateBand } from "../_lib/agenda"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
+import { useWriteGuard } from "@/components/shared/use-write-guard"
 
 /** Key for the ungrouped tasks in the local order overlay. Not a valid uuid, so it can
  *  never collide with a routine id. */
@@ -191,7 +192,10 @@ export function Slate({
   use24Hour: boolean
   collapsed: boolean
 }) {
-  const [, startTransition] = React.useTransition()
+  // `isPending` is wanted now, for the dashboard agenda's reorder: it is true exactly while an
+  // optimistic write is open, which is the window a hard navigation would throw away.
+  const [writing, startTransition] = React.useTransition()
+  useWriteGuard(writing)
   // An append-only id array, not a copy of the rows. The card this replaces held a full
   // row-array copy, which freezes at the moment it is taken — a task completed elsewhere
   // would not appear until the component remounted.

@@ -33,6 +33,7 @@ import { bucketTasks } from "@/modules/todos/service"
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { useWriteGuard } from "@/components/shared/use-write-guard"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,7 +106,10 @@ export function ActivityView({
   const [rulesOpen, setRulesOpen] = React.useState(false)
   const [confirmSeries, setConfirmSeries] =
     React.useState<TaskWithSeries | null>(null)
-  const [, startTransition] = React.useTransition()
+  // `isPending` is wanted now, for the task list's reorder: it is true exactly while an
+  // optimistic write is open, which is the window a hard navigation would throw away.
+  const [writing, startTransition] = React.useTransition()
+  useWriteGuard(writing)
   // The strip's own transition lives inside the hook, so ticking a task cannot grey out a
   // Log button and logging cannot grey out the list. Shared with `/activity/habits` and the
   // dashboard card — the handler used to exist here and there, verbatim.

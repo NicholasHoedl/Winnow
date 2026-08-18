@@ -483,11 +483,26 @@ predicate would resolve on a navigation.
 `reorderTasks` returns `{ ok: true }` with no toast, and clearing the pending order is
 visually a no-op once the server agrees. The app gives a successful write no signal at all.
 
-**The app behaviour underneath is real and is NOT fixed.** Drag a task and navigate within a
-few hundred milliseconds and the reorder is silently lost — no error, no indication. Same
-family as the disabled-submit trap in §4: an action that appears to work and does not. Low
-stakes for a reorder, and re-dragging fixes it, so it was left alone deliberately rather than
-missed. Anything higher-stakes that writes optimistically should not copy this pattern.
+**The app behaviour underneath is now fixed too, and the fix is smaller than it first looked.**
+Measuring the exposure changed it: a SOFT navigation does not lose the write. A client-side
+route change keeps the JS context alive and the fetch completes — proved by delaying a Server
+Action two seconds, soft-navigating mid-flight, and finding the reorder had persisted. Only a
+HARD navigation loses it: reload, tab close, an off-site link.
+
+So the guard is a `beforeunload` and nothing larger — `useWriteGuard` in
+`components/shared/use-write-guard.ts`, keyed on `isPending` from each surface's own
+`useTransition`, on all four optimistic-write surfaces (the task list, the dashboard agenda,
+the goal list, drag-to-reschedule). A router guard was rejected: soft navigation is already
+safe, so intercepting it would be friction bought for no safety.
+
+`isPending` rather than each surface's optimistic state, deliberately. Slate's `order` overlay
+is never cleared, so it is not a pending signal at all — and the transition flag covers every
+optimistic write on the page rather than only the reorder.
+
+**Proved in both directions**, because a passing suite shows only that the guard is harmless:
+idle reload → 0 dialogs; reload during a held-open write → 1. If you change this, check the
+negative case as well, or you will be prompting on every navigation and the suite will still
+be green.
 
 **One flake remains and is genuinely unsolved: `quick-add-burst:42`.** It has no reload and no
 optimistic-then-navigate shape, so none of the above applies to it. Treat a non-zero flaky
