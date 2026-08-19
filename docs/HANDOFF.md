@@ -382,8 +382,10 @@ it is `winnow-postgres-1`.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
 Current green baseline, measured on a full run: **837 unit tests across 46 files, 166 e2e,
-0 lint errors, 5 lint warnings** (2026-08-19, T19; 19.0 minutes wall clock for the e2e, which
-is slow — see the flake note in §4). The
+0 lint errors, 5 lint warnings** (2026-08-19, after the two flake fixes in §4; 11.2 minutes
+wall clock for the e2e, **zero flaky**). The two runs before those fixes took 19.0 and 22.5
+minutes and each retried two tests — a retry is a whole test re-run, so a flaky suite reports
+a slower clock as well as a worse result. The
 numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
 the next — so re-measure rather than trusting a remembered figure.
 
@@ -576,32 +578,51 @@ The lesson is the one worth keeping: **a fixed sleep is a guess about a machine,
 is documented as varying by more than 2x between identical consecutive requests.** If a spec
 sleeps, it is waiting for something it could be observing instead.
 
-**Those four are fixed. Two OTHERS have since been seen, and they are not the same bug.**
-The sentence here used to read "no known flake remains", which was true of the four
-catalogued above and wrong as a general claim — it lasted one run. T19's two full suites came
-in at **19.0 and 22.5 minutes against a ~11 minute baseline** and each produced the SAME two
-flaky, both passing on retry, neither in a spec that tranche touched. Twice with the same
-pair is what makes this a report rather than a coincidence:
+**Two OTHERS appeared after that, and both are now fixed as well.** The sentence here used to
+read "no known flake remains", which was true of the four above and wrong as a general claim
+— it lasted one run. T19's two full suites came in at **19.0 and 22.5 minutes against a ~11
+minute baseline** and each produced the SAME two flaky, both passing on retry, neither in a
+spec that tranche touched.
 
-- **`calendar-reschedule.spec.ts:59`** — a dragged block polled at `0.375` where `11/24`
-  (0.4583) was expected. It landed **two hours early**, so this is drag PRECISION, not the
-  lost-write bug: the trailing `page.waitForResponse: Test ended` in that failure is a
-  consequence of the test giving up, not its cause. Do not "fix" it with `serverWrite`.
-- **`companion.spec.ts:345`** — "Your week" never appeared after clicking Summarise. The
-  page snapshot shows the button back at its idle label with no proposal, no busy state and
-  no error on screen, which is what a failed stub call plus an auto-dismissed toast looks
-  like ten seconds later. The stub is a second process (see below) and this is the spec that
-  depends on it most.
+**Read this part before diagnosing anything from a log line.** The first pass at these two,
+written from the error text alone, got BOTH of them wrong, and both wrong in the same
+direction — inventing a plausible mechanism instead of checking a cheap fact:
 
-Both are timing-shaped and both appeared on runs 1.7x and 2x slower than baseline, which is a
-reason to re-run before believing either — and NOT a reason to dismiss them. Traces from the
-first run were captured and are the first evidence either has left. Neither is diagnosed;
-both are named here so the next person starts from evidence instead of a log line.
+|                          | Guessed from the log                      | What the trace showed                                                                                                                         |
+| ------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calendar-reschedule:59` | "landed two hours early — drag precision" | It never moved. `0.375` is 9/24, which is where the event STARTS. A no-op leaves exactly the number that a two-hour-early drop would produce. |
+| `companion:345`          | "the AI stub never answered"              | The stub was never asked. The click worked, the request went out, and the SERVER returned 422.                                                |
+
+- **`calendar-reschedule:59` — the spec dragged before the grid had hydrated.** `page.goto`
+  waits for streamed markup to settle (`_test.ts`) and that is not the same thing: at that
+  moment blocks are painted, `offsetTop` is right, and React has attached nothing. Measured
+  on this machine: hydration lands ~60ms after settle when idle and **1.2 seconds under 4x
+  CPU load**, while the spec reaches its mousedown ~550ms after settle. Under a loaded full
+  run the drag went first, `PointerSensor` was not listening, and nothing happened — no
+  Server Action POST at all, which is what the trace showed and what proves it was a no-op
+  rather than a mis-drop. There is a second failure mode behind the same wait: the grid's
+  opening scroll MOVES the block 336px, so a `boundingBox()` taken before it aims the mouse
+  seven hours off. **Fixed** by waiting for that scroll (`gridReady`), which is an effect and
+  therefore cannot fire before hydration. Reproduced 5/5 at 4x throttle and fixed 5/5.
+- **`companion:345` — the seed lost a write, and the app was right to refuse.**
+  `seedCompletedTasks` completes three tasks, asserts only the `line-through` OPTIMISTIC
+  paint, and returns; the caller's `page.goto("/review")` then aborted the third completion's
+  in-flight Server Action. `/review` rendered "2 tasks done", `MIN_TASKS` is 3, and
+  `summaryReadiness` correctly returned 422 with "There isn't enough in this week to
+  summarise". So this IS the lost-write bug from the four above, wearing a disguise: it
+  surfaces four steps downstream as "the AI didn't respond". Both callers seed exactly
+  `MIN_TASKS`, so there was no margin for one lost write. **Fixed** with `serverWrites(page,
+count * 2)` — the helper that already existed.
+
+The lesson generalises past these two. **`settle()` is not a hydration wait**, and every spec
+that uses raw `page.mouse` coordinates or presses a key at a freshly loaded page is exposed
+to the same window. `todos-reorder` survives it only because it uses `handle.hover()`, which
+re-resolves the element, and because a task list has no effect that moves things after paint.
 
 Treat a non-zero flaky count as a triage item rather than a pass, and **read the trace before
 assuming a new one is old** — traces live in `test-results/` and are cleared at the start of
 every run, so capture one the same day or you will be reconstructing from a log line, which
-is what happened with three of the four above.
+is what happened with three of the four above and what produced both wrong guesses here.
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
 Playwright starts alongside the app on port 3100. **`e2e/ai.setup.ts` points the app at it

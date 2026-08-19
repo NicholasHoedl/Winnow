@@ -42,6 +42,37 @@ async function addEvent(page: Page, title: string) {
   await expect(dialog).toHaveCount(0)
 }
 
+/**
+ * Wait until the grid is interactive.
+ *
+ * `page.goto` already waits for the streamed markup to settle (see `_test.ts`), and that
+ * is NOT the same thing: at that moment the blocks are painted, `offsetTop` is correct,
+ * and React has attached nothing. Measured on this machine, hydration lands ~60ms after
+ * settle when idle and **1.2 seconds** under 4x CPU load, while the drag below reaches its
+ * mousedown about 550ms after settle. That gap is the whole bug — under a loaded full-suite
+ * run the drag happened first, dnd-kit's `PointerSensor` was not listening, and the block
+ * simply stayed where it was. It read as a two-hours-early drop, because 9/24 is both the
+ * event's start time and the value a no-op leaves behind.
+ *
+ * The grid's opening scroll is the signal, and it is a real one rather than a proxy: it
+ * runs in an effect, so it cannot fire before this component hydrates. See `time-grid.tsx`.
+ *
+ * There is a second failure mode behind the same wait. The scroll MOVES the block — 336px
+ * on this layout — so a `boundingBox()` taken before it aims the mouse seven hours off.
+ * Both are gone once the scroll has happened, because it only ever happens once.
+ */
+async function gridReady(page: Page) {
+  await expect
+    .poll(
+      async () =>
+        page
+          .getByTestId("time-grid-scroller")
+          .evaluate((el) => (el as HTMLElement).scrollTop),
+      { timeout: 15_000, intervals: [25] },
+    )
+    .toBeGreaterThan(0)
+}
+
 /** The block's column index and top fraction, measured through the real layout. */
 async function placement(page: Page, title: string) {
   const block = page.getByRole("button", { name: new RegExp(title) })
@@ -62,6 +93,7 @@ test("a block can be dragged to another day and time, and it sticks", async ({
   const title = `${PREFIX} drag ${Date.now()}`
   await addEvent(page, title)
   await page.goto(`/calendar?view=week&date=${DAY}`)
+  await gridReady(page)
 
   const start = await placement(page, title)
   expect(start.top).toBeCloseTo(9 / 24, 2)
@@ -121,6 +153,10 @@ test("the same move is possible from the keyboard", async ({ page }) => {
   const title = `${PREFIX} keys ${Date.now()}`
   await addEvent(page, title)
   await page.goto(`/calendar?view=week&date=${DAY}`)
+  // This path uses no coordinates, so the stale-box half cannot bite it — but Space
+  // reaches a `KeyboardSensor` that is attached by the same hydration, so the other half
+  // can. It has not been seen to fail; it is one line and the same bug.
+  await gridReady(page)
   expect((await placement(page, title)).top).toBeCloseTo(9 / 24, 2)
 
   // Space lifts, arrows move, Space drops. Enter is deliberately NOT the lift key here

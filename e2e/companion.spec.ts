@@ -5,6 +5,7 @@ import { pageAction } from "./_menu"
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
 import { announces, meter } from "./_habits"
+import { serverWrites } from "./_server-write"
 import { deleteTasksMatching } from "./_tasks"
 
 /**
@@ -323,9 +324,19 @@ test("a routine refinement replaces the proposal in place", async ({
  * test has to establish its own precondition rather than hope the dev database has one.
  * That refusal is unit-tested six ways in `service.test.ts`; what these specs prove is
  * the wiring above it.
+ *
+ * **Every assertion below reads an optimistic paint**, including the `line-through` that
+ * confirms a task is done — so without the wait at the end this returns while writes are
+ * still in flight, and the caller's `page.goto("/review")` aborts whichever has not landed.
+ * That is not hypothetical: it lost the third completion twice, `/review` rendered
+ * "2 tasks done", and `MIN_TASKS` is 3 — so the summariser correctly refused a thin week
+ * and the spec failed ten seconds later on a missing "Your week", four steps from the
+ * cause. Both callers seed exactly `MIN_TASKS`, which leaves no margin for one lost write.
  */
 async function seedCompletedTasks(page: Page, prefix: string, count: number) {
   await page.goto("/activity")
+  // One per create and one per completion. Armed before the first, awaited after the last.
+  const written = serverWrites(page, count * 2)
   const input = page.getByLabel("Quick add task")
   for (let i = 0; i < count; i++) {
     await input.fill(`${prefix} ${i}`)
@@ -340,6 +351,7 @@ async function seedCompletedTasks(page: Page, prefix: string, count: number) {
       /line-through/,
     )
   }
+  await written
 }
 
 test("a week is narrated read-only, with no way to apply it", async ({

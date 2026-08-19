@@ -241,6 +241,15 @@ export function TimeGrid({
 
   // Open on something worth looking at rather than on an empty midnight. Once only:
   // re-running on every minute would yank the view back under anyone who scrolled away.
+  //
+  // **`calendar-reschedule.spec.ts` waits on this having run**, and the reason is worth
+  // knowing before changing it. It is an effect, so it fires only after this component
+  // hydrates — which makes it the one observable moment at which dnd-kit's sensors become
+  // live and the blocks stop moving under a mouse. Before it, the grid renders at
+  // scrollTop 0 with no listeners attached: a drag measured and performed in that window
+  // is a no-op, and the spec spent a while looking like a drag-precision problem instead.
+  // If this ever stops scrolling (a `DEFAULT_SCROLL_HOUR` of 0 would do it), that spec
+  // needs a different signal rather than a longer timeout.
   const scrolled = React.useRef(false)
   React.useEffect(() => {
     const el = scrollRef.current
@@ -462,6 +471,11 @@ export function TimeGrid({
         </div>
         <div
           ref={scrollRef}
+          // Named for the e2e, which polls this element's `scrollTop` to know the grid is
+          // interactive. A class selector would have done it without touching this file,
+          // and that is exactly why it is here instead: `overflow-y-auto` is a styling
+          // decision someone may reasonably change, and it would take the test with it.
+          data-testid="time-grid-scroller"
           className={cn("overflow-y-auto", fill && "min-h-0 flex-1")}
           // svh throughout, not vh: every other height on the dashboard is svh, and on
           // mobile the two differ by the browser chrome.
