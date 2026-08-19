@@ -1,6 +1,7 @@
 import { test, expect, type Locator } from "./_test"
 
 import { visibleCard } from "./_card"
+import { serverWrites } from "./_server-write"
 
 /**
  * Regression coverage for the rapid-capture defect: every text quick-add in the app used
@@ -26,6 +27,10 @@ async function burst(input: Locator, entries: string[]) {
   await expect(input).toBeVisible()
   await input.click()
 
+  // Armed BEFORE the first Enter, awaited after the last. The burst puts every write in
+  // flight at once, so this counts them rather than waiting for one.
+  const written = serverWrites(input.page(), entries.length)
+
   for (const entry of entries) {
     await input.fill(entry)
     await input.press("Enter")
@@ -34,9 +39,16 @@ async function burst(input: Locator, entries: string[]) {
   // After, not between: a server action still in flight is aborted if the page navigates
   // or the test ends, which would fail this spec for a reason that has nothing to do with
   // what it covers. Waiting between entries would defeat the whole point, so this waits
-  // once, at the end, for the last transition to finish.
+  // once, at the end.
+  //
+  // **This was `waitForTimeout(1_500)`, and that guess is what made the dashboard test
+  // flaky.** `docs/HANDOFF.md` measures `/activity` at 1.7–3.4s per render on this machine,
+  // so the sleep was routinely shorter than the writes it was covering — and the dashboard
+  // test is the only one here that navigates afterwards, which is why it alone flaked.
+  // Measured with the actions held at 2.5s: the sleep kept 0 of 3 entries, awaiting the
+  // writes kept 3 of 3.
   await expect(input).toHaveValue("")
-  await input.page().waitForTimeout(1_500)
+  await written
 }
 
 test("dashboard quick-capture keeps every entry in a burst", async ({
@@ -119,10 +131,15 @@ test("budget quick-add keeps every entry in a burst", async ({ page }) => {
 test("meals quick-add keeps every entry in a burst", async ({ page }) => {
   const tag = `e2eburstmeal${Date.now()}`
   // `a`, `b`, `d` — deliberately NOT `a`, `b`, `c` like the specs above. The tag ends in
-  // digits, and `p`, `c` and `f` are the parser's macro letters, so `…278c` is read as
-  // "1785869309278 carbs" — over the 100000 cap, so the action rejects it. That failure
-  // looks exactly like a dropped entry (no row, no visible error) and cost real time to
+  // digits, and `p`, `c` and `f` are the parser's macro letters, so `…278c` was read as
+  // "1785869309278 carbs" — over the 100000 cap, so the action rejected it. That failure
+  // looked exactly like a dropped entry (no row, no visible error) and cost real time to
   // tell apart from the bug this file covers.
+  //
+  // The parser was fixed since: its macro patterns now require a leading word boundary, so
+  // a digit-then-letter inside a word is no longer a macro token. `c` would be safe again.
+  // Kept as `d` anyway — changing it would re-test the parser rather than this file's
+  // subject, and `service.test.ts` covers that directly now.
   const names = [`${tag}a`, `${tag}b`, `${tag}d`]
 
   await page.goto("/meals")

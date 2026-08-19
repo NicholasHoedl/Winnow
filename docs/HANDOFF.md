@@ -453,7 +453,7 @@ the button focused and opens nothing. It now clicks until the dialog is actually
 **If a spec starts failing right after a teardown is made faster, look for a click that
 assumes its own effect** rather than putting the slack back.
 
-**Three of the four known flakes were ONE bug, and it is fixed.** `todos-reorder:59`,
+**All four known flakes were ONE bug, and it is fixed.** `todos-reorder:59`,
 `todos-reorder:86` and `calendar-reschedule:74` were listed here as separate unsolved flakes
 from 2026-08-13. They shared a single shape:
 
@@ -504,12 +504,27 @@ idle reload → 0 dialogs; reload during a held-open write → 1. If you change 
 negative case as well, or you will be prompting on every navigation and the suite will still
 be green.
 
-**One flake remains and is genuinely unsolved: `quick-add-burst:42`.** It has no reload and no
-optimistic-then-navigate shape, so none of the above applies to it. Treat a non-zero flaky
-count as a triage item rather than a pass, and **do not assume a new flake is that one without
-reading its trace** — the traces live in `test-results/` and are cleared at the start of every
-run, so capture one the same day or you will be reconstructing it from a log line, which is
-what happened here.
+**`quick-add-burst:42` was the same bug wearing different clothes.** It looked unrelated —
+no reload, no optimistic-then-navigate — and it took reading the file to see it. `burst()`
+ended with `waitForTimeout(1_500)`, and the dashboard test is the ONLY one of the four that
+navigates afterwards (`page.goto("/activity")`, to assert where quick-capture's dated tasks
+actually appear). So the sleep was the thing standing between three in-flight writes and a
+hard navigation — and this file measures `/activity` at 1.7–3.4s per render, which is longer
+than the sleep.
+
+Measured with the actions held at 2.5s: **the sleep kept 0 of 3 entries; awaiting the writes
+kept 3 of 3.** All three, not just the last, because a burst puts them in flight at once.
+`burst()` now uses `serverWrites(page, n)` — one listener counting responses, because several
+`waitForResponse` calls would all settle on whichever arrived first.
+
+The lesson is the one worth keeping: **a fixed sleep is a guess about a machine, and this one
+is documented as varying by more than 2x between identical consecutive requests.** If a spec
+sleeps, it is waiting for something it could be observing instead.
+
+**No known flake remains.** Treat a non-zero flaky count as a triage item rather than a pass,
+and **read the trace before assuming a new one is old** — traces live in `test-results/` and
+are cleared at the start of every run, so capture one the same day or you will be
+reconstructing from a log line, which is what happened with three of these four.
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
 Playwright starts alongside the app on port 3100. **`e2e/ai.setup.ts` points the app at it

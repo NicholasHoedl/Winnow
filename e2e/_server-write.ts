@@ -43,3 +43,45 @@ export function serverWrite(page: Page): Promise<Response> {
       "next-action" in response.request().headers(),
   )
 }
+
+/**
+ * The same guarantee for a BURST: resolve once `count` Server Action writes have landed.
+ *
+ * `serverWrite` cannot be called in a loop for this — several writes are in flight at once,
+ * so every `waitForResponse` would settle on whichever arrived first and the rest would be
+ * counted twice. One listener, counting.
+ *
+ * This replaced a fixed `waitForTimeout(1_500)` in `quick-add-burst.spec.ts`, which was a
+ * guess rather than a wait: `docs/HANDOFF.md` measures `/activity` at 1.7–3.4s per render on
+ * this machine, so the sleep was routinely shorter than the thing it waited for, and the
+ * `page.goto` that followed aborted whatever was still open. That is why only the DASHBOARD
+ * test in that file was flaky — it is the only one that navigates after its burst.
+ */
+export function serverWrites(
+  page: Page,
+  count: number,
+  timeoutMs = 30_000,
+): Promise<void> {
+  if (count <= 0) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    let seen = 0
+    const timer = setTimeout(() => {
+      page.off("response", onResponse)
+      reject(
+        new Error(
+          `Timed out after ${timeoutMs}ms waiting for ${count} Server Action writes; saw ${seen}.`,
+        ),
+      )
+    }, timeoutMs)
+    function onResponse(response: import("./_test").Response) {
+      const request = response.request()
+      if (request.method() !== "POST") return
+      if (!("next-action" in request.headers())) return
+      if (++seen < count) return
+      clearTimeout(timer)
+      page.off("response", onResponse)
+      resolve()
+    }
+    page.on("response", onResponse)
+  })
+}
