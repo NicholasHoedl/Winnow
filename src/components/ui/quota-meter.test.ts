@@ -75,3 +75,30 @@ describe("quotaSegments", () => {
     expect(quotaSegments(2.7, 3.9)).toMatchObject({ total: 3, filled: 2 })
   })
 })
+
+describe("quotaSegments — measured", () => {
+  // Not a size threshold like MAX_SEGMENTS. A measured quota has nothing discrete to draw
+  // a box per, so it never segments however small its target is.
+  it("never segments, even at a target squares would fit", () => {
+    expect(quotaSegments(1.5, 3, true).segmented).toBe(false)
+    expect(quotaSegments(0, 1, true).segmented).toBe(false)
+  })
+
+  // The bug this flag exists to stop: 1.5 L of a 3 L day floored to one filled box of
+  // three, reporting half a litre as nothing and reading as a session count.
+  it("keeps the fraction a session quota would floor away", () => {
+    expect(quotaSegments(1.5, 3, true)).toMatchObject({ total: 3, filled: 1.5 })
+    expect(quotaSegments(1.5, 3, false)).toMatchObject({ total: 3, filled: 1 })
+  })
+
+  it("still grows past the target so an overshoot is visible", () => {
+    expect(quotaSegments(14.5, 10, true)).toMatchObject({
+      total: 14.5,
+      surplus: 4.5,
+    })
+  })
+
+  it("draws nothing for a target of zero rather than dividing by it", () => {
+    expect(quotaSegments(0, 0, true)).toMatchObject({ total: 0, surplus: 0 })
+  })
+})

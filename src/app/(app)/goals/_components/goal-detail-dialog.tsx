@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ListPlus, Pause, Pencil, Plus, Trash2, TrendingUp } from "lucide-react"
+import { ListPlus, Pause, Pencil, Trash2, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 
 import { dueStatus } from "@/lib/date"
@@ -23,6 +23,7 @@ import {
   usePreferences,
 } from "@/components/preferences/preferences-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
+import { LogHabitButton } from "@/components/habits/log-habit-button"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -247,22 +248,21 @@ export function GoalDetailDialog({
                           name={habit.title}
                           done={habit.now.done}
                           target={habit.now.target}
+                          unit={habit.now.unit}
+                          measured={habit.now.measured}
                           caption={periodPhrase(habit.period)}
                         />
                       </div>
                       {/* Loggable in place. Sending you to `/activity/habits` to tick off
                           the thing this goal is made of is exactly the round trip T5a's
                           read-only task list was criticised for. */}
-                      <Button
-                        variant="outline"
+                      <LogHabitButton
+                        title={habit.title}
+                        unit={habit.now.unit}
+                        pending={pendingId === habit.id}
                         size="sm"
-                        disabled={pendingId === habit.id}
-                        aria-label={`Log ${habit.title}`}
-                        onClick={() => log(habit)}
-                      >
-                        <Plus className="size-3.5" />
-                        Log
-                      </Button>
+                        onLog={(amount) => log(habit, amount)}
+                      />
                     </li>
                   ))}
                 </ul>

@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Plus } from "lucide-react"
+import { ArrowRight } from "lucide-react"
 
 import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
-import { Button } from "@/components/ui/button"
+import { LogHabitButton } from "@/components/habits/log-habit-button"
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
 /**
@@ -40,7 +40,7 @@ export function HabitStrip({
   habits: HabitStripCard[]
   /** The habit whose write is in flight — only that chip's control disables. */
   pendingId: string | null
-  onLog: (habit: HabitStripCard) => void
+  onLog: (habit: HabitStripCard, amount?: number) => void
 }) {
   if (habits.length === 0) {
     return (
@@ -112,6 +112,8 @@ export function HabitStrip({
               name={habit.title}
               done={habit.now.done}
               target={habit.now.target}
+              unit={habit.now.unit}
+              measured={habit.now.measured}
               caption={periodPhrase(habit.period)}
             />
             {/* Full width rather than the rail's icon square: this is now the primary
@@ -119,16 +121,13 @@ export function HabitStrip({
                 only for ITS OWN habit — a shared flag would grey out the whole strip and
                 imply the others were blocked. There is no unique constraint behind the
                 write, so a double tap really is two rows. */}
-            <Button
-              variant="outline"
+            <LogHabitButton
+              title={habit.title}
+              unit={habit.now.unit}
+              pending={pendingId === habit.id}
               className="mt-2 w-full"
-              disabled={pendingId === habit.id}
-              aria-label={`Log ${habit.title}`}
-              onClick={() => onLog(habit)}
-            >
-              <Plus className="size-4" />
-              Log
-            </Button>
+              onLog={(amount) => onLog(habit, amount)}
+            />
           </div>
         ))}
       </div>

@@ -22,6 +22,9 @@ import {
 /** `userId` is dropped the way `getTaskRecurrences` drops it — it is never rendered. */
 export type HabitRow = Omit<typeof habits.$inferSelect, "userId">
 
+/** The entry columns both reads select, and exactly what the maths consumes. */
+type EntryFields = { onDate: string; amount: number | null }
+
 export type HabitCard = {
   habit: HabitRow
   /** done/target for the period containing today. What the rail and the page both show. */
@@ -101,11 +104,13 @@ export async function getHabitsView(): Promise<HabitsView> {
         eq(habitEntries.userId, userId),
         gte(habitEntries.onDate, entryFloor),
       ),
-      columns: { habitId: true, onDate: true },
+      // `amount` is null on every entry of a session habit and on everything logged before
+      // a habit was switched to measured. `tallyByPeriod` is where that means something.
+      columns: { habitId: true, onDate: true, amount: true },
     }),
   ])
 
-  const byHabit = new Map<string, { onDate: string }[]>()
+  const byHabit = new Map<string, EntryFields[]>()
   for (const entry of entryRows) {
     const found = byHabit.get(entry.habitId)
     if (found) found.push(entry)
@@ -117,7 +122,7 @@ export async function getHabitsView(): Promise<HabitsView> {
 
   const cards = habitRows.map((habit) => {
     const entries = byHabit.get(habit.id) ?? []
-    const periods = tallyByPeriod(entries, habit.period, weekStartsOn)
+    const periods = tallyByPeriod(entries, habit, weekStartsOn)
     return {
       habit,
       now: adherence(periods, habit, today, weekStartsOn),
@@ -178,7 +183,15 @@ export type HabitStripCard = {
    * target should not delete the running (schema.ts).
    */
   goalId: string | null
-  /** done/target for the period containing today. The only reading this shape carries. */
+  /**
+   * done/target for the period containing today. The only reading this shape carries.
+   *
+   * This shape gained NOTHING when measured habits shipped, which was the point of putting
+   * `measured` and `unit` on `Adherence` itself: four surfaces draw a quota from a `now`,
+   * and each of them needs to know whether the numbers are sessions or kilometres. Adding
+   * the columns here instead would have meant four card shapes, four prop threads, and
+   * four chances for one surface to read the rule differently from the others.
+   */
   now: Adherence
 }
 
@@ -208,14 +221,22 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
   const [habitRows, entryRows] = await Promise.all([
     db.query.habits.findMany({
       where: and(eq(habits.userId, userId), isNull(habits.archivedAt)),
-      // `targetCount` is selected but not returned: it feeds `adherence` here and is folded
-      // into `now.target`, so the client gets the reading rather than the rule. Everything
-      // else here flows straight through via the rest-spread below.
+      // `targetCount`, `targetAmount` and `unit` are selected but not returned: they feed
+      // `adherence` here and are folded into `now`, so the client gets the reading rather
+      // than the rule. Everything else flows straight through via the rest-spread below.
+      //
+      // The last two arrived with measured habits. They are what makes this read able to
+      // tell "3 sessions a week" from "20 words a day", and leaving them out would not
+      // have failed — the strip would simply have shown every measured habit as though its
+      // target were one session. What prevents that is `adherence`'s narrow `Pick`: it
+      // names these columns, so omitting one is a type error rather than a wrong number.
       columns: {
         id: true,
         title: true,
         period: true,
         targetCount: true,
+        targetAmount: true,
+        unit: true,
         goalId: true,
       },
       orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
@@ -225,24 +246,27 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
         eq(habitEntries.userId, userId),
         gte(habitEntries.onDate, floor),
       ),
-      columns: { habitId: true, onDate: true },
+      columns: { habitId: true, onDate: true, amount: true },
     }),
   ])
 
-  const byHabit = new Map<string, { onDate: string }[]>()
+  const byHabit = new Map<string, EntryFields[]>()
   for (const entry of entryRows) {
     const found = byHabit.get(entry.habitId)
     if (found) found.push(entry)
     else byHabit.set(entry.habitId, [entry])
   }
 
-  return habitRows.map(({ targetCount, ...habit }) => ({
-    ...habit,
-    now: adherence(
-      tallyByPeriod(byHabit.get(habit.id) ?? [], habit.period, weekStartsOn),
-      { period: habit.period, targetCount },
-      today,
-      weekStartsOn,
-    ),
-  }))
+  return habitRows.map(({ targetCount, targetAmount, unit, ...habit }) => {
+    const rule = { period: habit.period, targetCount, targetAmount, unit }
+    return {
+      ...habit,
+      now: adherence(
+        tallyByPeriod(byHabit.get(habit.id) ?? [], rule, weekStartsOn),
+        rule,
+        today,
+        weekStartsOn,
+      ),
+    }
+  })
 }

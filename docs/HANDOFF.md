@@ -171,12 +171,65 @@ to go. ADR-0014 already said a habit is a quota and a log; this is that idea dra
 
 - **Exceeding the target GROWS the meter**, surplus segments in the accent colour, rather
   than clamping. A clamped bar drew 3-of-2 identically to 2-of-2.
-- **Above twelve segments it falls back to a continuous bar and brings the numbers back**,
+- **Above ten segments it falls back to a continuous bar and brings the numbers back**,
   because thirty slivers are not countable and a bar with no figure beside it says nothing.
+  It was TWELVE until T19 made the segments a fixed size — see below; the number is now a
+  measurement of the narrowest surface rather than a judgement about countability.
 - **The numbers are gone from the DOM**, so the meter is a `progressbar` carrying the count
   in `aria-valuetext` — otherwise a screen reader gets nothing. The specs assert on that,
   which tests the number and its accessibility together. Hunting for the old text is how
   three assertions were missed; `e2e/_habits.ts` is where the locator lives now.
+
+**T19 is shipped: a habit can be an amount, and its quota is drawn in fixed squares.**
+No migration — `habits.unit`, `habits.target_amount` and `habit_entries.amount` have been in
+the schema since T12a, deliberately unwritable.
+
+This is audit item 4.6, and the audit's own correction of it is the useful part: it was
+scoped as "one validation entry and one form field", and that was wrong by a whole tranche.
+`adherence` counted ROWS, so a habit carrying `targetAmount: 20` read **"1 of 1 done" after
+a single word** — a number that looks right and is nonsense. Writing those columns without
+teaching the maths to sum amounts would have shipped exactly that.
+
+- **The maths changed in two functions and nowhere else.** `tallyByPeriod` sums a
+  contribution (1 for a session, the `amount` for a measured entry) and `resolveQuota`
+  decides which target a habit is judged against. `habitStreak` and `windowAdherence` were
+  not touched at all — they compare a tally to a target and never needed to know which kind
+  of number they held. If a future variant does not fit in those two functions, that is a
+  signal about the variant.
+- **`Adherence` carries `measured` and `unit`.** That is what kept this out of four card
+  shapes: every surface that draws a quota already receives a `now`, so the meter, the
+  figures and the log control all learn the variant from one object. `HabitStripCard`
+  gained no field.
+- **An entry with no amount is worth NOTHING to a measured habit**, and the dialog says so
+  before you switch one. Switching is allowed on the same reasoning `updateHabit` already
+  allows a cadence change: it rewrites history, and that is acceptable because it is a
+  visible edit. Sessions logged before the switch genuinely recorded no quantity; counting
+  each as one word would invent data.
+- **`+ Log` could not express "fifteen pages"**, so the control changed. `LogHabitButton`
+  (`components/habits/`) replaces the four near-identical buttons: unchanged for a session
+  habit, a small popover prompt for a measured one. `aria-label` stays exactly `Log {title}`
+  in both branches — four specs address it by that name and it is their only handle.
+- **The action is what refuses a mismatch**, not the client: a measured habit REQUIRES an
+  amount and a session habit rejects one. Both are reachable from a page left open while
+  the habit was edited in another tab, and there is no constraint that would catch the row.
+- **Not built: the companion proposing a measured habit.** `goalPlanHabitSchema` carries no
+  `targetAmount`, so AI plans still create session habits. That is a clean boundary rather
+  than an oversight — the rate-feasibility warning it unblocks ("at 20 words a day you reach
+  5000 in February, not December") is named in IMPROVEMENT-PLAN as its own unbuilt item.
+
+**The squares became a fixed size in the same pass, and `MAX_SEGMENTS` is now measured.**
+They were `flex-1`, so the same three-a-week quota drew fat segments in a wide card and thin
+ones in a narrow chip — a segment's width was a fact about its container, not about the
+habit. Fixed 8px squares make a longer row mean a bigger commitment, at a glance, across
+every habit on a page. The cost is that the row has a real width now:
+
+- `/activity`'s 192px habit chip gives its meter **108px**. At 8px a square plus a 2px gap,
+  twelve squares need **118** and overflowed by ten. Ten squares need 98 and fit.
+- **The layout sweep did not catch it and cannot.** The chip lives inside an
+  `overflow-x-auto` scroller, and a scroller is allowed to hold content wider than itself.
+  This was found by measuring the box in a throwaway probe spec, which is the only way. If a
+  surface narrower than 192px ever draws a quota, measure the bar — `mobile-layout.spec.ts`
+  will stay green either way.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
@@ -203,8 +256,9 @@ The T12 line is what most of §5 now describes:
 | **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
 **The ROADMAP has run out of code that can be written without a deployment — the work has
-not.** T13 through T18 are six tranches shipped since, none of them on any plan: they came
-from the user looking at a screen and saying what was wrong with it. Read that as the shape
+not.** T13 through T19 are seven tranches shipped since, none of them on any plan: they came
+from the user looking at a screen and saying what was wrong with it, and from the pre-deploy
+audit that exercise turned into. Read that as the shape
 of the work now, not as a backlog waiting to be worked through. **Hosting is still the only
 thing standing between this app and being used**, and everything in the table below is
 blocked on it.
@@ -245,7 +299,7 @@ Decided with the user, so do not re-litigate:
 app tied to a login session, so the stack stayed down after a Windows Update reboot until
 someone logged in — which falsified ADR-0002's always-on premise rather than being a config
 detail. The answer is **Docker Engine inside WSL2, not Docker Desktop**, with systemd in the
-distro and a Task Scheduler trigger at *system startup* rather than logon. ADR-0002's
+distro and a Task Scheduler trigger at _system startup_ rather than logon. ADR-0002's
 amendment has the reasoning and rejected alternatives; `deploy.md` §0 has the procedure, and
 it now runs before everything else. The trap worth keeping in mind: Docker Desktop's own
 "WSL2 backend" setting does **not** fix this — the backend is only where containers run, and
@@ -327,8 +381,9 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **801 unit tests across 46 files, 164 e2e,
-0 lint errors, 5 lint warnings** (2026-08-17, 10.5 minutes wall clock for the e2e). The
+Current green baseline, measured on a full run: **837 unit tests across 46 files, 166 e2e,
+0 lint errors, 5 lint warnings** (2026-08-19, T19; 19.0 minutes wall clock for the e2e, which
+is slow — see the flake note in §4). The
 numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
 the next — so re-measure rather than trusting a remembered figure.
 
@@ -521,10 +576,32 @@ The lesson is the one worth keeping: **a fixed sleep is a guess about a machine,
 is documented as varying by more than 2x between identical consecutive requests.** If a spec
 sleeps, it is waiting for something it could be observing instead.
 
-**No known flake remains.** Treat a non-zero flaky count as a triage item rather than a pass,
-and **read the trace before assuming a new one is old** — traces live in `test-results/` and
-are cleared at the start of every run, so capture one the same day or you will be
-reconstructing from a log line, which is what happened with three of these four.
+**Those four are fixed. Two OTHERS have since been seen, and they are not the same bug.**
+The sentence here used to read "no known flake remains", which was true of the four
+catalogued above and wrong as a general claim — it lasted one run. T19's two full suites came
+in at **19.0 and 22.5 minutes against a ~11 minute baseline** and each produced the SAME two
+flaky, both passing on retry, neither in a spec that tranche touched. Twice with the same
+pair is what makes this a report rather than a coincidence:
+
+- **`calendar-reschedule.spec.ts:59`** — a dragged block polled at `0.375` where `11/24`
+  (0.4583) was expected. It landed **two hours early**, so this is drag PRECISION, not the
+  lost-write bug: the trailing `page.waitForResponse: Test ended` in that failure is a
+  consequence of the test giving up, not its cause. Do not "fix" it with `serverWrite`.
+- **`companion.spec.ts:345`** — "Your week" never appeared after clicking Summarise. The
+  page snapshot shows the button back at its idle label with no proposal, no busy state and
+  no error on screen, which is what a failed stub call plus an auto-dismissed toast looks
+  like ten seconds later. The stub is a second process (see below) and this is the spec that
+  depends on it most.
+
+Both are timing-shaped and both appeared on runs 1.7x and 2x slower than baseline, which is a
+reason to re-run before believing either — and NOT a reason to dismiss them. Traces from the
+first run were captured and are the first evidence either has left. Neither is diagnosed;
+both are named here so the next person starts from evidence instead of a log line.
+
+Treat a non-zero flaky count as a triage item rather than a pass, and **read the trace before
+assuming a new one is old** — traces live in `test-results/` and are cleared at the start of
+every run, so capture one the same day or you will be reconstructing from a log line, which
+is what happened with three of the four above.
 
 The companion's e2e needs a second server — `e2e/_ai-stub.mjs`, a stand-in provider that
 Playwright starts alongside the app on port 3100. **`e2e/ai.setup.ts` points the app at it
@@ -563,8 +640,8 @@ somewhere neutral so routines stops importing todos — not to add the import an
 
 **A client hook called from a server component is invisible to `tsc` AND to lint.** Only the
 e2e suite catches it, and that is the whole argument for running the suite on work that looks
-purely mechanical. Threading a `useDateLocale()` through the date formatters produced *0
-typecheck errors, 0 lint errors and 38 failing e2e* on the first attempt, and 9 on the second
+purely mechanical. Threading a `useDateLocale()` through the date formatters produced _0
+typecheck errors, 0 lint errors and 38 failing e2e_ on the first attempt, and 9 on the second
 — every one of them `Attempted to call useDateLocale() from the server`.
 
 The reason it took two rounds is worth more than the bug. The guard used to find the offenders
@@ -1060,12 +1137,12 @@ still the old indigo.**
   made `/goals` use 60% of a 1440px canvas while the dashboard clipped at 1280. The tiers, and
   what each is for:
 
-  | Tier | Class | For |
-  | --- | --- | --- |
-  | Form | `max-w-3xl` | one column of fields or entries — Settings, Meals, Budget |
-  | List | `max-w-5xl` | a list plus its controls — Calendar, Review, Routines, Habits, Goals |
-  | Board | `max-w-7xl` | genuinely multi-column — Activity |
-  | Full | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920 |
+  | Tier  | Class            | For                                                                   |
+  | ----- | ---------------- | --------------------------------------------------------------------- |
+  | Form  | `max-w-3xl`      | one column of fields or entries — Settings, Meals, Budget             |
+  | List  | `max-w-5xl`      | a list plus its controls — Calendar, Review, Routines, Habits, Goals  |
+  | Board | `max-w-7xl`      | genuinely multi-column — Activity                                     |
+  | Full  | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920 |
 
   `/goals` was `max-w-4xl`, the only value off the scale, and is now List like every other
   page of its shape. Deliberately NOT abstracted into a constant: Tailwind is the vocabulary

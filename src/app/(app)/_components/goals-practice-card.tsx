@@ -1,13 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { Pause, Plus } from "lucide-react"
+import { Pause } from "lucide-react"
 
 import type { GoalProgress } from "@/modules/goals/service"
 import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
-import { Button } from "@/components/ui/button"
+import { LogHabitButton } from "@/components/habits/log-habit-button"
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { DashboardCard } from "./dashboard-card"
@@ -91,7 +91,7 @@ function HabitRow({
 }: {
   habit: HabitStripCard
   pending: boolean
-  onLog: () => void
+  onLog: (amount?: number) => void
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -107,22 +107,21 @@ function HabitRow({
           name={habit.title}
           done={habit.now.done}
           target={habit.now.target}
+          unit={habit.now.unit}
+          measured={habit.now.measured}
           caption={periodPhrase(habit.period)}
         />
       </div>
       {/* A habit gets no checkbox, here or anywhere (ADR-0013's amendment). A quota is not
           done-or-not-done, and the moment a tick appears it is either duplicating this
           button or lying about what "done" means for a rate. */}
-      <Button
-        variant="outline"
+      <LogHabitButton
+        title={habit.title}
+        unit={habit.now.unit}
+        pending={pending}
         size="sm"
-        disabled={pending}
-        aria-label={`Log ${habit.title}`}
-        onClick={onLog}
-      >
-        <Plus className="size-3.5" />
-        Log
-      </Button>
+        onLog={onLog}
+      />
     </div>
   )
 }
@@ -197,7 +196,7 @@ export function GoalsPracticeCard({
                     key={habit.id}
                     habit={habit}
                     pending={pendingId === habit.id}
-                    onLog={() => log(habit)}
+                    onLog={(amount) => log(habit, amount)}
                   />
                 ))}
               </div>

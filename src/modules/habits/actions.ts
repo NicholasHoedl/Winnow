@@ -17,6 +17,7 @@ import { goals } from "@/modules/goals/schema"
 import { getUserPreferences } from "@/modules/preferences/queries"
 
 import { habitEntries, habits } from "./schema"
+import { isMeasured } from "./service"
 import { habitInputSchema, logEntrySchema } from "./validation"
 
 /** See goals/actions.ts — every id crossing an RPC boundary is parsed, not annotated. */
@@ -61,13 +62,23 @@ async function checkGoal(
   return owned ? null : "Unknown goal."
 }
 
-/** Ownership, and the guard that turns a bad id into a message instead of an FK error. */
-async function ownsHabit(userId: string, habitId: string): Promise<boolean> {
+/**
+ * Ownership, and the guard that turns a bad id into a message instead of an FK error.
+ *
+ * Returns the quota rather than a boolean, because `logEntry` has to know whether the
+ * habit it is writing against is measured before it can decide what an amount means. That
+ * decision cannot be made on the client: a page open since before an edit would offer the
+ * wrong control, and the schema has no constraint that would catch the resulting row.
+ */
+async function findQuota(
+  userId: string,
+  habitId: string,
+): Promise<{ targetAmount: number | null; unit: string | null } | null> {
   const owned = await db.query.habits.findFirst({
     where: and(eq(habits.id, habitId), eq(habits.userId, userId)),
-    columns: { id: true },
+    columns: { targetAmount: true, unit: true },
   })
-  return !!owned
+  return owned ?? null
 }
 
 /**
@@ -102,6 +113,8 @@ export async function createHabit(input: unknown): Promise<CreateHabitResult> {
       goalId: parsed.data.goalId,
       period: parsed.data.period,
       targetCount: parsed.data.targetCount,
+      targetAmount: parsed.data.targetAmount,
+      unit: parsed.data.unit,
       // A habit starts when you make it. Not client-supplied — see validation.ts.
       startDate: todayInZone(new Date(), timeZone),
       sortOrder: (last?.sortOrder ?? -1) + 1,
@@ -128,6 +141,12 @@ export async function updateHabit(
   // `startDate` is not updated. Moving it would re-bucket every period behind the habit and
   // silently rewrite its streak — the one thing ADR-0014 promises only happens when you
   // change the CADENCE, which is at least a visible edit.
+  //
+  // Switching between sessions and an amount is the second such edit, and it is allowed on
+  // exactly that reasoning. Entries logged before the switch carry no amount, so they
+  // contribute nothing to a measured tally and the streak recomputes downward — real, and
+  // the honest reading of what those rows actually recorded. The dialog says so before you
+  // save, which is what makes it a visible edit rather than a silent rewrite.
   await db
     .update(habits)
     .set({
@@ -135,6 +154,8 @@ export async function updateHabit(
       goalId: parsed.data.goalId,
       period: parsed.data.period,
       targetCount: parsed.data.targetCount,
+      targetAmount: parsed.data.targetAmount,
+      unit: parsed.data.unit,
     })
     .where(and(eq(habits.id, parsedId.data), eq(habits.userId, userId)))
 
@@ -221,8 +242,24 @@ export async function logEntry(
   const parsed = logEntrySchema.safeParse(input ?? {})
   if (!parsed.success) return invalid(parsed.error)
 
-  if (!(await ownsHabit(userId, parsedId.data))) {
-    return { ok: false, error: "Unknown habit." }
+  const quota = await findQuota(userId, parsedId.data)
+  if (!quota) return { ok: false, error: "Unknown habit." }
+
+  // An amount is required by a measured habit and refused by a session one, rather than
+  // being quietly dropped or quietly stored. Both directions are reachable from a stale
+  // page — the habit can be edited in another tab between render and tap — and a silently
+  // discarded amount is the failure this feature exists to stop: a number that looks
+  // logged and is not there when the week is scored.
+  const measured = isMeasured(quota)
+  const { amount } = parsed.data
+  if (measured && amount === undefined) {
+    return {
+      ok: false,
+      error: `How many ${quota.unit}? Reopen the habit and try again.`,
+    }
+  }
+  if (!measured && amount !== undefined) {
+    return { ok: false, error: "That habit counts sessions, not an amount." }
   }
 
   const { timeZone } = await getUserPreferences()
@@ -236,7 +273,9 @@ export async function logEntry(
 
   const [created] = await db
     .insert(habitEntries)
-    .values({ userId, habitId: parsedId.data, onDate })
+    // Null for a session, which is what the column has always meant — the amount is only
+    // ever written when a habit has a target to measure it against.
+    .values({ userId, habitId: parsedId.data, onDate, amount: amount ?? null })
     .returning({ id: habitEntries.id })
 
   revalidateHabitViews()

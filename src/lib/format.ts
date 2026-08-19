@@ -31,6 +31,31 @@ export function formatTime(hhmm: string, use24Hour: boolean): string {
   return `${h12}:${String(m).padStart(2, "0")} ${period}`
 }
 
+// --- amounts ---
+
+/**
+ * Float dust, removed at the points an amount is summed or subtracted.
+ *
+ * `0.1 + 0.2` is 0.30000000000000004, and a habit reading "0.30000000000000004 of 1 L" is
+ * a rendering bug with no upstream cause worth chasing. Three decimals is finer than any
+ * unit a person logs by hand and coarse enough to absorb the error.
+ */
+export function roundAmount(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
+/**
+ * An amount as a person would write it — "20", "5.5", "0.25".
+ *
+ * `real` columns come back as floats, so a whole target arrives as 20 and must not render
+ * as "20.0", while a genuinely fractional one has to keep its decimals. `String(number)`
+ * does exactly that; this exists so a badge, a meter and a prompt cannot drift into three
+ * spellings of one number.
+ */
+export function formatAmount(value: number): string {
+  return String(roundAmount(value))
+}
+
 // --- units ---
 
 /**

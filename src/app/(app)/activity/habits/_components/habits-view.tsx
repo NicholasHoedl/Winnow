@@ -36,6 +36,7 @@ import {
   periodPhrase,
 } from "@/modules/habits/service"
 import { Heatmap, type HeatmapCell } from "@/components/charts/heatmap"
+import { LogHabitButton } from "@/components/habits/log-habit-button"
 import { Ring } from "@/components/charts/ring"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
@@ -93,7 +94,7 @@ function HabitPanel({
   days: string[]
   weekStartsOn: number
   pending: boolean
-  onLog: (card: HabitCardData) => void
+  onLog: (card: HabitCardData, amount?: number) => void
   onEdit: (habit: HabitRow) => void
   onArchive: (habit: HabitRow) => void
   /** This habit's archive is in flight. */
@@ -151,17 +152,15 @@ function HabitPanel({
           </div>
 
           {/* The action this page exists for. Disabled in flight because there is no
-              unique constraint behind it — a double-click would write two rows. */}
-          <Button
-            variant="outline"
+              unique constraint behind it — a double-click would write two rows. It asks
+              for an amount when the habit has one to give; see `LogHabitButton`. */}
+          <LogHabitButton
+            title={habit.title}
+            unit={now.unit}
+            pending={pending}
             size="sm"
-            disabled={pending}
-            aria-label={`Log ${habit.title}`}
-            onClick={() => onLog(card)}
-          >
-            <Plus className="size-3.5" />
-            Log
-          </Button>
+            onLog={(amount) => onLog(card, amount)}
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -206,6 +205,8 @@ function HabitPanel({
           name={habit.title}
           done={now.done}
           target={now.target}
+          unit={now.unit}
+          measured={now.measured}
           caption={periodPhrase(habit.period)}
         />
 
@@ -349,7 +350,7 @@ export function HabitsView({
               days={days}
               weekStartsOn={weekStartsOn}
               pending={pendingId === card.habit.id}
-              onLog={(target) => log(target.habit)}
+              onLog={(target, amount) => log(target.habit, amount)}
               onEdit={openDialog}
               onArchive={handleArchive}
               archiving={archivingId === card.habit.id}

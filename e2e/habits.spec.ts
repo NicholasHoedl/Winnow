@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "./_test"
+import { test, expect, type Locator, type Page } from "./_test"
 import { visibleCard } from "./_card"
 import { announces, meter } from "./_habits"
 
@@ -41,6 +41,56 @@ async function addHabit(
   }
   await dialog.getByRole("button", { name: "Add", exact: true }).click()
   await expect(visibleCard(page, title)).toHaveCount(1)
+}
+
+/**
+ * The other kind: "20 words a day" rather than "one session a day".
+ *
+ * Separate from `addHabit` rather than another optional argument, because the dialog is a
+ * different form once "An amount" is chosen — a different field, a different label, and a
+ * `targetCount` that stops being read at all.
+ */
+async function addMeasuredHabit(
+  page: Page,
+  title: string,
+  amount: number,
+  unit: string,
+  period: "a day" | "a week" | "a month" = "a day",
+) {
+  await page.goto("/activity/habits")
+  await page.getByRole("button", { name: "New habit", exact: true }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(title)
+  await dialog.getByLabel("Track by", { exact: true }).click()
+  await page.getByRole("option", { name: "An amount", exact: true }).click()
+  await dialog.getByLabel("How much", { exact: true }).fill(String(amount))
+  await dialog.getByLabel("Unit", { exact: true }).fill(unit)
+  await dialog.getByLabel("Period", { exact: true }).click()
+  await page.getByRole("option", { name: period, exact: true }).click()
+  await dialog.getByRole("button", { name: "Add", exact: true }).click()
+  await expect(visibleCard(page, title)).toHaveCount(1)
+}
+
+/**
+ * Log an amount against a measured habit.
+ *
+ * Enter rather than the popover's own Log button, and not only because it is shorter: the
+ * prompt contains a second control named "Log" beside the trigger that opened it, and
+ * submitting the form is the path a person actually takes after typing one number.
+ */
+async function logAmount(
+  page: Page,
+  // The card or the chip — whichever surface's button is being tested.
+  scope: Page | Locator,
+  title: string,
+  amount: number,
+) {
+  await scope.getByRole("button", { name: `Log ${title}`, exact: true }).click()
+  // Found on the PAGE rather than inside `scope`: a popover renders in a portal at the
+  // document root, so it is nowhere near the button that opened it in the DOM.
+  const field = page.getByLabel(/^How many /)
+  await field.fill(String(amount))
+  await field.press("Enter")
 }
 
 /**
@@ -322,5 +372,72 @@ test("an archived habit can be brought back", async ({ page }) => {
   await expect(meter(visibleCard(page, title), title)).toHaveAttribute(
     "aria-valuetext",
     announces(0, 3, "this week"),
+  )
+})
+
+/**
+ * The measured variant, and the exact reading the old code produced.
+ *
+ * `adherence` counted ROWS until this shipped, so a habit carrying `targetAmount: 20` sat
+ * at "1 of 1 done" after a single word — a number that looked right and was nonsense. That
+ * is why `unit` and `targetAmount` were kept out of `habitInputSchema` for three tranches,
+ * and it is the one behaviour worth pinning in a browser rather than only in a unit test.
+ */
+test("a measured habit counts what you logged, not that you logged", async ({
+  page,
+}) => {
+  const title = `${PREFIX} words ${Date.now()}`
+  await addMeasuredHabit(page, title, 20, "words")
+
+  const card = () => visibleCard(page, title)
+
+  // The cadence line names the amount. "Daily" would be the session habit's wording and
+  // would lose the only statement on the card of what 20 refers to.
+  await expect(card()).toContainText("20 words a day")
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 20, "today", "words"),
+  )
+
+  // One log of twelve is twelve, not one — and not done.
+  await logAmount(page, card(), title, 12)
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(12, 20, "today", "words"),
+  )
+
+  // A second log ADDS. Under the old maths this was the moment the habit read 2 of 1.
+  await logAmount(page, card(), title, 8)
+  await expect(meter(card(), title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(20, 20, "today", "words"),
+  )
+})
+
+/**
+ * The cheap read has its own column list, and this is what proves it selects the new two.
+ *
+ * `getHabitStrip` picks columns by hand rather than taking the row — that is what lets it
+ * cost four fields instead of thirteen. Leaving `targetAmount` and `unit` out of that list
+ * would not have failed anywhere: the strip would simply have shown every measured habit
+ * as though its target were one session, on the surface most used from a phone.
+ */
+test("the strip shows a measured habit in its own units", async ({ page }) => {
+  const title = `${PREFIX} pages ${Date.now()}`
+  await addMeasuredHabit(page, title, 30, "pages")
+
+  await page.goto("/activity")
+  const chip = page.getByTestId("habit-chip").filter({ hasText: title })
+  await expect(chip).toHaveCount(1)
+  await expect(meter(chip, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 30, "today", "pages"),
+  )
+
+  // And it is loggable from here, which is the whole reason the strip exists.
+  await logAmount(page, chip, title, 12.5)
+  await expect(meter(chip, title)).toHaveAttribute(
+    "aria-valuetext",
+    announces(12.5, 30, "today", "pages"),
   )
 })

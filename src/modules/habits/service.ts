@@ -15,6 +15,7 @@
 // still exists but there is nothing left to get wrong.
 
 import { addDays, dayDiff, dowOf, shiftMonth, weekRange } from "@/lib/date"
+import { formatAmount, roundAmount } from "@/lib/format"
 
 export type HabitPeriod = "day" | "week" | "month"
 
@@ -22,22 +23,100 @@ export type HabitPeriod = "day" | "week" | "month"
 export type HabitRule = {
   period: HabitPeriod
   targetCount: number
+  /**
+   * The measured variant's target — 20 words, 5.5 km. Null means the habit counts
+   * sessions, which is what `targetCount` is for.
+   *
+   * These two are never both in force. `resolveQuota` is the only thing that decides
+   * between them, so nothing else in the app has to hold the rule.
+   */
+  targetAmount: number | null
+  /** What the amount is IN. Paired with `targetAmount`; null exactly when it is. */
+  unit: string | null
   startDate: string
   endDate: string | null
 }
 
-/** The entry fields the maths reads. */
-export type EntryLike = { onDate: string }
+/** What a quota is, once the two ways of expressing one have been resolved to a number. */
+export type Quota = {
+  /** The figure a period is judged against, whichever field it came from. */
+  target: number
+  /** True when that figure is an AMOUNT rather than a count of sessions. */
+  measured: boolean
+  /** Null for a session habit. */
+  unit: string | null
+}
+
+/** The entry fields the maths reads. `amount` is null for a session, and on old rows. */
+export type EntryLike = { onDate: string; amount?: number | null }
 
 /**
- * Never below 1.
+ * Whether a habit is measured — the single place that decision is made.
  *
- * Not paranoia: `habitInputSchema` guards every action path, but `account/import.ts` runs
- * no Zod at all — it maps JSON straight onto columns. A hand-edited backup carrying
- * `targetCount: 0` would reach this file and divide by zero.
+ * Derived from `targetAmount` rather than stored in a `kind` column, because there is no
+ * third state and a stored discriminator could disagree with the number it describes:
+ * `kind: "measured"` beside `target_amount: null` divides by zero. The same reasoning
+ * `endDate: null` and `goalId: null` already carry — absence IS the other case.
+ *
+ * A non-positive or non-finite amount is treated as NOT measured, which degrades a corrupt
+ * row to session counting rather than propagating NaN through a streak. See `resolveQuota`.
+ *
+ * A type PREDICATE rather than a plain boolean, so `resolveQuota` can read `targetAmount`
+ * as a number without an assertion. The alternative was `habit.targetAmount!` guarded by a
+ * call TypeScript cannot see through — and the only way to avoid that without a predicate
+ * is to inline the check, which would put this rule in two places.
  */
-function targetOf(habit: Pick<HabitRule, "targetCount">): number {
-  return Math.max(1, Math.trunc(habit.targetCount))
+export function isMeasured<T extends Pick<HabitRule, "targetAmount">>(
+  habit: T,
+): habit is T & { targetAmount: number } {
+  const amount = habit.targetAmount
+  return amount !== null && Number.isFinite(amount) && amount > 0
+}
+
+/**
+ * What one entry adds to its period's tally.
+ *
+ * A session is worth 1. A measured entry is worth what it recorded — and an entry with no
+ * amount is worth NOTHING to a measured habit, which is the honest reading rather than a
+ * convenient one. It matters because a habit can be edited from sessions to an amount, and
+ * every entry logged before that carries `amount: null`: those sessions genuinely did not
+ * record a quantity, and counting each as one word (or one kilometre) would invent data.
+ * The dialog says so before you make the switch.
+ */
+function contributionOf(entry: EntryLike, measured: boolean): number {
+  if (!measured) return 1
+  const amount = entry.amount
+  if (amount === null || amount === undefined || !Number.isFinite(amount))
+    return 0
+  return amount
+}
+
+/**
+ * The figure a period is judged against, and which kind of figure it is.
+ *
+ * Never below 1 for a session habit, and that is not paranoia: `habitInputSchema` guards
+ * every action path, but `account/import.ts` runs no Zod at all — it maps JSON straight
+ * onto columns. A hand-edited backup carrying `targetCount: 0` would reach this file and
+ * divide by zero. A measured target needs no such floor because `isMeasured` has already
+ * rejected everything that is not a positive finite number.
+ */
+export function resolveQuota(
+  habit: Pick<HabitRule, "targetCount" | "targetAmount" | "unit">,
+): Quota {
+  if (isMeasured(habit)) {
+    return { target: habit.targetAmount, measured: true, unit: habit.unit }
+  }
+  return {
+    target: Math.max(1, Math.trunc(habit.targetCount)),
+    measured: false,
+    unit: null,
+  }
+}
+
+function targetOf(
+  habit: Pick<HabitRule, "targetCount" | "targetAmount" | "unit">,
+): number {
+  return resolveQuota(habit).target
 }
 
 /** The start date of the period `date` falls in — the key everything buckets on. */
@@ -100,21 +179,31 @@ export function currentPeriodFloor(today: string, weekStartsOn = 0): string {
 }
 
 /**
- * Entries per period, keyed by period start.
+ * What each period holds, keyed by period start.
  *
- * Counts ROWS, not `amount` — the measured variant ("20 words") is a later tranche, and
- * counting a null amount as anything but one session would be inventing data.
+ * Sessions per period for a session habit, and the SUM OF AMOUNTS for a measured one — one
+ * function rather than two, because everything downstream compares this against a target
+ * and neither the streak nor the window percentage has any reason to know which kind of
+ * number it is holding. Teaching this and `resolveQuota` about the measured variant is
+ * what turned the feature on: `habitStreak` and `windowAdherence` needed no change at all.
+ *
+ * Takes the habit rather than a bare `period`, and declares exactly the two fields it
+ * reads — the same discipline `adherence` below documents, for the same reason.
  */
 export function tallyByPeriod(
   entries: readonly EntryLike[],
-  period: HabitPeriod,
+  habit: Pick<HabitRule, "period" | "targetAmount">,
   weekStartsOn = 0,
 ): Map<string, number> {
+  const measured = isMeasured(habit)
   const tally = new Map<string, number>()
   for (const entry of entries) {
-    const key = periodStart(entry.onDate, period, weekStartsOn)
-    tally.set(key, (tally.get(key) ?? 0) + 1)
+    const key = periodStart(entry.onDate, habit.period, weekStartsOn)
+    tally.set(key, (tally.get(key) ?? 0) + contributionOf(entry, measured))
   }
+  // Rounded once per period rather than per addition: summing first keeps the arithmetic
+  // exact for as long as it can be, and nothing reads the intermediate values.
+  for (const [key, value] of tally) tally.set(key, roundAmount(value))
   return tally
 }
 
@@ -131,9 +220,25 @@ export type Adherence = {
   /** Inclusive bounds of the period containing the date asked about. */
   start: string
   end: string
-  /** Entries logged in it. NOT capped — four sessions against a target of three reads 4. */
+  /**
+   * What was logged in it. NOT capped — four sessions against a target of three reads 4.
+   *
+   * Sessions for a session habit, the summed amount for a measured one. Which of the two
+   * it is, is `measured` below rather than something a reader infers from the number.
+   */
   done: number
   target: number
+  /**
+   * Whether `done`/`target` are an AMOUNT rather than a count of sessions.
+   *
+   * Carried on the READING rather than left for each surface to re-derive from the habit
+   * row, and that is what kept this feature out of four card shapes: every surface drawing
+   * a quota already receives an `Adherence`, so the meter, the numbers and the log control
+   * all learn the variant from the same object. `HabitStripCard` gained no field for it.
+   */
+  measured: boolean
+  /** The unit `done` and `target` are in, or null for a session habit. */
+  unit: string | null
   /** 0–100, CLAMPED at 100 so an overshoot cannot overflow a progress bar. */
   percent: number
   /** How many more to hit the target. Floored at 0. */
@@ -149,24 +254,31 @@ export type Adherence = {
  */
 export function adherence(
   tally: ReadonlyMap<string, number>,
-  // Only the two fields it actually reads, not the whole rule. That is what lets
-  // `getHabitStrip` select four columns instead of thirteen — widening this was the
-  // enabling change, and a test calls it with a bare literal so re-adding a `startDate`
-  // read here fails loudly rather than breaking the strip's column list.
-  habit: Pick<HabitRule, "period" | "targetCount">,
+  // Only the fields it actually reads, not the whole rule. That is what lets
+  // `getHabitStrip` select a handful of columns instead of thirteen — widening this was
+  // the enabling change, and a test calls it with a bare literal so re-adding a
+  // `startDate` read here fails loudly rather than breaking the strip's column list.
+  //
+  // It went from two fields to four when measured habits were turned on, and the strip's
+  // column list moved with it in the same commit. That is the guard working, not a hole.
+  habit: Pick<HabitRule, "period" | "targetCount" | "targetAmount" | "unit">,
   today: string,
   weekStartsOn = 0,
 ): Adherence {
   const { start, end } = periodRange(today, habit.period, weekStartsOn)
-  const target = targetOf(habit)
+  const { target, measured, unit } = resolveQuota(habit)
   const done = tally.get(start) ?? 0
   return {
     start,
     end,
     done,
     target,
+    measured,
+    unit,
     percent: Math.min(100, Math.round((done / target) * 100)),
-    remaining: Math.max(0, target - done),
+    // Rounded because it is a subtraction of amounts and is rendered directly: 20 - 12.3
+    // is 7.699999999999999 in binary floating point.
+    remaining: Math.max(0, roundAmount(target - done)),
     met: done >= target,
   }
 }
@@ -333,11 +445,20 @@ const EVERY_LABEL: Record<HabitPeriod, string> = {
   month: "Monthly",
 }
 
-/** "Daily" / "3× a week" / "Monthly" — the badge wording, alongside `repeatLabel`. */
+/**
+ * "Daily" / "3× a week" / "20 words a day" — the badge wording, alongside `repeatLabel`.
+ *
+ * A measured habit never collapses to "Daily", however round its target is: "1 L a day"
+ * and "one session a day" are different commitments, and this is the only line on the card
+ * that says which one you made.
+ */
 export function periodLabel(
-  habit: Pick<HabitRule, "period" | "targetCount">,
+  habit: Pick<HabitRule, "period" | "targetCount" | "targetAmount" | "unit">,
 ): string {
-  const target = targetOf(habit)
+  const { target, measured, unit } = resolveQuota(habit)
+  if (measured) {
+    return `${formatAmount(target)} ${unit} a ${PERIOD_NOUN[habit.period]}`
+  }
   if (target === 1) return EVERY_LABEL[habit.period]
   return `${target}× a ${PERIOD_NOUN[habit.period]}`
 }

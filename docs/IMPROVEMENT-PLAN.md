@@ -750,7 +750,10 @@ ADR-0014 and the T12a notes below.
 - **`unit` and `targetAmount` ship unread**, and are kept OUT of `habitInputSchema` so that
   is structural rather than aspirational: `z.object()` strips them, so nothing can write a
   value nothing reads. Without that, a T12c proposal setting `targetAmount: 20` would produce
-  a habit reading "1 of 1 done" after a single word.
+  a habit reading "1 of 1 done" after a single word. _(**T19 turned them on** — by teaching
+  `tallyByPeriod` to sum amounts first, which is precisely the missing half this bullet
+  names. The guard did its job for three tranches and was retired by the thing it was
+  waiting for, not worked around.)_
 - **Ordering was the safety mechanism.** `reopenWouldDestroy` moved to `todos/service.ts` and
   `dateRange` to `lib/date.ts` BEFORE anything was deleted, so `tsc` could prove the rest
   unreferenced. Nothing was removed on judgement.
@@ -802,7 +805,10 @@ ADR-0014 and the T12a notes below.
   starts in milliseconds, so reuse bought nothing and cost correctness.
 - Not built: a rate-feasibility warning ("at 20 words a day you reach 5000 in February, not
   December"). It needs `targetAmount` on a proposed habit, which is the measured variant
-  deferred from T12a. Named here rather than left as a gap someone rediscovers.
+  deferred from T12a. Named here rather than left as a gap someone rediscovers. _(T19 built
+  the measured variant, but deliberately **not** this: `goalPlanHabitSchema` still carries no
+  `targetAmount`, so AI plans create session habits. The blocker is gone; the feature is
+  still unbuilt.)_
 
 **T12d — shipped**, no migration. T12a made habits a primitive and nothing revisited the page
 around them, so the rail still treated one the way it did when a habit _was_ a repeating task:
@@ -1350,3 +1356,64 @@ default becomes configurable: with a week preference, the Month button produced
 `/calendar?date=…`, which resolves back to the week — the one view unreachable from the
 switcher. It now always names the view, and `parseView` takes the fallback as a parameter so
 every other call site keeps its behaviour.
+
+## Tranche 19 — A habit can be an amount ✅
+
+**Shipped**, no migration. This is pre-deploy audit item **4.6**, which that audit deferred
+into its own phase after discovering it had been scoped wrong.
+
+**The scoping error is the most useful thing here.** 4.6 read: "`habits.unit` and
+`habits.targetAmount` are already in the schema, deliberately kept out of `habitInputSchema`
+so nothing writes what nothing reads. '20 new words a day' instead of 'one session a day' is
+one validation entry and one form field." Every clause of that is true and the conclusion is
+wrong, because `adherence` counted ROWS. Turning the columns on without the maths gives a
+habit that reads **"1 of 1 done" after a single word** — the exact failure the T12a comment
+predicted, arrived at by reading the schema and not the comment beside it.
+
+- **Two functions carry the whole feature.** `tallyByPeriod` sums a contribution — 1 for a
+  session, the `amount` for a measured entry — and `resolveQuota` picks the target. Nothing
+  else in `service.ts` changed: `habitStreak` and `windowAdherence` compare a tally against a
+  target and have no reason to know which kind of number that is. Both were correct for the
+  measured variant the moment those two were.
+- **The variant is derived from `targetAmount`, not stored in a `kind` column.** There is no
+  third state, and a discriminator could disagree with the number it describes —
+  `kind: "measured"` beside `target_amount: null` divides by zero. `isMeasured` is the one
+  place that decision is made, and it treats a non-positive or non-finite amount as a session
+  habit so a hand-edited backup degrades instead of propagating NaN.
+- **`Adherence` gained `measured` and `unit`**, so no card shape did. Four surfaces draw a
+  quota and each already receives a `now`. Putting the columns on `HabitStripCard` instead
+  would have meant four shapes, four prop threads, and four chances to read the rule
+  differently.
+- **Switching an existing habit between the two is allowed and recalculates history.** Same
+  reasoning `updateHabit` already applies to a cadence change: it rewrites the streak, and
+  that is acceptable because it is a visible edit. Entries logged before the switch carry no
+  amount and contribute nothing; the dialog says so before you save, which is what makes it
+  visible rather than silent.
+- **The logging control had to change too** — `+ Log` means one session and cannot express
+  fifteen pages. `LogHabitButton` is one component for both variants and replaces four
+  near-identical buttons; a measured habit opens a popover prompt. A popover rather than an
+  inline field because the narrowest surface drawing it is a 192px chip in a scroller, and an
+  inline number input there would force a second presentation for phones — the exact drift
+  that put habits in an `lg:`-only rail before T12d.
+- **A mismatch is refused by the ACTION**, not the form: a measured habit requires an amount
+  and a session habit rejects one. Both are reachable from a page left open while the habit
+  was edited elsewhere, and `habit_entries` has no constraint that would catch the row.
+
+**The squares became a fixed size in the same pass, at the user's request, and that moved a
+constant that had been chosen rather than measured.** `QuotaMeter`'s segments were `flex-1`,
+so one quota drew fat segments in a wide card and thin ones in a narrow chip: a segment's
+width described its container, not the habit. Fixed 8px squares make a longer row mean a
+bigger commitment across every habit on a page.
+
+- **`MAX_SEGMENTS` went from 12 to 10, and it is now a measurement.** The 192px habit chip
+  gives its meter 108px; twelve squares plus their gaps need 118 and overflowed by ten. Ten
+  need 98.
+- **`mobile-layout.spec.ts` did not catch that and could not.** The chip sits inside an
+  `overflow-x-auto` scroller, and a scroller is permitted to hold content wider than itself.
+  It was found with a throwaway probe spec that measured the real box — the same method that
+  settled the stat-card header in the audit's phase 3, after reading the CSS predicted the
+  opposite twice.
+
+**Deliberately not built: the companion proposing a measured habit.** See the T12c bullet
+above — the blocker named there is gone, the feature is still unbuilt, and the boundary is
+clean because `createHabit` defaults both columns to null.

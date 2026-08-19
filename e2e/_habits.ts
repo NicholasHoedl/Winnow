@@ -20,11 +20,19 @@ export function meter(scope: Locator, title: string): Locator {
   return scope.getByRole("progressbar", { name: title })
 }
 
-/** "2 of 3 this week" — the shape `QuotaMeter` builds for `aria-valuetext`. */
+/**
+ * "2 of 3 this week", or "12 of 20 words today" — the shape `QuotaMeter` builds for
+ * `aria-valuetext`.
+ *
+ * `unit` is what separates the two kinds of habit in the one string every surface
+ * announces. A session habit has none; a measured one names it between the figures and the
+ * cadence, which is also the order it reads aloud in.
+ */
 export function announces(
   done: number,
   target: number,
   period: string,
+  unit?: string,
 ): string {
-  return `${done} of ${target} ${period}`
+  return `${done} of ${target}${unit ? ` ${unit}` : ""} ${period}`
 }

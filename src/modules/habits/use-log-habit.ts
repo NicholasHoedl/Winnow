@@ -28,7 +28,12 @@ type Loggable = { id: string; title: string }
 export function useLogHabit(): {
   /** The habit whose write is in flight, or null — so only the tapped control disables. */
   pendingId: string | null
-  log: (habit: Loggable) => void
+  /**
+   * `amount` is required for a MEASURED habit and refused for a session one — the action
+   * enforces both, because it is the only layer that knows which kind it is writing
+   * against. `LogHabitButton` is what collects it; this stays the thing that writes.
+   */
+  log: (habit: Loggable, amount?: number) => void
 } {
   const [target, setTarget] = React.useState<string | null>(null)
   const [isPending, startTransition] = React.useTransition()
@@ -45,15 +50,24 @@ export function useLogHabit(): {
   // entry is being removed — which is correct, not incidental.
   const pendingId = isPending ? target : null
 
-  const log = React.useCallback((habit: Loggable) => {
+  const log = React.useCallback((habit: Loggable, amount?: number) => {
     setTarget(habit.id)
     startTransition(async () => {
-      const result = await logEntry(habit.id)
+      // `{}` rather than `{ amount: undefined }` for a session habit: the action REJECTS an
+      // amount it was not expecting, and Zod treats a present-but-undefined key the same
+      // as an absent one only by luck of the current schema.
+      const result = await logEntry(
+        habit.id,
+        amount === undefined ? {} : { amount },
+      )
       if (!result.ok) {
         toast.error(result.error)
         return
       }
+      // The title alone stays the toast's headline — four e2e specs read it, and the
+      // amount is the thing you just typed, so it is confirmation rather than news.
       toast(`Logged ${habit.title}`, {
+        description: amount === undefined ? undefined : `+${amount}`,
         action: {
           label: "Undo",
           onClick: () =>
