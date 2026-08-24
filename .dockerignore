@@ -1,13 +1,28 @@
 node_modules
-.next
+# `.next*`, not `.next` — the glob is the whole point. `distDir` is env-configurable
+# (next.config.ts), and the suites use it: `.next-e2e` for the e2e run and
+# `.next-e2e-prod` for the production one. A bare `.next` matches none of those, so a
+# machine that had run the e2e was shipping 1.1GB of stale build output into every image
+# build. Measured at "transferring context: 1.11GB" before this line changed.
+.next*
 .git
 .gitignore
 .env*
 !.env.example
-e2e
+# `e2e*`, for the same reason as `.next*` above and it is the same bug twice. `e2e` alone
+# does not match `e2e-prod`, so the production suite was copied into the image WITHOUT the
+# `e2e/` helpers it imports — and `next build` type-checks the whole project, so the image
+# build died on `Cannot find module '../e2e/_login'`. A test directory failing a production
+# build is a confusing enough error to be worth this comment.
+e2e*
 coverage
 test-results
-playwright-report
+# `playwright*` covers the report directory AND the two root configs, which is the third
+# instance of this same bug: both import from `./e2e/`, which is excluded above, and
+# `next build` type-checks the whole project — so a Playwright config sitting at the repo
+# root failed the production image build. Test infrastructure has no business in the image
+# regardless of whether it happens to compile.
+playwright*
 .claude
 .code-review-graph
 docker

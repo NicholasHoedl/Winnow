@@ -8,6 +8,46 @@ will find things this document got wrong. Fix them here as you go.
 **Read `docs/HANDOFF.md` §1 first.** The single most common wrong assumption about this
 project is that some of it is already deployed. None of it is.
 
+## Rehearsed on 2026-08-24 — what is now proven, and what is not
+
+Steps 3, 4 and the app half of 6 were run end to end **on the laptop**, in an isolated
+compose project on other ports with throwaway secrets, then torn down with `down -v`. That
+is not the deploy — it is the parts of it that do not depend on which machine you are on,
+taken off the list before anyone is standing at the desktop.
+
+| Step            | Result                                                                               |
+| --------------- | ------------------------------------------------------------------------------------ |
+| Image build     | **Was broken. Three fixes to `.dockerignore` — see below.** Builds clean now; 390MB. |
+| `up -d`         | Both services reach **healthy** on their own healthchecks, ~30s.                     |
+| §4 migrate      | 41 migrations apply cleanly, 27 tables.                                              |
+| §4 seed         | Creates the account.                                                                 |
+| §6.1 (app only) | `/login` serves **200**, `/` correctly **307**s to it.                               |
+| §8 `backup.sh`  | Writes a gzip dump — **and see the warning in §8, which got worse.**                 |
+
+**Still entirely unproven**, because none of it can be done from here: everything in §0, the
+Task Scheduler lifecycle, Tailscale serve and its certificate (§5), reachability from the
+phone or from off the tailnet (§6.2/§6.3), and §7.
+
+**The image build was broken and would have failed at step 3.** Three separate bugs in
+`.dockerignore`, all the same shape — a name that does not match its longer sibling:
+
+- `.next` does not match **`.next-e2e`**. `distDir` is env-configurable and the suites use
+  it, so a machine that had run the e2e shipped 1.1GB of stale output into every build.
+- `e2e` does not match **`e2e-prod`**, so the production suite was copied in without the
+  `e2e/` helpers it imports.
+- `playwright-report` does not match **`playwright.config.ts`**, which imports `./e2e/`.
+
+The last two are FATAL rather than merely wasteful, because `next build` type-checks the
+whole project: the image build died on `Cannot find module '../e2e/_login'`, which is a
+baffling thing to read while deploying. All three are fixed with globs.
+
+**One intermittent failure is NOT explained.** The very first build failed inside Turbopack's
+CSS optimizer with corrupted strings — `var(-���-nav-height)` where
+`var(--nav-height)` belonged, control bytes injected mid-token. It has not recurred in three
+builds since, and the same commit builds cleanly on Windows. If step 3 fails on the desktop
+with a CSS parse error, **retry it before believing anything is wrong with the CSS** — and
+record here whether it recurred, because one sighting is not a pattern.
+
 ## The plan, and how it changed
 
 Originally: build the image on the laptop, `docker save` it to a tar, carry the tar over.
@@ -23,12 +63,12 @@ would rebuild from source and defeat the transfer). Under this plan it is **corr
 
 Claude Code cannot install these, and should not try.
 
-| What | Why |
-| --- | --- |
-| **WSL2 with Docker Engine inside it — *not* Docker Desktop** | Runs the stack, and keeps running it after a reboot with nobody logged in. **Do §0 first**; the obvious install is the broken one here. |
-| **Tailscale**, signed in | The only ingress. ADR-0002. |
-| **Node 22 + pnpm** (`corepack enable`) | `drizzle-kit` is a dev dependency and is **not** in the runtime image, so migrations and the seed run from the host, not from a container. |
-| **Git** | To clone. |
+| What                                                         | Why                                                                                                                                        |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **WSL2 with Docker Engine inside it — _not_ Docker Desktop** | Runs the stack, and keeps running it after a reboot with nobody logged in. **Do §0 first**; the obvious install is the broken one here.    |
+| **Tailscale**, signed in                                     | The only ingress. ADR-0002.                                                                                                                |
+| **Node 22 + pnpm** (`corepack enable`)                       | `drizzle-kit` is a dev dependency and is **not** in the runtime image, so migrations and the seed run from the host, not from a container. |
+| **Git**                                                      | To clone.                                                                                                                                  |
 
 If you would rather not install Node on the desktop, migrations can run from a throwaway
 `node:22-slim` container with the repo mounted and joined to the compose network. That
@@ -69,7 +109,7 @@ human in it:
    Log out and back into the distro for the group to take effect.
 
 3. Make the distro start with Windows. Task Scheduler → Create Task:
-   - Trigger: **At startup** — *not* "At log on". This is the entire point; a logon trigger
+   - Trigger: **At startup** — _not_ "At log on". This is the entire point; a logon trigger
      reproduces the original problem while looking like a fix.
    - Action: `wsl.exe -d <distro> -- /bin/true` (starting the distro is enough; systemd
      brings Docker up behind it).
@@ -95,12 +135,12 @@ values; **you** fill the secrets. Do not paste passwords into a chat.
 
 Required for the production stack:
 
-| Key | Notes |
-| --- | --- |
-| `POSTGRES_PASSWORD` | Compose refuses to start without it. Not in `.env.example` before this runbook existed — that omission is the first thing that used to break this deploy. |
-| `AUTH_SECRET` | `npx auth secret`, or `openssl rand -base64 33`. |
-| `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | Used once, by the seed script. There is no sign-up flow. |
-| `APP_TIME_ZONE` | Compose defaults to `America/Chicago`. |
+| Key                                      | Notes                                                                                                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`                      | Compose refuses to start without it. Not in `.env.example` before this runbook existed — that omission is the first thing that used to break this deploy. |
+| `AUTH_SECRET`                            | `npx auth secret`, or `openssl rand -base64 33`.                                                                                                          |
+| `SEED_USER_EMAIL` / `SEED_USER_PASSWORD` | Used once, by the seed script. There is no sign-up flow.                                                                                                  |
+| `APP_TIME_ZONE`                          | Compose defaults to `America/Chicago`.                                                                                                                    |
 
 **`DATABASE_URL` is the trap.** It means two different things:
 
@@ -184,10 +224,20 @@ tailnet), and the **dashboard**, which is a phone surface that has only ever bee
 schedules them with cron or systemd. On Windows that means **Git Bash plus Task Scheduler**.
 Rewrite that section against the real machine rather than leaving it aspirational.
 
-One concrete gotcha: `backup.sh` defaults `WINNOW_DB_CONTAINER` to `winnow-postgres`, which
-is the **dev** container name. Under `docker-compose.prod.yml` the container is
-`winnow-postgres-1`. Confirm with `docker compose -f docker-compose.prod.yml ps` and pass
-the real name.
+**`backup.sh`'s default is dangerous, and the rehearsal proved it rather than reasoning
+about it.** It defaults `WINNOW_DB_CONTAINER` to `winnow-postgres` — the **dev** container
+name — while under `docker-compose.prod.yml` the container is `winnow-postgres-1`.
+
+The problem is not that the default is wrong. It is that **the script does not fail when it
+is wrong.** Run on a host that has a dev container, it backs that up instead, prints "Wrote
+20K", exits 0, and says nothing. Both were run side by side here and produced dumps of
+different sizes from different databases, one of them silently the wrong one. You would find
+out during a restore.
+
+If dev and prod ever share a host — which is exactly what is being contemplated — pass
+`WINNOW_DB_CONTAINER` explicitly every time, and consider making the script require it
+rather than guess. A backup tool that quietly backs up the wrong database is worse than one
+that refuses to run.
 
 A backup script is not a backup until a restore has been proven. Do the drill in
 `backup-restore.md` on this machine, not on the laptop.
