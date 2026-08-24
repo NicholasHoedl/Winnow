@@ -219,7 +219,15 @@ export function GoalsView({
               proposal.setPayload({ kind: "goal_plan", payload: next })
             }
             goalTitle={goalTitleFor(active.targetId)}
-            targetDate={goalFor(active.targetId)?.targetDate ?? null}
+            // The whole goal, not just its date: the rate check needs the numeric target
+            // too, and `GoalWithProgress` already carries all four — `getGoals` selects the
+            // row, so no query changed for this.
+            goal={{
+              targetDate: goalFor(active.targetId)?.targetDate ?? null,
+              targetValue: goalFor(active.targetId)?.targetValue ?? null,
+              currentValue: goalFor(active.targetId)?.currentValue ?? null,
+              unit: goalFor(active.targetId)?.unit ?? null,
+            }}
             today={today}
             pending={busy}
             onApply={(next) =>

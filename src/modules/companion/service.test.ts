@@ -9,6 +9,7 @@ import {
   offsetLabel,
   planCounts,
   planWarnings,
+  proposedQuota,
   resolveCategory,
   routineSpan,
   summaryReadiness,
@@ -24,15 +25,44 @@ const goal: GoalPromptContext = {
   title: "Learn 2000 Kanji",
   notes: null,
   targetDate: "2026-12-31",
+  // No numeric target on the BASE fixture, deliberately: it keeps the exact-string prompt
+  // tripwire below asserting the same string it always did, so the tests that gained a
+  // numeric goal had to say so explicitly rather than shifting it under everything.
+  targetValue: null,
+  currentValue: null,
+  unit: null,
   existingMilestones: [],
   today: TODAY,
 }
+
+/** A goal measured numerically — what the rate check needs to have anything to say. */
+const measuredGoal = {
+  targetDate: "2026-12-31",
+  targetValue: 2000,
+  currentValue: 0,
+  unit: "kanji",
+}
+
+/** A session habit in the shape the payload now carries. */
+const sessions = (
+  title: string,
+  period: "day" | "week" | "month",
+  targetCount: number,
+) => ({ title, period, targetCount, targetAmount: null, unit: null })
+
+/** A measured one — "20 kanji a day". */
+const measured = (
+  title: string,
+  period: "day" | "week" | "month",
+  targetAmount: number,
+  unit = "kanji",
+) => ({ title, period, targetCount: 1, targetAmount, unit })
 
 const plan = (over: Partial<GoalPlanPayload> = {}): GoalPlanPayload => ({
   milestones: [{ title: "Radicals", dueDate: "2026-09-30" }],
   // A habit by default, so the base fixture does not trip the `no-habits` warning in every
   // unrelated case — the tests that care about it override this to an empty array.
-  habits: [{ title: "Review the deck", period: "day", targetCount: 1 }],
+  habits: [sessions("Review the deck", "day", 1)],
   setupTasks: [],
   ...over,
 })
@@ -243,8 +273,8 @@ describe("planWarnings", () => {
       planWarnings(
         plan({
           habits: [
-            { title: "Attend class", period: "week", targetCount: 3 },
-            { title: "Drill at home", period: "week", targetCount: 2 },
+            sessions("Attend class", "week", 3),
+            sessions("Drill at home", "week", 2),
           ],
         }),
         goal,
@@ -263,7 +293,7 @@ describe("planCounts", () => {
             { title: "a", dueDate: "2026-09-01" },
             { title: "b", dueDate: "2026-10-01" },
           ],
-          habits: [{ title: "h", period: "week", targetCount: 3 }],
+          habits: [sessions("h", "week", 3)],
           setupTasks: [{ title: "t", dueDate: "2026-09-01" }],
         }),
       ),
@@ -289,8 +319,8 @@ describe("finalizePlan", () => {
       { title: "C", dueDate: "2026-11-01" },
     ],
     habits: [
-      { title: "Practice daily", period: "day", targetCount: 1 },
-      { title: "Attend class", period: "week", targetCount: 3 },
+      sessions("Practice daily", "day", 1),
+      sessions("Attend class", "week", 3),
     ],
     setupTasks: [{ title: "Buy the book", dueDate: "2026-08-20" }],
   }
@@ -588,5 +618,210 @@ describe("buildImportMessages", () => {
     )
     expect(user.content).toContain("Revise this existing extraction")
     expect(user.content).toContain("drop the refunds")
+  })
+})
+
+// ---------------------------------------------------------------------------------------
+// The measured variant reaching the companion, and the rate check it unblocked. Named as
+// unbuilt in IMPROVEMENT-PLAN since T12c, where it was waiting on a proposed habit being
+// able to carry an amount at all.
+// ---------------------------------------------------------------------------------------
+
+describe("buildGoalPlanMessages — a numeric goal", () => {
+  it("sends what is left, not just the total", () => {
+    const [, user] = buildGoalPlanMessages({
+      ...goal,
+      targetValue: 2000,
+      currentValue: 500,
+      unit: "kanji",
+    })
+    expect(user.content).toContain("500 of 2000 kanji so far")
+    expect(user.content).toContain("1500 kanji still to go")
+  })
+
+  it("asks for the goal's own unit, which is the only one the check can compare", () => {
+    const [, user] = buildGoalPlanMessages({
+      ...goal,
+      targetValue: 2000,
+      currentValue: null,
+      unit: "kanji",
+    })
+    expect(user.content).toContain('use "kanji" as its unit')
+  })
+
+  it("says nothing numeric about a goal tracked by milestones alone", () => {
+    const [, user] = buildGoalPlanMessages(goal)
+    expect(user.content).not.toContain("Measured numerically")
+  })
+})
+
+describe("proposedQuota", () => {
+  it("reads an amount and a unit as measured", () => {
+    expect(proposedQuota(measured("Learn", "day", 20))).toEqual({
+      measured: true,
+      amount: 20,
+      unit: "kanji",
+    })
+  })
+
+  it("reads a plain count as sessions", () => {
+    expect(proposedQuota(sessions("Class", "week", 3))).toEqual({
+      measured: false,
+      amount: null,
+      unit: null,
+    })
+  })
+
+  // The half-states. A model can emit these because the both-or-neither rule CANNOT live in
+  // the schema: it is converted with `z.toJSONSchema` and Zod refuses to convert a refinement
+  // or a transform. Reading them as sessions keeps the plan visible and editable rather than
+  // failing the whole payload as malformed.
+  it("falls back to sessions when only one half was given", () => {
+    for (const half of [
+      { ...measured("Learn", "day", 20), unit: null },
+      { ...measured("Learn", "day", 20), unit: "   " },
+      { ...measured("Learn", "day", 20), targetAmount: null },
+      { ...measured("Learn", "day", 20), targetAmount: 0 },
+      { ...measured("Learn", "day", 20), targetAmount: Number.NaN },
+    ]) {
+      expect(proposedQuota(half).measured).toBe(false)
+    }
+  })
+
+  it("trims a unit rather than carrying the whitespace into a reading", () => {
+    expect(proposedQuota(measured("Learn", "day", 20, "  kanji ")).unit).toBe(
+      "kanji",
+    )
+  })
+})
+
+describe("planWarnings — rate feasibility", () => {
+  // 2026-08-04 to 2026-12-31 is 149 days. 2000 kanji needs ~13.4 a day.
+  it("says nothing when the rate reaches the target", () => {
+    const warnings = planWarnings(
+      plan({ habits: [measured("Learn kanji", "day", 20)] }),
+      measuredGoal,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.kind === "rate-short")).toEqual([])
+  })
+
+  it("names the shortfall when it does not", () => {
+    const warnings = planWarnings(
+      plan({ habits: [measured("Learn kanji", "day", 5)] }),
+      measuredGoal,
+      TODAY,
+    )
+    const rate = warnings.find((w) => w.kind === "rate-short")
+    expect(rate).toBeDefined()
+    // 5 a day x 149 days = 745 of the 2000 needed.
+    expect(rate!.message).toContain("745")
+    expect(rate!.message).toContain("2000")
+    expect(rate!.message).toContain("kanji")
+  })
+
+  // Two practices toward one goal really do add up, and judging either alone would report
+  // a shortfall the plan does not have.
+  it("sums every habit in the goal's unit", () => {
+    const warnings = planWarnings(
+      plan({
+        habits: [
+          measured("New kanji", "day", 7),
+          measured("Review", "week", 49),
+        ],
+      }),
+      measuredGoal,
+      TODAY,
+    )
+    // 7/day + 7/day = 14/day, which clears 2000 in 149 days.
+    expect(warnings.filter((w) => w.kind === "rate-short")).toEqual([])
+  })
+
+  it("counts what is LEFT, not the whole target", () => {
+    const warnings = planWarnings(
+      plan({ habits: [measured("Learn kanji", "day", 5)] }),
+      { ...measuredGoal, currentValue: 1500 },
+      TODAY,
+    )
+    // 745 covers the remaining 500 comfortably.
+    expect(warnings.filter((w) => w.kind === "rate-short")).toEqual([])
+  })
+
+  // Every one of these is a reason to stay silent rather than guess.
+  it("stays silent when there is nothing to compare", () => {
+    const slow = [measured("Learn kanji", "day", 1)]
+    const cases: [string, Parameters<typeof planWarnings>[1]][] = [
+      ["no numeric target", { ...measuredGoal, targetValue: null }],
+      ["no unit on the goal", { ...measuredGoal, unit: null }],
+      ["no target date", { ...measuredGoal, targetDate: null }],
+      ["target already reached", { ...measuredGoal, currentValue: 2000 }],
+    ]
+    for (const [why, g] of cases) {
+      const warnings = planWarnings(plan({ habits: slow }), g, TODAY)
+      expect(
+        warnings.filter((w) => w.kind === "rate-short"),
+        why,
+      ).toEqual([])
+    }
+  })
+
+  // `goals.unit` is free text and purely a display suffix — this app converts nothing and
+  // must not start by inference. "30 minutes a day" toward 2000 kanji is not slow, it is
+  // incomparable, and a number here would be a guess wearing a decimal point.
+  it("stays silent when the units do not match", () => {
+    const warnings = planWarnings(
+      plan({ habits: [measured("Study", "day", 30, "minutes")] }),
+      measuredGoal,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.kind === "rate-short")).toEqual([])
+  })
+
+  it("matches units case- and space-insensitively", () => {
+    const warnings = planWarnings(
+      plan({ habits: [measured("Learn", "day", 1, " Kanji ")] }),
+      measuredGoal,
+      TODAY,
+    )
+    expect(warnings.some((w) => w.kind === "rate-short")).toBe(true)
+  })
+
+  it("ignores a session habit, which states no amount to check", () => {
+    const warnings = planWarnings(
+      plan({ habits: [sessions("Study", "day", 1)] }),
+      measuredGoal,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.kind === "rate-short")).toEqual([])
+  })
+})
+
+describe("finalizePlan — half-stated habits", () => {
+  const none = {
+    milestones: new Set<number>(),
+    habits: new Set<number>(),
+    setupTasks: new Set<number>(),
+  }
+
+  // Reaching `createHabit` with an amount and no unit would be REJECTED by
+  // `habitInputSchema`'s both-or-neither rule, failing the entire apply with "couldn't
+  // create <title>". Resolving it here makes it the session habit it already reads as.
+  it("resolves an amount with no unit to a session habit", () => {
+    const result = finalizePlan(
+      plan({ habits: [{ ...measured("Learn", "day", 20), unit: null }] }),
+      none,
+    )
+    expect(result.habits[0]).toMatchObject({ targetAmount: null, unit: null })
+  })
+
+  it("leaves a properly stated measured habit alone", () => {
+    const result = finalizePlan(
+      plan({ habits: [measured("Learn", "day", 20)] }),
+      none,
+    )
+    expect(result.habits[0]).toMatchObject({
+      targetAmount: 20,
+      unit: "kanji",
+    })
   })
 })

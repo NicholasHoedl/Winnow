@@ -40,7 +40,15 @@ function planFor(isRefinement) {
   if (isRefinement) {
     return {
       milestones: [{ title: "STUB refined milestone", dueDate: inDays(30) }],
-      habits: [{ title: "STUB refined habit", period: "week", targetCount: 2 }],
+      habits: [
+        {
+          title: "STUB refined habit",
+          period: "week",
+          targetCount: 2,
+          targetAmount: null,
+          unit: null,
+        },
+      ],
       setupTasks: [],
     }
   }
@@ -51,7 +59,25 @@ function planFor(isRefinement) {
       { title: "STUB first milestone", dueDate: inDays(30) },
       { title: "STUB second milestone", dueDate: inDays(60) },
     ],
-    habits: [{ title: "STUB practice", period: "week", targetCount: 3 }],
+    // BOTH variants, because the schema now has both and a stub that only ever emits one
+    // would let the other rot. The measured one is deliberately a SLOW rate: against a goal
+    // of 2000 kanji it trips `rate-short`, which is the whole point of the field existing.
+    habits: [
+      {
+        title: "STUB practice",
+        period: "week",
+        targetCount: 3,
+        targetAmount: null,
+        unit: null,
+      },
+      {
+        title: "STUB measured practice",
+        period: "day",
+        targetCount: 1,
+        targetAmount: 5,
+        unit: "kanji",
+      },
+    ],
     setupTasks: [{ title: "STUB setup task", dueDate: inDays(7) }],
   }
 }

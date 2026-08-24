@@ -41,6 +41,30 @@ export const goalPlanMilestoneSchema = z.object({
  * a plan of dated items was the only well-formed answer available.
  *
  * No dates here, deliberately. A habit states a RATE and is measured by what you log.
+ *
+ * **Two ways to state that rate**, matching `habits.target_count` and `habits.target_amount`
+ * — a count of sessions ("3 times a week") or an amount ("20 words a day"). The second was
+ * unavailable here until T19 turned the measured variant on, and its absence is why every
+ * AI-planned habit counted sessions however numeric the goal was.
+ *
+ * **There is deliberately no `.superRefine` or `.transform` on this object**, and that is
+ * not an oversight about the both-or-neither rule below. This schema is handed to
+ * `z.toJSONSchema` and sent to the provider as a `strict: true` structured-output schema —
+ * and Zod refuses outright: *"Transforms cannot be represented in JSON Schema"*. A
+ * transform here would not degrade the field, it would break every plan request in the app.
+ * Verified, not assumed.
+ *
+ * So the rule lives in `proposedQuota` (service.ts), which both the review UI and
+ * `finalizePlan` read.
+ *
+ * **`.nullable().default(null)`, and each half of that earns its place.** `nullable` rather
+ * than `optional` because `strict: true` requires every property to be present, and
+ * `.nullable()` converts to `anyOf: [T, null]` while STAYING in `required` — `.optional()`
+ * drops it out and providers reject the schema. The `.default(null)` is not about the model
+ * at all: it keeps the field in `required` too, and it means a proposal already sitting in
+ * `ai_proposals` from before these fields existed still parses, as the session habit it
+ * always was. Without it, every pending plan in the database would have become `malformed`
+ * on upgrade — unreadable, and un-discardable through a UI that renders nothing.
  */
 export const goalPlanHabitSchema = z.object({
   title: planTitle,
@@ -49,7 +73,21 @@ export const goalPlanHabitSchema = z.object({
   }),
   targetCount: z.number().int().min(1).max(100).meta({
     description:
-      "How many times per period — 3 with period 'week' is 3x a week",
+      "How many times per period — 3 with period 'week' is 3x a week. Ignored when targetAmount is set.",
+  }),
+  targetAmount: z
+    .number()
+    .positive()
+    .max(1_000_000)
+    .nullable()
+    .default(null)
+    .meta({
+      description:
+        "For a habit measured by quantity rather than by sessions: 20 with unit 'words' and period 'day' is 20 words a day. Null when the habit just counts sessions.",
+    }),
+  unit: z.string().max(20).nullable().default(null).meta({
+    description:
+      "What targetAmount counts — words, km, pages, minutes. Must be set whenever targetAmount is, and null whenever it is not.",
   }),
 })
 

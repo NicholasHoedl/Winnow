@@ -212,10 +212,7 @@ teaching the maths to sum amounts would have shipped exactly that.
 - **The action is what refuses a mismatch**, not the client: a measured habit REQUIRES an
   amount and a session habit rejects one. Both are reachable from a page left open while
   the habit was edited in another tab, and there is no constraint that would catch the row.
-- **Not built: the companion proposing a measured habit.** `goalPlanHabitSchema` carries no
-  `targetAmount`, so AI plans still create session habits. That is a clean boundary rather
-  than an oversight — the rate-feasibility warning it unblocks ("at 20 words a day you reach
-  5000 in February, not December") is named in IMPROVEMENT-PLAN as its own unbuilt item.
+- **The companion could not propose one, and now can — see T20 below.**
 
 **The squares became a fixed size in the same pass, and `MAX_SEGMENTS` is now measured.**
 They were `flex-1`, so the same three-a-week quota drew fat segments in a wide card and thin
@@ -230,6 +227,65 @@ every habit on a page. The cost is that the row has a real width now:
   This was found by measuring the box in a throwaway probe spec, which is the only way. If a
   surface narrower than 192px ever draws a quota, measure the bar — `mobile-layout.spec.ts`
   will stay green either way.
+
+**T20 is shipped: the companion proposes measured habits, and the app judges the rate.**
+No migration.
+
+This is the item IMPROVEMENT-PLAN has carried as unbuilt since T12c — _"at 20 words a day
+you reach 5000 in February, not December"_ — which was blocked on a proposed habit being
+able to state an amount at all. T19 removed the blocker; this builds the thing.
+
+- **`goalPlanHabitSchema` gained `targetAmount` and `unit`**, and the interesting part is
+  what it did NOT gain. The both-or-neither rule cannot live in that schema: it is converted
+  by `z.toJSONSchema` and sent as a `strict: true` structured-output schema, and Zod refuses
+  outright — _"Transforms cannot be represented in JSON Schema"_. A `.transform()` or
+  `.superRefine()` there would break **every plan request in the app**, not degrade one
+  field. Tested before writing it, not discovered afterwards.
+- **So the rule lives in `proposedQuota` (companion/service.ts)**, read by both the review UI
+  and `finalizePlan`. A half-stated habit — an amount with no unit, or the reverse — is read
+  as a SESSION habit rather than rejected, which is the same asymmetry
+  `goalPlanPayloadSchema` already documents about its minima: a rejected payload reaches the
+  user as a bare `malformed` they can only escape by regenerating.
+- **Both fields are `.nullable().default(null)`, and both halves matter.** `nullable` because
+  `strict: true` requires every property present and `.optional()` drops it out of
+  `required`; `.default(null)` because a plan already sitting in `ai_proposals` from before
+  these fields existed has neither key. Without the default, every pending plan in the
+  database would have become `malformed` on upgrade — unreadable, and _un-discardable_,
+  because the renderer that offers Discard never renders.
+- **`buildGoalContext` now sends the goal's numbers.** It selected `title`/`notes`/
+  `targetDate` only, so the model never learned a goal was "2000 kanji". It sends what is
+  LEFT rather than the total, since a goal part-done needs a rate for the remainder. Still
+  named columns, never the row — ADR-0011's rule, and `service.test.ts`'s exact-string
+  prompt assertion is the tripwire that enforces it.
+- **`planWarnings` gained `rate-short`**, and it is a list of reasons to stay SILENT with one
+  reason to speak. It needs a numeric target with something left, a future target date, and
+  **units that match** — `goals.unit` is free text and purely a display suffix, so this app
+  converts nothing and must not start by inference. "30 minutes a day" against "2000 kanji"
+  is not slow, it is incomparable. Rates SUM across habits sharing the goal's unit, because
+  two practices toward one goal genuinely do add up.
+- **The review UI shows every plan-level warning, not the first.** That was a latent
+  shortcoming before — an empty plan produces both `no-habits` and `no-milestones` and only
+  one ever rendered — and `rate-short` gave it a third way to hide something.
+
+**Deliberately still not built:** month length in the rate maths is approximated at 30 days
+(`DAYS_PER_PERIOD`), with a 5% grace so the approximation cannot produce a warning on its
+own. Walking real calendar periods is a lot of machinery for an estimate of a plan nobody
+has started.
+
+**T20 also uncovered a leak that had been there since T12c, and it is the more useful
+finding.** `companion.spec.ts` had no `afterEach` at all. `habits.goal_id` is
+`ON DELETE SET NULL` by design — giving up a target must not delete the practice that served
+it — so `removeGoal` deleted the goal and left every habit an applied plan had created,
+permanently, for the rest of the run, in `/activity`'s strip where other specs can see them.
+
+It stayed invisible for eight tranches because the only leaked habit was WEEKLY, and its
+meter caption reads "this week". The moment the stub proposed a DAILY one the caption became
+"today" — and `todos-sections.spec.ts`, which found its Today section with
+`locator("section").filter({ hasText: "Today" })`, matched the habit strip as well and died
+on strict mode. Two faults, both fixed: `deleteHabitsMatching` in `e2e/_habits.ts` with an
+`afterEach` that calls it, and a `sectionBody` helper that scopes by the exact HEADING
+instead of by text. **Playwright's `hasText` is case-INSENSITIVE** — worth remembering before
+writing another one.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
@@ -256,9 +312,9 @@ The T12 line is what most of §5 now describes:
 | **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
 **The ROADMAP has run out of code that can be written without a deployment — the work has
-not.** T13 through T19 are seven tranches shipped since, none of them on any plan: they came
-from the user looking at a screen and saying what was wrong with it, and from the pre-deploy
-audit that exercise turned into. Read that as the shape
+not.** T13 through T20 are eight tranches shipped since, none of them on any plan: they came
+from the user looking at a screen and saying what was wrong with it, from the pre-deploy
+audit that exercise turned into, and from that audit's own list of things it had deferred. Read that as the shape
 of the work now, not as a backlog waiting to be worked through. **Hosting is still the only
 thing standing between this app and being used**, and everything in the table below is
 blocked on it.
@@ -381,9 +437,9 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **837 unit tests across 46 files, 166 e2e,
-0 lint errors, 5 lint warnings** (2026-08-19, after the two flake fixes in §4; 11.2 minutes
-wall clock for the e2e, **zero flaky**). The two runs before those fixes took 19.0 and 22.5
+Current green baseline, measured on a full run: **859 unit tests across 46 files, 167 e2e,
+0 lint errors, 5 lint warnings** (2026-08-19, T20; 11.6 minutes wall clock for the e2e,
+**zero flaky**). The two runs before those fixes took 19.0 and 22.5
 minutes and each retried two tests — a retry is a whole test re-run, so a flaky suite reports
 a slower clock as well as a worse result. The
 numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in

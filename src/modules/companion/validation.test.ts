@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
+import { z } from "zod"
 
 import {
+  goalPlanHabitSchema,
   goalPlanPayloadSchema,
   importPayloadSchema,
   summaryPayloadSchema,
@@ -134,5 +136,88 @@ describe("summaryPayloadSchema", () => {
       observations: "You finished more on Wednesday than any other day.",
     })
     expect(result.success).toBe(false)
+  })
+})
+
+describe("goalPlanHabitSchema — the measured variant", () => {
+  const base = { title: "Learn kanji", period: "day", targetCount: 1 }
+
+  it("takes an amount and a unit", () => {
+    const parsed = goalPlanHabitSchema.parse({
+      ...base,
+      targetAmount: 20,
+      unit: "kanji",
+    })
+    expect(parsed).toMatchObject({ targetAmount: 20, unit: "kanji" })
+  })
+
+  // The compatibility case, and the reason both fields carry `.default(null)`. A plan
+  // generated before these existed is sitting in `ai_proposals` as jsonb with neither key;
+  // without the default it would parse as `malformed` and the user could not even discard
+  // it, because the renderer that offers Discard never renders.
+  it("still parses a payload written before these fields existed", () => {
+    const parsed = goalPlanHabitSchema.parse(base)
+    expect(parsed.targetAmount).toBeNull()
+    expect(parsed.unit).toBeNull()
+  })
+
+  // Deliberately ACCEPTED here rather than refused. The both-or-neither rule cannot live in
+  // this schema — it is converted by `z.toJSONSchema` for the provider, and Zod will not
+  // convert a refinement — so `proposedQuota` resolves a half-stated pair to a session
+  // habit instead. Rejecting it here would fail the whole plan as malformed.
+  it("accepts a half-stated pair, which proposedQuota resolves", () => {
+    expect(
+      goalPlanHabitSchema.safeParse({ ...base, targetAmount: 20, unit: null })
+        .success,
+    ).toBe(true)
+    expect(
+      goalPlanHabitSchema.safeParse({
+        ...base,
+        targetAmount: null,
+        unit: "kanji",
+      }).success,
+    ).toBe(true)
+  })
+
+  it("still refuses a nonsense amount or an essay for a unit", () => {
+    expect(
+      goalPlanHabitSchema.safeParse({ ...base, targetAmount: 0, unit: "kanji" })
+        .success,
+    ).toBe(false)
+    expect(
+      goalPlanHabitSchema.safeParse({
+        ...base,
+        targetAmount: -5,
+        unit: "kanji",
+      }).success,
+    ).toBe(false)
+    expect(
+      goalPlanHabitSchema.safeParse({
+        ...base,
+        targetAmount: 20,
+        unit: "x".repeat(21),
+      }).success,
+    ).toBe(false)
+  })
+})
+
+// The tripwire that matters most for this change: the schema is sent to the provider, and
+// Zod refuses to convert a transform or a refinement. If either ever gets added to the plan
+// schemas, every plan request breaks — not one field.
+describe("the plan schema survives JSON Schema conversion", () => {
+  it("converts, with both new fields required and nullable", () => {
+    // Typed rather than `any`: the point of this test is the SHAPE, so naming it is the
+    // assertion doing half its own work.
+    const json = z.toJSONSchema(goalPlanPayloadSchema) as unknown as {
+      properties: {
+        habits: {
+          items: { required: string[]; additionalProperties: boolean }
+        }
+      }
+    }
+    const habit = json.properties.habits.items
+    expect(habit.required).toContain("targetAmount")
+    expect(habit.required).toContain("unit")
+    expect(habit.additionalProperties).toBe(false)
   })
 })

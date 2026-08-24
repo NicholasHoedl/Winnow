@@ -805,10 +805,10 @@ ADR-0014 and the T12a notes below.
   starts in milliseconds, so reuse bought nothing and cost correctness.
 - Not built: a rate-feasibility warning ("at 20 words a day you reach 5000 in February, not
   December"). It needs `targetAmount` on a proposed habit, which is the measured variant
-  deferred from T12a. Named here rather than left as a gap someone rediscovers. _(T19 built
-  the measured variant, but deliberately **not** this: `goalPlanHabitSchema` still carries no
-  `targetAmount`, so AI plans create session habits. The blocker is gone; the feature is
-  still unbuilt.)_
+  deferred from T12a. Named here rather than left as a gap someone rediscovers. _(**T20 built
+  it** — see below. T19 removed the blocker by turning the measured variant on; T20 carried it
+  into the plan schema, the prompt and `planWarnings`. Two tranches after this line was
+  written, which is roughly what "named rather than left as a gap" is worth.)_
 
 **T12d — shipped**, no migration. T12a made habits a primitive and nothing revisited the page
 around them, so the rail still treated one the way it did when a habit _was_ a repeating task:
@@ -1417,3 +1417,39 @@ bigger commitment across every habit on a page.
 **Deliberately not built: the companion proposing a measured habit.** See the T12c bullet
 above — the blocker named there is gone, the feature is still unbuilt, and the boundary is
 clean because `createHabit` defaults both columns to null.
+
+## Tranche 20 — The companion proposes a rate, and the app judges it ✅
+
+**Shipped**, no migration. The oldest named-and-unbuilt item on this plan: T12c wrote down
+"at 20 words a day you reach 5000 in February, not December" and said it was blocked on a
+proposed habit being able to carry `targetAmount`. T19 unblocked it; this is the feature.
+
+- **The schema could not hold the rule, and finding that out first was the whole trick.**
+  `goalPlanHabitSchema` is converted by `z.toJSONSchema` and sent to the provider as a
+  `strict: true` schema. Zod refuses to convert a transform — _"Transforms cannot be
+  represented in JSON Schema"_ — so putting both-or-neither there would have broken **every
+  plan request**, not one field. That was established with a throwaway test before a line of
+  the feature was written, which is the same method that settled `MAX_SEGMENTS` in T19 and
+  the stat-card header in the audit's phase 3.
+- **`.nullable().default(null)` on both fields**, and the default is not decoration.
+  `nullable` keeps them in `required`, which `strict: true` demands. The default means a plan
+  already stored in `ai_proposals` — written before these fields existed — still parses, as
+  the session habit it always was. Without it every pending plan would have become
+  `malformed` on upgrade: unreadable, and un-discardable, since the component offering
+  Discard is the one that fails to render.
+- **The prompt learned the goal's numbers.** `buildGoalContext` selected `title`, `notes` and
+  `targetDate` only, so a model planning "Learn 2000 kanji" had to infer the 2000 from the
+  title. It now sends what is LEFT rather than the total, and asks for a habit in the goal's
+  own unit — which is the only case the check below can speak about.
+- **`planWarnings` gained `rate-short`**, which is mostly a list of reasons to say nothing:
+  no numeric target, nothing left to do, no target date, or **units that do not match**.
+  `goals.unit` is documented as free text and purely a display suffix, so the app converts
+  nothing and must not begin by inference — "30 minutes a day" toward 2000 kanji is not a
+  slow plan, it is an incomparable one. Rates SUM across habits sharing the unit.
+- **A latent UI shortcoming went with it.** The proposal showed only the FIRST plan-level
+  warning, so an empty plan produced `no-habits` and `no-milestones` and rendered one. It
+  renders all of them now; `rate-short` would otherwise have been the third way to hide one.
+
+**Not built, deliberately:** real calendar months. `DAYS_PER_PERIOD` approximates a month at
+30 days, with a 5% grace so the approximation can never produce a warning by itself. Walking
+true periods is a lot of machinery for an estimate of a plan nobody has started yet.

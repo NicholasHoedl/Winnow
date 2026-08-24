@@ -1,5 +1,7 @@
 import { type Locator } from "@playwright/test"
 
+import { withTestDb } from "./_test-db"
+
 /**
  * Reading a habit's quota off its meter.
  *
@@ -35,4 +37,30 @@ export function announces(
   unit?: string,
 ): string {
   return `${done} of ${target}${unit ? ` ${unit}` : ""} ${period}`
+}
+
+/**
+ * Remove test habits straight from the database — the noun this file was missing.
+ *
+ * `habits.goal_id` is `ON DELETE SET NULL` (schema.ts: giving up a target must not delete
+ * the practice that served it), so deleting a goal does NOT take the habits a plan created
+ * with it. `companion.spec.ts` had leaked one per applied plan since T12c, permanently and
+ * invisibly — invisibly because the only leaked habit was WEEKLY, and its meter caption
+ * reads "this week". The moment the stub proposed a DAILY one the caption became "today",
+ * and `todos-sections.spec.ts` — which selects its Today section with
+ * `locator("section").filter({ hasText: "Today" })`, case-insensitively — started matching
+ * the habit strip as well and failed on strict mode.
+ *
+ * `strpos` rather than `LIKE`, matching `deleteTasksMatching`: the fragment keeps CONTAINS
+ * semantics so no caller has to think about `%` meaning something. Entries cascade with the
+ * row.
+ */
+export async function deleteHabitsMatching(fragment: string): Promise<number> {
+  return withTestDb(async (client) => {
+    const { rowCount } = await client.query(
+      "delete from habits where strpos(title, $1) > 0",
+      [fragment],
+    )
+    return rowCount ?? 0
+  })
 }

@@ -26,6 +26,17 @@ export type GoalPromptContext = {
   title: string
   notes: string | null
   targetDate: string | null
+  /**
+   * The goal's numeric target, when it has one — 5000 with unit "words".
+   *
+   * Sent so the model can answer with a habit in the SAME unit, which is the only case
+   * `planWarnings` can check a rate against: `goals.unit` is documented as free text and
+   * purely a display suffix, so nothing in this app converts between units and nothing
+   * here should start. A goal measured by milestones alone leaves all three null.
+   */
+  targetValue: number | null
+  currentValue: number | null
+  unit: string | null
   /** Titles only — enough to avoid proposing what already exists. */
   existingMilestones: string[]
   /** Today, as a local wall date, so the model has an anchor for "in three months". */
@@ -51,6 +62,8 @@ const SYSTEM_PROMPT = [
   "You turn a long-term goal into a ladder of milestones and the recurring practice that climbs it.",
   "Milestones are dated checkpoints worth celebrating, spaced evenly across the available time.",
   "Habits are the repeatable actions that actually get you there, stated as a RATE — three times a week, once a day. They carry no dates.",
+  "A habit's rate is EITHER a count of sessions (targetCount, with targetAmount and unit null) OR an amount (targetAmount plus unit, e.g. 20 with unit 'words'). Never both, and never one of targetAmount/unit without the other.",
+  "When the goal states a numeric target, prefer an amount in that same unit for at least one habit, so the rate can be checked against the target.",
   "Almost all of the work belongs in habits: a goal is reached by what you do repeatedly, not by a list of appointments.",
   "Setup tasks are rare and few — genuine one-offs that must happen before the practice can start, like buying the book or booking a trial class.",
   "Never propose a dated task for work the user does not control: you cannot decide what a class will cover on a given day.",
@@ -77,6 +90,21 @@ export function buildGoalPlanMessages(
       ? `Target date: ${goal.targetDate}.`
       : "No target date has been set; plan over a sensible horizon and say so with the dates.",
   ]
+  // The numeric target, when there is one. Phrased as "N left of M" rather than just the
+  // total, because a goal already part-done needs a rate for what REMAINS — and the model
+  // has no other way to know the difference.
+  if (goal.targetValue !== null && goal.targetValue > 0) {
+    const unit = goal.unit ? ` ${goal.unit}` : ""
+    const done = goal.currentValue ?? 0
+    lines.push(
+      `Measured numerically: ${done} of ${goal.targetValue}${unit} so far, ${Math.max(0, goal.targetValue - done)}${unit} still to go.`,
+    )
+    if (goal.unit) {
+      lines.push(
+        `If a habit is stated as an amount, use "${goal.unit}" as its unit so the rate can be compared with the target.`,
+      )
+    }
+  }
   if (goal.notes) lines.push(`The user describes it as: ${goal.notes}`)
   if (goal.existingMilestones.length > 0) {
     lines.push(
@@ -105,6 +133,39 @@ export function buildGoalPlanMessages(
  * fits comfortably before your deadline" would sometimes be wrong and there would be no
  * way to tell.
  */
+/**
+ * What a proposed habit's rate actually says, once the two ways of stating one have been
+ * resolved. The app's copy of `resolveQuota`, for a payload rather than a row.
+ *
+ * **This is where the both-or-neither rule lives**, and it is here rather than in the Zod
+ * schema because that schema is converted with `z.toJSONSchema` and sent to the provider —
+ * Zod refuses to convert a transform or a refinement, so expressing the rule there would
+ * break every plan request rather than tidy one field. See `goalPlanHabitSchema`.
+ *
+ * A half-stated habit — an amount with no unit, or a unit with no amount — is read as a
+ * SESSION habit rather than rejected. That is the same asymmetry `goalPlanPayloadSchema`
+ * documents about its own minima: a rejected payload reaches the user as a bare `malformed`
+ * they can only escape by regenerating, while a habit that quietly counts sessions is
+ * visible and editable in front of them.
+ */
+export function proposedQuota(habit: {
+  targetCount: number
+  targetAmount: number | null
+  unit: string | null
+}): { measured: boolean; amount: number | null; unit: string | null } {
+  const unit = habit.unit?.trim() ? habit.unit.trim() : null
+  const amount =
+    habit.targetAmount !== null &&
+    Number.isFinite(habit.targetAmount) &&
+    habit.targetAmount > 0
+      ? habit.targetAmount
+      : null
+  if (unit === null || amount === null) {
+    return { measured: false, amount: null, unit: null }
+  }
+  return { measured: true, amount, unit }
+}
+
 export type PlanWarning = {
   /** Which list, and which position in it. `plan` is about the proposal as a whole. */
   on: "milestone" | "setupTask" | "plan"
@@ -116,15 +177,40 @@ export type PlanWarning = {
     | "out-of-order"
     | "no-habits"
     | "no-milestones"
+    | "rate-short"
   message: string
 }
+
+/** Days in a period, for turning a rate into "how much by then". */
+const DAYS_PER_PERIOD: Record<"day" | "week" | "month", number> = {
+  day: 1,
+  week: 7,
+  // An approximation, and the reason `RATE_GRACE` exists below. Using real calendar months
+  // would mean walking periods from today to the target date, which is a lot of machinery
+  // for a figure that is already an estimate of a plan nobody has started.
+  month: 30,
+}
+
+/**
+ * How far short a rate may land before it is worth saying so.
+ *
+ * A plan that misses by 2% is inside the error of `DAYS_PER_PERIOD` above, and warning
+ * about it would be the app inventing precision it does not have.
+ */
+const RATE_GRACE = 0.95
 
 /** Within this many days of the target counts as cutting it fine. */
 const TIGHT_DAYS = 7
 
 export function planWarnings(
   payload: GoalPlanPayload,
-  goal: { targetDate: string | null },
+  goal: {
+    targetDate: string | null
+    /** The numeric target, when the goal has one. All three travel together. */
+    targetValue?: number | null
+    currentValue?: number | null
+    unit?: string | null
+  },
   today: string,
 ): PlanWarning[] {
   const warnings: PlanWarning[] = []
@@ -197,7 +283,11 @@ export function planWarnings(
   }
 
   payload.milestones.forEach((m, i) => check("milestone", i, m.dueDate))
-  // Habits are not checked: they carry no dates, which is the point of them.
+  // Habits carry no dates, which is the point of them — but a measured habit carries a
+  // RATE, and a rate can be checked against a numeric target with a deadline. That is the
+  // one thing about a habit this function can judge.
+  const rate = rateWarning(payload, goal, today)
+  if (rate) warnings.push(rate)
   payload.setupTasks.forEach((t, i) => check("setupTask", i, t.dueDate))
 
   // Milestones are a sequence — one dated before the one it follows is the model having
@@ -215,6 +305,73 @@ export function planWarnings(
   })
 
   return warnings
+}
+
+/**
+ * "At 20 words a day you reach 5000 in February, not December."
+ *
+ * Named as unbuilt in IMPROVEMENT-PLAN since T12c, where it was blocked on a proposed habit
+ * being able to carry an amount at all. Every condition below is a reason to stay SILENT
+ * rather than guess, and there are more of them than there are reasons to speak:
+ *
+ * - **The goal must be measured numerically**, with something left to do. A goal tracked by
+ *   milestones has no quantity to divide by a rate.
+ * - **There must be a target date**, in the future. Without a deadline nothing is late, and
+ *   a warning list is for things that are wrong — the user chose silence here explicitly.
+ * - **The units must MATCH.** `goals.unit` is free text and purely a display suffix, so
+ *   this app has no conversions and must not acquire one by inference. "30 minutes a day"
+ *   against "5000 words" is not slow, it is incomparable, and saying anything about it
+ *   would be a guess wearing a number.
+ *
+ * Rates SUM across every habit in the matching unit, because two practices toward one goal
+ * really do add up — "20 new words a day" plus "50 reviewed a week" is 70 a week, and
+ * judging either alone would report a shortfall that the plan does not have.
+ */
+function rateWarning(
+  payload: GoalPlanPayload,
+  goal: {
+    targetDate: string | null
+    targetValue?: number | null
+    currentValue?: number | null
+    unit?: string | null
+  },
+  today: string,
+): PlanWarning | null {
+  const goalUnit = goal.unit?.trim().toLowerCase()
+  if (!goalUnit) return null
+  if (!goal.targetValue || goal.targetValue <= 0) return null
+  if (!goal.targetDate || goal.targetDate <= today) return null
+
+  const remaining = goal.targetValue - (goal.currentValue ?? 0)
+  if (remaining <= 0) return null
+
+  let perDay = 0
+  for (const habit of payload.habits) {
+    const quota = proposedQuota(habit)
+    if (!quota.measured) continue
+    if (quota.unit!.toLowerCase() !== goalUnit) continue
+    perDay += quota.amount! / DAYS_PER_PERIOD[habit.period]
+  }
+  // No habit in the goal's own unit. That is not a slow plan, it is an unmeasurable one,
+  // and `no-habits` already covers a plan with no practice at all.
+  if (perDay <= 0) return null
+
+  const days = dayDiff(today, goal.targetDate)
+  const reached = perDay * days
+  if (reached >= remaining * RATE_GRACE) return null
+
+  const unit = goal.unit!.trim()
+  return {
+    on: "plan",
+    index: 0,
+    kind: "rate-short",
+    message: `At this rate you reach about ${round(reached)} of the ${round(remaining)} ${unit} needed by your target date`,
+  }
+}
+
+/** Whole numbers for a figure that is already an estimate — "3650", not "3649.8". */
+function round(value: number): number {
+  return Math.round(value)
 }
 
 /** What Apply will actually create, for the manifest footer. Counts what is included. */
@@ -259,7 +416,17 @@ export function finalizePlan(
     milestones: payload.milestones.filter(
       (_, i) => !excluded.milestones.has(i),
     ),
-    habits: payload.habits.filter((_, i) => !excluded.habits.has(i)),
+    // Normalised on the way out, not merely filtered. A half-stated habit reaching
+    // `createHabit` would be REJECTED by `habitInputSchema`'s both-or-neither rule, and
+    // the whole apply would fail with "couldn't create <title>" — the bad failure mode
+    // `goalPlanPayloadSchema` warns about, arrived at from the other direction. Here it
+    // simply becomes the session habit it already reads as. See `proposedQuota`.
+    habits: payload.habits
+      .filter((_, i) => !excluded.habits.has(i))
+      .map((habit) => {
+        const quota = proposedQuota(habit)
+        return { ...habit, targetAmount: quota.amount, unit: quota.unit }
+      }),
     setupTasks: payload.setupTasks.filter(
       (_, i) => !excluded.setupTasks.has(i),
     ),

@@ -81,7 +81,19 @@ export async function buildGoalContext(
 
   const goal = await db.query.goals.findFirst({
     where: and(eq(goals.id, goalId), eq(goals.userId, userId)),
-    columns: { title: true, notes: true, targetDate: true },
+    // The numeric target travels with the date now: `planWarnings` checks a proposed rate
+    // against it, and the prompt asks for a habit in the goal's own unit so that check has
+    // comparable numbers to work with. Still named columns rather than the row — ADR-0011's
+    // rule is that a prompt builder must never be one schema change away from sending
+    // something nobody chose to send.
+    columns: {
+      title: true,
+      notes: true,
+      targetDate: true,
+      targetValue: true,
+      currentValue: true,
+      unit: true,
+    },
   })
   if (!goal) return null
 
@@ -100,6 +112,9 @@ export async function buildGoalContext(
     // The goal's own description — see GoalPromptContext for why it is sent at all.
     notes: goal.notes,
     targetDate: goal.targetDate,
+    targetValue: goal.targetValue,
+    currentValue: goal.currentValue,
+    unit: goal.unit,
     existingMilestones: existing.map((m) => m.title),
     today,
   }

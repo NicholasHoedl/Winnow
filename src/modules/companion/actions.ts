@@ -160,6 +160,11 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
         title: habit.title,
         period: habit.period,
         targetCount: habit.targetCount,
+        // The measured variant, straight through. `finalizePlan` has already resolved any
+        // half-stated pair to a session habit, so `habitInputSchema`'s both-or-neither rule
+        // cannot reject one of these and fail the whole apply.
+        targetAmount: habit.targetAmount,
+        unit: habit.unit,
         goalId,
       })
       if (!result.ok) return failed(habit.title)

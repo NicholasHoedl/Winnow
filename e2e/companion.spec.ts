@@ -4,7 +4,7 @@ import { pageAction } from "./_menu"
 
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
-import { announces, meter } from "./_habits"
+import { announces, deleteHabitsMatching, meter } from "./_habits"
 import { serverWrites } from "./_server-write"
 import { deleteTasksMatching } from "./_tasks"
 
@@ -72,6 +72,22 @@ test.beforeEach(async ({ page }) => {
   await clearAllQueues(page)
 })
 
+/**
+ * The habits an applied plan creates, which nothing else was removing.
+ *
+ * `removeGoal` deletes the goal, and `habits.goal_id` is `ON DELETE SET NULL` — so the
+ * practice survives its goal by design (ADR-0014: giving up a target should not delete the
+ * running). Every applied plan in this file therefore left a habit behind for the rest of
+ * the run, and they accumulate in `/activity`'s strip where other specs can see them.
+ *
+ * In SQL rather than through the UI for the same reason `clearWideContent` is: a delete
+ * that is CLEANUP should not depend on a page rendering, least of all a page another spec
+ * is about to make assertions against.
+ */
+test.afterEach(async () => {
+  await deleteHabitsMatching("STUB")
+})
+
 async function createGoal(page: Page, title: string) {
   await page.goto("/goals")
   await addGoal(page, { title })
@@ -102,9 +118,10 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
 
-  // The T12c shape: a ladder, one recurring practice, one genuine one-off.
+  // The T12c shape: a ladder, the practice that climbs it, one genuine one-off. Two habits
+  // since the stub started emitting both variants — a session rate and a measured one.
   await expect(
-    page.getByText("Creates 2 milestones, 1 habit and 1 task"),
+    page.getByText("Creates 2 milestones, 2 habits and 1 task"),
   ).toBeVisible()
 
   // Pruning a milestone no longer takes anything with it. `milestoneIndex` retired in
@@ -114,7 +131,7 @@ test("a generated plan can be pruned, edited, and applied", async ({
     .getByRole("checkbox", { name: "Include STUB second milestone" })
     .click()
   await expect(
-    page.getByText("Creates 1 milestone, 1 habit and 1 task"),
+    page.getByText("Creates 1 milestone, 2 habits and 1 task"),
   ).toBeVisible()
 
   // Editing in place: the row is an input, so there is no edit mode to enter.
@@ -176,7 +193,7 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
   await expect(
-    page.getByText("Creates 2 milestones, 1 habit and 1 task"),
+    page.getByText("Creates 2 milestones, 2 habits and 1 task"),
   ).toBeVisible()
 
   await page.getByLabel("Change this plan").fill("make it shorter")
@@ -533,4 +550,58 @@ test("an import refinement asks for an extraction, not a summary", async ({
   await expect(
     page.getByRole("button", { name: /^(Discard|Done)$/ }),
   ).toHaveCount(0)
+})
+
+/**
+ * The measured variant reaching a plan, and the rate check it unblocked.
+ *
+ * IMPROVEMENT-PLAN carried "at 20 words a day you reach 5000 in February, not December" as
+ * unbuilt from T12c onward, blocked on a proposed habit being able to state an amount at
+ * all. This is that end to end: the model proposes a rate, the APP judges it against the
+ * goal's own number, and the judgement moves as you edit.
+ */
+test("a proposed rate is judged against the goal's number", async ({
+  page,
+}) => {
+  const goalTitle = `E2E rate ${Date.now()}`
+  const target = new Date()
+  target.setDate(target.getDate() + 90)
+  const targetDate = target.toISOString().slice(0, 10)
+
+  await page.goto("/goals")
+  await addGoal(page, {
+    title: goalTitle,
+    current: "0",
+    target: "2000",
+    unit: "kanji",
+    targetDate,
+  })
+  await planGoal(page, goalTitle)
+
+  // The stub proposes 5 kanji a day. Over 90 days that is 450 of the 2000 needed, and the
+  // app says so — the model is never asked to grade its own arithmetic.
+  const warning = page.getByText(/At this rate you reach about/)
+  await expect(warning).toBeVisible()
+  await expect(warning).toContainText("2000")
+  await expect(warning).toContainText("kanji")
+
+  // Editing the rate re-judges it live. This is the assertion worth having: the warning is
+  // computed from the CURRENT payload, so fixing the plan makes it go away as you type
+  // rather than on some later submit.
+  await page.getByLabel("Habit 2 kanji per day").fill("40")
+  await expect(warning).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Apply" }).click()
+  await expect(page).toHaveURL(/\/goals/)
+
+  // And it arrives as a MEASURED habit, in its own unit, not as a session count.
+  await openGoalDetail(page, goalTitle)
+  const dialog = page.getByRole("dialog")
+  await expect(meter(dialog, "STUB measured practice")).toHaveAttribute(
+    "aria-valuetext",
+    announces(0, 40, "today", "kanji"),
+  )
+  await page.keyboard.press("Escape")
+
+  await removeGoal(page, goalTitle)
 })

@@ -14,6 +14,19 @@ import { visibleCard } from "./_card"
 const section = (page: import("@playwright/test").Page, name: string) =>
   page.getByRole("heading", { name, level: 2, exact: true })
 
+/**
+ * The section CONTAINING that heading — for asserting which rows landed under it.
+ *
+ * Scoped by the heading rather than by `filter({ hasText: name })`, which is what this was
+ * and which matched far more than a date section. `hasText` is case-INSENSITIVE, and
+ * `/activity` also renders `<section aria-label="Habits">` whose quota captions read
+ * "today" and "this week" — so the moment a DAILY habit existed anywhere in the account,
+ * "Today" resolved to two sections and every assertion here died on strict mode. It took a
+ * leaked habit from another spec to expose it; the heading is what this always meant.
+ */
+const sectionBody = (page: import("@playwright/test").Page, name: string) =>
+  page.locator("section").filter({ has: section(page, name) })
+
 // Cleanup here, not only inline. An earlier version of this spec failed on a locator and
 // left two tasks behind — end-of-body cleanup is skipped entirely when an assertion
 // aborts the test, which is how the same mistake has now happened three times in this
@@ -63,11 +76,11 @@ test("quick-add captures into Someday, the dialog schedules for today", async ({
 
   // Each landed under the right heading. Asserting the section CONTAINS the row is the
   // point — both rows exist either way, so a bare visibility check would prove nothing.
-  const somedaySection = page.locator("section").filter({ hasText: "Someday" })
+  const somedaySection = sectionBody(page, "Someday")
   await expect(somedaySection).toContainText(captured)
   await expect(somedaySection).not.toContainText(scheduled)
 
-  const todaySection = page.locator("section").filter({ hasText: "Today" })
+  const todaySection = sectionBody(page, "Today")
   await expect(todaySection).toContainText(scheduled)
   await expect(todaySection).not.toContainText(captured)
 
@@ -96,7 +109,7 @@ test("a completed task leaves the date sections for Done", async ({ page }) => {
 
   await page.getByRole("button", { name: "All", exact: true }).click()
   await expect(section(page, "Done")).toBeVisible()
-  const doneSection = page.locator("section").filter({ hasText: "Done" })
+  const doneSection = sectionBody(page, "Done")
   await expect(doneSection).toContainText(title)
 
   await row().getByRole("button", { name: "Task actions" }).click()

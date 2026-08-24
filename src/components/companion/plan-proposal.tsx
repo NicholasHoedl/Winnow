@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import {
   finalizePlan,
   planWarnings,
+  proposedQuota,
   type Excluded,
   type PlanWarning,
 } from "@/modules/companion/service"
@@ -110,7 +111,7 @@ export function PlanProposal({
   payload,
   onChange,
   goalTitle,
-  targetDate,
+  goal,
   today,
   pending,
   onApply,
@@ -119,7 +120,17 @@ export function PlanProposal({
   payload: GoalPlanPayload
   onChange: (next: GoalPlanPayload) => void
   goalTitle: string
-  targetDate: string | null
+  /**
+   * What the plan is judged against. Was a bare `targetDate` until the rate check needed
+   * the numeric target too — and since the only thing this component ever did with the
+   * date was hand it to `planWarnings`, one object beats four parallel props.
+   */
+  goal: {
+    targetDate: string | null
+    targetValue: number | null
+    currentValue: number | null
+    unit: string | null
+  }
   today: string
   pending: boolean
   onApply: (finalized: GoalPlanPayload) => void
@@ -133,13 +144,26 @@ export function PlanProposal({
 
   // Recomputed from the CURRENT payload, so fixing a bad date makes its warning vanish
   // as you type. The app judges these dates; the model is never asked to grade itself.
+  // Destructured so the memo keys on VALUES. The caller builds `goal` inline, so a
+  // dependency on the object itself would be a new reference every render and the memo
+  // would never hit — a memo that always recomputes is worse than no memo, because it
+  // reads as if the cost had been considered.
+  const { targetDate, targetValue, currentValue, unit: goalUnit } = goal
   const warnings = React.useMemo(
-    () => planWarnings(payload, { targetDate }, today),
-    [payload, targetDate, today],
+    () =>
+      planWarnings(
+        payload,
+        { targetDate, targetValue, currentValue, unit: goalUnit },
+        today,
+      ),
+    [payload, targetDate, targetValue, currentValue, goalUnit, today],
   )
   const warningFor = (on: "milestone" | "setupTask", index: number) =>
     warnings.find((w) => w.on === on && w.index === index)
-  const planWarning = warnings.find((w) => w.on === "plan")
+  // ALL of them, not the first. An empty plan produces both `no-habits` and `no-milestones`
+  // and only ever showed one, which was a latent shortcoming before `rate-short` gave it a
+  // third way to happen — a slow plan that also has no milestones would have hidden one.
+  const planLevel = warnings.filter((w) => w.on === "plan")
 
   const final = finalizePlan(payload, excluded as Excluded)
 
@@ -166,7 +190,7 @@ export function PlanProposal({
 
   function editHabit(
     index: number,
-    patch: { title?: string; targetCount?: number },
+    patch: { title?: string; targetCount?: number; targetAmount?: number },
   ) {
     onChange({
       ...payload,
@@ -203,12 +227,15 @@ export function PlanProposal({
         {/* A judgement about the plan as a whole rather than any one row. The app noticing
             "there is no practice here" is the same division as every other warning: the
             model proposes, the app checks. */}
-        {planWarning && (
-          <p className="text-brand-accent mb-4 flex items-start gap-1.5 text-xs">
+        {planLevel.map((warning) => (
+          <p
+            key={warning.kind}
+            className="text-brand-accent mb-4 flex items-start gap-1.5 text-xs"
+          >
             <AlertTriangle className="mt-px size-3.5 shrink-0" />
-            {planWarning.message}
+            {warning.message}
           </p>
-        )}
+        ))}
 
         <ol className="border-border ml-1.5 flex flex-col gap-5 border-l-2 pl-5">
           {payload.milestones.map((milestone, index) => {
@@ -279,6 +306,10 @@ export function PlanProposal({
             <ul className="flex flex-col gap-1.5">
               {payload.habits.map((habit, index) => {
                 const off = excluded.habits.has(index)
+                // The same reading `finalizePlan` will take. A habit the model half-stated
+                // renders as the session habit it will become, rather than as an amount
+                // with nothing to count.
+                const quota = proposedQuota(habit)
                 return (
                   <li key={index} className="flex items-baseline gap-2 text-sm">
                     <Checkbox
@@ -294,33 +325,62 @@ export function PlanProposal({
                       label={`Habit ${index + 1} title`}
                       onChange={(title) => editHabit(index, { title })}
                     />
-                    {/* The count is editable and the period is not. "5 a week" wanting to be
-                        "3 a week" is the correction people actually make; week → day is a
-                        different habit rather than an edit to this one. */}
+                    {/* The figure is editable and the period is not. "5 a week" wanting to
+                        be "3 a week" is the correction people actually make; week → day is a
+                        different habit rather than an edit to this one. The UNIT is fixed
+                        for the same reason — "words" to "pages" is a different practice,
+                        and it is the field the rate check compares against the goal. */}
                     <span
                       className={cn(
                         "text-muted-foreground flex shrink-0 items-baseline gap-1 text-xs tabular-nums",
                         off && "line-through opacity-50",
                       )}
                     >
-                      <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={habit.targetCount}
-                        disabled={off}
-                        aria-label={`Habit ${index + 1} times per ${habit.period}`}
-                        onChange={(event) =>
-                          editHabit(index, {
-                            targetCount: Math.min(
-                              100,
-                              Math.max(1, Number(event.target.value) || 1),
-                            ),
-                          })
-                        }
-                        className="hover:border-input focus:border-ring w-10 rounded border border-transparent bg-transparent px-1 text-right outline-none"
-                      />
-                      <span>× a {habit.period}</span>
+                      {quota.measured ? (
+                        <>
+                          <input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={quota.amount ?? 0}
+                            disabled={off}
+                            aria-label={`Habit ${index + 1} ${quota.unit} per ${habit.period}`}
+                            onChange={(event) =>
+                              editHabit(index, {
+                                targetAmount: Math.max(
+                                  0,
+                                  Number(event.target.value) || 0,
+                                ),
+                              })
+                            }
+                            className="hover:border-input focus:border-ring w-14 rounded border border-transparent bg-transparent px-1 text-right outline-none"
+                          />
+                          <span>
+                            {quota.unit} a {habit.period}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={habit.targetCount}
+                            disabled={off}
+                            aria-label={`Habit ${index + 1} times per ${habit.period}`}
+                            onChange={(event) =>
+                              editHabit(index, {
+                                targetCount: Math.min(
+                                  100,
+                                  Math.max(1, Number(event.target.value) || 1),
+                                ),
+                              })
+                            }
+                            className="hover:border-input focus:border-ring w-10 rounded border border-transparent bg-transparent px-1 text-right outline-none"
+                          />
+                          <span>× a {habit.period}</span>
+                        </>
+                      )}
                     </span>
                   </li>
                 )
