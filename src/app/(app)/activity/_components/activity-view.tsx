@@ -328,7 +328,13 @@ export function ActivityView({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl p-4 lg:p-6">
+    // `max-w-5xl`, the List tier, not the `max-w-7xl` Board tier it used to be. HANDOFF's
+    // width scale reserves Board for "genuinely multi-column", and this page stopped being
+    // that in T13 — the comment further down already says "one column at every width now".
+    // The width simply did not follow: task rows stretched ~945px at 1280px, long enough
+    // that the eye loses the line, and the habit strip's "open" arrow sat stranded ~570px
+    // to the right of the last chip. Its siblings — Habits, Routines, Goals — are all List.
+    <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">

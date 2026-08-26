@@ -1214,15 +1214,23 @@ still the old indigo.**
   made `/goals` use 60% of a 1440px canvas while the dashboard clipped at 1280. The tiers, and
   what each is for:
 
-  | Tier  | Class            | For                                                                   |
-  | ----- | ---------------- | --------------------------------------------------------------------- |
-  | Form  | `max-w-3xl`      | one column of fields or entries — Settings, Meals, Budget             |
-  | List  | `max-w-5xl`      | a list plus its controls — Calendar, Review, Routines, Habits, Goals  |
-  | Board | `max-w-7xl`      | genuinely multi-column — Activity                                     |
-  | Full  | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920 |
+  | Tier  | Class            | For                                                                                |
+  | ----- | ---------------- | ---------------------------------------------------------------------------------- |
+  | Form  | `max-w-3xl`      | one column of fields or entries — Settings, Meals, Budget                          |
+  | List  | `max-w-5xl`      | a list plus its controls — Calendar, Review, Routines, Habits, Goals, **Activity** |
+  | Board | `max-w-7xl`      | genuinely multi-column — **nothing, currently**                                    |
+  | Full  | `max-w-[120rem]` | the dashboard alone, which fills a desktop and only centres past 1920              |
 
   `/goals` was `max-w-4xl`, the only value off the scale, and is now List like every other
-  page of its shape. Deliberately NOT abstracted into a constant: Tailwind is the vocabulary
+  page of its shape.
+
+  **`/activity` moved from Board to List**, and the Board tier now has no occupant. It was
+  the tier's example while it had `lg:grid-cols-[17.5rem_minmax(0,1fr)]`; T13 moved goals to
+  their own page and left it one column at every width — the comment in `activity-view.tsx`
+  says so — but the width stayed. The cost was visible rather than theoretical: task rows
+  ran ~945px at 1280px, and the habit strip's arrow sat ~570px right of the last chip. Keep
+  the row in this table: a tier with nothing in it is a decision someone can consult, and
+  deleting it would invite the next multi-column page to invent a fifth number. Deliberately NOT abstracted into a constant: Tailwind is the vocabulary
   here and a `PAGE_WIDTH.list` indirection would buy nothing a table cannot say. What matters
   is that the next page reads this before picking a number.
 

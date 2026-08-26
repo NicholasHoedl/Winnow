@@ -47,7 +47,10 @@ function GoalHeading({ goal }: { goal: GoalPracticeRow }) {
           it. Splitting them moves that locator and fails a test about something else. */}
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate font-medium">{goal.title}</span>
+          {/* `line-clamp-2` for the reason `slate.tsx` gives: this column is narrower on a
+              laptop than the same card is on a phone, so truncating hid more of a goal's
+              name the bigger the screen got. */}
+          <span className="line-clamp-2 min-w-0 font-medium">{goal.title}</span>
           {/* Stalled is the one thing worth saying about a goal on a surface you see every
               day — the count and the window belong in the goal's detail on /goals, where
               there is room to explain them. The dashboard already runs tight below 1400px,

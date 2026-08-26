@@ -85,7 +85,18 @@ function TaskRow({
       <Link
         href="/activity"
         className={cn(
-          "min-w-0 flex-1 truncate text-sm",
+          // `line-clamp-3`, not `truncate`. The dashboard's outer columns are ~274px at
+          // 1280px and ~211px at 1024px — NARROWER than the 361px a 393px phone gives this
+          // same card, so a single-line ellipsis cut MORE off on a laptop than on a phone,
+          // which is the geometry backwards.
+          //
+          // Three rather than two, and the number is measured rather than picked. After
+          // `Gutter`'s 56px (which exists so an event's "all-day" lines up with a task's
+          // checkbox) the text gets ~190px on a laptop against ~263px on a phone — about
+          // 20 characters a line versus 30. Two lines on a phone is ~60 characters, so
+          // three lines here is what shows the SAME amount of a title at both widths.
+          // It costs nothing on a phone, which reaches 60 characters in two.
+          "line-clamp-3 min-w-0 flex-1 text-sm",
           done && "text-muted-foreground line-through",
         )}
       >
@@ -128,7 +139,8 @@ function EventRow({
           {occurrence.time ? formatTime(occurrence.time, use24Hour) : "all-day"}
         </span>
       </Gutter>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+      {/* Same reasoning as the task title above — see `TaskRow`. */}
+      <span className="line-clamp-3 min-w-0 flex-1 text-sm font-medium">
         {occurrence.event.title}
       </span>
       {/* An icon, not a colour: the accent border already means *which calendar*, so

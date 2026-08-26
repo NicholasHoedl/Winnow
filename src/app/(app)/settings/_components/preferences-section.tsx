@@ -282,6 +282,15 @@ export function PreferencesSection({
                 />
               )}
             />
+            {/* Every other field in this section carries a hint and this one did not, which
+                mattered more here than anywhere else: the card it controls is
+                `hidden lg:flex` on the dashboard, so below 1024px this setting is still
+                stored, still saved, and changes nothing you can see. Saying so beats
+                leaving someone to wonder whether it is broken. */}
+            <p className="text-muted-foreground text-xs">
+              The dashboard&apos;s calendar card, which needs a wide window —
+              phones and narrow screens don&apos;t show it.
+            </p>
           </Field>
 
           <Field>

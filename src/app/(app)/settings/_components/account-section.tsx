@@ -1,10 +1,12 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { LogOut } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
+import { signOutAction } from "@/app/(app)/actions"
 import { changePassword, updateProfile } from "@/modules/account/actions"
 import {
   changePasswordSchema,
@@ -185,6 +187,29 @@ export function AccountSection({
         <div>
           <h3 className="mb-3 text-sm font-semibold">Change password</h3>
           <PasswordForm />
+        </div>
+        <Separator />
+        {/* The ONLY way to sign out below 768px, and until this existed there was none.
+            `app-sidebar.tsx` is `hidden md:flex`, the bottom nav carries destinations
+            rather than actions, and nothing else in the app called `signOutAction` — so a
+            phone could sign in and never sign out. Worse once it is installed to the home
+            screen (deploy runbook §7), where there is no browser chrome to fall back on.
+
+            Here rather than in the mobile header: that row is already three icon buttons
+            wide at 393px, and sign-out is not something you want a thumb finding by
+            accident next to the theme toggle. The sidebar keeps its own copy — this adds a
+            route to the action, it does not move it. */}
+        <div>
+          <h3 className="mb-1 text-sm font-semibold">Sign out</h3>
+          <p className="text-muted-foreground mb-3 text-xs">
+            Ends this session on this device. Your data stays where it is.
+          </p>
+          <form action={signOutAction}>
+            <Button type="submit" variant="outline">
+              <LogOut className="size-4" />
+              Sign out
+            </Button>
+          </form>
         </div>
       </div>
     </SettingsSection>
