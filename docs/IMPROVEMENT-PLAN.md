@@ -1453,3 +1453,47 @@ proposed habit being able to carry `targetAmount`. T19 unblocked it; this is the
 **Not built, deliberately:** real calendar months. `DAYS_PER_PERIOD` approximates a month at
 30 days, with a 5% grace so the approximation can never produce a warning by itself. Walking
 true periods is a lot of machinery for an estimate of a plan nobody has started yet.
+
+## Tranche 21 — A phone can sign out, and desktop stops hiding more than a phone ✅
+
+**Shipped**, no migration. Four findings from a desktop-vs-mobile sweep of all ten routes.
+The instrument was a DIFF of the interactive elements each width actually offers — reading
+CSS would not have found any of these, and one of them inverted a hypothesis twice before
+the measurement settled it.
+
+- **A phone could not sign out.** `signOutAction` had one call site, in a sidebar that is
+  `hidden md:flex`; the bottom nav carries destinations rather than actions, and Settings had
+  nothing. Now in `account-section.tsx`, reachable at every width. A functional gap rather
+  than a cosmetic one, and worst exactly where it is hardest to work around — an installed
+  PWA has no browser chrome to fall back on.
+- **`dashboardCalendarView` did nothing on a phone.** Its card is `hidden lg:flex`, so below
+  1024px the preference is stored, saved and invisible. It says so now.
+- **Desktop truncated MORE than a phone**, which is the geometry backwards: the three-column
+  dashboard gives its outer cards ~274px at 1280px against a phone's ~361px full width.
+  `line-clamp-2` on the titles rather than re-laying-out the columns — the smaller change
+  that resolves the stated problem.
+- **`/activity` was Board width for a layout T13 deleted.** Its own comment said "one column
+  at every width now"; the width had not followed. It is List now, and the Board tier is
+  empty — kept in the table so the next multi-column page does not invent a fifth number.
+
+**Measured and deliberately NOT changed: touch targets.** Every route has controls under
+44px, and DESKTOP has more of them than mobile (31 vs 19 on `/`). So it is an app-wide
+density choice rather than a mobile regression — real, but it wants judging on a device
+rather than an emulated viewport.
+
+## After T21 — the deploy, and what it changed about this plan
+
+**Hosting shipped on 2026-08-25**, which retires the sentence this plan carried for a long
+time about hosting being the only thing between the app and being used. Two consequences for
+what comes next, neither of them a tranche yet:
+
+- **The deploy is not finished.** WSL does not start itself, so the app is down after every
+  reboot until someone signs in. See HANDOFF §1 and ADR-0002's second amendment. Nothing on
+  this plan is worth as much as fixing that.
+- **A day of real use produced two undiagnosed bugs** — the Safari-vs-PWA split and the goal
+  planner's intermittent `malformed`. Both in HANDOFF §6. The planner one has a clear first
+  move that is not a fix: make the failure diagnosable, because the app currently computes
+  the exact reason and discards it.
+
+That is the shape of the work now: it comes from using the thing, which is what the whole
+plan was for.

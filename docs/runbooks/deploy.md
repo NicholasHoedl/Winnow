@@ -1,9 +1,12 @@
 # Runbook — First Deploy To The Home Server
 
 Standing Winnow up on the Windows desktop, from a fresh `git clone`, for the first time.
-This is ROADMAP Checkpoint 0.4 and it has never been done. Nothing here is drilled — it is
-assembled from the compose file, the Dockerfile and ADR-0002, and the first run through it
-will find things this document got wrong. Fix them here as you go.
+This was ROADMAP Checkpoint 0.4. **It has now been done once, on 2026-08-25**, and the
+things it got wrong are corrected below rather than left for the next reader to rediscover.
+(The ROADMAP itself is not a file in this repo and never has been — see HANDOFF §2.)
+
+**The one step that did NOT work is §0.4, the reboot test.** Read it before assuming the
+stack comes back on its own; it does not.
 
 **Read `docs/HANDOFF.md` §1 first.** The single most common wrong assumption about this
 project is that some of it is already deployed. None of it is.
@@ -24,9 +27,16 @@ taken off the list before anyone is standing at the desktop.
 | §6.1 (app only) | `/login` serves **200**, `/` correctly **307**s to it.                               |
 | §8 `backup.sh`  | Writes a gzip dump — **and see the warning in §8, which got worse.**                 |
 
-**Still entirely unproven**, because none of it can be done from here: everything in §0, the
-Task Scheduler lifecycle, Tailscale serve and its certificate (§5), reachability from the
-phone or from off the tailnet (§6.2/§6.3), and §7.
+**That list was written before the real deploy. It has since happened, so here is what is
+now actually proven and what is not:**
+
+- **Proven:** §0.1–§0.3 (WSL2, systemd, Docker Engine), §1–§4, §5 Tailscale serve **and its
+  certificate — which survived a reboot**, §6.1 and §6.2 (laptop and phone both load it over
+  HTTPS with no warning), and §7 (the PWA is installed).
+- **Failed and unsolved:** **§0.4**, the reboot-with-nobody-logged-in test. See the warning
+  box there — this is the one genuinely unfinished part of the deploy.
+- **Still not done:** §6.3 (the off-tailnet check, which needs a device that is not on it)
+  and §8's restore drill.
 
 **The image build was broken and would have failed at step 3.** Three separate bugs in
 `.dockerignore`, all the same shape — a name that does not match its longer sibling:
@@ -118,6 +128,29 @@ human in it:
 4. Verify the thing you actually care about: reboot with nobody logged in, wait, then from
    another machine on the tailnet confirm the stack answers. Do this **before** step 5's
    HTTPS work, so a failure here is isolated from a failure there.
+
+   > ### ⚠️ This step FAILED on the real host, and has not been solved
+   >
+   > Run the task by hand (`wsl --shutdown`, then right-click → Run) and it works. Reboot
+   > with nobody signed in and it does not — three minutes, no distribution running.
+   >
+   > **The cause is that WSL2 is not a service.** A distribution belongs to a user account
+   > and wants an interactive session; a startup task runs in Session 0, where WSL does not
+   > reliably launch. Tweaking the task did not fix it: full path to `wsl.exe`, a longer
+   > delay, highest privileges, and a stored password were all applied.
+   >
+   > **Current operating reality: after every restart, sign in and open Ubuntu from the
+   > Start menu.** That alone is enough — Docker and both containers come back behind it
+   > with nothing typed. Until this is solved the app is down between a reboot and someone
+   > signing in.
+   >
+   > Task Scheduler's **history is off by default** — the "Enable All Tasks History" action
+   > in the right-hand panel turns it on, and it is the only evidence available here.
+   >
+   > The open alternative is **Windows auto-login** with a logon trigger, which works because
+   > it supplies the interactive session. ADR-0002 rejected it on physical-access grounds and
+   > its second amendment revisits that with the lock-immediately-after variant. Decide there,
+   > not here.
 
 Everything from here on — `docker compose`, `pnpm`, the repo — lives **inside the distro**,
 not on the Windows side.
@@ -212,11 +245,23 @@ The third is the one people skip, and it is the only one that proves the thing i
 
 Safari → Share → Add to Home Screen.
 
-This is the step that finally exercises three features that have shipped but have never run
-anywhere except a laptop: the **offline page** (T6b — the service worker only registers in
-production over HTTPS), the **calendar feed** (T5c-a, subscribed from iOS Calendar over the
-tailnet), and the **dashboard**, which is a phone surface that has only ever been seen on a
-1440px screen. Expect to find things here.
+**Done, 2026-08-25** — and it did what this step promised: it found things nothing local had.
+
+Of the three features it was meant to exercise, two now have: the **offline page** (T6b) and
+the **dashboard** have run on a real phone. The **calendar feed** (T5c-a) has NOT — subscribing
+from iOS Calendar over the tailnet is still untried, and remains the last shipped feature
+never to have run where it was designed to.
+
+Two things surfaced that no local testing had, both recorded in HANDOFF §6 and neither
+diagnosed:
+
+- **Safari and the installed app can disagree.** iOS treats a home-screen install as a
+  separate installation with its own storage and cookies, so one can work while the other
+  shows a blank page — including in Private Browsing, which rules out cached files.
+- **The goal planner intermittently rejects the provider's answer.** Unrelated to the
+  deploy, but this is where it was noticed, because it is where the app started being used.
+
+Expect the same of anything else that has only ever run on a laptop.
 
 ## 8. Backups
 

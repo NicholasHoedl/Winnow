@@ -84,13 +84,14 @@ distribution, and give it a lifecycle that does not involve a human logging in:
 
 ### Consequences
 
-- The compose stack survives a reboot with nobody logged in, which is what this ADR always
-  claimed and did not previously have.
+- ~~The compose stack survives a reboot with nobody logged in, which is what this ADR always
+  claimed and did not previously have.~~ **This was predicted, then tested, and it is false.
+  See the second amendment below.**
 - Docker Desktop's licensing question disappears along with Docker Desktop.
 - **More setup, and setup that only a human can do.** It needs elevation, and it is the
   first thing in the deploy that has no fallback if it goes wrong — hence its position as
   the first blocking item rather than a step buried mid-runbook.
-- The trigger is at *system startup*, and that distinction is the whole point. A logon
+- The trigger is at _system startup_, and that distinction is the whole point. A logon
   trigger reproduces the original problem exactly while appearing to solve it.
 
 ### Alternatives Considered
@@ -102,3 +103,44 @@ distribution, and give it a lifecycle that does not involve a human logging in:
   app is down exactly when it is reached for, and the habit the §10 soak exists to build
   does not survive that.
 
+## Second amendment: the always-on property does not hold, and the rejected option is in force (2026-08-25)
+
+The first amendment moved from Docker Desktop to Docker Engine inside WSL2 specifically to
+get a stack that "survives a reboot with nobody logged in". **The deploy happened, that
+property was tested directly, and it does not hold.**
+
+What was observed on the real host:
+
+- The Task Scheduler task from the runbook's §0 **works when run by hand** — `wsl --shutdown`
+  first, then Run, and the distro starts.
+- At boot with nobody signed in, **it does not**. Waiting three minutes changed nothing;
+  `wsl --list --running` showed no distribution.
+- Signing in and simply **opening Ubuntu from the Start menu was enough** — Docker and both
+  containers came back behind it with no command typed. So everything below WSL is correct;
+  the only broken link is WSL starting itself.
+
+**The reason is that WSL2 is not a service.** A distribution belongs to a Windows user
+account and expects an interactive session. A scheduled task at startup runs in Session 0,
+the non-interactive services session, and WSL does not reliably launch there. That is a
+property of WSL rather than a misconfiguration — which means **this ADR did not remove the
+login dependency it rejected Docker Desktop for. It moved it somewhere less visible.**
+Docker Desktop's dependency was at least obvious.
+
+**The decision, for now: accept manual restarts.** That is the option this ADR's own
+Alternatives Considered rejects, and it is being taken with that rejection in view rather
+than in ignorance of it. The rejection's reasoning stands and is worth restating, because it
+is a prediction that can now be checked rather than argued: _"the app is down exactly when it
+is reached for, and the habit the §10 soak exists to build does not survive that."_ **If the
+soak fails, look here first.**
+
+The other option remains open and is unchanged in its trade-off: **Windows auto-login** would
+work, because it gives WSL the interactive session it wants — at the cost this ADR already
+named, a machine holding the user's finances and calendar unlocked at its own console. It can
+be softened by locking the screen immediately after the automatic sign-in, which yields a
+running session behind a lock screen. That was not part of the original weighing and may
+change the answer; it has not been tried.
+
+What is NOT in doubt, and should not be re-litigated on the strength of this: Tailscale as
+the only ingress works exactly as designed. It is a real Windows service, it comes up before
+anyone logs in, and it kept answering throughout — which is precisely why the failure
+presented as a 502 from a healthy front door rather than as an unreachable host.

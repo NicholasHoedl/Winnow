@@ -19,15 +19,19 @@ conventions that are not guessable, and the traps that have already cost real ti
 
 > ### If you are Claude Code running on the Windows desktop
 >
-> You have been cloned onto the deploy target. **Your job is Checkpoint 0.4: get this
-> stack running and reachable over Tailscale.** It has never been done, on any machine.
+> You are on the deploy target, and **the deploy is already done** — this block used to say
+> your job was Checkpoint 0.4, and that was true until 2026-08-25. The stack runs: Ubuntu
+> under WSL2, Docker Engine, the compose stack, reachable over Tailscale with the PWA
+> installed on the phone.
 >
-> 1. Read **§1 below** — the one thing most likely to be assumed wrong — then
->    **`docs/runbooks/deploy.md`**, which is the actual procedure.
-> 2. Settle the Docker-Desktop-login question in §2 **before** you build. If the answer
->    turns out to be "run it under WSL2 as a service", that changes the first step rather
->    than being something to patch later.
-> 3. Work through the runbook. It marks which steps only the user can do.
+> 1. Read **§1 below** first — what is running, and the one part of it that is not finished.
+> 2. **The live problem is that WSL does not start itself.** After a reboot the app is down
+>    until someone signs in and opens Ubuntu. That is not a bug in the app, and it is the
+>    thing most likely to be misdiagnosed as one. See `docs/runbooks/deploy.md` §0.4 and
+>    ADR-0002's second amendment.
+> 3. To update the running app: `cd ~/winnow && git pull && docker compose -f
+docker-compose.prod.yml up -d --build`. Data lives in a Docker volume and is untouched
+>    by a rebuild. A migration additionally needs the temporary-port step in the runbook's §4.
 >
 > Four things to have straight before you start:
 >
@@ -49,26 +53,46 @@ conventions that are not guessable, and the traps that have already cost real ti
 
 ## 1. The one thing most likely to be assumed wrong
 
-**Winnow has never been deployed. There is no home server running it.**
+**Winnow IS deployed now — and it does not start on its own.**
 
-Everything is local: `.env` points at `localhost:5432`, there is no production
-environment anywhere in the checkout, and ROADMAP Checkpoint 0.4 (Docker + Tailscale +
-iPhone install) has never been completed. Commit `d013006` is _deploy-prep_ — artifacts
-staged, nothing shipped.
+This section said the exact opposite until 2026-08-25, and it was the first thing anyone
+read. If you are working from a summary that says "nothing is deployed", the summary is
+older than this line.
 
-This matters because three finished features have only ever run on localhost and are
-unverified on the device they were built for:
+**What is running.** The Windows desktop (`nickspc`) runs Ubuntu under WSL2, with Docker
+Engine inside it and the `docker-compose.prod.yml` stack on top: the app plus Postgres, 41
+migrations applied, the account seeded. Tailscale on the Windows side publishes it over
+HTTPS to the tailnet. Verified 2026-08-25 from the laptop — `/login` 200, `/` 307 to it,
+static assets 200. The iPhone PWA is installed (runbook §7 is done).
 
-- **T6b's offline page** — the point is an installed iOS PWA with no network.
-- **T5c-a's calendar feed** — the point is subscribing from iOS Calendar over the tailnet.
-- **The dashboard** — it is a phone-and-desktop surface that has only been seen on a laptop.
+**The thing that is NOT true, and the deploy runbook now says so too: it does not survive a
+reboot.** WSL does not start itself. The Task Scheduler task from runbook §0 works when run
+by hand and fails at boot, which is the Session 0 limitation described there. Until that is
+solved, **the app is down after every restart until someone signs into the desktop and opens
+Ubuntu** — opening it is enough on its own, because Docker and the containers come back
+behind it without a single command typed. The user has accepted this for now; see ADR-0002's
+second amendment, which records that it is the option that ADR originally rejected.
 
-Corollary: statements like "migration 0020 is pending on the server" are wrong. The
-database is empty of production data because there is no production. The **first** deploy
-runs all 39 migrations from scratch plus `scripts/seed-user.ts`. A first deploy therefore
-runs `0022`, which CREATES the notes table, and later `0035`, which drops it again. That is
-correct and deliberate: migration history is append-only, so the sequence is replayed rather
-than rewritten to skip a table no longer wanted.
+So a phrase like "it should have come back after the update" is wrong by default. **Check
+whether anyone has signed in since the last restart** before believing anything else about a
+502 or an unreachable app.
+
+**What the first real use found**, which no amount of local testing had:
+
+- **The offline page and the dashboard have now run on a real phone.** They were two of the
+  three things this section used to list as unverified.
+- **The calendar feed (T5c-a) is still unverified** — subscribing from iOS Calendar over the
+  tailnet has not been tried.
+- **Safari and the installed PWA can disagree.** iOS treats a home-screen app as a separate
+  installation with its own storage and cookies, and one worked while the other showed a
+  blank page. Not diagnosed — see §6.
+- **The goal planner intermittently fails** with "the provider answered with something this
+  app couldn't read as a plan", on Anthropic. Not diagnosed either, and the app currently
+  discards the evidence that would diagnose it — see §6.
+
+Migration history is append-only and is replayed from scratch on a first deploy, so a run
+executes `0022` (which CREATES the notes table) and later `0035` (which drops it again).
+That is correct and deliberate rather than a sequence someone forgot to tidy.
 
 ## 2. Where the work stands
 
@@ -287,6 +311,33 @@ on strict mode. Two faults, both fixed: `deleteHabitsMatching` in `e2e/_habits.t
 instead of by text. **Playwright's `hasText` is case-INSENSITIVE** — worth remembering before
 writing another one.
 
+**T21 is shipped: a phone can sign out, and desktop stopped hiding more than a phone
+does.** No migration. Four findings from a desktop-vs-mobile sweep of all ten routes,
+comparing the interactive elements each width actually offers rather than reading CSS:
+
+- **A phone could not sign out at all.** `signOutAction` had exactly one call site —
+  `app-sidebar.tsx`, which is `hidden md:flex` — and the bottom nav carries destinations
+  rather than actions. Below 768px there was no route to it, and Settings had none either.
+  It is in `account-section.tsx` now, which is reachable at every width. Worse than it
+  sounds once installed to a home screen (runbook §7), where there is no browser chrome to
+  fall back on.
+- **`dashboardCalendarView` was a setting that did nothing on a phone.** The card it
+  controls is `hidden lg:flex`, so below 1024px the preference is stored, saved, and
+  invisible. It now says so in its own hint — every other field in that section already had
+  one.
+- **Desktop truncated MORE than a phone.** The three-column dashboard gives its outer cards
+  ~274px at 1280px and ~211px at 1024px, against the ~361px a 393px phone gives the same
+  card full-width — so `truncate` cut more off the bigger the screen got. `line-clamp-2` on
+  the task, event and goal titles; the columns themselves were left alone.
+- **`/activity` was still Board width.** See the page-width scale in §5: it was `max-w-7xl`
+  for a two-column layout T13 deleted, and its own comment says "one column at every width
+  now". Task rows ran ~945px. It is List (`max-w-5xl`) now, like its siblings.
+
+**Touch targets were measured and deliberately NOT changed.** Every route has controls under
+44px, and desktop has MORE of them than mobile (31 vs 19 on `/`, 80 vs 72 on `/settings`) —
+so it is an app-wide density choice rather than a mobile regression. It only _hurts_ on a
+phone. Worth doing on a real device rather than an emulated viewport.
+
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
 after a verified-empty pre-flight dump — the user had written nothing in it). Anything you
@@ -311,19 +362,27 @@ The T12 line is what most of §5 now describes:
 | **T12h**      | Companion settings derive the base URL and fetch the model list, instead of asking you to type both.                                                       |
 | **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
-**The ROADMAP has run out of code that can be written without a deployment — the work has
-not.** T13 through T20 are eight tranches shipped since, none of them on any plan: they came
-from the user looking at a screen and saying what was wrong with it, from the pre-deploy
-audit that exercise turned into, and from that audit's own list of things it had deferred. Read that as the shape
-of the work now, not as a backlog waiting to be worked through. **Hosting is still the only
-thing standing between this app and being used**, and everything in the table below is
-blocked on it.
+**The ROADMAP is not a file in this repo.** It is referenced here and in the deploy runbook
+and has never been tracked in git, so "see the ROADMAP" is not an instruction anyone can
+follow — treat the references as historical. This document is the plan of record.
+
+**Its remaining code ran out before the deployment did, and the work did not.** T13 through
+T21 are nine tranches shipped since, none of them on any plan: they came from the user
+looking at a screen and saying what was wrong with it, from the pre-deploy audit that
+exercise turned into, and from that audit's own list of things it had deferred. Read that as
+the shape of the work now, rather than as a backlog waiting to be worked through.
+
+**Hosting is DONE** — it was the thing everything below was blocked on, and it stopped being
+the blocker on 2026-08-25. See §1 for what is running and for the one thing about it that is
+not finished.
 
 | Next up                                   | Why                                                                                                                                                                                                                                                                                                                    |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hosting / Checkpoint 0.4**              | The only remaining work that isn't blocked on it. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure: **`docs/runbooks/deploy.md`**.                                                               |
-| **T5c-b** — event reminders over Web Push | Behind hosting, not by preference: iOS only permits Web Push from an installed home-screen app, and it needs a scheduler this app does not have. Both need the deploy first.                                                                                                                                           |
-| **The §10 soak**                          | A week of real daily use, from the original ROADMAP. Never done, because the app has never been somewhere it could be used daily.                                                                                                                                                                                      |
+| **Reboot survival**                       | **The one unfinished piece of the deploy, and the highest-value item here.** WSL does not start itself, so the app is down after every restart until someone signs in — see §1 and ADR-0002's second amendment. Everything else on this list is easier to want once the app is reliably there.                         |
+| **The two live unknowns**                 | The Safari-vs-PWA split and the goal planner's intermittent `malformed`. Both in §6, both undiagnosed, both found within a day of real use. The planner one has a clear first move: make it diagnosable before guessing at a cause.                                                                                    |
+| **Hosting / Checkpoint 0.4 — DONE**       | Shipped 2026-08-25. Host is a **Windows home PC, amd64**, with a discrete NVIDIA GPU (**6GB** VRAM — an earlier note here said 12GB+, and that error is what ADR-0011 reverses). Procedure and its corrections: **`docs/runbooks/deploy.md`**.                                                                         |
+| **T5c-b** — event reminders over Web Push | **Unblocked now.** iOS only permits Web Push from an installed home-screen app, which now exists — but it still needs a scheduler this app does not have, and a machine that is reliably up. Behind reboot survival, not behind hosting.                                                                               |
+| **The §10 soak**                          | A week of real daily use. Now possible for the first time, and the manual-start problem is exactly what would undermine it — the app being down when it is reached for is the failure ADR-0002 predicted for accepting manual restarts.                                                                                |
 | **The AI companion — complete**           | **T9a–T9d shipped**, reshaped by T12c and reconfigured by T11 and T12h. See §5, ADR-0011 and ADR-0012.                                                                                                                                                                                                                 |
 | **The Activity page — complete**          | **T10a–T10b shipped**, revisited by T12d and again by T13. `/todos` merged into `/activity`; `/goals` un-merged back to its own page and the rail is gone. Habits are a strip. See §5 and ADR-0013 with both amendments.                                                                                               |
 | **Mobile — measured, not finished**       | A `mobile` Playwright project renders every `(app)` route in WebKit at 393px — **ten** since T13 deleted `/notes`; it was eleven when T12i's follow-up added it, and nine of those were already clean. It was also BLIND to anything inside a vertical scroller until T18 (see §4). What it still cannot see is in §6. |
@@ -437,13 +496,20 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, measured on a full run: **859 unit tests across 46 files, 167 e2e,
-0 lint errors, 5 lint warnings** (2026-08-19, T20; 11.6 minutes wall clock for the e2e,
-**zero flaky**). The two runs before those fixes took 19.0 and 22.5
-minutes and each retried two tests — a retry is a whole test re-run, so a flaky suite reports
-a slower clock as well as a worse result. The
-numbers here disagreed with each other before T16 — 784/46/143 in one sentence and 140 in
-the next — so re-measure rather than trusting a remembered figure.
+Current green baseline, **re-measured 2026-08-25 rather than copied forward**: **859 unit
+tests across 46 files, 167 e2e, 0 typecheck errors, 0 lint errors, 5 lint warnings** (13.6
+minutes wall clock for the e2e, **zero flaky**).
+
+That re-measurement was worth doing rather than asserting. **T21 shipped without a full e2e
+run** — it was pushed while the verification spec was still being written — so the figure
+above was a claim about untested code until this run confirmed it. It passed; the point is
+that nobody knew that at the time.
+
+Earlier runs took 19.0 and 22.5 minutes and each retried two tests — a retry is a whole test
+re-run, so a flaky suite reports a slower clock as well as a worse result. The numbers here
+disagreed with each other before T16 — 784/46/143 in one sentence and 140 in the next — so
+re-measure rather than trusting a remembered figure. This paragraph is where that keeps
+going wrong.
 
 **Wall clock is the triage signal, and it is not reliable on this machine.** Full runs on
 2026-08-17 came in at 11.4, 11.5, 11.9, 16.7, 26.9 and 46.7 minutes, and one ran 10.1 HOURS
@@ -1183,6 +1249,38 @@ enforces them: `manifest.ts`, `layout.tsx`'s `viewport.themeColor`, `public/offl
 still the old indigo.**
 
 ## 6. Known caveats worth stating before someone finds them
+
+### Live since the deploy, and NOT diagnosed
+
+Both of these were found by using the app on a phone, which is the one thing no amount of
+local work had done. Neither is understood; both are written down so the next person starts
+from evidence rather than from scratch.
+
+- **The app does not come back after a reboot.** WSL does not start itself — see §1. This is
+  the operational fact most likely to be mistaken for a bug in the app.
+- **Safari and the installed PWA can disagree on the same phone.** One showed the app
+  correctly while the other showed a blank page, including in Private Browsing and on
+  `/login`. iOS treats a home-screen install as a separate installation with its own storage
+  and cookies, which is how they can drift. Private Browsing being blank rules out cached
+  files and cookies, so the cause is still open. Retest after a reboot fix — some of it may
+  simply have been the app being down.
+- **The goal planner intermittently answers "the provider answered with something this app
+  couldn't read as a plan"**, on Anthropic with a reasoning model, and works again on retry.
+  On that provider the payload arrives as an already-parsed object on a forced `tool_use`
+  block, so it cannot be a JSON parse failure — it is either a missing tool block or content
+  the schema rejected. **The app cannot currently tell you which**, and that is the real
+  defect:
+  - `stop_reason` is never read, so a truncated answer and a bad answer are indistinguishable
+    — `MAX_OUTPUT_TOKENS` is 8192, and a reasoning model spends that budget on thinking
+    before it emits the tool call, which fits the intermittency exactly.
+  - `ai-client.ts` computes the precise Zod error and discards it on the same line
+    (`if (!result.success) return { ok: false, failure: { kind: "malformed" } }`).
+  - Three genuinely different failures — body not JSON, no tool block, schema rejected — all
+    collapse to one message.
+  - There is no retry anywhere, so one unlucky sample is a user-visible failure.
+
+  Fix the diagnosis before the cause: read `stop_reason`, log the Zod error server-side, and
+  only then decide whether the answer is a bigger token budget or a single retry.
 
 - The dashboard **opens on the month view each visit** — the month/week toggle keeps its
   state in the URL, so the server renders the chosen view with no flash. Making it stick
