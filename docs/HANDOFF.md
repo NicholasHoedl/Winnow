@@ -1250,6 +1250,11 @@ still the old indigo.**
 
 ## 6. Known caveats worth stating before someone finds them
 
+**A security assessment of the deployed stack is in `docs/securityrisk.md`** (2026-08-25).
+Five findings, all open. The highest-value one is not in this codebase at all — Tailscale
+exposes the whole host to the tailnet by default, and SMB answers on the deploy machine. The
+two that are ours are an unvalidated outbound URL (SSRF) and an API key stored in plaintext.
+
 ### Live since the deploy, and NOT diagnosed
 
 Both of these were found by using the app on a phone, which is the one thing no amount of
