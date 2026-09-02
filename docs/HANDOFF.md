@@ -1,9 +1,12 @@
 # Handoff
 
-Last updated: **2026-08-13**.
+Last updated: **2026-09-02** — a documentation-only pass, which corrected the stale
+"not deployed" claims in `README.md`, `ROADMAP.md` and the deploy runbook that had outlived
+the deploy by a week. Nothing about the running stack was re-checked: §1 still describes
+2026-08-25, and the green baseline in §3 is still the one measured that day.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T12i is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T21 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -362,9 +365,12 @@ The T12 line is what most of §5 now describes:
 | **T12h**      | Companion settings derive the base URL and fetch the model list, instead of asking you to type both.                                                       |
 | **T12i**      | A dead-code sweep that turned up four finished actions with no UI, and wired them.                                                                         |
 
-**The ROADMAP is not a file in this repo.** It is referenced here and in the deploy runbook
-and has never been tracked in git, so "see the ROADMAP" is not an instruction anyone can
-follow — treat the references as historical. This document is the plan of record.
+**`ROADMAP.md` is at the repo root and is tracked.** An earlier note here claimed it was not
+a file in this repo and never had been, which was simply wrong — `git ls-files` lists it.
+What is true is that it is explicitly historical: preserved as written, not maintained, and
+carrying a header block that names what it has since got wrong. So "see the ROADMAP" points
+at the original sequencing reasoning, not at anything current. This document is the plan of
+record.
 
 **Its remaining code ran out before the deployment did, and the work did not.** T13 through
 T21 are nine tranches shipped since, none of them on any plan: they came from the user
@@ -408,7 +414,7 @@ Decided with the user, so do not re-litigate:
 - **The companion no longer waits on hosting, and T9a was built first.** It used to be a
   hard dependency — a local model on this machine's GPU could not be tested until the stack
   was up — and ADR-0011 removed it by moving to a hosted API. The user chose to build
-  before deploying; hosting is still the only thing between this app and being used.
+  before deploying, and that ordering held right up to the deploy on 2026-08-25.
 
 **The Docker-Desktop gap is closed** (2026-08-17). It was: Docker Desktop is a Windows GUI
 app tied to a login session, so the stack stayed down after a Windows Update reboot until

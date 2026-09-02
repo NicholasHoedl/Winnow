@@ -272,8 +272,8 @@ a classic, easy-to-introduce bug.
 > (T7b, `routines` + `routine_items`), **habits** (T12a, `habits` + `habit_entries` — a
 > quota and a log; see ADR-0014, which supersedes ADR-0009), **review** (T7d — no tables;
 > a pure projection of four other modules) and **companion** (T9a, the AI proposal store —
-> `ai_proposals`). There are **26 user-owned tables across 13 modules, at 39 migrations**
-> (`0000`–`0038`). Do not infer from silence here that something does not exist. The table
+> `ai_proposals`). There are **26 user-owned tables across 13 modules, at 41 migrations**
+> (`0000`–`0040`). Do not infer from silence here that something does not exist. The table
 > figure is the one `src/modules/account/tables.test.ts` asserts EXACTLY — it was 27 until
 > T13 dropped `notes` — so that test is the authority and this line follows it.
 >

@@ -3,13 +3,15 @@
 Standing Winnow up on the Windows desktop, from a fresh `git clone`, for the first time.
 This was ROADMAP Checkpoint 0.4. **It has now been done once, on 2026-08-25**, and the
 things it got wrong are corrected below rather than left for the next reader to rediscover.
-(The ROADMAP itself is not a file in this repo and never has been — see HANDOFF §2.)
+(`ROADMAP.md` is at the repo root, but it is historical and not maintained — see HANDOFF §2.)
 
 **The one step that did NOT work is §0.4, the reboot test.** Read it before assuming the
 stack comes back on its own; it does not.
 
-**Read `docs/HANDOFF.md` §1 first.** The single most common wrong assumption about this
-project is that some of it is already deployed. None of it is.
+**Read `docs/HANDOFF.md` §1 first.** The most common wrong assumption about this project has
+inverted since this line was written. It used to be that some of it was already deployed,
+and none of it was. It is deployed now — what it does not do is come back on its own after a
+reboot.
 
 ## Rehearsed on 2026-08-24 — what is now proven, and what is not
 

@@ -9,10 +9,11 @@ Last updated: 2026-07-21
 >
 > Two things it says are no longer true, and both matter:
 >
-> - **"At the end of every phase, the app runs on the home server."** It never has.
->   Winnow has never been deployed to hardware. Checkpoint 0.4 is still open, and it is
->   now the only thing standing between this app and being used — see
->   `docs/HANDOFF.md` §1 and `docs/runbooks/deploy.md`.
+> - **"At the end of every phase, the app runs on the home server."** It never did. The
+>   deploy happened once, at the end rather than per phase, on **2026-08-25** — that was
+>   Checkpoint 0.4, closed long after the phases it was meant to punctuate. One part of it
+>   is still unfinished: the host does not bring the stack back by itself after a reboot.
+>   See `docs/HANDOFF.md` §1 and `docs/runbooks/deploy.md`.
 > - **The visual palette is no longer "a Phase 5 concern".** It was settled after T7:
 >   one warm scheme, no picker. See ARCHITECTURE.md §1.3.
 >

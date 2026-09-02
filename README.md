@@ -8,8 +8,9 @@ tailnet, and installs to an iPhone home screen as a PWA.
 Next.js 16 (App Router, Turbopack), TypeScript, PostgreSQL + Drizzle, Tailwind v4 +
 shadcn/ui, Auth.js (single account, JWT), Vitest + Playwright.
 
-**Status:** well past the MVP spec, but **not yet deployed to hardware** - see
-`docs/HANDOFF.md`.
+**Status:** deployed and in real use since 2026-08-25, well past the MVP spec. One part of
+the deploy is unfinished - the host does not bring the stack back by itself after a reboot.
+See `docs/HANDOFF.md`.
 
 ## Running it locally
 
@@ -17,7 +18,7 @@ shadcn/ui, Auth.js (single account, JWT), Vitest + Playwright.
 docker compose -f docker/docker-compose.yml up -d   # postgres on :5432
 pnpm install
 cp .env.example .env                                # fill AUTH_SECRET + SEED_USER_*
-pnpm db:migrate                                     # 39 migrations
+pnpm db:migrate                                     # 41 migrations
 pnpm db:seed                                        # creates the single account
 pnpm dev
 ```
@@ -54,12 +55,12 @@ Two things that bite otherwise:
 
 ## Documentation
 
-| File                       | What it is for                                                                                                                                                                                                                    |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`docs/HANDOFF.md`**      | **Start here.** Current state, working conventions, and the traps that have already cost time.                                                                                                                                    |
-| `SPEC.md`                  | What the product is, and what is deliberately out of scope                                                                                                                                                                        |
-| `ARCHITECTURE.md`          | Stack rationale, data model, deployment, PWA and auth approach                                                                                                                                                                    |
-| `ROADMAP.md`               | The original phased build and its checkpoints                                                                                                                                                                                     |
-| `docs/IMPROVEMENT-PLAN.md` | The master roadmap since the MVP - tranches T0-T12i, plus a corrections list worth two minutes. Everything after T12i came from the user looking at a screen rather than from a plan; `docs/HANDOFF.md` §2 is the record of those |
-| `docs/adr/`                | Why the non-obvious calls were made (0001-0018)                                                                                                                                                                                   |
-| `docs/runbooks/`           | `deploy.md` for standing the app up on the home server; `backup-restore.md`, drilled rather than theoretical                                                                                                                      |
+| File                       | What it is for                                                                                                                                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`docs/HANDOFF.md`**      | **Start here.** Current state, working conventions, and the traps that have already cost time.                                                                                                                                   |
+| `SPEC.md`                  | What the product is, and what is deliberately out of scope                                                                                                                                                                       |
+| `ARCHITECTURE.md`          | Stack rationale, data model, deployment, PWA and auth approach                                                                                                                                                                   |
+| `ROADMAP.md`               | The original phased build and its checkpoints                                                                                                                                                                                    |
+| `docs/IMPROVEMENT-PLAN.md` | The master roadmap since the MVP - tranches T0-T21, plus a corrections list worth two minutes. Everything after T12i came from the user looking at a screen rather than from a plan; `docs/HANDOFF.md` §2 is the record of those |
+| `docs/adr/`                | Why the non-obvious calls were made (0001-0018)                                                                                                                                                                                  |
+| `docs/runbooks/`           | `deploy.md` for standing the app up on the home server; `backup-restore.md`, drilled rather than theoretical                                                                                                                     |

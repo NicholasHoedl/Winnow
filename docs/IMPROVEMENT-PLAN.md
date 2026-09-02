@@ -17,7 +17,7 @@ picked up — it is **not** code-level detail yet.
 | T5a — Depth: to-dos + goals                        | ✅ shipped        |
 | T5b — Depth: calendar (grid, drag, split)          | ✅ shipped        |
 | T5c-a — Calendar: iCal export + feed               | ✅ shipped        |
-| T5c-b — Calendar: event reminders (Web Push)       | after hosting     |
+| T5c-b — Calendar: event reminders (Web Push)       | needs a scheduler |
 | T6a — Robustness: data durability                  | ✅ shipped        |
 | T6b — Robustness: offline fallback                 | ✅ shipped        |
 | T7a — Net-new: Notes / Journal                     | ⤳ removed in T13  |
@@ -47,16 +47,23 @@ picked up — it is **not** code-level detail yet.
 | T16 — Slate, and events you can highlight          | ✅ shipped        |
 | T17 — Dashboard cards fold to their header         | ✅ shipped        |
 | T18 — A habit's quota is one box per log           | ✅ shipped        |
+| T19 — A habit can be an amount                     | ✅ shipped        |
+| T20 — The companion proposes a rate, app judges    | ✅ shipped        |
+| T21 — A phone can sign out; desktop stops hiding   | ✅ shipped        |
 
-**T7 is complete.** The remaining roadmap work is Checkpoint 0.4 (hosting) and then T5c-b —
-but T12b and T12c sit ahead of both, since they finish what T12a started.
+**T7 is complete, and so is Checkpoint 0.4** — hosting shipped 2026-08-25; see the section
+at the end of this file. **T5c-b is the only tranche in the table above that has not
+shipped**, and what it waits on has changed. Not hosting: iOS permits Web Push only from an
+installed home-screen app, and that now exists. What it still needs is a scheduler this app
+does not have, and a machine that is reliably up — which is why it sits behind reboot
+survival. See `docs/HANDOFF.md` §1 and §2.
 
-**T13 onward were not on this roadmap, and are not described below.** They came from the
-user looking at a screen and saying what was wrong with it, one tranche at a time, and the
-sections in this file stop at T13's four phases. **`docs/HANDOFF.md` §2 is the record of
-T14–T18** — what shipped, which migration each carried, and the decisions worth not
-re-litigating. This file remains the authority for T0–T13 and for the corrections list at
-the top.
+**T13 onward were not on this roadmap.** They came from the user looking at a screen and
+saying what was wrong with it, one tranche at a time. Sections for **T13, T14 and T19–T21**
+were written here as they were built; **T15–T18 have a row in the table above and no section
+here at all.** **`docs/HANDOFF.md` §2 is the record of every one of T13–T21** — what shipped,
+which migration each carried, and the decisions worth not re-litigating. This file remains
+the authority for T0–T13 and for the corrections list at the top.
 
 **T10** was not on this roadmap either. `/todos` and `/goals` had been describing the same
 rows from opposite ends since T2 gave tasks a `goalId`, and each had grown a compromise to
