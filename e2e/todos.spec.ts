@@ -11,8 +11,9 @@ test("add, complete, and delete a to-do", async ({ page }) => {
   await input.fill(title)
   await input.press("Enter")
 
-  // "Active" (the default) hides completed tasks — switch to "All" so the
-  // completed row stays visible to assert on.
+  // All is the DEFAULT now, so this click is belt and braces rather than a switch. Kept
+  // because it says which view the line-through below is being asserted in, and because
+  // Active would hide the row outright.
   await page.getByRole("button", { name: "All", exact: true }).click()
 
   const row = visibleCard(page, title)

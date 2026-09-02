@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
+import { serverWrite } from "./_server-write"
 
 // Browser coverage for a goal's relationship to its tasks (T2, T5a-S11, reshaped by T10).
 //
@@ -73,10 +74,17 @@ test.afterEach(async ({ page }) => {
 async function complete(page: import("@playwright/test").Page, title: string) {
   await page.goto("/activity")
   const row = visibleCard(page, title)
+  // A ticked row no longer disappears: the status filter defaults to All since /activity
+  // gained a search box, so a done task stays on screen under Done. So the write is now
+  // WAITED FOR rather than inferred from a disappearance — which is the honest signal in any
+  // case, and `_server-write.ts` is where that lesson is already written down.
+  const written = serverWrite(page)
   await row.getByLabel("Mark as done").click()
-  await expect(row).toHaveCount(0) // optimistic — proves only that the click took
+  await written
   await page.reload()
-  await expect(row).toHaveCount(0) // and now it has actually been written
+  await expect(row.getByText(title, { exact: true })).toHaveClass(
+    /line-through/,
+  )
 }
 
 test("selecting a goal scopes the task list to its work", async ({ page }) => {

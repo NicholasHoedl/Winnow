@@ -4,6 +4,8 @@ import {
   bucketTasks,
   reopenWouldDestroy,
   repeatLabel,
+  searchTasks,
+  sortByCompletion,
   summarizeTasks,
 } from "./service"
 
@@ -197,5 +199,94 @@ describe("reopenWouldDestroy", () => {
     expect(
       reopenWouldDestroy({ seriesId: "rule", occurrenceDate: null }, cycle),
     ).toBe(false)
+  })
+})
+
+// /activity's own search box. Deliberately NOT the ⌘K palette's search, which is a
+// server-side `ilike` across every module — this one narrows a list the page already holds
+// in memory, so it costs no round trip and can run on every keystroke.
+describe("searchTasks", () => {
+  const rows = [
+    { title: "Buy milk", notes: null },
+    { title: "Call the dentist", notes: "ask about the crown" },
+    { title: "File taxes", notes: null },
+  ]
+
+  it("matches on the title, ignoring case", () => {
+    expect(searchTasks(rows, "MILK").map((t) => t.title)).toEqual(["Buy milk"])
+  })
+
+  it("matches on the notes as well as the title", () => {
+    // The palette searches both, and a task whose detail is in its notes is exactly the one
+    // you cannot remember the title of.
+    expect(searchTasks(rows, "crown").map((t) => t.title)).toEqual([
+      "Call the dentist",
+    ])
+  })
+
+  it("matches a substring, not just a prefix", () => {
+    expect(searchTasks(rows, "ent").map((t) => t.title)).toEqual([
+      "Call the dentist",
+    ])
+  })
+
+  it("returns everything for an empty or whitespace-only query", () => {
+    expect(searchTasks(rows, "")).toEqual(rows)
+    expect(searchTasks(rows, "   ")).toEqual(rows)
+  })
+
+  it("trims the query before matching", () => {
+    expect(searchTasks(rows, "  milk  ").map((t) => t.title)).toEqual([
+      "Buy milk",
+    ])
+  })
+
+  it("survives a null notes without matching on it", () => {
+    expect(searchTasks(rows, "null")).toEqual([])
+  })
+
+  it("preserves input order", () => {
+    // Same contract as `bucketTasks`: the query's ORDER BY carries the manual drag order,
+    // so re-sorting here would silently undo one.
+    expect(searchTasks(rows, "l").map((t) => t.title)).toEqual([
+      "Buy milk",
+      "Call the dentist",
+      "File taxes",
+    ])
+  })
+})
+
+describe("sortByCompletion", () => {
+  const older = {
+    title: "older",
+    completedAt: new Date("2026-07-19T10:00:00Z"),
+  }
+  const newer = {
+    title: "newer",
+    completedAt: new Date("2026-07-21T10:00:00Z"),
+  }
+  const never = { title: "never", completedAt: null }
+
+  it("puts the most recently completed first", () => {
+    expect(sortByCompletion([older, newer]).map((t) => t.title)).toEqual([
+      "newer",
+      "older",
+    ])
+  })
+
+  // `completed_at` is nullable, so a row finished before the column was written has no
+  // instant to sort by. Bottom is the honest place for it, not the top.
+  it("sends a row with no completion time to the end", () => {
+    expect(sortByCompletion([never, older, newer]).map((t) => t.title)).toEqual(
+      ["newer", "older", "never"],
+    )
+  })
+
+  it("does not mutate its input", () => {
+    // It is handed a React prop-derived array; sorting in place would be a side effect on
+    // data the caller still holds.
+    const input = [older, newer]
+    sortByCompletion(input)
+    expect(input.map((t) => t.title)).toEqual(["older", "newer"])
   })
 })

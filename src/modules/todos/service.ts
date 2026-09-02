@@ -127,3 +127,67 @@ export function reopenWouldDestroy(
   if (!task.seriesId || !task.occurrenceDate) return false
   return cycle === null || cycle.occurrenceDate !== task.occurrenceDate
 }
+
+/** The fields `/activity`'s search box reads off a task. */
+export type TaskSearchInput = {
+  title: string
+  notes: string | null
+}
+
+/**
+ * Narrow a task list to the rows matching a free-text query, on title or notes.
+ *
+ * **This is the page's own box, not the ⌘K palette's.** That one is a server-side `ilike`
+ * across every module in the app; this narrows a list `/activity` already holds in memory,
+ * so it costs no round trip and can run on every keystroke without a debounce.
+ *
+ * Notes are searched as well as titles because a task whose detail lives in its notes is
+ * exactly the one whose title you cannot remember — the palette made the same call.
+ *
+ * An empty or whitespace-only query returns the input UNCHANGED rather than nothing: the box
+ * is a filter that is simply off until you type in it.
+ *
+ * INPUT ORDER IS PRESERVED, for the reason `bucketTasks` preserves it — `tasks.sort_order`
+ * carries the manual drag, and re-sorting here would silently undo one.
+ */
+export function searchTasks<T extends TaskSearchInput>(
+  tasks: T[],
+  query: string,
+): T[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === "") return tasks
+  return tasks.filter(
+    (task) =>
+      task.title.toLowerCase().includes(needle) ||
+      (task.notes?.toLowerCase().includes(needle) ?? false),
+  )
+}
+
+/** The field the Completed view orders by. */
+export type TaskCompletionInput = {
+  completedAt: Date | null
+}
+
+/**
+ * Most recently completed first.
+ *
+ * `getTasks` orders by `sort_order` then due date, which is the right order for open work and
+ * a meaningless one for finished work — it put the thing you just ticked anywhere in the
+ * list. A Completed view is a history, and a history reads newest first.
+ *
+ * **Nulls sort LAST.** `completed_at` is nullable, so a row finished before that column was
+ * written has no instant to place; the bottom is the honest place for it rather than the top,
+ * which is where an ascending-null sort would put it.
+ *
+ * Copies before sorting. It is handed an array derived from a React prop, and sorting in
+ * place would be a side effect on data the caller still holds.
+ */
+export function sortByCompletion<T extends TaskCompletionInput>(
+  tasks: T[],
+): T[] {
+  return [...tasks].sort((a, b) => {
+    if (!a.completedAt) return b.completedAt ? 1 : 0
+    if (!b.completedAt) return -1
+    return b.completedAt.getTime() - a.completedAt.getTime()
+  })
+}

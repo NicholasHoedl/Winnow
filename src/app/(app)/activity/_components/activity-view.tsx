@@ -8,6 +8,7 @@ import {
   MoreVertical,
   Plus,
   Repeat,
+  Search,
   Settings2,
   X,
 } from "lucide-react"
@@ -28,11 +29,16 @@ import {
   toggleTaskStatus,
 } from "@/modules/todos/actions"
 import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
-import { bucketTasks } from "@/modules/todos/service"
+import {
+  bucketTasks,
+  searchTasks,
+  sortByCompletion,
+} from "@/modules/todos/service"
 
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useWriteGuard } from "@/components/shared/use-write-guard"
 import {
   DropdownMenu,
@@ -52,11 +58,12 @@ import { RunRoutineDialog } from "../routines/_components/run-routine-dialog"
 
 // Just a STATUS filter. "Due today" and "Overdue" were chips until T5a; the sections below
 // say the same thing without hiding everything else to do it.
-type Filter = "active" | "all"
+type Filter = "active" | "all" | "completed"
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "all", label: "All" },
+  { key: "completed", label: "Completed" },
 ]
 
 /** Rendered top to bottom. Someday last — it's the backlog, not the agenda. */
@@ -97,7 +104,12 @@ export function ActivityView({
   selectedGoalId: string | null
   timeZone: string
 }) {
-  const [filter, setFilter] = React.useState<Filter>("active")
+  // "all", not "active". The search box narrows what the FILTER has already chosen rather
+  // than reaching past it, so an Active default would have silently hidden every match you
+  // had already finished — and a search that omits the thing you searched for is worse than
+  // no search at all. Defaulting to All is what makes the narrower rule safe.
+  const [filter, setFilter] = React.useState<Filter>("all")
+  const [query, setQuery] = React.useState("")
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editingTask, setEditingTask] = React.useState<TaskWithSeries | null>(
     null,
@@ -305,15 +317,37 @@ export function ActivityView({
     ? optimisticTasks.filter((task) => task.goalId === activeGoal.id)
     : optimisticTasks
 
+  // Applied BEFORE the open/done split, which is exactly what makes the box narrow whatever
+  // the filter has already chosen instead of reaching past it.
+  const matched = searchTasks(scopedTasks, query)
+
   // `bucketTasks` drops completed tasks, so the "All" filter keeps its own flat list —
   // a Done task has no date section it belongs in.
-  const openTasks = scopedTasks.filter((task) => task.status === "open")
+  const openTasks = matched.filter((task) => task.status === "open")
   const buckets = bucketTasks(openTasks, new Date(), timeZone)
-  const done = scopedTasks.filter((task) => task.status === "done")
+  // Newest first: `getTasks` orders by sort_order then due date, which says nothing useful
+  // about finished work and scattered the thing you just ticked through the list.
+  const done = sortByCompletion(
+    matched.filter((task) => task.status === "done"),
+  )
   const isEmpty =
-    filter === "all" ? scopedTasks.length === 0 : openTasks.length === 0
+    filter === "active"
+      ? openTasks.length === 0
+      : filter === "completed"
+        ? done.length === 0
+        : matched.length === 0
 
   function emptyMessage(): string {
+    // A search that matched nothing is its own case. The messages below explain where a
+    // captured task lands, which is not what you want to read when you typed a word and got
+    // nothing back — and under Active it would tell you to switch to All, which is wrong
+    // advice when the reason is the query rather than the filter.
+    if (query.trim()) return "No tasks match that search."
+    if (filter === "completed") {
+      return activeGoal
+        ? `Nothing completed for ${activeGoal.title} yet.`
+        : "Nothing completed yet. Tick something off and it will show up here."
+    }
     if (activeGoal) {
       return filter === "active" && done.length > 0
         ? `Nothing active for ${activeGoal.title}. Switch to All to see what you've finished.`
@@ -405,6 +439,30 @@ export function ActivityView({
             />
           </div>
 
+          {/* Its own row rather than squeezed into the toolbar below. That row already wraps
+              hard on a phone — three status buttons, the goal menu, and a clear control —
+              and an input wide enough to type a task title into would push it to a third
+              line. Full width here costs one row and fights nothing.
+
+              Not the ⌘K palette, which searches every module server-side. This filters a
+              list the page already holds, so there is no round trip and no debounce. */}
+          <div className="relative mb-3">
+            <Search
+              aria-hidden
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
+            />
+            <Input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search tasks"
+              // The placeholder is not a label — it disappears the moment you type, and it
+              // is the only thing naming this control.
+              aria-label="Search tasks"
+              className="h-9 pl-8"
+            />
+          </div>
+
           <div className="mb-4 flex flex-wrap items-center gap-1">
             {FILTERS.map((item) => (
               <Button
@@ -491,6 +549,9 @@ export function ActivityView({
             ) : (
               <>
                 {SECTIONS.map((section) => {
+                  // Completed shows finished work and nothing else; the date sections are
+                  // built from open tasks only.
+                  if (filter === "completed") return null
                   const rows = applyPending(buckets[section.key])
                   if (rows.length === 0) return null
                   return (
@@ -526,7 +587,7 @@ export function ActivityView({
                   )
                 })}
 
-                {filter === "all" && done.length > 0 && (
+                {filter !== "active" && done.length > 0 && (
                   <section>
                     <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
                       Done

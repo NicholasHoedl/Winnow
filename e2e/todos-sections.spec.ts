@@ -104,7 +104,11 @@ test("a completed task leaves the date sections for Done", async ({ page }) => {
   await expect(row()).toHaveCount(1)
 
   await row().getByLabel("Mark as done").click()
-  // "Active" hides it entirely; a done task has no date section it belongs in.
+
+  // The filter defaults to All now, so ticking a task does not remove it from the page — it
+  // moves to Done. Switch to Active to assert what this test is actually about: a done task
+  // has no date section it belongs in.
+  await page.getByRole("button", { name: "Active", exact: true }).click()
   await expect(row()).toHaveCount(0)
 
   await page.getByRole("button", { name: "All", exact: true }).click()
