@@ -36,12 +36,51 @@ import type { Page, Response } from "./_test"
  * to the page's own route, so a method-and-path predicate would also match a form post or a
  * navigation and resolve on the wrong thing.
  */
-export function serverWrite(page: Page): Promise<Response> {
-  return page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      "next-action" in response.request().headers(),
-  )
+/**
+ * Narrows a wait to the write you actually triggered.
+ *
+ * A POST carrying a `next-action` header identifies "some Server Action", not "mine" — and
+ * the gap between those two is a real bug, caught in a trace rather than reasoned about.
+ * `DigestBanner` calls `getDigest()` from an effect on the first `(app)` page a test opens,
+ * so `serverWrites(page, 3)` counted the digest as one of its three, resolved after only two
+ * `createTask` responses had landed, and let the `page.goto` that followed abort the third.
+ * The guard against lost writes was itself defeated by an unrelated write.
+ *
+ * Server Action arguments are JSON in the POST body, so a matcher over that body is enough
+ * to tell `createTask("…my title…")` from a zero-argument `getDigest()` whose body is `[]`.
+ */
+export type WriteMatcher = (body: string) => boolean
+
+function isServerWrite(response: Response, match?: WriteMatcher): boolean {
+  const request = response.request()
+  if (request.method() !== "POST") return false
+  if (!("next-action" in request.headers())) return false
+  // Undefined body is not a match when a matcher was supplied: an action whose arguments
+  // cannot be read is exactly the one we cannot claim is ours.
+  if (!match) return true
+  return match(request.postData() ?? "")
+}
+
+/**
+ * Rejects a zero-argument action, which is the general form of "not the write I triggered".
+ *
+ * Server Action arguments are a JSON array in the POST body — a call with arguments posts
+ * `[{"title":"…"}]`, and a call with none posts `[]`. `getDigest()` is the only action in
+ * this app that fires unbidden (from `DigestBanner`'s effect, on the first (app) page a test
+ * opens) and it takes no arguments, so this separates it from every deliberate write.
+ *
+ * Prefer matching your own payload where you can — `todos.spec.ts` matches its title. This
+ * exists for the bursts, whose entries are TRANSFORMED before they reach the action:
+ * quick-capture strips "tomorrow" out of the title, budget parses an amount out, meals
+ * parses macros out. Matching on the raw entry there looks right and silently never fires.
+ */
+export const withArguments: WriteMatcher = (body) => body.trim() !== "[]"
+
+export function serverWrite(
+  page: Page,
+  match?: WriteMatcher,
+): Promise<Response> {
+  return page.waitForResponse((response) => isServerWrite(response, match))
 }
 
 /**
@@ -60,6 +99,7 @@ export function serverWrite(page: Page): Promise<Response> {
 export function serverWrites(
   page: Page,
   count: number,
+  match?: WriteMatcher,
   timeoutMs = 30_000,
 ): Promise<void> {
   if (count <= 0) return Promise.resolve()
@@ -74,9 +114,7 @@ export function serverWrites(
       )
     }, timeoutMs)
     function onResponse(response: import("./_test").Response) {
-      const request = response.request()
-      if (request.method() !== "POST") return
-      if (!("next-action" in request.headers())) return
+      if (!isServerWrite(response, match)) return
       if (++seen < count) return
       clearTimeout(timer)
       page.off("response", onResponse)

@@ -1,7 +1,7 @@
 import { test, expect, type Locator } from "./_test"
 
 import { visibleCard } from "./_card"
-import { serverWrites } from "./_server-write"
+import { serverWrites, withArguments } from "./_server-write"
 
 /**
  * Regression coverage for the rapid-capture defect: every text quick-add in the app used
@@ -29,7 +29,13 @@ async function burst(input: Locator, entries: string[]) {
 
   // Armed BEFORE the first Enter, awaited after the last. The burst puts every write in
   // flight at once, so this counts them rather than waiting for one.
-  const written = serverWrites(input.page(), entries.length)
+  // Counting bare Server Actions let `DigestBanner`'s `getDigest()` take one of these slots,
+  // so this resolved one write early and the navigation that follows aborted the last entry
+  // — the exact loss this helper exists to prevent, proved from a trace rather than argued.
+  //
+  // `withArguments` rather than a match on the entry text: three of these four bars TRANSFORM
+  // what you type before it reaches the action, so matching the raw entry never fires.
+  const written = serverWrites(input.page(), entries.length, withArguments)
 
   for (const entry of entries) {
     await input.fill(entry)
