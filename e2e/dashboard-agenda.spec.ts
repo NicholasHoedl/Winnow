@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
+import { serverWrite } from "./_server-write"
 
 // Browser coverage for the dashboard's Slate: it renders the merged list and its tasks
 // stay actionable there.
@@ -185,4 +186,50 @@ test("routine tasks are grouped in the agenda, and are draggable", async ({
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await page.getByRole("button", { name: "Delete", exact: true }).click()
   await expect(visibleCard(page, routine)).toHaveCount(0)
+})
+
+// The sibling test above completes a task and asserts the row flips. It could pass on the
+// OPTIMISTIC paint alone, which is why it never caught this: the row flipped, then the
+// revalidation dropped it, because `buildSlate` filtered out anything not `open`. Reported
+// from real use as "completing a task removes it from the dashboard".
+//
+// So this one reloads. A task ticked today stays on the board, struck through, until
+// midnight — `onBoard` in `(app)/_lib/agenda.ts` is the rule, and its unit tests cover the
+// day boundary. What only a browser can prove is that the row survives the round trip.
+test("a task completed on the dashboard is still there after a reload", async ({
+  page,
+}) => {
+  const title = `E2E stays ${Date.now()}`
+
+  // The dialog prefills today's date; quick-add captures into Someday instead.
+  await page.goto("/activity")
+  await page.getByRole("button", { name: "New task" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(title)
+  await dialog.getByRole("button", { name: "Create" }).click()
+  await expect(visibleCard(page, title)).toBeVisible()
+
+  await page.goto("/")
+  const slate = page.getByRole("region", { name: "Slate" })
+
+  // Armed BEFORE the click. `toggleTaskStatus` runs in a transition and the row strikes
+  // through synchronously, so asserting on the paint alone would be satisfied while the
+  // write was still in flight — and the reload below would abort it. See `_server-write.ts`,
+  // where four flakes came from exactly that shape.
+  const written = serverWrite(page)
+  await slate.getByLabel(`Complete ${title}`).click()
+  await expect(slate.getByLabel(`Reopen ${title}`)).toBeVisible()
+  await written
+
+  // The regression itself: this used to come back empty-handed.
+  await page.reload()
+  await expect(slate.getByLabel(`Reopen ${title}`)).toBeVisible()
+
+  // Cleanup needs the All filter — the task is done, so Active no longer lists it.
+  await page.goto("/activity")
+  await page.getByRole("button", { name: "All", exact: true }).click()
+  const row = visibleCard(page, title)
+  await row.getByRole("button", { name: "Task actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(visibleCard(page, title)).toHaveCount(0)
 })

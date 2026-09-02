@@ -11,6 +11,30 @@ export type AgendaTask = {
   status: "open" | "done"
   /** Set when a routine run created this task — see `tasks.routine_id`. */
   routineId?: string | null
+  /**
+   * When it was ticked — see `tasks.completed_at`. Nullable, so a row finished before that
+   * column existed carries no instant to judge and reads as old work rather than today's.
+   */
+  completedAt?: Date | null
+}
+
+/**
+ * Whether a task still belongs on the board.
+ *
+ * Open work always does. Completed work does for the REST OF THE DAY it was ticked, so a row
+ * you just checked goes struck-through in place instead of vanishing under the tap — and an
+ * accidental tick stays visibly undoable until midnight.
+ *
+ * **Bounded by `completedAt`, not by status alone, and that is the load-bearing part.**
+ * `getTasks` applies no status filter in SQL — the three call sites below are the only thing
+ * that has ever excluded done work — so admitting every completed task here would drop every
+ * task ever finished late into Overdue, permanently. Judged in the caller's zone for the same
+ * reason `dueStatus` is: 02:00Z is still the previous day in Chicago.
+ */
+function onBoard(task: AgendaTask, today: string, timeZone: string): boolean {
+  if (task.status === "open") return true
+  if (!task.completedAt) return false
+  return todayInZone(task.completedAt, timeZone) === today
 }
 
 /** An expanded calendar occurrence. `time` is "HH:MM" local, or null for all-day. */
@@ -72,9 +96,10 @@ export function buildTodayAgenda<
   // appears rather than in an arbitrary or alphabetical one. The name is carried in the
   // bucket so the map lookup happens once per task and never needs re-asserting later.
   const grouped = new Map<string, AgendaGroup<T>>()
+  const today = todayInZone(now, timeZone)
 
   for (const task of tasks) {
-    if (task.status !== "open") continue
+    if (!onBoard(task, today, timeZone)) continue
     const status = dueStatus(task.dueDate, now, timeZone)
     if (status === "overdue") {
       overdue.push(task)
@@ -215,8 +240,12 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   const lastDate = dates[dates.length - 1]
 
   const onDay = (date: string) => occurrences.filter((o) => o.date === date)
-  const dueOn = (date: string) =>
-    tasks.filter((task) => task.status === "open" && task.dueDate === date)
+  // Filtered ONCE, not inside each band's helper. `getTasks` is bounded only by `userId`,
+  // so this array holds every task the account has ever completed and that set only grows —
+  // and `onBoard` costs an `Intl.DateTimeFormat` per done row. Filtering per band re-paid
+  // that for every day in the horizon, and again for `later`.
+  const board = tasks.filter((task) => onBoard(task, today, timeZone))
+  const dueOn = (date: string) => board.filter((task) => task.dueDate === date)
 
   const agenda = buildTodayAgenda(
     tasks,
@@ -262,10 +291,8 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   // Everything still on the list that no band above claimed: dated past the horizon, or
   // never dated at all. `dueDate > lastDate` is a plain string compare, which is sound for
   // ISO dates and is how `dueStatus` does it too.
-  const later = tasks.filter(
-    (task) =>
-      task.status === "open" &&
-      (task.dueDate === null || task.dueDate > lastDate),
+  const later = board.filter(
+    (task) => task.dueDate === null || task.dueDate > lastDate,
   )
   if (later.length > 0) {
     bands.push({

@@ -4,6 +4,10 @@ import { buildSlate, buildTodayAgenda, type AgendaItem } from "./agenda"
 
 const TZ = "America/Chicago"
 const now = new Date("2026-07-21T12:00:00Z") // Chicago today = 2026-07-21
+// Two instants either side of the Chicago day boundary, for `completedAt`. Both are the
+// same wall-day in Chicago as their names say — which is the only thing that matters here.
+const earlierToday = new Date("2026-07-21T15:00:00Z") // 10:00 on the 21st
+const yesterday = new Date("2026-07-20T15:00:00Z") // 10:00 on the 20th
 
 // Terse builders so the tables below stay readable. The extra `label` proves the
 // generics hand the caller's own richer objects back.
@@ -11,8 +15,9 @@ function task(
   dueDate: string | null,
   status: "open" | "done" = "open",
   label = `task ${dueDate}`,
+  completedAt: Date | null = null,
 ) {
-  return { dueDate, status, label }
+  return { dueDate, status, label, completedAt }
 }
 function occ(time: string | null, label = `event ${time ?? "all-day"}`) {
   return { time, label }
@@ -60,11 +65,11 @@ describe("buildTodayAgenda", () => {
     expect(shape(items)).toEqual(["task:today"])
   })
 
-  it("ignores done, upcoming, and undated tasks", () => {
+  it("ignores upcoming, undated, and tasks completed before today", () => {
     const { overdue, items } = buildTodayAgenda(
       [
-        task("2026-07-19", "done", "done overdue"),
-        task("2026-07-21", "done", "done today"),
+        task("2026-07-19", "done", "overdue, ticked yesterday", yesterday),
+        task("2026-07-21", "done", "due today, ticked yesterday", yesterday),
         task("2026-07-25", "open", "upcoming"),
         task(null, "open", "someday"),
       ],
@@ -220,6 +225,92 @@ describe("buildTodayAgenda — routine groups", () => {
   })
 })
 
+// A task you tick stays on the board for the rest of the day, struck through, instead of
+// vanishing under the tap. `completed_at` is what bounds that: status alone would leave
+// every task ever finished late sitting in Overdue for good, since `getTasks` applies no
+// status filter of its own and these three call sites are the only thing excluding done work.
+describe("buildTodayAgenda — tasks completed today", () => {
+  it("keeps a task completed today in today's items", () => {
+    const { items } = buildTodayAgenda(
+      [task("2026-07-21", "done", "water plants", earlierToday)],
+      [],
+      now,
+      TZ,
+    )
+    expect(shape(items)).toEqual(["task:water plants"])
+  })
+
+  // Deliberate: ticking an overdue task must not make the row jump into Today under the
+  // finger that just tapped it. It goes struck-through where it already was.
+  it("keeps an overdue task completed today in the overdue block", () => {
+    const { overdue, items } = buildTodayAgenda(
+      [task("2026-07-19", "done", "old", earlierToday)],
+      [],
+      now,
+      TZ,
+    )
+    expect(overdue.map((t) => t.label)).toEqual(["old"])
+    expect(items).toEqual([])
+  })
+
+  it("drops a task completed on an earlier day", () => {
+    const { overdue, items } = buildTodayAgenda(
+      [task("2026-07-21", "done", "yesterday's win", yesterday)],
+      [],
+      now,
+      TZ,
+    )
+    expect(overdue).toEqual([])
+    expect(items).toEqual([])
+  })
+
+  // The column is nullable, so a row completed before it was written has no instant to
+  // judge. Treated as old work rather than as today's.
+  it("drops a done task carrying no completion time at all", () => {
+    const { items } = buildTodayAgenda(
+      [task("2026-07-21", "done", "no stamp", null)],
+      [],
+      now,
+      TZ,
+    )
+    expect(items).toEqual([])
+  })
+
+  it("judges the completion against the configured zone, not UTC", () => {
+    // 02:00Z on the 21st is 21:00 on the 20th in Chicago — yesterday's work, though UTC
+    // calls it today. The same hazard `dueStatus` is careful about, one field over.
+    const justAfterUtcMidnight = new Date("2026-07-21T02:00:00Z")
+    const tasks = [task("2026-07-21", "done", "late tick", justAfterUtcMidnight)]
+
+    expect(buildTodayAgenda(tasks, [], now, TZ).items).toEqual([])
+    expect(shape(buildTodayAgenda(tasks, [], now, "UTC").items)).toEqual([
+      "task:late tick",
+    ])
+  })
+
+  it("keeps a completed routine step in its block and out of the flat list", () => {
+    const MORNING = "11111111-1111-4111-8111-111111111111"
+    const { groups, items } = buildTodayAgenda(
+      [
+        {
+          dueDate: "2026-07-21",
+          status: "done" as const,
+          routineId: MORNING,
+          completedAt: earlierToday,
+          label: "make bed",
+        },
+      ],
+      [],
+      now,
+      TZ,
+      new Map([[MORNING, "Morning routine"]]),
+    )
+    // In the group and NOT also loose — the one-band invariant T16 exists to protect.
+    expect(groups[0].tasks.map((t) => t.label)).toEqual(["make bed"])
+    expect(items).toEqual([])
+  })
+})
+
 // --- Slate -----------------------------------------------------------------------------
 
 // Chicago today = 2026-07-21 (Tue). Tomorrow 07-22, +2 07-23 (Thu), +7 07-28.
@@ -354,17 +445,48 @@ describe("buildSlate", () => {
     expect(slate.bands.flatMap((b) => shape(b.items))).toEqual(["task:today"])
   })
 
-  it("ignores done tasks everywhere", () => {
+  it("ignores tasks completed before today, in every band", () => {
     const slate = buildSlate(
       [
-        task("2026-07-23", "done", "done-soon"),
-        task("2026-09-12", "done", "done-later"),
+        task("2026-07-19", "done", "old", yesterday),
+        task("2026-07-21", "done", "today", yesterday),
+        task("2026-07-23", "done", "done-soon", yesterday),
+        task("2026-09-12", "done", "done-later", yesterday),
+        task(null, "done", "someday", yesterday),
       ],
       [],
       now,
       TZ,
       7,
     )
+    expect(slate.overdue).toEqual([])
     expect(bandLabels(slate)).toEqual(["Today"])
+    expect(slate.bands[0].items).toEqual([])
+  })
+
+  // Ticked ahead of time from /activity: it stays where its due date puts it rather than
+  // moving to the day it was done. The band is a statement about the deadline.
+  it("keeps a task completed today in its future band", () => {
+    const slate = buildSlate(
+      [task("2026-07-22", "done", "packed bag", earlierToday)],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Tomorrow"])
+    expect(shape(slate.bands[1].items)).toEqual(["task:packed bag"])
+  })
+
+  it("keeps an undated task completed today in Later", () => {
+    const slate = buildSlate(
+      [task(null, "done", "someday, done", earlierToday)],
+      [],
+      now,
+      TZ,
+      7,
+    )
+    expect(bandLabels(slate)).toEqual(["Today", "Later"])
+    expect(shape(slate.bands[1].items)).toEqual(["task:someday, done"])
   })
 })
