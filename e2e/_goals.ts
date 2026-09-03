@@ -1,7 +1,36 @@
 import { expect, type Page } from "@playwright/test"
 
 import { goalCard } from "./_card"
-import { withTestDb } from "./_test-db"
+import { seedUserId, withTestDb } from "./_test-db"
+
+/**
+ * Create a goal straight in the database, and hand back its id.
+ *
+ * The mirror of `deleteGoalsMatching` below, and it follows the same rule from the other
+ * end: **a goal that IS the thing under test is made through the dialog; a goal that is
+ * merely a precondition is made here.** `addGoal` stays for the specs that mean to exercise
+ * the form — `goals-order`, `goals-progress`, `review` and `task-links` all still do.
+ *
+ * The saving is not the insert against the dialog, it is the NAVIGATION around it: every
+ * dialog-driven fixture costs a `goto` to the page that owns the button, and the page it
+ * lands on is rarely the page the assertions are about.
+ */
+export async function seedGoal(fields: {
+  title: string
+  targetDate?: string | null
+  notes?: string | null
+}): Promise<string> {
+  return withTestDb(async (client) => {
+    const userId = await seedUserId(client)
+    const { rows } = await client.query<{ id: string }>(
+      `insert into goals (user_id, title, target_date, notes)
+       values ($1, $2, $3, $4)
+       returning id`,
+      [userId, fields.title, fields.targetDate ?? null, fields.notes ?? null],
+    )
+    return rows[0].id
+  })
+}
 
 /**
  * Creating, opening and deleting a goal on `/goals`.

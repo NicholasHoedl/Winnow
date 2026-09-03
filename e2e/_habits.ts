@@ -1,6 +1,59 @@
 import { type Locator } from "@playwright/test"
 
-import { withTestDb } from "./_test-db"
+import { seedUserId, withTestDb } from "./_test-db"
+
+/**
+ * Create a habit straight in the database, and hand back its id.
+ *
+ * **The defaults mirror the DIALOG's, not the schema's** — "3 a week", where the column
+ * default for `target_count` is 1. That is deliberate: these fixtures replace
+ * `addHabit(page, title)`, whose canonical case is three-a-week, and every assertion that
+ * reads a meter is written against that number. A helper defaulting to the column would
+ * silently retune those without touching them.
+ *
+ * `unit` + `targetAmount` make the measured variant ("20 words a day"). They were unwritable
+ * until T19; they are ordinary columns now.
+ */
+export async function seedHabit(fields: {
+  title: string
+  period?: "day" | "week" | "month"
+  targetCount?: number
+  goalId?: string | null
+  unit?: string | null
+  targetAmount?: number | null
+  startDate?: string
+}): Promise<string> {
+  return withTestDb(async (client) => {
+    const userId = await seedUserId(client)
+    const { rows } = await client.query<{ id: string }>(
+      `insert into habits
+         (user_id, title, period, target_count, goal_id, unit, target_amount,
+          start_date)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning id`,
+      [
+        userId,
+        fields.title,
+        fields.period ?? "week",
+        fields.targetCount ?? 3,
+        fields.goalId ?? null,
+        fields.unit ?? null,
+        fields.targetAmount ?? null,
+        // `start_date` is NOT NULL with no default — a habit that failed to say when it
+        // began is a bug, the same reasoning `period` carries. Today, which is what the
+        // dialog writes for a new habit, so a seeded one has no prior periods to drag a
+        // streak down.
+        //
+        // **en-CA gives YYYY-MM-DD in LOCAL time, and local is the point.** `toISOString`
+        // would give the UTC date, which after 18:00 in Chicago is already tomorrow — and a
+        // habit that starts tomorrow does not count a session logged today, which would
+        // surface as a meter reading zero for a log the test just made.
+        fields.startDate ?? new Date().toLocaleDateString("en-CA"),
+      ],
+    )
+    return rows[0].id
+  })
+}
 
 /**
  * Reading a habit's quota off its meter.

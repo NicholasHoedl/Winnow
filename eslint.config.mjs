@@ -14,6 +14,12 @@ const eslintConfig = defineConfig([
     // to ignore it — and it is a separate line because `.next/**` is anchored and does not
     // match a differently named sibling.
     ".next-e2e/**",
+    // And the PRODUCTION suite's, which is a real `next build` rather than a dev server —
+    // `playwright.prod.config.ts` sets `NEXT_DIST_DIR` to this so the build cannot overwrite
+    // the dev server's cache. It was missing here, so a single `pnpm test:e2e:prod` left
+    // `pnpm lint` red on generated Turbopack chunks until someone deleted the directory by
+    // hand. Exactly the failure the `.claude/**` note below describes, one directory over.
+    ".next-e2e-prod/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

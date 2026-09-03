@@ -1,6 +1,9 @@
 import { test, expect, type Page } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
+import { deleteGoalsMatching, seedGoal } from "./_goals"
+import { deleteHabitsMatching, seedHabit } from "./_habits"
+import { deleteTasksMatching, seedTask } from "./_tasks"
 
 /**
  * Browser coverage for goal momentum: the reading that says whether a goal is still being
@@ -18,26 +21,30 @@ import { goalCard, visibleCard } from "./_card"
  * in it lives in the detail dialog, which is where you go when the badge makes you ask why.
  */
 
-async function createGoal(page: Page, title: string) {
-  await page.goto("/goals")
-  await page.getByRole("button", { name: "New goal" }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(goalCard(page, title)).toBeVisible()
-}
+/**
+ * Every fixture below is seeded, and every stray is swept, in SQL.
+ *
+ * What this file TESTS is the momentum reading — stalled versus moving, and the window the
+ * copy names. A goal, a linked task and a habit are the preconditions for reading it, and
+ * building each through its dialog cost a navigation to the page that owns the button plus
+ * a form, none of it on the page the assertion lands on. The dialogs keep their coverage
+ * elsewhere: `goals-order`, `goals-progress`, `review` and `task-links` create goals through
+ * the form, `activity` and `command-palette` create habits through it.
+ *
+ * What stays in the browser is everything the reading depends on: ticking the task off,
+ * logging the habit from the strip, and changing the window in Settings.
+ */
+const SWEEP = ["E2E momentum", "E2E untracked", "E2E window"]
 
-async function createLinkedTask(page: Page, title: string, goalTitle: string) {
-  await page.goto("/activity")
-  await page.getByRole("button", { name: "New task" }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title").fill(title)
-  await dialog.getByLabel("Goal").click()
-  await page.getByRole("option", { name: goalTitle }).click()
-  await dialog.getByRole("button", { name: "Create" }).click()
-  // The dialog closes only once the action resolved; navigating sooner races the write.
-  await expect(dialog).toBeHidden()
-}
+test.afterEach(async () => {
+  for (const fragment of SWEEP) {
+    // Tasks and habits before goals only for tidiness; each matches on its own title, so
+    // unlike the UI version there is no detach-then-orphan ordering to get wrong.
+    await deleteTasksMatching(fragment)
+    await deleteHabitsMatching(fragment)
+    await deleteGoalsMatching(fragment)
+  }
+})
 
 async function openDetail(page: Page, title: string) {
   await goalCard(page, title)
@@ -46,30 +53,13 @@ async function openDetail(page: Page, title: string) {
   await expect(page.getByRole("dialog")).toBeVisible()
 }
 
-async function deleteGoal(page: Page, title: string) {
-  await page.goto("/goals")
-  await openDetail(page, title)
-  await page.getByRole("button", { name: "Delete", exact: true }).click()
-  await page.getByRole("button", { name: "Delete goal" }).click()
-  await expect(goalCard(page, title)).toHaveCount(0)
-}
-
-async function deleteTask(page: Page, title: string) {
-  await page.goto("/activity")
-  await page.getByRole("button", { name: "All", exact: true }).click()
-  const row = visibleCard(page, title)
-  await row.getByRole("button", { name: "Task actions" }).click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
-  await expect(visibleCard(page, title)).toHaveCount(0)
-}
-
 test("finishing a linked task moves a stalled goal", async ({ page }) => {
   const stamp = Date.now()
   const goalTitle = `E2E momentum ${stamp}`
   const taskTitle = `E2E momentum task ${stamp}`
 
-  await createGoal(page, goalTitle)
-  await createLinkedTask(page, taskTitle, goalTitle)
+  const goalId = await seedGoal({ title: goalTitle })
+  await seedTask({ title: taskTitle, goalId })
 
   await page.goto("/goals")
   const card = goalCard(page, goalTitle)
@@ -106,9 +96,6 @@ test("finishing a linked task moves a stalled goal", async ({ page }) => {
   // The work also lands in the week's review, in the Goals card rather than only in Tasks.
   await page.goto("/review")
   await expect(page.getByText(`${taskTitle} · ${goalTitle}`)).toBeVisible()
-
-  await deleteGoal(page, goalTitle)
-  await deleteTask(page, taskTitle)
 })
 
 /**
@@ -125,16 +112,10 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
   const goalTitle = `E2E momentum habit ${stamp}`
   const habitTitle = `E2E momentum practice ${stamp}`
 
-  await createGoal(page, goalTitle)
-
-  await page.goto("/activity/habits")
-  await page.getByRole("button", { name: "New habit", exact: true }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title", { exact: true }).fill(habitTitle)
-  await dialog.getByLabel("Goal", { exact: true }).click()
-  await page.getByRole("option", { name: goalTitle, exact: true }).click()
-  await dialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(visibleCard(page, habitTitle)).toHaveCount(1)
+  const goalId = await seedGoal({ title: goalTitle })
+  // Three-a-week, matching what the dialog's defaults produced — the caption the strip
+  // shows ("this week") is read further down, so the cadence is load-bearing here.
+  await seedHabit({ title: habitTitle, goalId })
 
   // Attached but never logged. "Stalled" is the honest reading here — the goal is now
   // measurable, and nothing has been done. Before T12b it was not measurable at all.
@@ -175,16 +156,6 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
     page.getByRole("dialog").getByText(/1 finished in the last 14 days/),
   ).toBeVisible()
   await page.keyboard.press("Escape")
-
-  // The habit goes first: it holds the goal link, and deleting the goal would only null it.
-  await page.goto("/activity/habits")
-  await visibleCard(page, habitTitle)
-    .getByRole("button", { name: `${habitTitle} actions` })
-    .click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
-  await page.getByRole("button", { name: "Delete habit", exact: true }).click()
-  await expect(visibleCard(page, habitTitle)).toHaveCount(0)
-  await deleteGoal(page, goalTitle)
 })
 
 test("a goal with nothing to track gets no momentum reading at all", async ({
@@ -194,23 +165,22 @@ test("a goal with nothing to track gets no momentum reading at all", async ({
   // place with no history, so there is genuinely nothing to measure — and a stalled badge
   // here would be a lie about a goal that might have been updated an hour ago.
   const goalTitle = `E2E untracked ${Date.now()}`
-  await createGoal(page, goalTitle)
+  await seedGoal({ title: goalTitle })
 
+  await page.goto("/goals")
   await expect(goalCard(page, goalTitle).getByText("Stalled")).toHaveCount(0)
   await openDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText("No milestones or target yet.")).toBeVisible()
   await expect(detail.getByText(/finished in the last/)).toHaveCount(0)
   await page.keyboard.press("Escape")
-
-  await deleteGoal(page, goalTitle)
 })
 
 test("the momentum window follows the setting", async ({ page }) => {
   const goalTitle = `E2E window ${Date.now()}`
   const taskTitle = `E2E window task ${Date.now()}`
-  await createGoal(page, goalTitle)
-  await createLinkedTask(page, taskTitle, goalTitle)
+  const goalId = await seedGoal({ title: goalTitle })
+  await seedTask({ title: taskTitle, goalId })
 
   // Scoped to the control's own group, not the page. Two segmented controls in this form
   // offer "1 week" and "2 weeks" — this one and the Slate horizon — so an unscoped lookup
@@ -237,7 +207,4 @@ test("the momentum window follows the setting", async ({ page }) => {
   await window.getByRole("button", { name: "2 weeks" }).click()
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
-
-  await deleteGoal(page, goalTitle)
-  await deleteTask(page, taskTitle)
 })

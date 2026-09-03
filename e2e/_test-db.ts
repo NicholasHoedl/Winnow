@@ -81,6 +81,25 @@ export function assertSafeToDestroy(): void {
  * pool would be a lifecycle to manage — one that Playwright's worker teardown gives no
  * obvious place to close.
  */
+/**
+ * The single seeded account's id, which every seeded row needs.
+ *
+ * `global-setup` truncates and re-seeds before every run, so there is exactly one row here
+ * and it is a different uuid each time — which is why this is a lookup rather than a
+ * constant anyone could paste into a fixture and have quietly rot.
+ */
+export async function seedUserId(client: Client): Promise<string> {
+  const { rows } = await client.query<{ id: string }>(
+    "select id from users order by created_at limit 1",
+  )
+  if (rows.length === 0) {
+    throw new Error(
+      "No account in the test database. `global-setup.ts` seeds one — did it run?",
+    )
+  }
+  return rows[0].id
+}
+
 export async function withTestDb<T>(
   fn: (client: Client) => Promise<T>,
 ): Promise<T> {

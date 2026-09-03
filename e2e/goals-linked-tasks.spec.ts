@@ -1,7 +1,9 @@
 import { test, expect } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
+import { deleteGoalsMatching, seedGoal } from "./_goals"
 import { serverWrite } from "./_server-write"
+import { deleteTasksMatching, seedTask } from "./_tasks"
 
 // Browser coverage for a goal's relationship to its tasks (T2, T5a-S11, reshaped by T10).
 //
@@ -30,36 +32,16 @@ const OTHER = `E2E link unrelated ${STAMP}`
  */
 const card = (page: import("@playwright/test").Page) => goalCard(page, GOAL)
 
-test.afterEach(async ({ page }) => {
-  // Tasks first: deleting the goal only detaches them (goal_id ON DELETE SET NULL).
-  await page.goto("/activity")
-  await page.getByRole("button", { name: "All", exact: true }).click()
-  const tasks = visibleCard(page, `E2E link `)
-  for (let i = 0; i < 10; i++) {
-    const before = await tasks.count()
-    if (before === 0) break
-    await tasks.first().getByRole("button", { name: "Task actions" }).click()
-    await page.getByRole("menuitem", { name: "Delete" }).click()
-    await expect(tasks).toHaveCount(before - 1)
-    await page.reload()
-    await page.getByRole("button", { name: "All", exact: true }).click()
-  }
-  await expect(tasks).toHaveCount(0)
-
-  await page.goto("/goals")
-  const goals = goalCard(page, "E2E link goal ")
-  for (let i = 0; i < 5; i++) {
-    const before = await goals.count()
-    if (before === 0) break
-    await goals
-      .first()
-      .getByRole("button", { name: /^Open / })
-      .click()
-    await page.getByRole("button", { name: "Delete", exact: true }).click()
-    await page.getByRole("button", { name: "Delete goal" }).click()
-    await expect(goals).toHaveCount(before - 1)
-  }
-  await expect(goals).toHaveCount(0)
+test.afterEach(async () => {
+  // Both match by title, so the order no longer matters. It did when this walked the UI:
+  // deleting a goal there only DETACHES its tasks (`goal_id ON DELETE SET NULL`), so a
+  // goal-first sweep left them behind. That version cost up to ten page loads with a full
+  // reload between each delete, on a page none of the assertions below are about — and
+  // `deleteTasksMatching`/`deleteGoalsMatching` already existed; this file had simply never
+  // picked them up. Takes no `page` now, for the reason `_goals.ts` gives at length: there
+  // is no wrong page to be on.
+  await deleteTasksMatching("E2E link ")
+  await deleteGoalsMatching("E2E link goal ")
 })
 
 /**
@@ -102,39 +84,21 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
    */
   test.setTimeout(90_000)
 
-  // --- A goal to link against.
+  // --- A goal, and three tasks: two pointing at it (one long overdue) and one pointing at
+  // nothing, which is what proves the filter EXCLUDES rather than merely orders.
+  //
+  // Seeded rather than dialogued. None of this is what the test covers — the filter is —
+  // and building it through the UI cost four dialogs plus the navigation between two pages,
+  // which is most of why this was the slowest test in the suite. The dialogs keep their own
+  // coverage: `goals-order`, `goals-progress`, `review` and `task-links` create goals
+  // through the form, and `todos.spec` creates a task through it.
+  const goalId = await seedGoal({ title: GOAL })
+  await seedTask({ title: LATE, dueDate: "2020-02-01", goalId })
+  await seedTask({ title: OPEN, goalId })
+  await seedTask({ title: OTHER })
+
   await page.goto("/goals")
-  // One button at every state now — see `_goals.ts`. The rail had two ("Add a goal" at
-  // zero, a `+` labelled "Add goal" thereafter) and matching one silently required a goal
-  // to already exist.
-  await page.getByRole("button", { name: "New goal" }).click()
-  const goalDialog = page.getByRole("dialog")
-  await goalDialog.getByLabel("Title", { exact: true }).fill(GOAL)
-  await goalDialog.getByRole("button", { name: "Add", exact: true }).click()
   await expect(card(page)).toHaveCount(1)
-
-  // --- Two tasks pointing at it, one overdue; and one that points at nothing, which is
-  // what proves the filter excludes rather than merely orders. Back on `/activity`, which
-  // is where tasks are made — goals moved out in T13 and the helpers never navigate.
-  await page.goto("/activity")
-  for (const [title, due, link] of [
-    [LATE, "2020-02-01", true],
-    [OPEN, "", true],
-    [OTHER, "", false],
-  ] as const) {
-    await page.getByRole("button", { name: "New task" }).click()
-    const dialog = page.getByRole("dialog")
-    await dialog.getByLabel("Title", { exact: true }).fill(title)
-    if (due) await dialog.getByLabel("Due date").fill(due)
-    if (link) {
-      await dialog.getByLabel("Goal").click()
-      await page.getByRole("option", { name: GOAL }).click()
-    }
-    await dialog.getByRole("button", { name: "Create" }).click()
-    await expect(visibleCard(page, title)).toHaveCount(1)
-  }
-
-  await page.goto("/goals")
   await expect(card(page)).toContainText("2 open")
 
   // --- Unfiltered, all three are on the board. Back to `/activity` first: the count above

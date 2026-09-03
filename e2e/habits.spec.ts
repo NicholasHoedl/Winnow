@@ -1,6 +1,6 @@
 import { test, expect, type Locator, type Page } from "./_test"
 import { visibleCard } from "./_card"
-import { announces, meter } from "./_habits"
+import { announces, deleteHabitsMatching, meter, seedHabit } from "./_habits"
 
 /**
  * Browser coverage for T12a: a habit is a quota and a log.
@@ -22,24 +22,32 @@ const PREFIX = "E2E habit"
  * A habit, built through the dialog. Defaults are "3 × a week", which is the canonical
  * case, so only a different cadence needs arguments.
  */
+/** The dialog's wording for a cadence, in the column's terms. */
+function periodOf(
+  period?: "a day" | "a week" | "a month",
+): "day" | "week" | "month" {
+  if (period === "a day") return "day"
+  if (period === "a month") return "month"
+  return "week"
+}
+
 async function addHabit(
   page: Page,
   title: string,
   period?: "a day" | "a week" | "a month",
   target?: number,
 ) {
+  // Seeded, not dialogued. Every test in this file is about what a quota DOES as you log
+  // against it — the streak turning over, an overshoot counted honestly, an undo taking
+  // exactly its own entry — and none of them is about the form that made the habit. The
+  // dialog keeps its browser coverage in `activity.spec.ts` and `command-palette.spec.ts`,
+  // both of which create a habit through it.
+  //
+  // The signature is unchanged so every call site reads as it did, and the navigation and
+  // assertion stay: the tests below act on this page, and proving the row rendered is worth
+  // keeping whether the row arrived through a form or through SQL.
+  await seedHabit({ title, period: periodOf(period), targetCount: target })
   await page.goto("/activity/habits")
-  await page.getByRole("button", { name: "New habit", exact: true }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title", { exact: true }).fill(title)
-  if (target !== undefined) {
-    await dialog.getByLabel("How often", { exact: true }).fill(String(target))
-  }
-  if (period) {
-    await dialog.getByLabel("Period", { exact: true }).click()
-    await page.getByRole("option", { name: period, exact: true }).click()
-  }
-  await dialog.getByRole("button", { name: "Add", exact: true }).click()
   await expect(visibleCard(page, title)).toHaveCount(1)
 }
 
@@ -57,17 +65,16 @@ async function addMeasuredHabit(
   unit: string,
   period: "a day" | "a week" | "a month" = "a day",
 ) {
+  // `unit` + `targetAmount` together are what make the variant measured; `targetCount` is
+  // written but never read for one (`resolveQuota` picks the amount), which is why this
+  // still leaves it at the default rather than pretending to a number.
+  await seedHabit({
+    title,
+    period: periodOf(period),
+    unit,
+    targetAmount: amount,
+  })
   await page.goto("/activity/habits")
-  await page.getByRole("button", { name: "New habit", exact: true }).click()
-  const dialog = page.getByRole("dialog")
-  await dialog.getByLabel("Title", { exact: true }).fill(title)
-  await dialog.getByLabel("Track by", { exact: true }).click()
-  await page.getByRole("option", { name: "An amount", exact: true }).click()
-  await dialog.getByLabel("How much", { exact: true }).fill(String(amount))
-  await dialog.getByLabel("Unit", { exact: true }).fill(unit)
-  await dialog.getByLabel("Period", { exact: true }).click()
-  await page.getByRole("option", { name: period, exact: true }).click()
-  await dialog.getByRole("button", { name: "Add", exact: true }).click()
   await expect(visibleCard(page, title)).toHaveCount(1)
 }
 
@@ -98,42 +105,18 @@ async function logAmount(
  * a habit generates no tasks, so there is no rule to stop and no orphaned instances to
  * sweep. Entries cascade with the row.
  */
-test.afterEach(async ({ page }) => {
-  await page.goto("/activity/habits")
-
-  // Archived strays first. An archived row carries `data-rail` — see the header note — so
-  // `visibleCard` cannot see it, and an archived habit has no Delete menu: the only way
-  // out is back through Unarchive. Without this, a test that archives and then fails
-  // before restoring leaves a row nothing sweeps, and the next run's "0 strays" is a lie.
-  const showArchived = page.getByRole("button", { name: /^Show archived/ })
-  if (await showArchived.isVisible()) {
-    await showArchived.click()
-    const retired = page
-      .getByTestId("archived-habit")
-      .filter({ hasText: new RegExp(PREFIX) })
-    for (let i = 0; i < 10; i++) {
-      const before = await retired.count()
-      if (before === 0) break
-      await retired.first().getByRole("button", { name: "Unarchive" }).click()
-      await expect(retired).toHaveCount(before - 1)
-    }
-  }
-
-  const strays = visibleCard(page, new RegExp(PREFIX))
-  for (let i = 0; i < 10; i++) {
-    const before = await strays.count()
-    if (before === 0) break
-    await strays
-      .first()
-      .getByRole("button", { name: new RegExp(`^${PREFIX}.* actions$`) })
-      .click()
-    await page.getByRole("menuitem", { name: "Delete" }).click()
-    await page
-      .getByRole("button", { name: "Delete habit", exact: true })
-      .click()
-    await expect(strays).toHaveCount(before - 1)
-  }
-  await expect(strays).toHaveCount(0)
+/**
+ * Straight to SQL, which is simpler than the UI version AND strictly more thorough.
+ *
+ * That sweep had to unarchive before it could delete: an archived row carries `data-rail`,
+ * so `visibleCard` cannot see it, and an archived habit has no Delete menu at all — the only
+ * way out through the UI was back through Unarchive first. A `delete` does not care, so the
+ * two loops, the confirm dialog and the page they needed all go. Entries cascade with the
+ * row either way, which is the property that made the UI version safe and makes this one
+ * safe for the same reason.
+ */
+test.afterEach(async () => {
+  await deleteHabitsMatching(PREFIX)
 })
 
 test("the streak turns over at the target, not at the first log", async ({
