@@ -1,12 +1,12 @@
 # Handoff
 
-Last updated: **2026-09-02** — a documentation-only pass, which corrected the stale
-"not deployed" claims in `README.md`, `ROADMAP.md` and the deploy runbook that had outlived
-the deploy by a week. Nothing about the running stack was re-checked: §1 still describes
-2026-08-25, and the green baseline in §3 is still the one measured that day.
+Last updated: **2026-09-03**. Two features reported from real use (T22, T23), and a pass
+over the test suite that came out of asking why it was getting slower. §1 still describes
+the deploy as of 2026-08-25 and nothing about the running stack was re-checked; the green
+baseline in §3 HAS moved and is re-measured below.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T21 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T23 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -341,6 +341,52 @@ comparing the interactive elements each width actually offers rather than readin
 so it is an app-wide density choice rather than a mobile regression. It only _hurts_ on a
 phone. Worth doing on a real device rather than an emulated viewport.
 
+**T22 is shipped: a task you tick stays on the dashboard until midnight.** No migration.
+
+Reported from real use as "completing a task removes it from the dashboard", and the UI was
+never the problem — `Slate` already held optimistic state and already drew a done row struck
+through. The row flipped, then `revalidateTaskViews` refetched and three status filters in
+`(app)/_lib/agenda.ts` dropped it, so it vanished under the finger that had just tapped it.
+
+- **`onBoard` replaces those three filters**, and is bounded by `completed_at` rather than by
+  status. That is the load-bearing part: `getTasks` applies no status filter in SQL, so
+  admitting every done task would have dropped every task ever finished late into Overdue,
+  permanently. `toggleTaskStatus` has always written the column, hence no migration.
+- **A completed task stays in the band it already occupied**, so ticking an overdue one
+  leaves it in Overdue rather than hopping it into Today under your thumb. The user's call.
+- **`buildSlate` filters ONCE**, not per band — `onBoard` costs an `Intl.DateTimeFormat` per
+  done row and that array holds every task the account has ever completed.
+- The empty state changed as a consequence: a fully-completed day now shows the struck-through
+  list rather than "Nothing due and nothing scheduled". That is the direct consequence of the
+  ask, and the one part of T22 a user could reasonably dislike.
+
+**T23 is shipped: `/activity` filters by Completed and has a search box.** No migration.
+
+- **The filter is Active / All / Completed, and it opens on All.** Those two changes are ONE
+  decision rather than two: the box narrows what the FILTER has already chosen instead of
+  reaching past it, so an Active default would have silently hidden every match already
+  finished — and a search that omits the thing you searched for is worse than no search.
+- **Completed is a re-slice, not a new view** — the Done section already existed under All —
+  but it is sorted newest-first, which Done never was. It inherited `getTasks`' sort_order
+  ordering, which says nothing useful about finished work.
+- **`searchTasks` and `sortByCompletion` are pure, in `todos/service.ts`** beside
+  `bucketTasks`, because `activity-view.tsx` has no unit tests and that is the only way
+  either gets any. Title AND notes, case-insensitively, as the ⌘K palette does. It is NOT
+  that search: the palette is a server-side `ilike` across every module, this narrows a list
+  the page already holds, so no round trip and no debounce.
+- Defaulting to All means the Done section is on screen every visit, and it is unbounded. Fine
+  at present; if it grows heavy the fix is capping the Done block in All with a VISIBLE "see
+  all in Completed" link.
+
+**The test suite was audited after that, and the measured answer was not the expected one.**
+The suite is navigation-bound: 597 navigations across 172 tests, ~3.5 per test, against a
+`chromium` project that is 92.7% of the runtime at ~7.5s a test. The obvious lever looked
+like the dev server, so it was spiked — the same specs against a real production build, which
+costs 35s to make. **Render-bound specs got 38–48% faster and `companion` got 30% SLOWER, for
+a net of −0.5% and two failures.** The idea is dead; what survived is the finding that
+fewer renders beats faster ones, which is what T23's follow-up acted on. Do not re-spike it
+without reading that paragraph.
+
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
 after a verified-empty pre-flight dump — the user had written nothing in it). Anything you
@@ -502,9 +548,16 @@ it is `winnow-postgres-1`.
   react-hook-form's `watch()`. Judge lint by errors, which should be 0.
 - **Do not commit or push unless asked.** The user drives that explicitly.
 
-Current green baseline, **re-measured 2026-08-25 rather than copied forward**: **859 unit
-tests across 46 files, 167 e2e, 0 typecheck errors, 0 lint errors, 5 lint warnings** (13.6
+Current green baseline, **re-measured 2026-09-03 rather than copied forward**: **897 unit
+tests across 50 files, 172 e2e, 0 typecheck errors, 0 lint errors, 5 lint warnings** (10.7
 minutes wall clock for the e2e, **zero flaky**).
+
+The e2e clock came DOWN — from ~11.5 minutes — because T23's follow-up moved three specs'
+fixtures from their dialogs into SQL. Do not read that as headroom: those three were only
+16% of the runtime, so making them ~2.5x faster bought 7% overall, and the other fifty specs
+still build their fixtures through the UI. The unit count rose by 38 across four files
+because the dialogs got their first component tests — see §4 on what those can and cannot
+reach.
 
 That re-measurement was worth doing rather than asserting. **T21 shipped without a full e2e
 run** — it was pushed while the verification spec was still being written — so the figure
@@ -610,7 +663,23 @@ groups and failed identically. The lesson is narrower than "scope to the group":
 group **and match its name exactly**, because preference labels are naturally one another's
 prefixes. `segmented()` in that spec is the helper to copy.
 
-**Fixture teardown goes through the DATABASE, not the UI.** `e2e/_events.ts`, `_goals.ts`
+**Fixtures go through the DATABASE, not the UI — building them as well as tearing them
+down.** The rule, and it reads the same from either end: **a creation or a delete that IS the
+thing under test stays in the UI; one that is merely a precondition goes to SQL.**
+`seedGoal`, `seedTask` and `seedHabit` sit beside the delete helpers they mirror, and the
+create dialogs keep their browser coverage elsewhere — `activity` and `command-palette`
+build a habit through the form, `goals-order`, `goals-progress`, `review` and `task-links`
+build a goal through it. Only `goals-linked-tasks`, `goal-momentum` and `habits` have been
+converted; the rest still open dialogs, which is where the remaining time is.
+
+Two things the seed helpers insist on, both found by them failing loudly:
+`habits.start_date` is NOT NULL with no default and is written as today's LOCAL date — the
+UTC date is already tomorrow after ~18:00 in Chicago, and a habit that starts tomorrow does
+not count a session logged today. And a series fixture must be COMPLETE: `EventDialog` and
+`TaskDialog` re-derive their form from the rule, so a half-filled one crashes the render
+rather than failing an assertion.
+
+The teardown half, unchanged: `e2e/_events.ts`, `_goals.ts`
 and `_tasks.ts` each expose a `delete…Matching(fragment)` built on `withTestDb` in
 `_test-db.ts`, which calls `assertSafeToDestroy` by construction so no caller has to
 remember it. `deleteGoalsMatching` and `deleteTasksMatching` take **no `page`** — that is
@@ -766,6 +835,41 @@ rather than pretending otherwise.
 ## 4. Traps that have already been paid for
 
 Each of these cost hours. Do not re-discover them.
+
+**`serverWrite`/`serverWrites` match "a Server Action", not "yours", unless you say so.**
+`DigestBanner` fires `getDigest()` from an effect on the first `(app)` page a test opens, so
+`serverWrites(page, 3)` counted the digest as one of its three, resolved after only two
+`createTask` responses had landed, and let the `page.goto` that followed abort the third —
+the guard against lost writes defeated by an unrelated write. Proved from a trace, not
+argued: four POSTs where three were expected, one carrying an empty `[]` argument body, the
+third `createTask` at `status: -1`.
+
+Both helpers take an optional matcher over the request body now. Two things about using it:
+Server Action arguments are a JSON array, so a zero-argument call posts `[]` and
+`withArguments` is the general "not the digest" guard; and **matching on the raw entry text
+is wrong for three of the four quick-add bars** — quick-capture strips "tomorrow" out of the
+title, budget parses an amount out, meals parses macros out — so that matcher looks correct
+and silently never fires. It broke 3 of 4 before the bodies were logged.
+
+The root cause is upstream and is fixed too: `auth.setup.ts` captured `storageState` before
+`DigestBanner` had written its `winnow:digest-seen:` key, measured at 32–171ms wide on an
+idle machine. Losing that race bakes the unseen state into `user.json`, Playwright restores
+it per test, and `getDigest()` then fires on the first page of EVERY test for the whole run.
+
+**A component test here cannot drive a base-ui `Select`, and should not pretend to.** Type,
+Category, Repeat, List, Goal and Event are all `Select`s — popovers driven by pointer events
+jsdom does not implement — so a test that appeared to exercise one would really be asserting
+against whatever polyfill it shipped with. They stay in `e2e/`, where the browser is real.
+That ceiling is why only four of the eight big components got tests, and why `time-grid`,
+`activity-view` and `log-food-dialog` were judged poor value rather than merely skipped.
+
+The line worth keeping: `slate.test.tsx` DOES supply a missing `PointerEvent` constructor,
+because that leaves the component's own handler, optimistic state and action call running
+for real. Supplying a missing DOM constructor is not the same as faking a widget's
+behaviour. **The test for which side of the line you are on is a mutation check** — break the
+behaviour and see whether the test notices. Every one of the twenty component tests was
+proved that way, because a characterisation test passes on its first run by construction and
+that proves nothing.
 
 **`todos/schema.ts` and `routines/schema.ts` cannot both import each other.** Routines
 already imports `lists` and `priorityEnum` from todos, and `priorityEnum` is read EAGERLY at

@@ -32,7 +32,7 @@ script is the only thing that creates an account.
 | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `pnpm dev` / `build` / `start`                  | Next.js                                                                              |
 | `pnpm typecheck`, `pnpm lint`                   | static checks                                                                        |
-| `pnpm test:run`                                 | unit (Vitest, co-located `*.test.ts`)                                                |
+| `pnpm test:run`                                 | unit + component (Vitest, co-located `*.test.ts` / `*.test.tsx`)                     |
 | `pnpm test:e2e`                                 | Playwright against the dev server                                                    |
 | `pnpm test:e2e:prod`                            | Playwright against a real production build - the service worker only registers there |
 | `pnpm db:generate` / `db:migrate` / `db:studio` | Drizzle                                                                              |
@@ -49,9 +49,11 @@ Two things that bite otherwise:
   what it asserts on will fail. Older notes describing it as running against your dev
   database are pre-T12g.
 
-  Fixtures are **torn down in SQL**, not by driving the UI — `e2e/_events.ts`, `_goals.ts`
-  and `_tasks.ts`. A delete that is the thing under test stays in the UI; see
-  `docs/HANDOFF.md` §4 before changing either.
+  Fixtures are **built and torn down in SQL**, not by driving the UI — `e2e/_events.ts`,
+  `_goals.ts`, `_habits.ts` and `_tasks.ts`. The rule reads the same from either end: a
+  creation or a delete that IS the thing under test stays in the UI; one that is merely a
+  precondition goes to SQL. Only three specs have been converted so far. See
+  `docs/HANDOFF.md` §3 before changing either.
 
 ## Documentation
 

@@ -50,6 +50,8 @@ picked up — it is **not** code-level detail yet.
 | T19 — A habit can be an amount                     | ✅ shipped        |
 | T20 — The companion proposes a rate, app judges    | ✅ shipped        |
 | T21 — A phone can sign out; desktop stops hiding   | ✅ shipped        |
+| T22 — A ticked task stays on the dashboard         | ✅ shipped        |
+| T23 — Activity: Completed filter and a search box  | ✅ shipped        |
 
 **T7 is complete, and so is Checkpoint 0.4** — hosting shipped 2026-08-25; see the section
 at the end of this file. **T5c-b is the only tranche in the table above that has not
@@ -60,10 +62,10 @@ survival. See `docs/HANDOFF.md` §1 and §2.
 
 **T13 onward were not on this roadmap.** They came from the user looking at a screen and
 saying what was wrong with it, one tranche at a time. Sections for **T13, T14 and T19–T21**
-were written here as they were built; **T15–T18 have a row in the table above and no section
-here at all.** **`docs/HANDOFF.md` §2 is the record of every one of T13–T21** — what shipped,
-which migration each carried, and the decisions worth not re-litigating. This file remains
-the authority for T0–T13 and for the corrections list at the top.
+were written here as they were built; **T15–T18 and T22–T23 have a row in the table above
+and no section here at all.** **`docs/HANDOFF.md` §2 is the record of every one of T13–T23**
+— what shipped, which migration each carried, and the decisions worth not re-litigating.
+This file remains the authority for T0–T13 and for the corrections list at the top.
 
 **T10** was not on this roadmap either. `/todos` and `/goals` had been describing the same
 rows from opposite ends since T2 gave tasks a `goalId`, and each had grown a compromise to
