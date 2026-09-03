@@ -9,9 +9,16 @@ import { AI_SETTINGS_BACKUP, readAiConfig, writeAiConfig } from "./_ai-config"
  *
  * Until T11 this came from `.env`, which both `pnpm dev` and Playwright read. The AI_* env
  * vars are gone, so the suite has to write the configuration into `user_preferences` itself.
- * That is the whole reason `ai.teardown.ts` exists: this suite shares the PERSISTENT DEV
- * DATABASE with whoever uses the machine, so writing the stub's details here overwrites
- * their real configuration.
+ *
+ * **This used to say the suite shares the persistent dev database, and that stopped being
+ * true at T12g** — it writes to `winnow_test`, which `global-setup.ts` empties and reseeds
+ * before every run, so nothing here can reach the owner's real configuration. The backup
+ * and `ai.teardown.ts` are kept anyway, and deliberately: the restore is the only thing
+ * asserting this setup wrote what it meant to, `ai-settings.spec.ts` clears the API key
+ * unconditionally and says "do not remove that teardown" for that reason, and the day
+ * someone points the suite back at a real database is the day its absence would matter.
+ * `ai.teardown.ts`'s own docstring carries the same reasoning; this one had simply fallen
+ * behind it.
  *
  * Both halves now go through Postgres rather than the settings page. Reading the form was
  * the cause of two separate data losses — see the long note in `_ai-config.ts`, which is
@@ -67,7 +74,12 @@ setup("configure the AI stub", async ({ page }) => {
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   })
+  // The same cold-compile budget the `goto` above is given, and for the same reason — this
+  // assertion lands on a route Turbopack has just built from scratch, and the default 10s is
+  // not a compile budget. Observed failing twice in a row on a cold `.next-e2e`, which is
+  // expensive out of all proportion: this fixture gates every project, so it does not fail
+  // one spec, it fails the run.
   await expect(
     page.getByRole("heading", { name: "Build a routine" }).first(),
-  ).toBeVisible()
+  ).toBeVisible({ timeout: 60_000 })
 })

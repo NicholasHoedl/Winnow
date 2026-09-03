@@ -3,6 +3,7 @@ import { test, expect } from "./_test"
 import { pageAction } from "./_menu"
 
 import { visibleCard } from "./_card"
+import { serverWrite } from "./_server-write"
 
 // Browser coverage for T4-S6.
 //
@@ -59,8 +60,17 @@ test("searching the food database writes nothing to the library", async ({
   // not create a row, because import is a separate, explicit act (ADR-0005).
   const search = page.getByPlaceholder(/search open food facts/i)
   await expect(search).toBeVisible()
+
+  // Armed BEFORE typing. The field debounces and then runs `searchFoodDatabase` in a
+  // transition, so this waited a flat 1.5s instead — a guess about a machine
+  // `playwright.config.ts` documents as varying more than 2x between identical consecutive
+  // requests, and one that would have passed whether the search ran at all. Awaiting the
+  // round trip proves it actually happened before the count below is read. Whether OFF
+  // ANSWERS is still irrelevant: the action responds either way, which is the property that
+  // makes this wait safe with the integration switched off or the network down.
+  const searched = serverWrite(page, (body) => body.includes("yogurt"))
   await search.fill("yogurt")
-  await page.waitForTimeout(1500)
+  await searched
 
   await expect(libraryRows).toHaveCount(before)
 })
