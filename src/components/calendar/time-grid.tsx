@@ -389,8 +389,20 @@ export function TimeGrid({
       // Inline because the value is a prop — an arbitrary Tailwind class can't carry it.
       style={{ "--hour-h": hourHeight } as React.CSSProperties}
     >
-      {/* Column headers. */}
-      <div className="bg-muted/40 flex border-b">
+      {/* Column headers.
+
+          `scrollbar-gutter:stable` with `overflow-y-hidden` is load-bearing, not tidying.
+          This row and the all-day row below are SIBLINGS of the hour grid, and only the
+          hour grid scrolls — so a classic scrollbar takes its width out of that row's
+          content box and out of nobody else's. Its seven `flex-1` columns are then each a
+          fraction narrower than the seven here, and the error accumulates left to right
+          until the vertical rules visibly miss the headings above them.
+
+          `overflow-y-hidden` makes this row a scroll container so the gutter property
+          applies to it at all; `stable` then reserves the same width the scroller's real
+          scrollbar costs. On a platform with overlay scrollbars both reserve nothing,
+          which is correct — there is no fault to fix there. */}
+      <div className="bg-muted/40 flex [scrollbar-gutter:stable] overflow-y-hidden border-b">
         <div className="w-(--gutter) shrink-0" />
         {dates.map((date) => {
           const isToday = date === today
@@ -419,7 +431,12 @@ export function TimeGrid({
       {/* All-day gutter. Hidden entirely when nothing is in it — an always-present
           empty strip reads as a broken row. */}
       {hasAllDay && (
-        <div role="group" aria-label="All-day events" className="flex border-b">
+        <div
+          role="group"
+          aria-label="All-day events"
+          // Same reservation as the headings above — see the note there.
+          className="flex [scrollbar-gutter:stable] overflow-y-hidden border-b"
+        >
           <div className="text-muted-foreground w-(--gutter) shrink-0 px-1 py-1.5 text-right text-[0.65rem] leading-tight">
             All-day
           </div>
@@ -476,7 +493,13 @@ export function TimeGrid({
           // and that is exactly why it is here instead: `overflow-y-auto` is a styling
           // decision someone may reasonably change, and it would take the test with it.
           data-testid="time-grid-scroller"
-          className={cn("overflow-y-auto", fill && "min-h-0 flex-1")}
+          // `scrollbar-gutter:stable` here too, so this row reserves the width whether or
+          // not it is currently scrolling — otherwise the two rows above would match it
+          // only while it happens to overflow.
+          className={cn(
+            "[scrollbar-gutter:stable] overflow-y-auto",
+            fill && "min-h-0 flex-1",
+          )}
           // svh throughout, not vh: every other height on the dashboard is svh, and on
           // mobile the two differ by the browser chrome.
           style={{ maxHeight }}
