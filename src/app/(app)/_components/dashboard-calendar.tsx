@@ -238,7 +238,18 @@ export function DashboardCalendar({
             {(["month", "week"] as const).map((v) => (
               <Link
                 key={v}
-                href={v === "month" ? "/" : "/?calendar=week"}
+                // **Always emits the parameter, month included.** Omitting it for month was
+                // sound while month was the hard-coded fallback, and became a bug the moment
+                // `dashboardCalendarView` made the fallback a preference: a bare `/` resolves
+                // to whatever is SAVED, so with week saved the Month button returned you to
+                // the week you were trying to leave. Reported from real use as "I cannot
+                // change the view".
+                //
+                // Exactly the inversion T14 fixed one component over, where `calendarHref`
+                // stopped omitting `view=` for the same reason. The fallback in `page.tsx`
+                // was fixed then; this link was not, and its own comment describes the
+                // mirror image of what was left behind.
+                href={`/?calendar=${v}`}
                 aria-current={view === v ? "true" : undefined}
                 className={cn(
                   "rounded px-2 py-0.5 text-xs font-medium capitalize transition-colors",
