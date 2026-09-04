@@ -270,3 +270,33 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
     }
   })
 }
+
+/**
+ * The full rows for every habit attached to a goal — no entries, no readings.
+ *
+ * `/goals` already loads `getHabitStrip`, and that shape is deliberately five fields
+ * (see its note). It is enough to DRAW a practice and not enough to EDIT one: `HabitDialog`
+ * reads `period`, `targetCount`, `unit`, `targetAmount`, `startDate` and `endDate`, none of
+ * which the strip carries.
+ *
+ * A third query rather than widening either of the other two. The strip's objection is to
+ * the ENTRY WINDOW — 400 days of rows versus about 37 — not to the column count, and this
+ * loads no entries at all: one indexed read of a handful of rows, on a page that already
+ * makes five parallel queries. Widening the strip instead would have pushed six unused
+ * columns onto the dashboard, `/activity` and the habits page as well.
+ *
+ * Archived habits are excluded, matching every other read: a retired practice keeps its
+ * history but is not something the goal still lists.
+ */
+export async function getGoalHabits(): Promise<HabitRow[]> {
+  const userId = await requireUserId()
+  return db.query.habits.findMany({
+    where: and(
+      eq(habits.userId, userId),
+      isNotNull(habits.goalId),
+      isNull(habits.archivedAt),
+    ),
+    columns: { userId: false },
+    orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
+  })
+}

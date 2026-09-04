@@ -115,10 +115,17 @@ behaviour, and a view that cannot say it is a heatmap, not a habit tracker.
   lengthen or break a streak for periods already past. This is ADR-0009's "editing a schedule
   rewrites the past" inherited whole, for the same reason — the denominator is derived from
   the rule as it exists now, and rules are mutated in place. Accepted on the same grounds.
-- **Deleting a goal silently detaches its habits.** `goal_id` is `ON DELETE set null`, so the
-  practice outlives the goal it served but loses its attribution, and T12b's momentum will
-  lose it with nothing on screen to say why. Structurally identical to `tasks.series_id`,
-  which ADR-0009 recorded and left alone; recorded and left alone here for the same reason.
+- **Deleting a goal detaches its habits, and it is no longer silent.** `goal_id` is
+  `ON DELETE set null`, so the practice outlives the goal it served but loses its
+  attribution, and T12b's momentum loses it with nothing stored to say why. Structurally
+  identical to `tasks.series_id`, which ADR-0009 recorded and left alone.
+  **Recorded and left alone here too — until it was reported from real use**, at which point
+  the behaviour was kept and made explicit rather than changed: the delete confirm now names
+  the practice and offers leave / archive / delete, defaulting to leave. The milestones get
+  no equivalent choice and the dialog says so outright, because `milestones.goal_id` is NOT
+  NULL — a milestone genuinely cannot outlive its goal without a nullable column and a
+  screen to show the orphans on, and an option that silently does nothing is worse than no
+  option.
 - **`+1` is deliberately not idempotent.** No unique constraint means a double-click writes
   two rows — correct for two classes on Tuesday, wrong for a fat finger, and unfixable in the
   schema without breaking the first case. The mitigation is entirely in the UI: the button is

@@ -79,11 +79,21 @@ export function HabitDialog({
   goals,
   open,
   onOpenChange,
+  defaultGoalId = null,
 }: {
   habit: HabitRow | null
   goals: GoalOption[]
   open: boolean
   onOpenChange: (open: boolean) => void
+  /**
+   * Which goal a NEW habit starts attached to. Ignored when editing, where the habit's own
+   * `goalId` is the answer.
+   *
+   * For the goals page, where "Add a practice" is pressed from inside one goal's dialog and
+   * having to then pick that same goal out of a list would be the round trip the whole
+   * section exists to remove. The picker is still rendered and still changeable.
+   */
+  defaultGoalId?: string | null
 }) {
   const isEdit = !!habit
   const {
@@ -119,13 +129,13 @@ export function HabitDialog({
     if (!open) return
     reset({
       title: habit?.title ?? "",
-      goalId: habit?.goalId ?? null,
+      goalId: habit?.goalId ?? defaultGoalId,
       period: habit?.period ?? "week",
       targetCount: habit?.targetCount ?? 3,
       targetAmount: habit?.targetAmount ?? null,
       unit: habit?.unit ?? null,
     })
-  }, [open, habit, reset])
+  }, [open, habit, defaultGoalId, reset])
 
   /**
    * Switching modes clears the fields the other one owns.

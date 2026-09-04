@@ -2,8 +2,8 @@ import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { aiReady } from "@/modules/companion/ai-settings"
 import { getPendingProposals } from "@/modules/companion/queries"
-import { getGoals } from "@/modules/goals/queries"
-import { getHabitStrip } from "@/modules/habits/queries"
+import { getGoalOptions, getGoals } from "@/modules/goals/queries"
+import { getGoalHabits, getHabitStrip } from "@/modules/habits/queries"
 import {
   getAiSettings,
   getUserPreferences,
@@ -30,27 +30,37 @@ export default async function GoalsPage() {
   // cannot start until the time zone is known.
   const { timeZone, goalMomentumDays } = await getUserPreferences()
 
-  const [goals, habits, events, aiSettings, pending] = await Promise.all([
-    getGoals(timeZone, goalMomentumDays),
-    // The practice that serves these goals. Until now `habits.goal_id` was visible in
-    // exactly one place in the app — the dashboard's card — so this page could say a goal
-    // was "Moving" and never name what was moving it. The cheap read, same as `/activity`
-    // and `/`: four fields, and `adherence` for the current period only.
-    getHabitStrip(),
-    // For the goal dialog's target-date link. Already fetched on every authenticated page
-    // by the `(app)` layout for the global create dialogs, so this is a second call to a
-    // `cache()`d query rather than a second round trip.
-    getEventOptions(),
-    getAiSettings(),
-    // `goal_plan` only. Without the filter this page would auto-open whatever proposal was
-    // newest — an import, a narrated week — because the view opens `pending[0]`.
-    getPendingProposals("goal_plan"),
-  ])
+  const [goals, habits, habitRows, goalOptions, events, aiSettings, pending] =
+    await Promise.all([
+      getGoals(timeZone, goalMomentumDays),
+      // The practice that serves these goals. Until now `habits.goal_id` was visible in
+      // exactly one place in the app — the dashboard's card — so this page could say a goal
+      // was "Moving" and never name what was moving it. The cheap read, same as `/activity`
+      // and `/`: four fields, and `adherence` for the current period only.
+      getHabitStrip(),
+      // The same habits as full rows, for the detail dialog's edit form. Two reads rather
+      // than one widened shape: `HabitDialog` needs six columns the strip omits, and the
+      // strip's leanness is what keeps it cheap on the dashboard and `/activity` too. This
+      // one carries no entries at all.
+      getGoalHabits(),
+      // For the habit dialog's goal picker. `cache()`d, and already warm on this page.
+      getGoalOptions(),
+      // For the goal dialog's target-date link. Already fetched on every authenticated page
+      // by the `(app)` layout for the global create dialogs, so this is a second call to a
+      // `cache()`d query rather than a second round trip.
+      getEventOptions(),
+      getAiSettings(),
+      // `goal_plan` only. Without the filter this page would auto-open whatever proposal was
+      // newest — an import, a narrated week — because the view opens `pending[0]`.
+      getPendingProposals("goal_plan"),
+    ])
 
   return (
     <GoalsView
       goals={goals}
       habits={habits}
+      habitRows={habitRows}
+      goalOptions={goalOptions}
       events={events}
       pending={pending}
       // The page renders either way: goals are not an AI feature, and only the plan tool

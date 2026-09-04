@@ -77,3 +77,23 @@ export const restoreMilestoneSchema = z.object({
   completedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
 })
+
+/**
+ * What happens to a goal's practice when the goal is deleted.
+ *
+ * The milestones have no say and the dialog says so: `milestones.goal_id` is NOT NULL, so a
+ * milestone cannot outlive its goal without a nullable column and a screen to show the
+ * orphans on. Habits can — `habits.goal_id` is `ON DELETE SET NULL` — which is why this
+ * choice exists for the practice and not for both.
+ *
+ * `leave` is first because it is the default and the existing behaviour: deleting a goal
+ * has always detached its habits and kept them, and a confirm dialog is the wrong place to
+ * change what Enter does.
+ */
+export const PRACTICE_ON_DELETE = ["leave", "archive", "delete"] as const
+export type PracticeOnDelete = (typeof PRACTICE_ON_DELETE)[number]
+
+export const deleteGoalSchema = z.object({
+  id: z.string().uuid(),
+  practice: z.enum(PRACTICE_ON_DELETE),
+})

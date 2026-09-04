@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
-import { HabitDialog } from "./habit-dialog"
+import { HabitDialog } from "@/components/habits/habit-dialog"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /**

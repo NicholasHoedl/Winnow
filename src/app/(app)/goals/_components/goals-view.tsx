@@ -5,7 +5,7 @@ import { Plus, Sparkles, Target } from "lucide-react"
 import { toast } from "sonner"
 
 import { reorderGoals } from "@/modules/goals/actions"
-import type { GoalWithProgress } from "@/modules/goals/queries"
+import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
 import { PlanProposal } from "@/components/companion/plan-proposal"
@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select"
 
 import type { EventOption } from "@/modules/calendar/queries"
-import type { HabitStripCard } from "@/modules/habits/queries"
+import type { HabitRow, HabitStripCard } from "@/modules/habits/queries"
 import { useWriteGuard } from "@/components/shared/use-write-guard"
 
 import { GoalCard } from "./goal-card"
@@ -31,6 +31,8 @@ import { GoalDialog } from "./goal-dialog"
 export function GoalsView({
   goals,
   habits,
+  habitRows,
+  goalOptions,
   events,
   pending,
   companionEnabled,
@@ -49,6 +51,16 @@ export function GoalsView({
    * detail dialog wants one goal's practice, and the card wants a count.
    */
   habits: HabitStripCard[]
+  /**
+   * The same habits as full rows, for the detail dialog's edit form.
+   *
+   * `getGoalHabits`, not a widened strip: `HabitDialog` reads six columns the cheap shape
+   * deliberately omits, and widening it would have pushed them onto the dashboard and
+   * `/activity` as well. Neither read carries the other's cost — this one loads no entries.
+   */
+  habitRows: HabitRow[]
+  /** For the habit dialog's goal picker, inside the detail dialog. */
+  goalOptions: GoalOption[]
   /** For the goal dialog's target-date link. */
   events: EventOption[]
   /** Pending `goal_plan` proposals only — the page filters by kind at the query. */
@@ -274,6 +286,12 @@ export function GoalsView({
             ? habits.filter((habit) => habit.goalId === detailGoal.id)
             : []
         }
+        habitRows={
+          detailGoal
+            ? habitRows.filter((row) => row.goalId === detailGoal.id)
+            : []
+        }
+        goalOptions={goalOptions}
         open={detailGoal !== null}
         onOpenChange={(open) => !open && setDetailGoalId(null)}
         onEdit={openEditGoal}

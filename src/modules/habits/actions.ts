@@ -39,6 +39,10 @@ const idSchema = z.string().uuid()
 function revalidateHabitViews() {
   revalidatePath("/activity/habits")
   revalidatePath("/activity")
+  // `/goals` lists the practice serving each goal, and now edits it — a habit can be added,
+  // renamed, archived or deleted from inside a goal's dialog. Without this, doing any of
+  // those on the habits page and then opening a goal shows the practice as it was.
+  revalidatePath("/goals")
   revalidateHubs()
 }
 
