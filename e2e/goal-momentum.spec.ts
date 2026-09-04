@@ -36,6 +36,17 @@ import { deleteTasksMatching, seedTask } from "./_tasks"
  */
 const SWEEP = ["E2E momentum", "E2E untracked", "E2E window"]
 
+/**
+ * Older than `MOMENTUM_GRACE_DAYS`, so these goals can be judged at all.
+ *
+ * A goal is left alone for its first week — it is new, not neglected — so a goal seeded at
+ * `now()` reads as NEITHER moving nor stalled and every assertion below about a badge would
+ * be asserting against silence. Ten days is comfortably clear of the boundary; the boundary
+ * itself is pinned in `goals/service.test.ts`, where it costs milliseconds rather than a
+ * page load.
+ */
+const OLD_ENOUGH = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000)
+
 test.afterEach(async () => {
   for (const fragment of SWEEP) {
     // Tasks and habits before goals only for tidiness; each matches on its own title, so
@@ -58,7 +69,7 @@ test("finishing a linked task moves a stalled goal", async ({ page }) => {
   const goalTitle = `E2E momentum ${stamp}`
   const taskTitle = `E2E momentum task ${stamp}`
 
-  const goalId = await seedGoal({ title: goalTitle })
+  const goalId = await seedGoal({ title: goalTitle, createdAt: OLD_ENOUGH })
   await seedTask({ title: taskTitle, goalId })
 
   await page.goto("/goals")
@@ -112,7 +123,7 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
   const goalTitle = `E2E momentum habit ${stamp}`
   const habitTitle = `E2E momentum practice ${stamp}`
 
-  const goalId = await seedGoal({ title: goalTitle })
+  const goalId = await seedGoal({ title: goalTitle, createdAt: OLD_ENOUGH })
   // Three-a-week, matching what the dialog's defaults produced — the caption the strip
   // shows ("this week") is read further down, so the cadence is load-bearing here.
   await seedHabit({ title: habitTitle, goalId })
@@ -165,7 +176,7 @@ test("a goal with nothing to track gets no momentum reading at all", async ({
   // place with no history, so there is genuinely nothing to measure — and a stalled badge
   // here would be a lie about a goal that might have been updated an hour ago.
   const goalTitle = `E2E untracked ${Date.now()}`
-  await seedGoal({ title: goalTitle })
+  await seedGoal({ title: goalTitle, createdAt: OLD_ENOUGH })
 
   await page.goto("/goals")
   await expect(goalCard(page, goalTitle).getByText("Stalled")).toHaveCount(0)
@@ -179,7 +190,7 @@ test("a goal with nothing to track gets no momentum reading at all", async ({
 test("the momentum window follows the setting", async ({ page }) => {
   const goalTitle = `E2E window ${Date.now()}`
   const taskTitle = `E2E window task ${Date.now()}`
-  const goalId = await seedGoal({ title: goalTitle })
+  const goalId = await seedGoal({ title: goalTitle, createdAt: OLD_ENOUGH })
   await seedTask({ title: taskTitle, goalId })
 
   // Scoped to the control's own group, not the page. Two segmented controls in this form
@@ -207,4 +218,36 @@ test("the momentum window follows the setting", async ({ page }) => {
   await window.getByRole("button", { name: "2 weeks" }).click()
   await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByText("Preferences saved")).toBeVisible()
+})
+
+/**
+ * The bug the grace exists for, reported from real use: a goal created and immediately told
+ * it had stalled, about work nobody had yet had a chance to do.
+ *
+ * Seeded at `now()` — `seedGoal`'s default — because that is exactly what creating one
+ * through the dialog produces. It differs from the untracked case above in the reason for
+ * the silence rather than the silence itself: this goal HAS something to measure, an open
+ * linked task, and is simply too young to be judged on it.
+ */
+test("a goal made today is not called stalled", async ({ page }) => {
+  const stamp = Date.now()
+  const goalTitle = `E2E momentum fresh ${stamp}`
+  const taskTitle = `E2E momentum fresh task ${stamp}`
+
+  const goalId = await seedGoal({ title: goalTitle })
+  await seedTask({ title: taskTitle, goalId })
+
+  await page.goto("/goals")
+  const card = goalCard(page, goalTitle)
+  await expect(card).toHaveCount(1)
+  await expect(card.getByText("Stalled")).toHaveCount(0)
+  // Nor the opposite: withholding a false accusation must not invent a compliment.
+  await expect(card.getByText("Moving")).toHaveCount(0)
+
+  // And the detail says nothing about a window the goal has not lived through.
+  await openDetail(page, goalTitle)
+  await expect(
+    page.getByRole("dialog").getByText(/finished in the last/),
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
 })

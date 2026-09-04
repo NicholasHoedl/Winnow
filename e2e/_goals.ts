@@ -19,14 +19,27 @@ export async function seedGoal(fields: {
   title: string
   targetDate?: string | null
   notes?: string | null
+  /**
+   * When the goal was made. Defaults to now, which is what a goal created through the
+   * dialog gets — and which puts it inside `MOMENTUM_GRACE_DAYS`, so it reads as NEITHER
+   * moving nor stalled. A spec asserting "Stalled" has to seed a goal old enough to be
+   * judged; `goal-momentum.spec.ts` is where that matters and says so.
+   */
+  createdAt?: Date
 }): Promise<string> {
   return withTestDb(async (client) => {
     const userId = await seedUserId(client)
     const { rows } = await client.query<{ id: string }>(
-      `insert into goals (user_id, title, target_date, notes)
-       values ($1, $2, $3, $4)
+      `insert into goals (user_id, title, target_date, notes, created_at)
+       values ($1, $2, $3, $4, $5)
        returning id`,
-      [userId, fields.title, fields.targetDate ?? null, fields.notes ?? null],
+      [
+        userId,
+        fields.title,
+        fields.targetDate ?? null,
+        fields.notes ?? null,
+        fields.createdAt ?? new Date(),
+      ],
     )
     return rows[0].id
   })

@@ -114,13 +114,20 @@ const TZ = "America/Chicago"
 const TODAY = "2026-08-04"
 
 // windowDays 7 → the window opens on 2026-07-29 (today plus the six days before it).
+//
+// `createdAt` defaults to LONG ago on purpose. Every case below this one is about the
+// window, and a goal old enough to be judged is the premise they were written under — a
+// default of "today" would put them all inside the grace period and quietly turn a suite of
+// window tests into a suite of grace tests that happened to pass.
 function momentum(
   completedAt: (Date | null)[],
   trackableCount = completedAt.length,
+  createdAt = new Date("2026-01-01T12:00:00Z"),
 ) {
   return goalMomentum({
     completedAt,
     trackableCount,
+    createdAt,
     windowDays: 7,
     today: TODAY,
     timeZone: TZ,
@@ -171,6 +178,48 @@ describe("goalMomentum", () => {
     expect(momentum([new Date("2026-09-01T14:00:00Z")])?.moved).toBe(0)
   })
 
+  // A goal is not stalled the moment it is made. Reported from real use: creating one and
+  // immediately being told it had stalled, about work nobody had yet had a chance to do.
+  // The grace suppresses the FALSE reading only — see the moving case below.
+  it("withholds a reading for a week rather than calling a new goal stalled", () => {
+    const born = new Date("2026-08-04T12:00:00Z")
+    expect(momentum([new Date("2026-06-01T14:00:00Z")], 1, born)).toBeNull()
+  })
+
+  it("still reads as moving when work lands inside the grace period", () => {
+    // The half that must not be suppressed. A goal created and worked on the same day has
+    // genuinely moved, and hiding that would trade one wrong answer for another.
+    const born = new Date("2026-08-04T12:00:00Z")
+    const result = momentum([new Date("2026-08-04T14:00:00Z")], 1, born)
+    expect(result).toEqual({ moved: 1, stalled: false, windowDays: 7 })
+  })
+
+  it("withholds on the seventh day and judges on the eighth", () => {
+    const stale = [new Date("2026-06-01T14:00:00Z")]
+    // Created 2026-07-29 — six days back, so today is day seven of its life.
+    expect(momentum(stale, 1, new Date("2026-07-29T12:00:00Z"))).toBeNull()
+    // One day older, and the week is up.
+    expect(momentum(stale, 1, new Date("2026-07-28T12:00:00Z"))).toEqual({
+      moved: 0,
+      stalled: true,
+      windowDays: 7,
+    })
+  })
+
+  it("dates the grace from the local day it was created, not the UTC one", () => {
+    // 04:00Z on the 29th is 23:00 on the 28th in Chicago, so locally this goal is a day
+    // older than its UTC timestamp suggests — and that day is the difference between a
+    // reading and none. The same rule the window itself follows.
+    const stale = [new Date("2026-06-01T14:00:00Z")]
+    expect(momentum(stale, 1, new Date("2026-07-29T04:00:00Z"))).toEqual({
+      moved: 0,
+      stalled: true,
+      windowDays: 7,
+    })
+    // An hour later is local midnight on the 29th, which is still inside the week.
+    expect(momentum(stale, 1, new Date("2026-07-29T05:00:00Z"))).toBeNull()
+  })
+
   it("is stalled, not null, when work exists but every timestamp is missing", () => {
     expect(momentum([null, null])).toEqual({
       moved: 0,
@@ -189,11 +238,15 @@ describe("goalMomentum", () => {
  * should stay quiet about.
  */
 describe("goalMomentum with habits", () => {
+  // Long ago, for the reason the other helper's default gives: these cases are about habit
+  // entries reaching the window, and a goal young enough to be inside the grace period would
+  // answer null to all of them regardless of what was logged.
   const withHabits = (loggedOn: string[], trackableCount = 1) =>
     goalMomentum({
       completedAt: [],
       loggedOn,
       trackableCount,
+      createdAt: new Date("2026-01-01T12:00:00Z"),
       windowDays: 7,
       today: TODAY,
       timeZone: TZ,
@@ -234,6 +287,7 @@ describe("goalMomentum with habits", () => {
       goalMomentum({
         completedAt: [new Date("2026-07-29T00:00:00Z")],
         trackableCount: 1,
+        createdAt: new Date("2026-01-01T12:00:00Z"),
         windowDays: 7,
         today: TODAY,
         timeZone: TZ,
@@ -246,6 +300,7 @@ describe("goalMomentum with habits", () => {
       completedAt: [new Date("2026-08-04T14:00:00Z")],
       loggedOn: ["2026-08-02"],
       trackableCount: 2,
+      createdAt: new Date("2026-01-01T12:00:00Z"),
       windowDays: 7,
       today: TODAY,
       timeZone: TZ,

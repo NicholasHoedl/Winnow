@@ -248,6 +248,9 @@ export async function getGoals(
         // attached habit is enough to make the goal measurable, logged or not.
         trackableCount:
           linkedTaskTotal + items.length + (habitIds.get(goal.id)?.size ?? 0),
+        // A goal younger than a week is not stalled, it is new — see
+        // `MOMENTUM_GRACE_DAYS`.
+        createdAt: goal.createdAt,
         windowDays: momentumDays,
         today,
         timeZone,
