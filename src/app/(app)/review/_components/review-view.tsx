@@ -13,6 +13,7 @@ import type { ProposalRow } from "@/modules/companion/queries"
 import type { WeeklyReviewView } from "@/modules/review/queries"
 import { reviewHeadline } from "@/modules/review/service"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { WEEK_FIGURES_ID } from "@/components/companion/summary-proposal"
 
 import { WeekSummary } from "./week-summary"
 
@@ -140,7 +141,13 @@ export function ReviewView({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      {/* The target of the summary panel's "See the figures behind this". `scroll-mt` so the
+          first card lands with a little air above it rather than flush to the viewport
+          edge; there is no sticky chrome to clear, so that margin is the whole of it. */}
+      <div
+        id={WEEK_FIGURES_ID}
+        className="grid scroll-mt-4 gap-4 sm:grid-cols-2"
+      >
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Tasks</CardTitle>

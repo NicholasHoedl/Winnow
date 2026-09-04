@@ -390,9 +390,21 @@ test("a week is narrated read-only, with no way to apply it", async ({
   // nothing to prune and nothing to create. No checkboxes, no Apply — one Done.
   await expect(page.getByRole("checkbox")).toHaveCount(0)
   await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(0)
-  await expect(
-    page.getByRole("link", { name: "See the figures behind this" }),
-  ).toBeVisible()
+  // **Visibility alone is what let this go dead**, so it is not what is asserted. It was a
+  // `Link` to `/review` — the page it is already on — and a link that navigates nowhere
+  // still renders perfectly, which is why this spec passed for the whole time the button
+  // did nothing. What is checked now is that it RESOLVES: the href names a fragment, and
+  // something on this page carries that id.
+  //
+  // Not that the page scrolled. A desktop viewport may fit the whole review, in which case
+  // clicking correctly scrolls nowhere — an assertion on `scrollY` would be testing the
+  // window size. The href-to-id pair is the contract; `WEEK_FIGURES_ID` is exported from
+  // `summary-proposal.tsx` and imported by `review-view.tsx` so the two cannot drift.
+  const figures = page.getByRole("link", {
+    name: "See the figures behind this",
+  })
+  await expect(figures).toHaveAttribute("href", "#week-figures")
+  await expect(page.locator("#week-figures")).toBeVisible()
 
   await page.getByRole("button", { name: "Done" }).click()
   // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
