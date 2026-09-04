@@ -72,7 +72,16 @@ for (const width of [320, 375, 393]) {
 
     test("the goal detail dialog fits a phone", async ({ page }) => {
       const title = `${PREFIX} goal ${width} ${Date.now()}`
-      const goalId = await seedGoal({ title, targetDate: "2026-09-30" })
+      // The token goes in the NOTES, which is the one block in this dialog that wraps
+      // with no clipping — `whitespace-pre-wrap`, no `overflow: hidden`. Everything
+      // else here truncates or line-clamps, and those imply `overflow: hidden`, so a
+      // word too long for them is cut off rather than pushing the box. Here it has
+      // nothing to stop it but `break-words`.
+      const goalId = await seedGoal({
+        title,
+        targetDate: "2026-09-30",
+        notes: `Ask about Supercalifragilisticexpialidociousandthensomemore before it starts`,
+      })
       // The worst case the dialog can draw: every milestone dated, and titles as long as
       // a real goal's — the report that prompted this had five of them.
       for (const [i, step] of [
@@ -93,6 +102,13 @@ for (const width of [320, 375, 393]) {
       // figures WITH the unit — "0/20 pages a day" — in a `shrink-0` span, which is a
       // different and wider row than the segmented one beside it.
       await seedHabit({ title: `${PREFIX} strength or cardio workout`, goalId })
+      // A token with no break opportunity, in the narrowest box the app draws. This is
+      // what `break-words` on the practice row is for: without it the word cannot fit
+      // any width and pushes the dialog out instead.
+      await seedHabit({
+        title: `${PREFIX} Supercalifragilisticexpialidociousandthensomemore`,
+        goalId,
+      })
       await seedHabit({
         title: `${PREFIX} log meals and calorie intake every day`,
         goalId,

@@ -1,5 +1,8 @@
 import { test, expect, type Browser, type Page } from "./_test"
 
+import { deleteGoalsMatching, seedGoal } from "./_goals"
+import { deleteHabitsMatching, seedHabit } from "./_habits"
+import { deleteTasksMatching, seedTask } from "./_tasks"
 import { deleteTransactionsMatching } from "./_transactions"
 
 /**
@@ -191,6 +194,19 @@ export function describeFaults(faults: Fault[]): string {
     .join("")
 }
 
+/** A title long enough to need more than one line anywhere it is drawn. */
+const LONG_TITLE =
+  "Reconcile the quarterly figures against the bank statement before the audit"
+
+/**
+ * A token with no break opportunity in it at all.
+ *
+ * `overflow-wrap: break-word` is the only thing that can wrap this, and nothing in `src/`
+ * used it when this was written — so a pasted URL or a run-together word had no way to
+ * fit and simply pushed its container wide.
+ */
+const UNBREAKABLE = "Supercalifragilisticexpialidociousandthensomemore"
+
 /**
  * Worst-case content, created on purpose.
  *
@@ -226,6 +242,51 @@ export async function seedWideContent(
   await dialog.waitFor({ state: "hidden" })
   await expect(dialog).toBeHidden()
 
+  // Long TEXT, which the amount above does not test and which is the other half of
+  // "worst-case content".
+  //
+  // The two break a layout in different ways and only one of them was covered. A wide
+  // NUMBER presses on a box that was sized for a small one. Long TEXT presses on the
+  // ancestor chain: `truncate` compiles to `white-space: nowrap`, which makes an element's
+  // min-content the width of the whole string — so unless every flex and grid ancestor
+  // above it carries `min-w-0`, the ancestor is forced wide instead of the text being
+  // clipped. That is not visible in the class list of the line that truncates, which is
+  // exactly why it needs measuring rather than reading.
+  //
+  // Seeded in SQL rather than through the UI, unlike the transaction above. The reason
+  // that one goes through the dialog is that money is shaped on the way in — cents,
+  // rounding, a type — and a hand-written row could be shaped differently from a real one.
+  // A title is stored as typed, so there is nothing for the UI to add.
+  const today = new Date().toLocaleDateString("en-CA")
+  await seedTask({ title: `${prefix} ${LONG_TITLE}`, dueDate: today })
+  await seedGoal({ title: `${prefix} ${LONG_TITLE}` })
+  // The unbreakable one goes on a habit because a habit title is drawn on four surfaces —
+  // the dashboard practice card, `/activity`'s strip, `/activity/habits`, and inside a
+  // goal — which is the widest spread any single field has.
+  await seedHabit({ title: `${prefix} ${UNBREAKABLE}` })
+
+  // **Prove the seed reaches the screen before any sweep measures it.**
+  //
+  // A row that exists in the database and is not drawn makes every assertion below pass
+  // for the wrong reason, and the pass looks exactly like a real one. This file's own
+  // opening note says a sweep over whatever the account happens to hold measures the
+  // account rather than the layout; content seeded but never rendered is the same fault
+  // wearing a fixture. `/activity` draws the task and the habit strip, `/goals` the goal.
+  await page.goto("/activity")
+  // `.first()` on all of these: a title is drawn more than once on a page — a goal
+  // appears both on its card and in the plan tool's picker — and a strict-mode
+  // violation here would report as "not visible", which is the opposite of the truth.
+  await expect(
+    page.getByText(LONG_TITLE, { exact: false }).first(),
+  ).toBeVisible()
+  await expect(
+    page.getByText(UNBREAKABLE, { exact: false }).first(),
+  ).toBeVisible()
+  await page.goto("/goals")
+  await expect(
+    page.getByText(LONG_TITLE, { exact: false }).first(),
+  ).toBeVisible()
+
   await context.close()
 }
 
@@ -239,5 +300,11 @@ export async function seedWideContent(
  * very file is trying to find faults in.
  */
 export async function clearWideContent(prefix: string): Promise<number> {
+  // Habits before goals: a habit's `goal_id` is ON DELETE SET NULL, so deleting the goal
+  // first would leave the habit behind with nothing pointing at it — still matched by the
+  // prefix, but it costs a second pass to notice.
+  await deleteHabitsMatching(prefix)
+  await deleteTasksMatching(prefix)
+  await deleteGoalsMatching(prefix)
   return deleteTransactionsMatching(prefix)
 }
