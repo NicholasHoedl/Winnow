@@ -14,6 +14,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed-user.ts",
+    "db:seed:dev": "tsx scripts/seed-dev-data.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
