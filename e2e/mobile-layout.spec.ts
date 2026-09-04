@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { seedGoal, seedMilestone, deleteGoalsMatching } from "./_goals"
+import { seedHabit, deleteHabitsMatching } from "./_habits"
 import {
   ROUTES,
   clearWideContent,
@@ -44,5 +46,74 @@ for (const route of ROUTES) {
 
     const faults = await layoutFaults(page)
     expect(faults, `${route} at 393px:${describeFaults(faults)}\n`).toEqual([])
+  })
+}
+
+/**
+ * The goal detail dialog, which the route sweep above structurally cannot reach.
+ *
+ * Every test above measures a page as it lands. This one opens on a click, so it was never
+ * in the sweep — and it is the widest thing the app draws inside a fixed-width box: a
+ * milestone row carries a checkbox, a title, a date and two icon buttons, and the add row
+ * below it carries a text field, a date field and a button.
+ *
+ * Reported from real use as a horizontal scrollbar on a phone. `DialogContent` is
+ * `overflow-y-auto`, and the CSS overflow spec promotes the paired `visible` axis to
+ * `auto` — so anything too wide gets a scrollbar rather than being clipped, which is the
+ * mechanism `layoutFaults` documents at the top of `_layout.ts`.
+ *
+ * **Three widths, because the project's own 393 does not reproduce it.** The device here is
+ * an iPhone 15; a 12 mini is 375 and an SE is 320, and the add row's two fixed-ish inputs
+ * are exactly the kind of content that fits one width and not the next.
+ */
+for (const width of [320, 375, 393]) {
+  test.describe(`goal detail at ${width}px`, () => {
+    test.use({ viewport: { width, height: 812 } })
+
+    test("the goal detail dialog fits a phone", async ({ page }) => {
+      const title = `${PREFIX} goal ${width} ${Date.now()}`
+      const goalId = await seedGoal({ title, targetDate: "2026-09-30" })
+      // The worst case the dialog can draw: every milestone dated, and titles as long as
+      // a real goal's — the report that prompted this had five of them.
+      for (const [i, step] of [
+        "Lose first 3 pounds before the end of the month",
+        "Lose 6 pounds total",
+        "Lose 9 pounds total",
+        "Lose 12 pounds total",
+        "Reach 15 pound goal",
+      ].entries()) {
+        await seedMilestone({
+          goalId,
+          title: step,
+          dueDate: `2026-09-${String(5 + i * 5).padStart(2, "0")}`,
+          sortOrder: i,
+        })
+      }
+      // Both quota shapes. A measured habit renders a continuous bar and prints its
+      // figures WITH the unit — "0/20 pages a day" — in a `shrink-0` span, which is a
+      // different and wider row than the segmented one beside it.
+      await seedHabit({ title: `${PREFIX} strength or cardio workout`, goalId })
+      await seedHabit({
+        title: `${PREFIX} log meals and calorie intake every day`,
+        goalId,
+        period: "day",
+        unit: "pages",
+        targetAmount: 20,
+      })
+
+      await page.goto("/goals")
+      await page.getByRole("button", { name: `Open ${title}` }).click()
+      await expect(page.getByRole("dialog")).toBeVisible()
+
+      const faults = await layoutFaults(page)
+      expect(
+        faults,
+        `goal detail dialog at ${width}px:${describeFaults(faults)}
+`,
+      ).toEqual([])
+
+      await deleteHabitsMatching(PREFIX)
+      await deleteGoalsMatching(PREFIX)
+    })
   })
 }

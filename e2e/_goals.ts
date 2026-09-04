@@ -46,6 +46,40 @@ export async function seedGoal(fields: {
 }
 
 /**
+ * Attach a milestone straight to a goal, and hand back its id.
+ *
+ * Same rule as `seedGoal` above: a milestone that IS the thing under test is made through
+ * the dialog's add row; a milestone that is merely a precondition is made here. A spec
+ * needing five of them to fill a dialog pays five `fill`/`click` round trips otherwise, and
+ * none of them is what it is asserting about.
+ */
+export async function seedMilestone(fields: {
+  goalId: string
+  title: string
+  dueDate?: string | null
+  done?: boolean
+  sortOrder?: number
+}): Promise<string> {
+  return withTestDb(async (client) => {
+    const userId = await seedUserId(client)
+    const { rows } = await client.query<{ id: string }>(
+      `insert into milestones (user_id, goal_id, title, due_date, done, sort_order)
+       values ($1, $2, $3, $4, $5, $6)
+       returning id`,
+      [
+        userId,
+        fields.goalId,
+        fields.title,
+        fields.dueDate ?? null,
+        fields.done ?? false,
+        fields.sortOrder ?? 0,
+      ],
+    )
+    return rows[0].id
+  })
+}
+
+/**
  * Creating, opening and deleting a goal on `/goals`.
  *
  * Shared because T10 moved all three, and T13 moved them again — which is the point. Six
