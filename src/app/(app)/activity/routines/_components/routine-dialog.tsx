@@ -24,6 +24,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -117,8 +118,9 @@ export function RoutineDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="r-description">Description</FieldLabel>
-              <Input
+              <Textarea
                 id="r-description"
+                rows={2}
                 placeholder="Optional"
                 {...register("description")}
               />

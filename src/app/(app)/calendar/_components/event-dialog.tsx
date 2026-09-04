@@ -41,6 +41,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -416,8 +417,9 @@ export function EventDialog({
 
             <Field>
               <FieldLabel htmlFor="e-notes">Notes</FieldLabel>
-              <Input
+              <Textarea
                 id="e-notes"
+                rows={3}
                 placeholder="Optional"
                 {...register("notes")}
               />

@@ -134,7 +134,11 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "text-base leading-none font-medium",
+        // `leading-tight`, not `leading-none`. A title long enough to wrap is normal —
+        // a goal or event named in a full sentence — and at line-height 1 its lines
+        // sit directly on top of one another. `break-words` for the same reason the
+        // notes below it carry it: one long token has nothing to wrap at.
+        "text-base leading-tight font-medium break-words",
         className
       )}
       {...props}

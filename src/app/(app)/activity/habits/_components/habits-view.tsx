@@ -145,7 +145,7 @@ function HabitPanel({
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="font-medium">{habit.title}</h3>
+            <h3 className="font-medium break-words">{habit.title}</h3>
             <p className="text-muted-foreground text-xs">
               {periodLabel(habit)}
             </p>

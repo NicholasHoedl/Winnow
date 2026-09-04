@@ -45,6 +45,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -501,8 +502,9 @@ export function TransactionDialog({
 
             <Field>
               <FieldLabel htmlFor="t-desc">Description</FieldLabel>
-              <Input
+              <Textarea
                 id="t-desc"
+                rows={2}
                 placeholder="Optional"
                 {...register("description")}
               />

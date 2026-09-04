@@ -97,8 +97,13 @@ export function AgendaView({
                   <span className="block truncate text-sm font-medium">
                     {occ.event.title}
                   </span>
+                  {/* A PREVIEW, so two lines rather than the whole note — the row opens
+                      the event, which is where the rest of it lives. One line of a
+                      2000-character field said almost nothing. `break-words` because a
+                      pasted URL has no space to break at and would otherwise push the
+                      row wide. */}
                   {occ.event.notes && (
-                    <span className="text-muted-foreground block truncate text-xs">
+                    <span className="text-muted-foreground line-clamp-2 block text-xs break-words">
                       {occ.event.notes}
                     </span>
                   )}

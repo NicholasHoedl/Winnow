@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/field"
 import { optionalNumberField } from "@/lib/forms"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -147,8 +148,9 @@ export function GoalDialog({
             </Field>
             <Field>
               <FieldLabel htmlFor="g-notes">Notes</FieldLabel>
-              <Input
+              <Textarea
                 id="g-notes"
+                rows={3}
                 placeholder="Optional"
                 {...register("notes")}
               />

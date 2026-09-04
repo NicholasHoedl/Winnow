@@ -275,8 +275,14 @@ export function GoalDetailDialog({
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
+            {/* The whole note, newlines intact. `whitespace-pre-wrap` because the field
+                is a textarea and HTML otherwise collapses every line break the user typed
+                into a single space; `break-words` because a pasted URL has nothing to wrap
+                at and would push the dialog wide. */}
             {goal.notes && (
-              <p className="text-muted-foreground text-sm">{goal.notes}</p>
+              <p className="text-muted-foreground text-sm break-words whitespace-pre-wrap">
+                {goal.notes}
+              </p>
             )}
 
             {/* Driven by the discriminated progress rather than by `milestones.length`, so
@@ -366,7 +372,14 @@ export function GoalDetailDialog({
                     return (
                       <li key={habit.id} className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{habit.title}</p>
+                          {/* Two lines, not one. This is the DETAIL view for the
+                              goal — the place you come to read what its practice
+                              actually is — and `truncate` cut a real habit title
+                              off mid-word. `line-clamp-2` still bounds the row so
+                              the meter below it stays put. */}
+                          <p className="line-clamp-2 text-sm break-words">
+                            {habit.title}
+                          </p>
                           <QuotaMeter
                             className="mt-1"
                             name={habit.title}
@@ -535,7 +548,7 @@ export function GoalDetailDialog({
                           aria-label={`Edit ${milestone.title}`}
                           onClick={() => startEdit(milestone)}
                           className={cn(
-                            "hover:text-foreground min-w-0 flex-1 truncate text-left",
+                            "hover:text-foreground line-clamp-2 min-w-0 flex-1 text-left break-words",
                             milestone.done &&
                               "text-muted-foreground line-through",
                           )}
