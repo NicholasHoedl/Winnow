@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { dashboardHeading } from "../e2e/_login"
 
 // The browser-level half of the service-worker proof. src/components/pwa/sw.test.ts
 // covers the routing decisions in a fake worker global; this covers the part that file
@@ -23,9 +24,7 @@ test("registers the worker without hijacking normal navigation", async ({
   await waitForWorker(page)
 
   await page.reload()
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
 })
 
 test("serves the offline page once the network is gone", async ({

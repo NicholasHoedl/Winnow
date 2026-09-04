@@ -8,6 +8,7 @@ import {
   dowOf,
   dueStatus,
   fmt,
+  hourInZone,
   isValidDateString,
   localDateToString,
   localStringToDate,
@@ -239,5 +240,35 @@ describe("dateRange", () => {
 
   it("is empty when the range runs backwards", () => {
     expect(dateRange("2026-07-04", "2026-07-01")).toEqual([])
+  })
+})
+
+describe("hourInZone", () => {
+  it("returns the wall-clock hour, not the UTC one", () => {
+    // 17:30Z is 12:30 in Chicago on CDT (UTC-5) — the afternoon boundary, and a
+    // different hour from the one the instant carries.
+    expect(hourInZone(new Date("2026-07-22T17:30:00Z"), TZ)).toBe(12)
+  })
+
+  it("is 0 at midnight, not 24", () => {
+    // The whole reason this asks Intl for `hourCycle: "h23"`. `hour12: false` selects
+    // h24 in en-US, which renders midnight as "24" — a value no clock has and one that
+    // would land outside every branch of `greeting`.
+    expect(hourInZone(new Date("2026-07-22T05:00:00Z"), TZ)).toBe(0)
+  })
+
+  it("follows the zone across a day boundary", () => {
+    // Still the previous evening in Chicago.
+    expect(hourInZone(new Date("2026-07-22T02:00:00Z"), TZ)).toBe(21)
+  })
+
+  it("applies the right DST rule rather than a fixed offset", () => {
+    // Same wall-clock instant of day, six months apart: CDT is UTC-5, CST is UTC-6.
+    expect(hourInZone(new Date("2026-07-15T18:00:00Z"), TZ)).toBe(13)
+    expect(hourInZone(new Date("2026-01-15T18:00:00Z"), TZ)).toBe(12)
+  })
+
+  it("works east of UTC", () => {
+    expect(hourInZone(new Date("2026-07-22T17:30:00Z"), "Asia/Tokyo")).toBe(2)
   })
 })

@@ -1,4 +1,5 @@
 // Client-safe display formatters keyed off user preferences.
+import { hourInZone } from "./date"
 
 /**
  * A 'YYYY-MM-DD' → "Monday, July 21". Parsed as UTC so the wall date is shown verbatim,
@@ -106,4 +107,24 @@ export function volumeUnitLabel(unit: "floz" | "ml"): string {
  */
 export function volumePresets(unit: "floz" | "ml"): number[] {
   return unit === "ml" ? [250, 500, 750] : [8, 12, 16]
+}
+
+/**
+ * "Good morning" / "Good afternoon" / "Good evening", by the account's own clock.
+ *
+ * The three boundaries are noon, 18:00 and midnight, and they are FIXED — there is
+ * deliberately no preference for them. Every other time-shaped thing in this app is
+ * configurable (`weekStartsOn`, `timeZone`, `use24HourTime`), so the omission is a
+ * decision rather than an oversight: a greeting is a pleasantry, and a settings row asking
+ * when your evening begins costs more attention than the answer is worth.
+ *
+ * Read in `timeZone`, not on the server's clock. The server runs in UTC, so a greeting
+ * derived from `new Date().getHours()` would tell someone in Chicago good evening over
+ * breakfast — the same fault `todayInZone` exists to prevent for dates.
+ */
+export function greeting(now: Date, timeZone: string): string {
+  const hour = hourInZone(now, timeZone)
+  if (hour < 12) return "Good morning"
+  if (hour < 18) return "Good afternoon"
+  return "Good evening"
 }

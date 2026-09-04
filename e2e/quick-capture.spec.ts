@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
+import { dashboardHeading } from "./_login"
 
 // Browser coverage for T1-S4: the dashboard natural-language quick-capture bar and the
 // three "create a task in place" affordances (n shortcut, palette command, header button).
@@ -10,9 +11,7 @@ test("dashboard quick-capture creates a task, parsing the date out of the text",
 }) => {
   const label = `E2E capture ${Date.now()}`
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
   await page.screenshot({ path: "test-results/quick-capture.png" })
 
   const input = page.getByLabel("Quick add a task")
@@ -37,9 +36,7 @@ test("dashboard quick-capture creates a task, parsing the date out of the text",
 
 test("the n shortcut opens the new-task dialog in place", async ({ page }) => {
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
 
   await page.keyboard.press("n")
   await expect(page.getByRole("heading", { name: "New task" })).toBeVisible()

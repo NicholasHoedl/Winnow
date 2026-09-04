@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
+import { dashboardHeading } from "./_login"
 
 /**
  * The agenda is the one section here that is NOT unconditional: `TodayAgenda` replaces
@@ -26,9 +27,7 @@ test("dashboard shows the key sections", async ({ page }) => {
   await expect(visibleCard(page, title)).toBeVisible()
 
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
   // Slate leads the page. It replaced the agenda, "Coming up" and "Tomorrow", which were
   // three cards splitting one question — what has a date on it? — along an arbitrary line.
   await expect(page.getByRole("heading", { name: "Slate" })).toBeVisible()

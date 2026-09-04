@@ -112,6 +112,26 @@ export function todayInZone(now: Date, timeZone: string): string {
   }).format(now)
 }
 
+/**
+ * Wall-clock hour (0–23) for an instant in a given IANA timezone.
+ *
+ * `hourCycle: "h23"` rather than `hour12: false`, and the difference is not cosmetic:
+ * `hour12: false` selects the h24 cycle in en-US, which renders midnight as "24". That is
+ * a value no clock shows and one that falls outside every branch that consumes this.
+ *
+ * The zone is a parameter for the same reason it is on `todayInZone` above — the server
+ * runs in UTC and the answer is about the account's own day.
+ */
+export function hourInZone(now: Date, timeZone: string): number {
+  return Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hourCycle: "h23",
+      hour: "2-digit",
+    }).format(now),
+  )
+}
+
 export type DueStatus = "overdue" | "due-today" | "upcoming" | "none"
 
 /**

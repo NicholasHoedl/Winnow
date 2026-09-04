@@ -233,3 +233,22 @@ test("a task completed on the dashboard is still there after a reload", async ({
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(visibleCard(page, title)).toHaveCount(0)
 })
+
+/**
+ * The dashboard greets you by the time of day.
+ *
+ * A wiring test, and deliberately not more than one. The rule — morning to noon, afternoon
+ * to six, evening to midnight, read in the account's own zone — is settled by unit tests in
+ * `src/lib/format.test.ts`, which can name an instant and a zone and assert the exact
+ * string on every boundary.
+ *
+ * That work cannot be repeated here: the greeting is rendered on the SERVER, so
+ * `page.clock` moves the browser's clock and changes nothing about the answer. What is left
+ * for a browser is whether the heading is wired to the clock at all rather than to the
+ * fixed string it replaced, and whether it still carries the name beside it.
+ */
+test("the dashboard greeting names the time of day", async ({ page }) => {
+  await page.goto("/")
+  const heading = page.getByRole("heading", { level: 1 }).first()
+  await expect(heading).toHaveText(/^Good (morning|afternoon|evening), \S/)
+})

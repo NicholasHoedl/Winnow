@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { visibleCard } from "./_card"
+import { dashboardHeading } from "./_login"
 
 // Browser coverage for the ⌘K command palette (T1-S3): open/close, the visible
 // trigger, page-jump commands, cross-module search, and the `g`-then-letter nav.
@@ -19,9 +20,7 @@ test("opens from the trigger and closes with Escape", async ({ page }) => {
 
 test("opens with the Ctrl+K shortcut", async ({ page }) => {
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
 
   await page.keyboard.press("Control+k")
   await expect(page.getByPlaceholder(PLACEHOLDER)).toBeVisible()
@@ -38,9 +37,7 @@ test("jumps to a page via a nav command", async ({ page }) => {
 
 test("g then b navigates to Budget", async ({ page }) => {
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
 
   await page.keyboard.press("g")
   await page.keyboard.press("b")

@@ -2,6 +2,7 @@ import { test, expect, type Locator } from "./_test"
 
 import { visibleCard } from "./_card"
 import { serverWrites, withArguments } from "./_server-write"
+import { dashboardHeading } from "./_login"
 
 /**
  * Regression coverage for the rapid-capture defect: every text quick-add in the app used
@@ -64,9 +65,7 @@ test("dashboard quick-capture keeps every entry in a burst", async ({
   const titles = [`${tag}a`, `${tag}b`, `${tag}c`]
 
   await page.goto("/")
-  await expect(
-    page.getByRole("heading", { name: /good to see you/i }),
-  ).toBeVisible()
+  await expect(dashboardHeading(page)).toBeVisible()
 
   await burst(
     page.getByLabel("Quick add a task"),

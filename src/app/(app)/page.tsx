@@ -15,7 +15,7 @@ import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
 import { getTasks } from "@/modules/todos/queries"
-import { formatLongDate } from "@/lib/format"
+import { formatLongDate, greeting } from "@/lib/format"
 import { dateLocale } from "@/lib/preferences"
 import type { DashboardCard } from "@/lib/preferences"
 import { Reveal } from "@/components/shared/reveal"
@@ -63,7 +63,10 @@ export default async function DashboardPage({
     requested === "week" || requested === "month"
       ? requested
       : dashboardCalendarView
-  const today = todayInZone(new Date(), timeZone)
+  // One instant, read twice. Two `new Date()` calls either side of midnight would date
+  // the page one day and greet you for the other.
+  const now = new Date()
+  const today = todayInZone(now, timeZone)
   const month = today.slice(0, 7)
 
   const [
@@ -190,7 +193,7 @@ export default async function DashboardPage({
                 explaining that the setting follows the account. The test is whether a reader
                 who already knows what the page is would lose anything. */}
             <h1 className="font-display mt-1 text-3xl font-semibold tracking-tight xl:text-4xl">
-              Good to see you, {name}
+              {greeting(now, timeZone)}, {name}
             </h1>
           </div>
           {/* `flex-wrap` is load-bearing, not tidying. The header above wraps, but this
