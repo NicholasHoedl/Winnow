@@ -501,6 +501,10 @@ describe("buildSummaryMessages", () => {
     spent: "$412.30",
     earned: "$0.00",
     goalMovement: ["Chapter one · Write the book"],
+    // A week already OVER by default, which is the premise every case below was written
+    // under — "5 of 7 days logged" only reads correctly for a complete week.
+    today: "2026-08-10",
+    progress: { elapsed: 7, total: 7, remaining: 0 },
   }
 
   // Money arrives pre-formatted. The app did that arithmetic with `formatCents`; handing
@@ -524,6 +528,43 @@ describe("buildSummaryMessages", () => {
     })
     expect(user.content).not.toContain("What was finished")
     expect(user.content).not.toContain("Progress toward goals")
+  })
+
+  // The week runs Monday to Sunday here, not Sunday to Saturday — `weekRange` builds it
+  // from `weekStartsOn`, so naming the days off the week's own bounds is what carries the
+  // setting into the prompt without this function ever reading the preference.
+  it("names the days the week runs on, from its own bounds", () => {
+    const [, user] = buildSummaryMessages(week)
+    expect(user.content).toContain("runs Monday to Sunday")
+  })
+
+  // Reported from real use: on a Wednesday it said "3 of 7 days logged", which counts four
+  // days as missed when three of them have not arrived.
+  it("tells the model how much of the week has actually happened", () => {
+    const [, user] = buildSummaryMessages({
+      ...week,
+      today: "2026-07-29",
+      daysLogged: 2,
+      progress: { elapsed: 3, total: 7, remaining: 4 },
+    })
+    expect(user.content).toContain("Today is Wednesday")
+    expect(user.content).toContain("day 3 of 7")
+    expect(user.content).toContain("4 still to come")
+    // The denominator moves with it, and says that it is provisional.
+    expect(user.content).toContain("Meals logged on 2 of 3 days so far")
+  })
+
+  it("says a finished week is finished, and drops the hedge", () => {
+    const [, user] = buildSummaryMessages(week)
+    expect(user.content).toContain("week is over")
+    expect(user.content).not.toContain("so far")
+    expect(user.content).not.toContain("still to come")
+    expect(user.content).toContain("Meals logged on 5 of 7 days")
+  })
+
+  it("tells the model not to count days that have not happened as missed", () => {
+    const [system] = buildSummaryMessages(week)
+    expect(system.content).toContain("not missed days")
   })
 
   it("sends the previous summary when refining", () => {

@@ -194,6 +194,10 @@ export async function POST(request: Request): Promise<Response> {
         {
           weekStart: review.weekStart,
           weekEnd: review.weekEnd,
+          // The app measured how much of the week has happened; the model is told, never
+          // asked to work it out. Same division as every other figure here.
+          today: review.today,
+          progress: review.progress,
           tasksCompleted: review.tasks.completed,
           busiestDay: review.tasks.busiestDay,
           // Capped so a busy week does not send fifty titles. The overflow count keeps

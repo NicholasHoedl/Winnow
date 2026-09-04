@@ -5,7 +5,49 @@
 // This module owns no tables. Everything here is a projection of what the four feature
 // modules already store.
 
+import { dayDiff } from "@/lib/date"
+
 export type ReviewTask = { id: string; title: string; completedOn: string }
+
+export type WeekProgress = {
+  /** Days of this week that have happened, today included. */
+  elapsed: number
+  /** The week's length, measured from its own bounds rather than assumed to be seven. */
+  total: number
+  /** Zero once the week is over. */
+  remaining: number
+}
+
+/**
+ * How much of the week has actually happened.
+ *
+ * **The denominator used to be the constant 7**, which read as an accusation mid-week:
+ * on a Wednesday "3 of 7 days logged" counts four days as missed when three of them have
+ * not arrived. Reported from real use, and it is the same class of mistake as calling a
+ * day-old goal stalled — judging a period against a bar it has not had the chance to clear.
+ *
+ * The week's own boundaries are the input rather than an assumed Sunday-to-Saturday, because
+ * `weekRange` already derives them from `weekStartsOn`. That keeps this correct for whichever
+ * day the account starts its week on WITHOUT this function needing to know which day that
+ * is — the setting is honoured by construction rather than by a second reading of it.
+ *
+ * A past week is a whole week, not "7 of 7 so far": once `today` is beyond the end there is
+ * nothing provisional left, and the review of it should read the way it always did.
+ */
+export function weekProgress(
+  weekStart: string,
+  weekEnd: string,
+  today: string,
+): WeekProgress {
+  const total = dayDiff(weekStart, weekEnd) + 1
+  const elapsed =
+    today < weekStart
+      ? 0
+      : today > weekEnd
+        ? total
+        : dayDiff(weekStart, today) + 1
+  return { elapsed, total, remaining: total - elapsed }
+}
 
 export type ReviewMilestone = {
   id: string
@@ -56,6 +98,8 @@ export type MacroWeek = {
 export type WeeklyReview = {
   weekStart: string
   weekEnd: string
+  /** The user's local today. Carried so the summary prompt need not re-derive it. */
+  today: string
   tasks: {
     completed: number
     /** The day with the most completions, or null on a tie-free empty week. */
@@ -67,6 +111,15 @@ export type WeeklyReview = {
   /** Completed tasks that fed a goal — a subset of `tasks.items`. */
   goalTasks: ReviewGoalTask[]
   money: ReviewMoney
+  /**
+   * How much of this week has happened — what "days logged" is measured AGAINST.
+   *
+   * Carried on the review rather than recomputed by each consumer so the page's figure and
+   * the summary's prose cannot disagree, which is the whole point: the summary is a reading
+   * of these figures, so a page saying 3/7 beside prose saying 3 of 4 makes the model look
+   * wrong when it is the page that is stale.
+   */
+  progress: WeekProgress
   /** True when the week holds nothing at all — the page says so rather than showing zeros. */
   isEmpty: boolean
 }
@@ -119,6 +172,8 @@ export function busiestDay(tasks: readonly ReviewTask[]): string | null {
 export function buildWeeklyReview(input: {
   weekStart: string
   weekEnd: string
+  /** The user's local today, so the week knows how much of itself has happened. */
+  today: string
   tasksCompleted: readonly ReviewTask[]
   milestones: readonly ReviewMilestone[]
   goalTasks: readonly ReviewGoalTask[]
@@ -136,6 +191,7 @@ export function buildWeeklyReview(input: {
   return {
     weekStart: input.weekStart,
     weekEnd: input.weekEnd,
+    today: input.today,
     tasks: {
       completed: input.tasksCompleted.length,
       busiestDay: busiestDay(input.tasksCompleted),
@@ -147,6 +203,7 @@ export function buildWeeklyReview(input: {
     // `tasksCompleted`, so testing it there would be testing the same thing twice.
     goalTasks: [...input.goalTasks],
     money: input.money,
+    progress: weekProgress(input.weekStart, input.weekEnd, input.today),
     isEmpty,
   }
 }

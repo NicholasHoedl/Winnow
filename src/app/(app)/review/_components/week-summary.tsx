@@ -89,7 +89,13 @@ export function WeekSummary({
           disabled={busy}
           aria-busy={busy}
         >
-          {busy ? "Reading…" : "Summarise this week"}
+          {/* "so far" only on the week in progress. On a past week nothing is provisional
+              and the hedge would be a lie about a week that is complete. */}
+          {busy
+            ? "Reading…"
+            : isCurrentWeek
+              ? "Summarise my week so far"
+              : "Summarise this week"}
         </Button>
       </ToolPanel>
 

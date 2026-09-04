@@ -1,7 +1,7 @@
 // Pure companion logic: what gets sent, and what the app checks about what comes back.
 // No DB, no framework — unit-testable directly.
 
-import { dayDiff } from "@/lib/date"
+import { dayDiff, dowOf } from "@/lib/date"
 
 import type {
   GoalPlanPayload,
@@ -514,9 +514,30 @@ export function routineSpan(payload: RoutinePayload): string {
  * already done that arithmetic with `formatCents`. Handing a model raw minor units and
  * a currency code is inviting it to divide by a hundred and be wrong about it.
  */
+/** Sunday-indexed, matching `dowOf`. */
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const
+
 export type SummaryPromptContext = {
   weekStart: string
   weekEnd: string
+  /** The user's local today, so the model can be told where in the week it is. */
+  today: string
+  /**
+   * How much of the week has happened — `weekProgress` in `review/service.ts` computes it.
+   *
+   * Taken as a SHAPE rather than imported, the same way `GoalMeasure` is: a companion
+   * importing another module's service would be the first cross-module service import in
+   * this codebase, and the convention when that came up for `dueStatus` was to avoid it.
+   */
+  progress: { elapsed: number; total: number; remaining: number }
   tasksCompleted: number
   busiestDay: string | null
   /** Up to a readable number of them; `taskOverflow` says how many were left out. */
@@ -554,6 +575,11 @@ const SUMMARY_SYSTEM_PROMPT = [
   "Say what actually happened and what it suggests. Do not congratulate, encourage, or moralise.",
   "If something is notably better or worse than the rest of the week, say which and why.",
   "Never invent detail that is not in the figures.",
+  // Without this the model reads a partial week as a failed one: told "2 of 3 days logged"
+  // on a Wednesday it still reaches for the shortfall against seven, because seven days is
+  // what "a week" means to it. Saying so in the system prompt is cheaper than hoping the
+  // figures alone carry it.
+  "A week still in progress is judged only on the days that have happened; days still to come are not missed days.",
 ].join(" ")
 
 export function buildSummaryMessages(
@@ -561,12 +587,30 @@ export function buildSummaryMessages(
   instruction?: string,
   previous?: SummaryPayload,
 ): ChatMessage[] {
+  const { elapsed, total, remaining } = week.progress
+  const inProgress = remaining > 0
+  // A week not yet begun has nothing elapsed to measure against; it reads against the whole
+  // week, for the same reason the Meals card does.
+  const outOf = elapsed || total
+
   const lines = [
-    `Week of ${week.weekStart} to ${week.weekEnd}.`,
+    // The day NAMES come off the week's own bounds, which `weekRange` built from
+    // `weekStartsOn` — so a Monday-start account tells the model its week runs Monday to
+    // Sunday without this function ever reading the preference.
+    `Week of ${week.weekStart} to ${week.weekEnd}, which runs ${
+      WEEKDAY_NAMES[dowOf(week.weekStart)]
+    } to ${WEEKDAY_NAMES[dowOf(week.weekEnd)]}.`,
+    inProgress
+      ? `Today is ${WEEKDAY_NAMES[dowOf(week.today)]} — day ${elapsed} of ${total}, with ${remaining} still to come. Everything below covers the week SO FAR.`
+      : `The week is over; all ${total} days are accounted for.`,
     `Tasks completed: ${week.tasksCompleted}${
       week.busiestDay ? `, busiest day ${week.busiestDay}` : ""
     }.`,
-    `Meals logged on ${week.daysLogged} of 7 days; ${week.daysOnTarget} of ${week.daysWithTarget} days with a calorie target were met.`,
+    // "of 7" was a constant here, which is what produced "3 of 7 days logged" on a
+    // Wednesday — four days counted as missed when three had not arrived.
+    `Meals logged on ${week.daysLogged} of ${outOf} days${
+      inProgress ? " so far" : ""
+    }; ${week.daysOnTarget} of ${week.daysWithTarget} days with a calorie target were met.`,
     `Money: ${week.spent} spent, ${week.earned} in.`,
   ]
   if (week.taskTitles.length > 0) {

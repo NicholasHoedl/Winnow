@@ -123,6 +123,9 @@ export async function getWeeklyReview(
     review: buildWeeklyReview({
       weekStart: start,
       weekEnd: end,
+      // Already the user's local wall date — the same one `isCurrentWeek` is judged on
+      // below, so the two cannot disagree about which week is in progress.
+      today,
       tasksCompleted,
       milestones,
       goalTasks,

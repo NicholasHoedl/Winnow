@@ -378,7 +378,11 @@ test("a week is narrated read-only, with no way to apply it", async ({
   await seedCompletedTasks(page, prefix, 3)
 
   await page.goto("/review")
-  await page.getByRole("button", { name: "Summarise this week" }).click()
+  // "so far" because this is the CURRENT week. A past week is complete, and the button says
+  // so — the hedge would be a lie about a week with nothing left to happen. The label is the
+  // visible half of making the summary day-aware; the arithmetic behind it is
+  // `weekProgress`, unit-tested in `review/service.test.ts`.
+  await page.getByRole("button", { name: "Summarise my week so far" }).click()
   await expect(page.getByText("Your week")).toBeVisible()
 
   await expect(page.getByText("STUB a steady week")).toBeVisible()
@@ -422,7 +426,7 @@ test("a summary refinement replaces it in place", async ({ page }) => {
   await seedCompletedTasks(page, prefix, 3)
 
   await page.goto("/review")
-  await page.getByRole("button", { name: "Summarise this week" }).click()
+  await page.getByRole("button", { name: "Summarise my week so far" }).click()
   await expect(page.getByText("STUB a steady week")).toBeVisible()
 
   await page.getByLabel("Change this summary").fill("be blunter")

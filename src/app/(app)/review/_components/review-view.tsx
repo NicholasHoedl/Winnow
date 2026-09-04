@@ -186,9 +186,18 @@ export function ReviewView({
           </CardHeader>
           <CardContent>
             <div className="flex gap-6">
+              {/* Against the days that have HAPPENED, not against a constant seven. On a
+                  Wednesday "3/7" counts four days as missed when three have not arrived —
+                  reported from real use, and the figure the summary narrates, so the two
+                  have to agree.
+
+                  A week not yet begun has nothing elapsed to measure against, and falls back
+                  to the whole week: "0/7" for a week ahead is honest, "0/0" is not. */}
               <Stat
                 label="Days logged"
-                value={`${review.macros.daysLogged}/7`}
+                value={`${review.macros.daysLogged}/${
+                  review.progress.elapsed || review.progress.total
+                }`}
               />
               <Stat
                 label="On calorie target"

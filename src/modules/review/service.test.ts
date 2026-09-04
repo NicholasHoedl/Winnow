@@ -7,6 +7,7 @@ import {
   busiestDay,
   macroWeek,
   reviewHeadline,
+  weekProgress,
 } from "./service"
 
 const task = (id: string, completedOn: string): ReviewTask => ({
@@ -28,6 +29,11 @@ const NO_MONEY = { incomeCents: 0, expenseCents: 0, netCents: 0 }
 const base = {
   weekStart: "2026-07-19",
   weekEnd: "2026-07-25",
+  // A day AFTER the week, so every case below sees a complete week — which is the premise
+  // they were written under. Defaulting to a day inside it would silently make them
+  // partial-week tests that happened to pass, the same trap `goalMomentum`'s helpers hit
+  // when `createdAt` arrived.
+  today: "2026-08-01",
   tasksCompleted: [],
   milestones: [],
   goalTasks: [],
@@ -227,5 +233,66 @@ describe("buildWeeklyReview goal tasks", () => {
     })
     expect(review.tasks.completed).toBe(1)
     expect(review.goalTasks).toHaveLength(1)
+  })
+})
+
+/**
+ * How much of the week has actually happened.
+ *
+ * Reported from real use: on a Wednesday the review said "3 of 7 days logged", which reads
+ * as four days missed when three of them have not arrived yet. The denominator was a
+ * constant; it is a measurement now.
+ *
+ * The week's own boundaries are the input rather than an assumed Sunday-to-Saturday, because
+ * `weekRange` already builds them from `weekStartsOn` — so this stays correct for whichever
+ * day the account starts its week on without knowing which day that is.
+ */
+describe("weekProgress", () => {
+  // 2026-08-30 is a Sunday; the week runs to Saturday 2026-09-05.
+  const START = "2026-08-30"
+  const END = "2026-09-05"
+
+  it("counts today as elapsed, mid-week", () => {
+    // Wednesday: Sun, Mon, Tue, Wed have happened.
+    expect(weekProgress(START, END, "2026-09-02")).toEqual({
+      elapsed: 4,
+      total: 7,
+      remaining: 3,
+    })
+  })
+
+  it("counts the first day as one elapsed, not none", () => {
+    expect(weekProgress(START, END, START)).toEqual({
+      elapsed: 1,
+      total: 7,
+      remaining: 6,
+    })
+  })
+
+  it("has nothing remaining on the last day", () => {
+    expect(weekProgress(START, END, END)).toEqual({
+      elapsed: 7,
+      total: 7,
+      remaining: 0,
+    })
+  })
+
+  it("treats a week already over as complete", () => {
+    // A past week is not "7 of 7 so far" — it is simply a whole week, and the review of it
+    // should read the way it always did.
+    expect(weekProgress(START, END, "2026-09-20")).toEqual({
+      elapsed: 7,
+      total: 7,
+      remaining: 0,
+    })
+  })
+
+  it("treats a week not yet begun as nothing elapsed", () => {
+    // Reachable: `/review?week=` navigates forward as freely as back.
+    expect(weekProgress(START, END, "2026-08-01")).toEqual({
+      elapsed: 0,
+      total: 7,
+      remaining: 7,
+    })
   })
 })
