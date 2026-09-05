@@ -272,7 +272,7 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
 }
 
 /**
- * The full rows for every habit attached to a goal — no entries, no readings.
+ * The full rows for every live habit — no entries, no readings.
  *
  * `/goals` already loads `getHabitStrip`, and that shape is deliberately five fields
  * (see its note). It is enough to DRAW a practice and not enough to EDIT one: `HabitDialog`
@@ -286,16 +286,18 @@ export async function getHabitStrip(): Promise<HabitStripCard[]> {
  * columns onto the dashboard, `/activity` and the habits page as well.
  *
  * Archived habits are excluded, matching every other read: a retired practice keeps its
- * history but is not something the goal still lists.
+ * history but is not something a goal still lists.
+ *
+ * **Every live habit, not only the ones attached to a goal.** It was goal-scoped when the
+ * goal dialog was its only reader, and the plan panel needs the whole week: the load
+ * warning asks what the account already keeps, and a practice with no goal on it is still
+ * something you do on a Tuesday. The dialog filters by `goalId` at the point of use and
+ * always did, so nothing there changes.
  */
-export async function getGoalHabits(): Promise<HabitRow[]> {
+export async function getLiveHabits(): Promise<HabitRow[]> {
   const userId = await requireUserId()
   return db.query.habits.findMany({
-    where: and(
-      eq(habits.userId, userId),
-      isNotNull(habits.goalId),
-      isNull(habits.archivedAt),
-    ),
+    where: and(eq(habits.userId, userId), isNull(habits.archivedAt)),
     columns: { userId: false },
     orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
   })

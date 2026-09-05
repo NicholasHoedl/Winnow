@@ -1,9 +1,10 @@
 import "server-only"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, isNull } from "drizzle-orm"
 
 import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 import { goals, milestones } from "@/modules/goals/schema"
+import { habits } from "@/modules/habits/schema"
 
 import { aiProposals } from "./schema"
 import type { GoalPromptContext } from "./service"
@@ -107,6 +108,19 @@ export async function buildGoalContext(
     orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
   })
 
+  // Every LIVE habit, not this goal's. The question the prompt needs answered is "what
+  // does my week already look like", and a practice attached to another goal — or to no
+  // goal at all — is still something you do on a Tuesday. Archived ones are excluded for
+  // the same reason every other read excludes them: a retired practice costs nothing.
+  const practice = await db.query.habits.findMany({
+    where: and(eq(habits.userId, userId), isNull(habits.archivedAt)),
+    // Named columns, not the row. ADR-0011's rule, and this list is going to a third
+    // party — a `.findMany()` without it would ship `unit`, `startDate` and whatever the
+    // next migration adds.
+    columns: { title: true, period: true, targetCount: true },
+    orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
+  })
+
   return {
     title: goal.title,
     // The goal's own description — see GoalPromptContext for why it is sent at all.
@@ -116,6 +130,7 @@ export async function buildGoalContext(
     currentValue: goal.currentValue,
     unit: goal.unit,
     existingMilestones: existing.map((m) => m.title),
+    existingHabits: practice,
     today,
   }
 }

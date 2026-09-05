@@ -3,7 +3,8 @@ import { getEventOptions } from "@/modules/calendar/queries"
 import { aiReady } from "@/modules/companion/ai-settings"
 import { getPendingProposals } from "@/modules/companion/queries"
 import { getGoalOptions, getGoals } from "@/modules/goals/queries"
-import { getGoalHabits, getHabitStrip } from "@/modules/habits/queries"
+import { weeklyCommitments } from "@/modules/companion/service"
+import { getHabitStrip, getLiveHabits } from "@/modules/habits/queries"
 import {
   getAiSettings,
   getUserPreferences,
@@ -42,7 +43,7 @@ export default async function GoalsPage() {
       // than one widened shape: `HabitDialog` needs six columns the strip omits, and the
       // strip's leanness is what keeps it cheap on the dashboard and `/activity` too. This
       // one carries no entries at all.
-      getGoalHabits(),
+      getLiveHabits(),
       // For the habit dialog's goal picker. `cache()`d, and already warm on this page.
       getGoalOptions(),
       // For the goal dialog's target-date link. Already fetched on every authenticated page
@@ -54,6 +55,10 @@ export default async function GoalsPage() {
       // newest — an import, a narrated week — because the view opens `pending[0]`.
       getPendingProposals("goal_plan"),
     ])
+
+  // What the week already asks of you, for the plan panel's load warning. Measured from
+  // the rows this page has already loaded rather than by a query of its own.
+  const existingCommitments = weeklyCommitments(habitRows)
 
   return (
     <GoalsView
@@ -68,6 +73,7 @@ export default async function GoalsPage() {
       // which is exactly the coupling T13 removed by dispersing the tools.
       companionEnabled={aiReady(aiSettings)}
       today={todayInZone(new Date(), timeZone)}
+      existingCommitments={existingCommitments}
     />
   )
 }

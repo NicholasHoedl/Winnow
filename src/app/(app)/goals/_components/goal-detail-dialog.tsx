@@ -109,7 +109,7 @@ export function GoalDetailDialog({
    * fields and a current-period reading — enough to DRAW a practice, and missing every
    * column `HabitDialog` needs to EDIT one. Widening the strip would have pushed those
    * columns onto the dashboard and `/activity` too, which is the cost its own note refuses.
-   * `getGoalHabits` loads them separately and carries no entries at all.
+   * `getLiveHabits` loads them separately and carries no entries at all.
    */
   habitRows: HabitRow[]
   /** For the habit dialog's goal picker. */

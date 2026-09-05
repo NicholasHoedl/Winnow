@@ -37,6 +37,7 @@ export function GoalsView({
   pending,
   companionEnabled,
   today,
+  existingCommitments,
 }: {
   goals: GoalWithProgress[]
   /**
@@ -54,7 +55,7 @@ export function GoalsView({
   /**
    * The same habits as full rows, for the detail dialog's edit form.
    *
-   * `getGoalHabits`, not a widened strip: `HabitDialog` reads six columns the cheap shape
+   * `getLiveHabits`, not a widened strip: `HabitDialog` reads six columns the cheap shape
    * deliberately omits, and widening it would have pushed them onto the dashboard and
    * `/activity` as well. Neither read carries the other's cost — this one loads no entries.
    */
@@ -67,6 +68,8 @@ export function GoalsView({
   pending: ProposalRow[]
   companionEnabled: boolean
   today: string
+  /** What the account already keeps in a week — the plan panel's load warning reads it. */
+  existingCommitments: number
 }) {
   const [detailGoalId, setDetailGoalId] = React.useState<string | null>(null)
   const [goalDialogOpen, setGoalDialogOpen] = React.useState(false)
@@ -241,6 +244,7 @@ export function GoalsView({
               unit: goalFor(active.targetId)?.unit ?? null,
             }}
             today={today}
+            existingCommitments={existingCommitments}
             pending={busy}
             onApply={(next) =>
               proposal.apply({ kind: "goal_plan", payload: next })

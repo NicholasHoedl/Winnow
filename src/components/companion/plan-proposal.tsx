@@ -117,6 +117,7 @@ export function PlanProposal({
   goalTitle,
   goal,
   today,
+  existingCommitments,
   pending,
   onApply,
   onDiscard,
@@ -136,6 +137,14 @@ export function PlanProposal({
     unit: string | null
   }
   today: string
+  /**
+   * Weekly commitments the account already keeps, across every goal.
+   *
+   * Passed in rather than measured here: this component is rendered from a page that has
+   * already loaded the habits, and a second read from a client component would be a
+   * round trip for a number somebody upstairs is holding.
+   */
+  existingCommitments: number
   pending: boolean
   onApply: (finalized: GoalPlanPayload) => void
   onDiscard: () => void
@@ -159,8 +168,17 @@ export function PlanProposal({
         payload,
         { targetDate, targetValue, currentValue, unit: goalUnit },
         today,
+        existingCommitments,
       ),
-    [payload, targetDate, targetValue, currentValue, goalUnit, today],
+    [
+      payload,
+      targetDate,
+      targetValue,
+      currentValue,
+      goalUnit,
+      today,
+      existingCommitments,
+    ],
   )
   const warningFor = (on: "milestone" | "setupTask", index: number) =>
     warnings.find((w) => w.on === on && w.index === index)

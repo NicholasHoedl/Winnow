@@ -14,6 +14,7 @@ import {
   routineSpan,
   summaryReadiness,
   uncategorisedCount,
+  weeklyCommitments,
   type GoalPromptContext,
   summaryObservations,
 } from "./service"
@@ -32,6 +33,7 @@ const goal: GoalPromptContext = {
   currentValue: null,
   unit: null,
   existingMilestones: [],
+  existingHabits: [],
   today: TODAY,
 }
 
@@ -933,5 +935,161 @@ describe("finalizePlan — unnamed rows", () => {
     expect(result.milestones).toEqual([
       { title: "Kept", dueDate: "2026-10-01" },
     ])
+  })
+})
+
+/**
+ * The counterweight to `no-habits`.
+ *
+ * Every other warning here is about a plan being too LITTLE or badly dated — `no-habits`
+ * fires at zero and nothing fired at six. Reported from real use: one goal produced four
+ * habits worth fourteen commitments a week, and with four or five goals planned the daily
+ * and weekly load became unmanageable. The model cannot see that, because each plan is
+ * made for one goal in isolation; the app can, which is ADR-0011's division exactly.
+ *
+ * Measured in COMMITMENTS rather than habits. Four daily habits and four weekly ones are
+ * not the same burden, and a count that calls them equal would warn about the wrong plans.
+ */
+describe("weeklyCommitments", () => {
+  it("counts a daily habit seven times", () => {
+    expect(weeklyCommitments([sessions("Read", "day", 1)])).toBe(7)
+  })
+
+  it("counts a weekly habit at its own rate", () => {
+    expect(weeklyCommitments([sessions("Gym", "week", 3)])).toBe(3)
+  })
+
+  it("spreads a monthly habit across the weeks", () => {
+    // 30/7 weeks in a month — the same approximation `DAYS_PER_PERIOD` already makes, and
+    // the reason this is rounded rather than reported to a decimal.
+    expect(weeklyCommitments([sessions("Review", "month", 4)])).toBeCloseTo(
+      0.93,
+      1,
+    )
+  })
+
+  it("sums a mixed practice", () => {
+    // The real load measured on 2026-09-04: one daily, three weekly, fourteen a week.
+    expect(
+      weeklyCommitments([
+        sessions("Log meals", "day", 1),
+        sessions("Strength or cardio", "week", 4),
+        sessions("Meal prep", "week", 2),
+        sessions("Weigh in", "week", 1),
+      ]),
+    ).toBe(14)
+  })
+
+  it("is zero for no practice at all", () => {
+    expect(weeklyCommitments([])).toBe(0)
+  })
+})
+
+describe("planWarnings — too much practice", () => {
+  const bare = { targetDate: null }
+  const plan = (habits: GoalPlanPayload["habits"]): GoalPlanPayload => ({
+    milestones: [{ title: "A step", dueDate: "2026-09-01" }],
+    habits,
+    setupTasks: [],
+  })
+  const kinds = (w: ReturnType<typeof planWarnings>) => w.map((x) => x.kind)
+
+  it("says nothing when the total stays under the threshold", () => {
+    // 7 existing + 3 proposed = 10 a week.
+    const w = planWarnings(plan([sessions("Gym", "week", 3)]), bare, TODAY, 7)
+    expect(kinds(w)).not.toContain("too-much-practice")
+  })
+
+  it("warns once the proposal pushes the total past three a day", () => {
+    // 18 existing + 7 proposed = 25 a week, against a threshold of 21.
+    const w = planWarnings(plan([sessions("Study", "day", 1)]), bare, TODAY, 18)
+    expect(kinds(w)).toContain("too-much-practice")
+  })
+
+  it("judges the total, not the proposal on its own", () => {
+    // The same modest proposal, unremarkable on an empty account and too much on a full
+    // one. This is the whole point: the model cannot see the second number.
+    const modest = plan([sessions("Gym", "week", 3)])
+    expect(kinds(planWarnings(modest, bare, TODAY, 0))).not.toContain(
+      "too-much-practice",
+    )
+    expect(kinds(planWarnings(modest, bare, TODAY, 19))).toContain(
+      "too-much-practice",
+    )
+  })
+
+  it("counts only the habits still ticked", () => {
+    // `planWarnings` runs on the CURRENT payload, so unticking is not what changes this —
+    // the panel passes what it would create. Proposed alone must clear the bar.
+    const w = planWarnings(plan([]), bare, TODAY, 30)
+    expect(kinds(w)).toContain("too-much-practice")
+  })
+
+  it("names both numbers, so the reading can be checked", () => {
+    const w = planWarnings(plan([sessions("Study", "day", 1)]), bare, TODAY, 18)
+    const warning = w.find((x) => x.kind === "too-much-practice")
+    expect(warning?.message).toMatch(/25/)
+  })
+
+  it("defaults to silence when the caller knows of no existing practice", () => {
+    // The parameter is optional so every existing caller keeps compiling; omitting it must
+    // mean "nothing known", not "nothing there and therefore fine to shout about".
+    const w = planWarnings(plan([sessions("Gym", "week", 3)]), bare, TODAY)
+    expect(kinds(w)).not.toContain("too-much-practice")
+  })
+})
+
+/**
+ * What the model is told about the practice you already keep.
+ *
+ * It was told nothing. `GoalPromptContext` carried the goal's own milestones so it would
+ * not duplicate them, and not one habit — so every plan was made as though the account
+ * were empty. Four or five locally reasonable plans then stack into a week nobody could
+ * keep, which is the fault reported from real use.
+ */
+describe("buildGoalPlanMessages — existing practice", () => {
+  it("says nothing when there is no practice to report", () => {
+    // The tripwire above asserts the exact string for this case, so the silence is not
+    // incidental: a line here would have to be added to that assertion deliberately.
+    const [, user] = buildGoalPlanMessages(goal)
+    expect(user.content).not.toMatch(/already keep/i)
+  })
+
+  it("names what is already kept, and the weekly total", () => {
+    const [, user] = buildGoalPlanMessages({
+      ...goal,
+      existingHabits: [
+        { title: "Log meals", period: "day", targetCount: 1 },
+        { title: "Strength or cardio", period: "week", targetCount: 4 },
+      ],
+    })
+    // The total is the number that matters — the model cannot add up periods reliably and
+    // should not be asked to. The titles are there so it does not propose a twin.
+    expect(user.content).toContain("11 commitments a week")
+    expect(user.content).toContain("Log meals")
+    expect(user.content).toContain("Strength or cardio")
+  })
+})
+
+describe("the goal plan system prompt", () => {
+  const system = () => buildGoalPlanMessages(goal)[0].content
+
+  // Asserted because these are the DECISIONS, not the wording. A prompt is the only part
+  // of this feature the stub cannot exercise — it returns a fixed payload whatever it is
+  // sent — so pinning the instructions is the nearest thing to coverage they can have.
+  it("asks for one or two habits rather than as many as fit", () => {
+    expect(system()).toMatch(/one or two/i)
+  })
+
+  it("refuses overlapping habits", () => {
+    // The reported plan had "log meals", "weigh in" and "meal prep" — three statements of
+    // one practice, and nothing in the prompt had told it not to.
+    expect(system()).toMatch(/same session/i)
+  })
+
+  it("says most goals need no setup tasks at all", () => {
+    // Was "rare and few", which still implies some, and three per goal across five goals
+    // is fifteen real open tasks.
+    expect(system()).toMatch(/most goals need none/i)
   })
 })

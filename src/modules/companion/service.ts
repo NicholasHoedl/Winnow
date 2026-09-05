@@ -39,6 +39,26 @@ export type GoalPromptContext = {
   unit: string | null
   /** Titles only — enough to avoid proposing what already exists. */
   existingMilestones: string[]
+  /**
+   * The practice the account ALREADY keeps, across every goal — not just this one.
+   *
+   * The gap this closes: a plan is made for one goal in isolation, so the model had no way
+   * to know it was the fifth such plan and that the week was already full. Reported from
+   * real use as the daily and weekly load becoming unmanageable at four or five goals.
+   *
+   * Every goal's, deliberately. Scoping it to this one would answer "what does this goal
+   * already ask of me" when the question that matters is "what does my week already look
+   * like" — and it is also what lets the model notice a habit it is about to propose a
+   * twin of.
+   *
+   * Three fields, not the row. ADR-0011's rule: a prompt builder must never be one schema
+   * change away from sending something nobody chose to send.
+   */
+  existingHabits: {
+    title: string
+    period: "day" | "week" | "month"
+    targetCount: number
+  }[]
   /** Today, as a local wall date, so the model has an anchor for "in three months". */
   today: string
 }
@@ -64,8 +84,10 @@ const SYSTEM_PROMPT = [
   "Habits are the repeatable actions that actually get you there, stated as a RATE — three times a week, once a day. They carry no dates.",
   "A habit's rate is EITHER a count of sessions (targetCount, with targetAmount and unit null) OR an amount (targetAmount plus unit, e.g. 20 with unit 'words'). Never both, and never one of targetAmount/unit without the other.",
   "When the goal states a numeric target, prefer an amount in that same unit for at least one habit, so the rate can be checked against the target.",
-  "Almost all of the work belongs in habits: a goal is reached by what you do repeatedly, not by a list of appointments.",
-  "Setup tasks are rare and few — genuine one-offs that must happen before the practice can start, like buying the book or booking a trial class.",
+  "The work belongs in habits rather than in dated appointments — but a goal needs one or two practices, not a routine of them.",
+  "Propose ONE habit where one will carry the goal, two when the goal genuinely has two sides, and three only in the rare case that nothing smaller works.",
+  "Never propose two habits that overlap: if they could be done in the same session, or one is how you measure the other, they are one habit.",
+  "Most goals need none at all: propose a setup task only when the practice literally cannot begin without it, like buying the book or booking a trial class. They become real open tasks on the user's list.",
   "Never propose a dated task for work the user does not control: you cannot decide what a class will cover on a given day.",
   "Never restate a milestone as a task or a habit.",
   "Every date must be a real calendar date in YYYY-MM-DD form.",
@@ -109,6 +131,21 @@ export function buildGoalPlanMessages(
   if (goal.existingMilestones.length > 0) {
     lines.push(
       `Milestones that already exist: ${goal.existingMilestones.join("; ")}`,
+    )
+  }
+
+  // The load the account is already under. The TOTAL is computed here rather than left for
+  // the model to work out from the list: adding up mixed periods is arithmetic, and
+  // ADR-0011 puts arithmetic on this side of the line. The titles come too, so a habit it
+  // was about to propose a twin of is visible as one.
+  if (goal.existingHabits.length > 0) {
+    const rate = (h: { period: string; targetCount: number }) =>
+      h.period === "day"
+        ? `${h.targetCount}x a day`
+        : `${h.targetCount}x a ${h.period}`
+    lines.push(
+      `You already keep ${goal.existingHabits.length} practice${goal.existingHabits.length === 1 ? "" : "s"}, about ${Math.round(weeklyCommitments(goal.existingHabits))} commitments a week: ${goal.existingHabits.map((h) => `${h.title} (${rate(h)})`).join("; ")}.`,
+      "Count that toward what you propose. Add only what is not already covered, and prefer fewer new practices when the week is already full.",
     )
   }
 
@@ -178,6 +215,7 @@ export type PlanWarning = {
     | "no-habits"
     | "no-milestones"
     | "rate-short"
+    | "too-much-practice"
   message: string
 }
 
@@ -202,6 +240,36 @@ const RATE_GRACE = 0.95
 /** Within this many days of the target counts as cutting it fine. */
 const TIGHT_DAYS = 7
 
+/**
+ * What a practice actually costs in a week.
+ *
+ * Commitments, not habits. Four daily habits and four weekly ones are the same COUNT and
+ * nothing like the same burden, and a threshold that treated them alike would warn about
+ * the wrong plans — so this is the figure the load warning is measured in.
+ *
+ * `DAYS_PER_PERIOD` supplies the month approximation rather than a second copy of it: a
+ * monthly habit is 30/7 of a week, close enough for a figure that is already an estimate,
+ * and wrong in the same direction as everything else that uses it.
+ */
+export function weeklyCommitments(
+  habits: readonly { period: "day" | "week" | "month"; targetCount: number }[],
+): number {
+  return habits.reduce(
+    (total, habit) =>
+      total + (habit.targetCount * 7) / DAYS_PER_PERIOD[habit.period],
+    0,
+  )
+}
+
+/**
+ * More than three things a day, across everything the account keeps.
+ *
+ * A sentence rather than a tuned constant, which is what makes it explainable in the
+ * warning itself. It is deliberately generous: the point is to notice the plan that tips
+ * an already-full week, not to have an opinion about anyone's ambition.
+ */
+const WEEKLY_COMMITMENT_LIMIT = 21
+
 export function planWarnings(
   payload: GoalPlanPayload,
   goal: {
@@ -212,6 +280,17 @@ export function planWarnings(
     unit?: string | null
   },
   today: string,
+  /**
+   * Weekly commitments the account ALREADY keeps, across every goal.
+   *
+   * Optional, and absent means "nothing known" rather than "nothing there" — every caller
+   * that has not been taught to measure it keeps compiling and keeps saying nothing, which
+   * is the honest answer for a caller that cannot see the number.
+   *
+   * A parameter rather than a query inside, matching `goalMomentumDays` and `timeZone`
+   * everywhere else here: this function is pure and its tests can name the number.
+   */
+  existingCommitments?: number,
 ): PlanWarning[] {
   const warnings: PlanWarning[] = []
 
@@ -227,6 +306,24 @@ export function planWarnings(
       message:
         "No recurring practice — nothing here builds toward the milestones",
     })
+  }
+
+  // The counterweight, and it had none until now: every warning in this file was about a
+  // plan being too little. Reported from real use — each plan is made for ONE goal, so
+  // four or five of them stack into a week nobody could keep, and the model cannot see the
+  // total because it is only ever shown the goal in front of it. The app can.
+  if (existingCommitments !== undefined) {
+    const total = existingCommitments + weeklyCommitments(payload.habits)
+    if (total > WEEKLY_COMMITMENT_LIMIT) {
+      warnings.push({
+        on: "plan",
+        index: 0,
+        kind: "too-much-practice",
+        // Both numbers, so the reading can be checked rather than taken on trust — the
+        // same reason `rate-short` prints the rate it compared.
+        message: `This would take you to about ${Math.round(total)} commitments a week across every goal. Consider keeping fewer of these.`,
+      })
+    }
   }
 
   // The counterpart, and the reason `milestones` no longer carries a `.min(1)`. A goal

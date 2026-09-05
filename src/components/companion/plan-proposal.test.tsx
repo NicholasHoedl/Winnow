@@ -51,6 +51,7 @@ function show(props: Partial<React.ComponentProps<typeof PlanProposal>> = {}) {
       goalTitle="Learn Japanese"
       goal={GOAL}
       today="2026-09-03"
+      existingCommitments={0}
       pending={false}
       onApply={onApply}
       onDiscard={onDiscard}
@@ -148,6 +149,7 @@ describe("PlanProposal — adding", () => {
           goalTitle="Learn Japanese"
           goal={GOAL}
           today="2026-09-03"
+          existingCommitments={0}
           pending={false}
           onApply={onApply}
           onDiscard={vi.fn()}
@@ -260,5 +262,28 @@ describe("PlanProposal — adding", () => {
       "Hold a five-minute conversation",
       "Sit the N4 exam",
     ])
+  })
+})
+
+/**
+ * The load warning, wired.
+ *
+ * `planWarnings` is pure and has its own boundary tests. What those cannot see is whether
+ * the number reaches it — and the failure mode is silent: the panel would render no
+ * warning on a plan that should have raised one, and look exactly like a plan that was fine.
+ */
+describe("PlanProposal — practice load", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("says nothing when the week has room", () => {
+    show({ existingCommitments: 0 })
+    expect(screen.queryByText(/commitments a week/i)).toBeNull()
+  })
+
+  it("names the total once the plan would overfill the week", () => {
+    // The fixture proposes one daily habit — 7 a week — on top of 18 already kept. 25
+    // against a limit of 21.
+    show({ existingCommitments: 18 })
+    expect(screen.getByText(/25 commitments a week/i)).toBeTruthy()
   })
 })
