@@ -128,10 +128,20 @@ export const goalPlanSetupTaskSchema = z.object({
  * editable, and honest about what is missing. The MAXIMA are untouched — those are the half
  * that is genuinely load-bearing.
  */
+/**
+ * How many of each a plan may hold.
+ *
+ * Exported because the panel adds rows now, and its Add buttons have to stop at the same
+ * number this schema rejects at. Two copies of 20 that must agree is exactly the kind of
+ * pair that drifts silently — the panel would let you add a twenty-first and the apply
+ * would fail on a limit nothing on screen had mentioned.
+ */
+export const PLAN_CAPS = { milestones: 20, habits: 6, setupTasks: 3 } as const
+
 export const goalPlanPayloadSchema = z.object({
-  milestones: z.array(goalPlanMilestoneSchema).max(20),
-  habits: z.array(goalPlanHabitSchema).max(6),
-  setupTasks: z.array(goalPlanSetupTaskSchema).max(3),
+  milestones: z.array(goalPlanMilestoneSchema).max(PLAN_CAPS.milestones),
+  habits: z.array(goalPlanHabitSchema).max(PLAN_CAPS.habits),
+  setupTasks: z.array(goalPlanSetupTaskSchema).max(PLAN_CAPS.setupTasks),
 })
 export type GoalPlanPayload = z.infer<typeof goalPlanPayloadSchema>
 

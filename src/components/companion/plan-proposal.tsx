@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { AlertTriangle, Flag, ListTodo, Repeat } from "lucide-react"
+import { AlertTriangle, Flag, ListTodo, Plus, Repeat } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import {
@@ -11,7 +11,7 @@ import {
   type Excluded,
   type PlanWarning,
 } from "@/modules/companion/service"
-import type { GoalPlanPayload } from "@/modules/companion/validation"
+import { PLAN_CAPS, type GoalPlanPayload } from "@/modules/companion/validation"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -28,18 +28,22 @@ function EditableTitle({
   disabled,
   className,
   label,
+  autoFocus,
 }: {
   value: string
   onChange: (next: string) => void
   disabled: boolean
   className?: string
   label: string
+  /** Set on a row that was just added, so typing is the next thing you do. */
+  autoFocus?: boolean
 }) {
   return (
     <input
       value={value}
       aria-label={label}
       disabled={disabled}
+      autoFocus={autoFocus}
       onChange={(event) => onChange(event.target.value)}
       className={cn(
         "hover:bg-muted focus:bg-muted -mx-1 min-w-0 flex-1 truncate rounded px-1 outline-none",
@@ -176,6 +180,67 @@ export function PlanProposal({
     })
   }
 
+  /**
+   * The row to focus, if one was just added.
+   *
+   * `autoFocus` fires on MOUNT, which is exactly the semantics wanted here: a new row
+   * focuses itself as it appears, and nothing refocuses when an unrelated re-render moves
+   * through. That is why this is never cleared — clearing it would be a setState with no
+   * reader, and the lint rules reject a synchronous one in an effect anyway.
+   */
+  const [justAdded, setJustAdded] = React.useState<{
+    on: "milestones" | "habits"
+    index: number
+  } | null>(null)
+
+  /**
+   * Append, never insert.
+   *
+   * `excluded` is a set of INDEXES into these arrays, so a row inserted anywhere but the
+   * end would silently repoint every exclusion after it — a checkbox you unticked on step
+   * 3 would come back applying to step 4. That is the renumbering bug `finalizePlan`'s own
+   * note describes, and appending is what makes it unreachable rather than merely unlikely.
+   *
+   * The new row starts UNNAMED and is therefore not counted by the "Creates N…" line and
+   * not created by Apply, until you type something. `finalizePlan` drops unnamed rows for
+   * that reason: an empty row you thought better of costs nothing and cannot fail an apply.
+   */
+  function addMilestone() {
+    if (payload.milestones.length >= PLAN_CAPS.milestones) return
+    // Dated after the last step rather than today: appending to a plan means "and then
+    // this", and a new row dated in the middle of the spine reads as a mistake.
+    const last = payload.milestones.at(-1)
+    setJustAdded({ on: "milestones", index: payload.milestones.length })
+    onChange({
+      ...payload,
+      milestones: [
+        ...payload.milestones,
+        { title: "", dueDate: last?.dueDate ?? today },
+      ],
+    })
+  }
+
+  function addHabit() {
+    if (payload.habits.length >= PLAN_CAPS.habits) return
+    setJustAdded({ on: "habits", index: payload.habits.length })
+    onChange({
+      ...payload,
+      // Three a week, the same default the habit dialog uses, and a SESSION habit: a
+      // measured one needs a unit, and the unit is the field this panel deliberately
+      // refuses to edit — "words" to "pages" is a different practice, not a correction.
+      habits: [
+        ...payload.habits,
+        {
+          title: "",
+          period: "week" as const,
+          targetCount: 3,
+          targetAmount: null,
+          unit: null,
+        },
+      ],
+    })
+  }
+
   function editMilestone(
     index: number,
     patch: { title?: string; dueDate?: string },
@@ -267,6 +332,10 @@ export function PlanProposal({
                     value={milestone.title}
                     disabled={off}
                     label={`Milestone ${index + 1} title`}
+                    autoFocus={
+                      justAdded?.on === "milestones" &&
+                      justAdded.index === index
+                    }
                     className="font-medium"
                     onChange={(title) => editMilestone(index, { title })}
                   />
@@ -295,99 +364,135 @@ export function PlanProposal({
           })}
         </ol>
 
+        {/* Aligned with the spine's text rather than its rule, so it reads as the next
+            step in the list rather than a control bolted to the side of it. */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground mt-2 ml-[26px] h-7 px-1"
+          onClick={addMilestone}
+          disabled={
+            pending || payload.milestones.length >= PLAN_CAPS.milestones
+          }
+        >
+          <Plus className="size-3.5" />
+          Add a milestone
+        </Button>
+
         {/* Off the spine, deliberately. The spine exists to expose date DISTRIBUTION, and a
             habit has no date to distribute — putting it on a timeline would be inventing a
             position for something that recurs. */}
-        {payload.habits.length > 0 && (
-          <section className="mt-6">
-            <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
-              The practice
-            </h3>
-            <ul className="flex flex-col gap-1.5">
-              {payload.habits.map((habit, index) => {
-                const off = excluded.habits.has(index)
-                // The same reading `finalizePlan` will take. A habit the model half-stated
-                // renders as the session habit it will become, rather than as an amount
-                // with nothing to count.
-                const quota = proposedQuota(habit)
-                return (
-                  <li key={index} className="flex items-baseline gap-2 text-sm">
-                    <Checkbox
-                      checked={!off}
-                      aria-label={`Include ${habit.title}`}
-                      onCheckedChange={() => toggle("habits", index)}
-                      className="shrink-0 self-center"
-                    />
-                    <Repeat className="text-muted-foreground size-3.5 shrink-0 self-center" />
-                    <EditableTitle
-                      value={habit.title}
-                      disabled={off}
-                      label={`Habit ${index + 1} title`}
-                      onChange={(title) => editHabit(index, { title })}
-                    />
-                    {/* The figure is editable and the period is not. "5 a week" wanting to
+        {/* Rendered even with nothing in it, which it was not before. A plan with no
+            practice is precisely when you want to add one — it is the case the `no-habits`
+            warning is about — and a section that hides itself takes its Add button with
+            it. */}
+        <section className="mt-6">
+          <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+            The practice
+          </h3>
+          {payload.habits.length === 0 && (
+            <p className="text-muted-foreground mb-2 text-sm">
+              Nothing proposed. A practice is something you repeat — three
+              sessions a week — rather than a step you finish.
+            </p>
+          )}
+          <ul className="flex flex-col gap-1.5">
+            {payload.habits.map((habit, index) => {
+              const off = excluded.habits.has(index)
+              // The same reading `finalizePlan` will take. A habit the model half-stated
+              // renders as the session habit it will become, rather than as an amount
+              // with nothing to count.
+              const quota = proposedQuota(habit)
+              return (
+                <li key={index} className="flex items-baseline gap-2 text-sm">
+                  <Checkbox
+                    checked={!off}
+                    aria-label={`Include ${habit.title}`}
+                    onCheckedChange={() => toggle("habits", index)}
+                    className="shrink-0 self-center"
+                  />
+                  <Repeat className="text-muted-foreground size-3.5 shrink-0 self-center" />
+                  <EditableTitle
+                    value={habit.title}
+                    disabled={off}
+                    label={`Habit ${index + 1} title`}
+                    autoFocus={
+                      justAdded?.on === "habits" && justAdded.index === index
+                    }
+                    onChange={(title) => editHabit(index, { title })}
+                  />
+                  {/* The figure is editable and the period is not. "5 a week" wanting to
                         be "3 a week" is the correction people actually make; week → day is a
                         different habit rather than an edit to this one. The UNIT is fixed
                         for the same reason — "words" to "pages" is a different practice,
                         and it is the field the rate check compares against the goal. */}
-                    <span
-                      className={cn(
-                        "text-muted-foreground flex shrink-0 items-baseline gap-1 text-xs tabular-nums",
-                        off && "line-through opacity-50",
-                      )}
-                    >
-                      {quota.measured ? (
-                        <>
-                          <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={quota.amount ?? 0}
-                            disabled={off}
-                            aria-label={`Habit ${index + 1} ${quota.unit} per ${habit.period}`}
-                            onChange={(event) =>
-                              editHabit(index, {
-                                targetAmount: Math.max(
-                                  0,
-                                  Number(event.target.value) || 0,
-                                ),
-                              })
-                            }
-                            className="hover:border-input focus:border-ring w-14 rounded border border-transparent bg-transparent px-1 text-right outline-none"
-                          />
-                          <span>
-                            {quota.unit} a {habit.period}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="number"
-                            min={1}
-                            max={100}
-                            value={habit.targetCount}
-                            disabled={off}
-                            aria-label={`Habit ${index + 1} times per ${habit.period}`}
-                            onChange={(event) =>
-                              editHabit(index, {
-                                targetCount: Math.min(
-                                  100,
-                                  Math.max(1, Number(event.target.value) || 1),
-                                ),
-                              })
-                            }
-                            className="hover:border-input focus:border-ring w-10 rounded border border-transparent bg-transparent px-1 text-right outline-none"
-                          />
-                          <span>× a {habit.period}</span>
-                        </>
-                      )}
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )}
+                  <span
+                    className={cn(
+                      "text-muted-foreground flex shrink-0 items-baseline gap-1 text-xs tabular-nums",
+                      off && "line-through opacity-50",
+                    )}
+                  >
+                    {quota.measured ? (
+                      <>
+                        <input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={quota.amount ?? 0}
+                          disabled={off}
+                          aria-label={`Habit ${index + 1} ${quota.unit} per ${habit.period}`}
+                          onChange={(event) =>
+                            editHabit(index, {
+                              targetAmount: Math.max(
+                                0,
+                                Number(event.target.value) || 0,
+                              ),
+                            })
+                          }
+                          className="hover:border-input focus:border-ring w-14 rounded border border-transparent bg-transparent px-1 text-right outline-none"
+                        />
+                        <span>
+                          {quota.unit} a {habit.period}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={habit.targetCount}
+                          disabled={off}
+                          aria-label={`Habit ${index + 1} times per ${habit.period}`}
+                          onChange={(event) =>
+                            editHabit(index, {
+                              targetCount: Math.min(
+                                100,
+                                Math.max(1, Number(event.target.value) || 1),
+                              ),
+                            })
+                          }
+                          className="hover:border-input focus:border-ring w-10 rounded border border-transparent bg-transparent px-1 text-right outline-none"
+                        />
+                        <span>× a {habit.period}</span>
+                      </>
+                    )}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground mt-2 h-7 px-1"
+            onClick={addHabit}
+            disabled={pending || payload.habits.length >= PLAN_CAPS.habits}
+          >
+            <Plus className="size-3.5" />
+            Add a practice
+          </Button>
+        </section>
 
         {payload.setupTasks.length > 0 && (
           <section className="mt-6">

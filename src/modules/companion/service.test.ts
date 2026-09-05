@@ -866,3 +866,72 @@ describe("finalizePlan — half-stated habits", () => {
     })
   })
 })
+
+/**
+ * A row you added and did not name is not a row you asked for.
+ *
+ * The plan panel can append an empty milestone or habit, so a blank title is now a normal
+ * intermediate state rather than something only a broken model could produce. Dropping it
+ * here is what keeps that safe: `planTitle` is `.min(1)`, so a blank one reaching the
+ * server fails the whole apply with a generic error, and the live "Creates N…" counter
+ * beside Apply would have been counting rows that were never going to be created.
+ */
+describe("finalizePlan — unnamed rows", () => {
+  const none = {
+    milestones: new Set<number>(),
+    habits: new Set<number>(),
+    setupTasks: new Set<number>(),
+  }
+
+  it("drops a milestone with no title", () => {
+    const result = finalizePlan(
+      {
+        milestones: [
+          { title: "Real", dueDate: "2026-09-01" },
+          { title: "", dueDate: "2026-10-01" },
+        ],
+        habits: [],
+        setupTasks: [],
+      },
+      none,
+    )
+    expect(result.milestones).toEqual([
+      { title: "Real", dueDate: "2026-09-01" },
+    ])
+  })
+
+  it("treats whitespace as no title", () => {
+    const result = finalizePlan(
+      {
+        milestones: [{ title: "   ", dueDate: "2026-09-01" }],
+        habits: [sessions("   ", "week", 3)],
+        setupTasks: [{ title: " ", dueDate: "2026-08-20" }],
+      },
+      none,
+    )
+    expect(result.milestones).toEqual([])
+    expect(result.habits).toEqual([])
+    expect(result.setupTasks).toEqual([])
+  })
+
+  it("keeps a named row that sits after an unnamed one", () => {
+    // Exclusions are keyed by INDEX, so the order things are dropped in matters. Filtering
+    // by title after filtering by index would be reading the second filter's positions
+    // against the first's — the renumbering bug this function's own note describes.
+    const result = finalizePlan(
+      {
+        milestones: [
+          { title: "", dueDate: "2026-09-01" },
+          { title: "Kept", dueDate: "2026-10-01" },
+          { title: "Excluded", dueDate: "2026-11-01" },
+        ],
+        habits: [],
+        setupTasks: [],
+      },
+      { ...none, milestones: new Set([2]) },
+    )
+    expect(result.milestones).toEqual([
+      { title: "Kept", dueDate: "2026-10-01" },
+    ])
+  })
+})

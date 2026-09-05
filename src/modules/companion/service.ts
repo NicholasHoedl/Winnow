@@ -407,14 +407,27 @@ export type Excluded = {
  * same place tasks always actually attached in the data model — the nesting under milestones
  * was only ever presentational. With nothing pointing at a position, there is nothing to
  * renumber, and a whole class of bug went with it.
+ *
+ * **Unnamed rows go too**, and for the same reason the half-stated habits below are
+ * normalised rather than passed on: the panel can append an empty milestone or habit, so a
+ * blank title is a normal intermediate state now rather than something only a broken model
+ * could produce. `planTitle` is `.min(1)`, so one reaching the server fails the entire
+ * apply with a generic error — and the live "Creates N…" counter beside Apply, which
+ * exists precisely so Apply never does more than the number next to it, would have been
+ * counting rows that were never going to exist.
+ *
+ * Both filters run in ONE pass per list, against the original index. Filtering by title
+ * and then by index would read the second filter's positions against the first's output —
+ * the renumbering bug described above, reintroduced by the back door.
  */
 export function finalizePlan(
   payload: GoalPlanPayload,
   excluded: Excluded,
 ): GoalPlanPayload {
+  const named = (row: { title: string }) => row.title.trim() !== ""
   return {
     milestones: payload.milestones.filter(
-      (_, i) => !excluded.milestones.has(i),
+      (m, i) => !excluded.milestones.has(i) && named(m),
     ),
     // Normalised on the way out, not merely filtered. A half-stated habit reaching
     // `createHabit` would be REJECTED by `habitInputSchema`'s both-or-neither rule, and
@@ -422,13 +435,13 @@ export function finalizePlan(
     // `goalPlanPayloadSchema` warns about, arrived at from the other direction. Here it
     // simply becomes the session habit it already reads as. See `proposedQuota`.
     habits: payload.habits
-      .filter((_, i) => !excluded.habits.has(i))
+      .filter((h, i) => !excluded.habits.has(i) && named(h))
       .map((habit) => {
         const quota = proposedQuota(habit)
         return { ...habit, targetAmount: quota.amount, unit: quota.unit }
       }),
     setupTasks: payload.setupTasks.filter(
-      (_, i) => !excluded.setupTasks.has(i),
+      (t, i) => !excluded.setupTasks.has(i) && named(t),
     ),
   }
 }

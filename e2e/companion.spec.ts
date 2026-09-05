@@ -134,6 +134,23 @@ test("a generated plan can be pruned, edited, and applied", async ({
     page.getByText("Creates 1 milestone, 2 habits and 1 task"),
   ).toBeVisible()
 
+  // A step the model did not think of. The panel could only ever subtract before, so a
+  // plan missing one meant discarding the whole thing or adding it by hand afterwards.
+  //
+  // The new row is UNNAMED at first and the counter must not move for it — an empty row is
+  // not a row you asked for, and `finalizePlan` drops it. That is asserted here rather
+  // than only in the unit tests because the counter is the anti-surprise device: it is
+  // the promise that Apply never does more than the number beside it.
+  const added = `${goalTitle} added milestone`
+  await page.getByRole("button", { name: "Add a milestone" }).click()
+  await expect(
+    page.getByText("Creates 1 milestone, 2 habits and 1 task"),
+  ).toBeVisible()
+  await page.getByLabel("Milestone 3 title").fill(added)
+  await expect(
+    page.getByText("Creates 2 milestones, 2 habits and 1 task"),
+  ).toBeVisible()
+
   // Editing in place: the row is an input, so there is no edit mode to enter.
   const renamed = `${goalTitle} renamed milestone`
   await page.getByLabel("Milestone 1 title").fill(renamed)
@@ -152,6 +169,8 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await openGoalDetail(page, goalTitle)
   const detail = page.getByRole("dialog")
   await expect(detail.getByText(renamed)).toBeVisible()
+  // The one that was not in the model's plan at all is a real milestone on the goal.
+  await expect(detail.getByText(added)).toBeVisible()
   // The excluded milestone was never created.
   await expect(detail.getByText("STUB second milestone")).toHaveCount(0)
   await page.keyboard.press("Escape")
