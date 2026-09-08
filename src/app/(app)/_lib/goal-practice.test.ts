@@ -1,86 +1,59 @@
 import { describe, expect, it } from "vitest"
 
-import { groupPracticeByGoal } from "./goal-practice"
+import { groupPracticeByPeriod } from "./goal-practice"
 
-const goal = (id: string) => ({ id, title: id })
-const habit = (id: string, goalId: string | null) => ({ id, goalId })
+const habit = (
+  id: string,
+  period: "day" | "week" | "month",
+  goalId: string | null = null,
+) => ({ id, period, goalId })
 
-describe("groupPracticeByGoal", () => {
-  it("puts each habit under the goal it serves", () => {
-    const groups = groupPracticeByGoal(
-      [goal("kanji"), goal("belt")],
-      [habit("words", "kanji"), habit("class", "belt"), habit("deck", "kanji")],
-    )
+describe("groupPracticeByPeriod", () => {
+  it("groups by cadence, day before week before month", () => {
+    const groups = groupPracticeByPeriod([
+      habit("rent", "month"),
+      habit("class", "week"),
+      habit("words", "day"),
+    ])
 
-    expect(groups).toHaveLength(2)
-    expect(groups[0].goal?.id).toBe("kanji")
-    expect(groups[0].habits.map((h) => h.id)).toEqual(["words", "deck"])
-    expect(groups[1].habits.map((h) => h.id)).toEqual(["class"])
+    expect(groups.map((g) => g.period)).toEqual(["day", "week", "month"])
   })
 
-  it("follows the goals' own order, not the order habits appear", () => {
-    // The distinction from `buildTodayAgenda`, which groups by first appearance. A goal has
-    // its own position — `[sortOrder, createdAt]`, written by a drag on /goals — and a card
-    // that reordered goals to match whichever habit happened to come first would undo it.
-    const groups = groupPracticeByGoal(
-      [goal("first"), goal("second")],
-      [habit("b", "second"), habit("a", "first")],
-    )
+  it("keeps the habits' own order inside a group", () => {
+    // `getHabitStrip` orders by [sortOrder, createdAt], which a drag on the habits page
+    // writes. Re-sorting here — unmet first, say — would undo that, and would reorder the
+    // card from one day to the next as quotas were met. The cap that once made an
+    // unmet-first sort necessary is long gone.
+    const groups = groupPracticeByPeriod([
+      habit("second", "week"),
+      habit("first", "week"),
+    ])
 
-    expect(groups.map((g) => g.goal?.id)).toEqual(["first", "second"])
+    expect(groups[0].habits.map((h) => h.id)).toEqual(["second", "first"])
   })
 
-  it("keeps a goal with no habits at all", () => {
-    // This is a goals card that shows practice, not a habits card that mentions goals — a
-    // goal you have not attached anything to is still a goal you are working on.
-    const groups = groupPracticeByGoal(
-      [goal("kanji"), goal("untouched")],
-      [habit("words", "kanji")],
-    )
-
-    expect(groups).toHaveLength(2)
-    expect(groups[1].goal?.id).toBe("untouched")
-    expect(groups[1].habits).toEqual([])
-  })
-
-  it("groups unattached habits last, under no goal", () => {
-    const groups = groupPracticeByGoal(
-      [goal("kanji")],
-      [habit("walk", null), habit("words", "kanji")],
-    )
-
-    expect(groups).toHaveLength(2)
-    expect(groups[1].goal).toBeNull()
-    expect(groups[1].habits.map((h) => h.id)).toEqual(["walk"])
-  })
-
-  it("omits the unattached group entirely when there is nothing in it", () => {
-    const groups = groupPracticeByGoal(
-      [goal("kanji")],
-      [habit("words", "kanji")],
-    )
+  it("omits a cadence nobody keeps", () => {
+    // A heading over nothing is a row of dead space on a card that already runs tight.
+    const groups = groupPracticeByPeriod([habit("words", "day")])
 
     expect(groups).toHaveLength(1)
-    expect(groups[0].goal?.id).toBe("kanji")
+    expect(groups[0].period).toBe("day")
   })
 
-  it("treats a habit pointing at an unknown goal as unattached", () => {
-    // Rather than dropping it. A habit that vanishes from every surface because its goal id
-    // no longer resolves is the worst outcome available — you would have no way to find it
-    // and no reason to look. Degrading to the loose group matches what the agenda does with
-    // a routine it cannot name.
-    const groups = groupPracticeByGoal(
-      [goal("kanji")],
-      [habit("orphan", "deleted")],
-    )
+  it("returns nothing for no habits at all", () => {
+    expect(groupPracticeByPeriod([])).toEqual([])
+  })
 
-    expect(groups[groups.length - 1].goal).toBeNull()
-    expect(groups[groups.length - 1].habits.map((h) => h.id)).toEqual([
-      "orphan",
+  it("groups a habit with no goal alongside the rest", () => {
+    // The goal is an ANNOTATION now, not the thing that decides where a row lives — which
+    // is the whole inversion this function represents. A practice kept for its own sake
+    // sits in its cadence like any other, rather than in a trailing bucket of its own.
+    const groups = groupPracticeByPeriod([
+      habit("attached", "week", "kanji"),
+      habit("loose", "week", null),
     ])
-  })
 
-  it("returns nothing at all for no goals and no habits", () => {
-    expect(groupPracticeByGoal([], [])).toEqual([])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].habits.map((h) => h.id)).toEqual(["attached", "loose"])
   })
 })

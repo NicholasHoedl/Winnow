@@ -109,13 +109,25 @@ test("a goal with neither milestones nor a target says so, on both surfaces", as
   await expect(detail(page)).toContainText("No milestones or target yet")
   await closeDetail(page)
 
-  // The dashboard rail is the surface that got this wrong for four tranches. Asserted
-  // POSITIVELY — a bare `not.toContainText("0/0")` would also pass if the goal never made
-  // it onto the rail at all (it shows only the first four).
-  await page.goto("/")
-  const rail = page.locator("div").filter({ hasText: title }).last()
-  await expect(rail).toContainText("Not tracked")
-  await expect(rail).not.toContainText("0/0")
+  // **This assertion used to be made against the DASHBOARD**, which is the surface that got
+  // it wrong for four tranches — a goal with nothing to measure reported "0/0" and drew a
+  // bar at 0%. The dashboard shows no goal progress at all now: its practice card groups
+  // habits by cadence and names the goal on the row, so there is no bar left there to be
+  // wrong. The bug is real and recurring, so the check moves to the surface that still
+  // draws one rather than being deleted with the card.
+  //
+  // Asserted POSITIVELY. A bare `not.toContainText("0/0")` would also pass if the goal had
+  // never rendered at all, which is exactly how a check like this goes quietly vacuous.
+  // Asserted POSITIVELY first. A bare `not.toContainText("0/0")` would also pass if the
+  // goal had never rendered at all, which is exactly how a check like this goes vacuous —
+  // and it nearly did here, because the two surfaces word this differently. The dashboard
+  // said "Not tracked" in so many words; `goal-card.tsx` renders NOTHING for a goal with
+  // nothing to measure, so the thing to assert is the absence of a figure on a card that
+  // is demonstrably present.
+  const card = goalCard(page, title)
+  await expect(card).toBeVisible()
+  await expect(card).not.toContainText("0/0")
+  await expect(card).not.toContainText("%")
 })
 
 test("a target date in the past reads as at risk, unless the goal is done", async ({

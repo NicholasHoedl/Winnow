@@ -1,9 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Pause } from "lucide-react"
 
-import type { GoalProgress } from "@/modules/goals/service"
 import type { HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
@@ -12,87 +10,45 @@ import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { DashboardCard } from "./dashboard-card"
 
-import { groupPracticeByGoal } from "../_lib/goal-practice"
+import {
+  groupPracticeByPeriod,
+  type PracticePeriod,
+} from "../_lib/goal-practice"
 
 /**
- * A goal, reduced to the four fields this card draws.
+ * A goal, reduced to the two fields this card still draws.
  *
- * Deliberately NOT `GoalWithProgress`. This is a client component — it has to be, because a
- * habit can be logged from here — so everything it receives is serialised into the RSC
- * payload and shipped to the browser. `GoalWithProgress` carries `milestones[]`,
- * `linkedTasks[]` and `linkedTaskTotal`, none of which appear below.
+ * It carried `progress` and `stalled` as well, for the per-goal headings this card used to
+ * group by — bars, counts and a stalled badge. Those went with the grouping: habits are
+ * organised by cadence now and the goal survives as an annotation on the row, so a title
+ * and the id to match it by is the whole of what is read.
  *
- * Same reasoning that produced `HabitStripCard`: a surface showing four fields should not be
- * handed a thirteen-column row. The page narrows on the way in.
+ * The narrowing matters beyond tidiness. This is a client component — it has to be,
+ * because a habit can be logged from here — so everything it receives is serialised into
+ * the RSC payload and shipped to the browser. `GoalProgress` is a discriminated union with
+ * up to five fields per goal and none of them are drawn any more.
  */
 export type GoalPracticeRow = {
   id: string
   title: string
-  progress: GoalProgress
-  /** `momentum?.stalled`, already resolved — the card never needs the window or the count. */
-  stalled: boolean
 }
 
-function GoalHeading({ goal }: { goal: GoalPracticeRow }) {
-  // Aliased to a const before the discriminant check, which is what lets TypeScript narrow
-  // the union for `progress.percent` below — the same pattern the card this replaces used.
-  // Checking `goal.progress.kind` inline compiles the check but narrows nothing.
-  const progress = goal.progress
-  const measurable = progress.kind !== "none"
-  return (
-    <>
-      {/* The title and its count share this div, and that is load-bearing beyond taste:
-          `goals-progress.spec.ts` locates a goal with `.filter({hasText}).last()`, which
-          resolves to the innermost div holding the title, and then asserts the count is in
-          it. Splitting them moves that locator and fails a test about something else. */}
-      <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="flex min-w-0 items-center gap-1.5">
-          {/* `line-clamp-2` for the reason `slate.tsx` gives: this column is narrower on a
-              laptop than the same card is on a phone, so truncating hid more of a goal's
-              name the bigger the screen got. */}
-          <span className="line-clamp-2 min-w-0 font-medium">{goal.title}</span>
-          {/* Stalled is the one thing worth saying about a goal on a surface you see every
-              day — the count and the window belong in the goal's detail on /goals, where
-              there is room to explain them. The dashboard already runs tight below 1400px,
-              so this is an icon. */}
-          {goal.stalled && (
-            <>
-              <Pause
-                className="text-brand-accent size-3 shrink-0"
-                aria-hidden
-              />
-              <span className="sr-only">Stalled</span>
-            </>
-          )}
-        </span>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {progress.kind === "milestones"
-            ? `${progress.done}/${progress.total}`
-            : progress.kind === "numeric"
-              ? `${progress.current}/${progress.target}`
-              : "Not tracked"}
-        </span>
-      </div>
-      {measurable && (
-        <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
-          <div
-            className="bg-cat-6 h-full rounded-full"
-            style={{
-              width: `${Math.max(2, Math.min(progress.percent, 100))}%`,
-            }}
-          />
-        </div>
-      )}
-    </>
-  )
+/** "Daily" over the day group, and so on. The heading a period gets. */
+const PERIOD_HEADING: Record<PracticePeriod, string> = {
+  day: "Daily",
+  week: "Weekly",
+  month: "Monthly",
 }
 
 function HabitRow({
   habit,
+  goalTitle,
   pending,
   onLog,
 }: {
   habit: HabitStripCard
+  /** The goal this practice serves, or undefined when it serves none. */
+  goalTitle?: string
   pending: boolean
   onLog: (amount?: number) => void
 }) {
@@ -114,6 +70,23 @@ function HabitRow({
           measured={habit.now.measured}
           caption={periodPhrase(habit.period)}
         />
+        {/* Its own line, and NOT the meter's caption slot — which is where this started.
+            That slot is free-looking now the group heading states the cadence, but
+            `QuotaMeter` builds its `aria-valuetext` from the same string: putting the goal
+            there turned "0 of 3 this week" into "0 of 3 Lose 15 pounds" and took the
+            cadence out of the announcement. The meter IS the count for a screen reader —
+            that is the whole reason `aria-valuetext` is set — so the caption stays the
+            period and the goal costs a line.
+
+            Only when there is one. A practice kept for its own sake, or one whose goal was
+            deleted, simply has no annotation; it used to be sorted into a "not tied to a
+            goal" group, and grouping by cadence retires that idea rather than relabelling
+            it. */}
+        {goalTitle && (
+          <p className="text-muted-foreground mt-0.5 truncate text-[0.7rem]">
+            {goalTitle}
+          </p>
+        )}
       </div>
       {/* A habit gets no checkbox, here or anywhere (ADR-0013's amendment). A quota is not
           done-or-not-done, and the moment a tick appears it is either duplicating this
@@ -130,17 +103,28 @@ function HabitRow({
 }
 
 /**
- * What you are working toward, and the practice that gets you there.
+ * The practice you keep, by how often you keep it.
  *
- * One card rather than the two this replaces. `habits.goal_id` has existed since T12a and
- * the dashboard never showed it, so "why am I doing this" and "what am I doing about it"
- * sat in different columns — the goal in the right one, the thing you act on in the left.
+ * **It showed goals until now, and grouped the habits under them** — a heading per goal
+ * with its progress bar, and its practice indented beneath. Reported from real use: with
+ * four or five goals that arrangement answers "what is this for" at the cost of the
+ * question a dashboard is opened to ask, which is what you have to do today. Habits are
+ * grouped by cadence now and each row names its goal instead.
  *
- * **Nothing is truncated.** The card it replaces capped habits at three with a `+N more`,
- * and the goals card capped at four SILENTLY, which is worse — goals five and up simply were
- * not there and nothing said so. Both caps are gone, which also retires the unmet-first
- * re-sort the habits card used: that existed only to make a cut safe, and with nothing
- * hidden it would just scatter a goal's practice.
+ * **Two things left the dashboard with that change, and both were deliberate before.** A
+ * goal's progress — the bar, the count and the stalled badge — is on `/goals` only; and a
+ * goal with NO practice has nothing to render here at all, where it used to get a heading
+ * of its own. That was the cost of the choice and it was made knowingly; the "Goals →"
+ * link below is the way to what is no longer shown.
+ *
+ * The card key stays `goals` even though the title is "Practice". It is what the collapse
+ * preference is stored under (`DASHBOARD_CARDS`), and renaming it would silently orphan a
+ * fold the user had set — `preferencesFor` filters against that list, so an unknown key
+ * degrades to "not collapsed" rather than failing loudly.
+ *
+ * **Nothing is truncated.** The habits card this descends from capped at three with a
+ * `+N more`; that cap is gone and stays gone, which is also why the unmet-first re-sort
+ * went — it existed only to make a cut safe.
  *
  * A client component, unlike most of this page, because it can be acted on: a habit is the
  * one thing here you can finish without going anywhere. It logs through `useLogHabit`, the
@@ -157,53 +141,56 @@ export function GoalsPracticeCard({
 }) {
   const { pendingId, log } = useLogHabit()
 
-  // Nothing at all when there is nothing to show, exactly as both cards this replaces did.
-  // Someone who has made neither a goal nor a habit should not find an empty box on their
-  // dashboard — and `loading.tsx` deliberately reserves no space for this card because of
-  // it, so a placeholder here would be a jump rather than a courtesy.
-  if (goals.length === 0 && habits.length === 0) return null
+  // Nothing at all when there is no practice, exactly as the cards this descends from did.
+  // Someone who has made no habit should not find an empty box on their dashboard — and
+  // `loading.tsx` deliberately reserves no space for this card because of it, so a
+  // placeholder here would be a jump rather than a courtesy.
+  //
+  // Habits alone now, where it used to be habits OR goals: a goal with no practice has
+  // nothing for this card to draw.
+  if (habits.length === 0) return null
 
-  const groups = groupPracticeByGoal(goals, habits)
+  const groups = groupPracticeByPeriod(habits)
   const short = habits.filter((habit) => !habit.now.met)
+  // Titles by id, so a row can name its goal. A Map rather than a `find` per row: this
+  // runs on every render of the dashboard's hottest card.
+  const goalTitles = new Map(goals.map((goal) => [goal.id, goal.title]))
 
   return (
-    <DashboardCard card="goals" title="Goals & practice" collapsed={collapsed}>
+    <DashboardCard card="goals" title="Practice" collapsed={collapsed}>
       <div className="flex flex-col gap-4">
-        {/* Moved into the body from the header, which the shell now owns. It belongs with
-            the list anyway: it answers "am I behind?" about the rows directly beneath it,
-            and folding the card should take it away along with them. */}
-        {habits.length > 0 && (
-          <p className="text-muted-foreground -mt-1 text-xs">
-            {short.length === 0
-              ? "All met"
-              : `${short.length} of ${habits.length} short`}
-          </p>
-        )}
+        {/* It answers "am I behind?" about the rows directly beneath it, so it belongs
+            with the list rather than in the header — and folding the card should take it
+            away along with them. */}
+        <p className="text-muted-foreground -mt-1 text-xs">
+          {short.length === 0
+            ? "All met"
+            : `${short.length} of ${habits.length} short`}
+        </p>
+
         {groups.map((group) => (
-          <div key={group.goal?.id ?? "unattached"}>
-            {group.goal ? (
-              <GoalHeading goal={group.goal} />
-            ) : (
-              /* Named rather than left as a nameless trailing list. These are practices
-                   you keep for their own sake, or ones whose goal was deleted — `goal_id`
-                   is `ON DELETE SET NULL` so giving up a target keeps the running — and
-                   both deserve to be told apart from a goal at a glance. */
-              <p className="text-muted-foreground text-xs font-medium">
-                Not tied to a goal
-              </p>
-            )}
-            {group.habits.length > 0 && (
-              <div className="mt-2 flex flex-col gap-2 pl-3">
-                {group.habits.map((habit) => (
-                  <HabitRow
-                    key={habit.id}
-                    habit={habit}
-                    pending={pendingId === habit.id}
-                    onLog={(amount) => log(habit, amount)}
-                  />
-                ))}
-              </div>
-            )}
+          <div key={group.period}>
+            <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+              {PERIOD_HEADING[group.period]}
+            </h3>
+            <div className="mt-2 flex flex-col gap-2 pl-3">
+              {group.habits.map((habit) => (
+                <HabitRow
+                  key={habit.id}
+                  habit={habit}
+                  // `?? undefined` rather than the id: a habit whose goal is not in this
+                  // list — deleted, or filtered out by the caller — draws no annotation
+                  // instead of a uuid.
+                  goalTitle={
+                    habit.goalId
+                      ? (goalTitles.get(habit.goalId) ?? undefined)
+                      : undefined
+                  }
+                  pending={pendingId === habit.id}
+                  onLog={(amount) => log(habit, amount)}
+                />
+              ))}
+            </div>
           </div>
         ))}
 

@@ -1,56 +1,52 @@
-// Pure grouping for the dashboard's "Goals & practice" card: each goal with the habits that
-// serve it, and the habits that serve none of them last. Dependency-free (no DB, no
-// `server-only`) so it unit-tests directly — same conventions as `agenda.ts` beside it.
+// Pure grouping for the dashboard's practice card: habits under the cadence they are kept
+// at. Dependency-free (no DB, no `server-only`) so it unit-tests directly — same
+// conventions as `agenda.ts` beside it.
 
-/** The only fields the grouping reads off a goal; callers pass their richer rows. */
-export type PracticeGoal = { id: string }
+/** The cadences a habit can be kept at, in the order they are shown. */
+export const PRACTICE_PERIODS = ["day", "week", "month"] as const
+export type PracticePeriod = (typeof PRACTICE_PERIODS)[number]
 
-/** The only field it reads off a habit. See `habits.goal_id`. */
-export type PracticeHabit = { goalId: string | null }
+/** The only field the grouping reads off a habit. See `habits.period`. */
+export type PracticeHabit = { period: PracticePeriod }
 
-export type PracticeGroup<G, H> = {
-  /**
-   * The goal these habits serve, or **null** for the group that serves none.
-   *
-   * Null rather than a sentinel goal so the renderer's branch is a type narrowing rather
-   * than a magic id comparison — a heading and a list of habits is genuinely a different
-   * shape from a goal with progress and a bar.
-   */
-  goal: G | null
+export type PracticeGroup<H> = {
+  period: PracticePeriod
   habits: H[]
 }
 
 /**
- * Habits grouped under the goal each one serves.
+ * Habits grouped by how often they are kept — everything daily, then weekly, then monthly.
  *
- * **Goal order, not first-appearance order.** `buildTodayAgenda` next door groups routines in
- * the order their first task appears, because a routine has no independent position. A goal
- * does — `[sortOrder, createdAt]`, which a drag on `/goals` writes — so the groups follow the
- * goals array and a goal with no habits at all still gets its place in it. That is deliberate:
- * this is a goals card that shows practice, not a habits card that mentions goals.
+ * **This replaced a grouping by GOAL, and the inversion is the point.** The card used to
+ * read as a goals card that showed practice: a heading per goal, its habits indented
+ * beneath, and the goal-less ones in a trailing bucket. Reported from real use — with four
+ * or five goals that arrangement answers "what is this for" at the cost of the question you
+ * open a dashboard to ask, which is what you have to do today. Cadence answers that
+ * directly, and the goal survives as an annotation on the row.
  *
- * The goal-less group is emitted **last**, and only when it has members, matching
- * `groupByMealType`'s "other" bucket.
+ * Two consequences worth stating, because both were deliberate before and are gone now:
  *
- * A habit whose `goalId` names a goal that is not in `goals` falls into the goal-less group
- * rather than vanishing — the same degradation the agenda applies to a routine it cannot name.
- * Worth stating because it is reachable rather than theoretical: `getGoals` returns every goal
- * a user has, so in practice this catches a caller that filtered them.
+ * - **A goal with no habits has nothing to render.** The old grouping emitted a group per
+ *   goal whether or not it had practice, so an unplanned goal still had a place on the
+ *   dashboard. Nothing here can do that — there is no habit to hang it on — and the card
+ *   no longer shows goals in their own right, so it does not try.
+ * - **A habit whose goal is unknown is no longer separated out.** It was a trailing "not
+ *   tied to a goal" group; it now sits in its cadence like any other, with no annotation.
+ *   The renderer looks the goal up by id and draws nothing when it cannot find one, which
+ *   also covers the id that names a goal the caller filtered out.
+ *
+ * Fixed period order rather than first-appearance order: a cadence is a fact about time,
+ * not a position anyone chose, so there is nothing here to preserve the way `goals`
+ * carried a `sortOrder`. Order WITHIN a group is the caller's, untouched.
+ *
+ * A cadence with no habits is omitted entirely — a heading over nothing is dead space on a
+ * card that already runs tight below 1400px.
  */
-export function groupPracticeByGoal<
-  G extends PracticeGoal,
-  H extends PracticeHabit,
->(goals: readonly G[], habits: readonly H[]): PracticeGroup<G, H>[] {
-  const known = new Set(goals.map((goal) => goal.id))
-  const groups: PracticeGroup<G, H>[] = goals.map((goal) => ({
-    goal,
-    habits: habits.filter((habit) => habit.goalId === goal.id),
-  }))
-
-  const loose = habits.filter(
-    (habit) => habit.goalId === null || !known.has(habit.goalId),
-  )
-  if (loose.length > 0) groups.push({ goal: null, habits: loose })
-
-  return groups
+export function groupPracticeByPeriod<H extends PracticeHabit>(
+  habits: readonly H[],
+): PracticeGroup<H>[] {
+  return PRACTICE_PERIODS.map((period) => ({
+    period,
+    habits: habits.filter((habit) => habit.period === period),
+  })).filter((group) => group.habits.length > 0)
 }

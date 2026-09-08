@@ -112,7 +112,7 @@ export default async function DashboardPage({
   // Narrowed before it crosses into a client component. `GoalsPracticeCard` has to be a
   // client component — a habit is loggable from it — so whatever it receives is serialised
   // into the RSC payload, and `GoalWithProgress` carries every milestone and linked task the
-  // card never draws. Four fields go instead, which is the same call `HabitStripCard`
+  // card never draws. Two fields go instead, which is the same call `HabitStripCard`
   // already makes for habits.
   // A membership test per card rather than six booleans threaded through. `dashboardCollapsed`
   // is already filtered to keys this build knows about (`parseCollapsedCards`), so a key left
@@ -142,12 +142,11 @@ export default async function DashboardPage({
     budget.totalBudgetedCents === 0 &&
     macros.progress.calories.consumed === 0
 
-  const goalRows = goals.map((goal) => ({
-    id: goal.id,
-    title: goal.title,
-    progress: goal.progress,
-    stalled: goal.momentum?.stalled ?? false,
-  }))
+  // Id and title only. The card drew a progress bar, a done/total and a stalled badge per
+  // goal while it grouped habits under them; it groups by cadence now and names the goal
+  // on the row, so everything else stopped being read — and `GoalProgress` is a union of
+  // up to five fields per goal that was crossing into a client component to be ignored.
+  const goalRows = goals.map((goal) => ({ id: goal.id, title: goal.title }))
 
   // Everything with a date on it, in one pass: overdue, then a band per day out to the
   // horizon, then whatever is further off than that.

@@ -305,9 +305,17 @@ test("the dashboard card shows today's practice and logs it", async ({
     announces(0, 3, "this week"),
   )
 
-  // `addHabit` attaches no goal, so this one proves the grouping too: it has to land in
-  // the group for practice that serves no goal rather than under someone else's heading.
-  await expect(card).toContainText("Not tied to a goal")
+  // `addHabit` attaches no goal, and the grouping is by CADENCE now — so this habit has to
+  // land under its own period rather than in a bucket for goal-less practice, which no
+  // longer exists. Three-a-week, so: Weekly.
+  //
+  // Scoped to the group, not the card: `toContainText("Weekly")` would pass on a card that
+  // had the heading somewhere and this row somewhere else entirely.
+  const weekly = card
+    .locator("div")
+    .filter({ has: page.getByRole("heading", { name: "Weekly" }) })
+    .last()
+  await expect(weekly).toContainText(title)
 
   await card.getByRole("button", { name: `Log ${title}` }).click()
   await expect(meter(card, title)).toHaveAttribute(
