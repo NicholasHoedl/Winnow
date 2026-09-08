@@ -1093,3 +1093,83 @@ describe("the goal plan system prompt", () => {
     expect(system()).toMatch(/most goals need none/i)
   })
 })
+
+/**
+ * Undated rows, which only became reachable when the panel started editing REAL data.
+ *
+ * Every task in a generated payload carries a date — `planDate` requires one. A real task
+ * does not: `tasks.due_date` is nullable, and a setup task that landed in Someday is the
+ * normal case rather than the odd one. The date checks were written against the generated
+ * shape and compared `null < today`, which in JavaScript is `null < "2026-08-04"` — a
+ * string comparison against "null" that quietly answers false and reports nothing.
+ */
+describe("planWarnings — undated rows", () => {
+  const bare = { targetDate: "2026-12-31" }
+  const plan = (over: Partial<GoalPlanPayload> = {}): GoalPlanPayload =>
+    ({
+      milestones: [{ title: "A step", dueDate: "2026-09-01" }],
+      habits: [sessions("Practice", "week", 3)],
+      setupTasks: [],
+      ...over,
+    }) as GoalPlanPayload
+
+  it("says nothing about a task with no date", () => {
+    const warnings = planWarnings(
+      plan({
+        setupTasks: [
+          { title: "Someday", dueDate: null },
+        ] as unknown as GoalPlanPayload["setupTasks"],
+      }),
+      bare,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.on === "setupTask")).toEqual([])
+  })
+
+  it("says nothing about a milestone with no date", () => {
+    const warnings = planWarnings(
+      plan({
+        milestones: [
+          { title: "Undated", dueDate: null },
+        ] as unknown as GoalPlanPayload["milestones"],
+      }),
+      bare,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.on === "milestone")).toEqual([])
+  })
+
+  it("still judges the dated rows beside an undated one", () => {
+    // The undated row must be skipped, not make the whole pass give up.
+    const warnings = planWarnings(
+      plan({
+        setupTasks: [
+          { title: "Someday", dueDate: null },
+          { title: "Overdue", dueDate: "2020-01-01" },
+        ] as unknown as GoalPlanPayload["setupTasks"],
+      }),
+      bare,
+      TODAY,
+    )
+    expect(warnings.filter((w) => w.on === "setupTask")).toEqual([
+      { on: "setupTask", index: 1, kind: "past", message: "Dated in the past" },
+    ])
+  })
+
+  it("does not read an undated milestone as out of order", () => {
+    // `out-of-order` compares each milestone with the one before it. A null in the middle
+    // compared as a string would have reported the row AFTER it as going backwards.
+    const warnings = planWarnings(
+      plan({
+        milestones: [
+          { title: "First", dueDate: "2026-09-01" },
+          { title: "Undated", dueDate: null },
+          { title: "Third", dueDate: "2026-10-01" },
+        ] as unknown as GoalPlanPayload["milestones"],
+      }),
+      bare,
+      TODAY,
+    )
+    expect(warnings.map((w) => w.kind)).not.toContain("out-of-order")
+  })
+})

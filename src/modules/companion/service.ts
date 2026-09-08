@@ -344,8 +344,19 @@ export function planWarnings(
   const check = (
     on: "milestone" | "setupTask",
     index: number,
-    dueDate: string,
+    /**
+     * Nullable, because this judges REAL rows now and not only generated ones.
+     *
+     * Every task in a payload carries a date — `planDate` requires one — so this was a
+     * `string` for as long as a proposal was the only thing it saw. `tasks.due_date` is
+     * nullable and a setup task sitting in Someday is the ordinary case, and the comparison
+     * below would have run `null < "2026-08-04"`, which JavaScript answers by comparing the
+     * STRING "null": false, silently, on every branch. An undated row has no date to be
+     * wrong about, so it gets no reading at all.
+     */
+    dueDate: string | null,
   ): void => {
+    if (dueDate === null) return
     if (dueDate < today) {
       warnings.push({
         on,
@@ -391,7 +402,19 @@ export function planWarnings(
   // lost track of its own ordering, and it reads as nonsense on the timeline.
   payload.milestones.forEach((milestone, i) => {
     if (i === 0) return
-    if (milestone.dueDate < payload.milestones[i - 1].dueDate) {
+    // Against the nearest DATED milestone above, not simply the one above. A null in the
+    // middle would otherwise compare as the string "null" and report the row after it as
+    // going backwards — and skipping only the null itself would silently break the chain,
+    // so an undated step in the middle would stop the rest being checked at all.
+    const previous = payload.milestones
+      .slice(0, i)
+      .reverse()
+      .find((m) => m.dueDate !== null)?.dueDate
+    if (
+      milestone.dueDate !== null &&
+      previous !== undefined &&
+      milestone.dueDate < previous
+    ) {
       warnings.push({
         on: "milestone",
         index: i,

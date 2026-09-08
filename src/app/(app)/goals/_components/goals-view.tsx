@@ -8,8 +8,10 @@ import { reorderGoals } from "@/modules/goals/actions"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
+import { PlanEditor } from "@/components/companion/plan-editor"
 import { PlanProposal } from "@/components/companion/plan-proposal"
 import { ToolPanel } from "@/components/companion/tool-panel"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { SortableList } from "@/components/shared/sortable-list"
 import { Button } from "@/components/ui/button"
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/select"
 
 import type { EventOption } from "@/modules/calendar/queries"
+import type { GoalPlanRow } from "@/modules/companion/queries"
 import type { HabitRow, HabitStripCard } from "@/modules/habits/queries"
 import { useWriteGuard } from "@/components/shared/use-write-guard"
 
@@ -38,6 +41,8 @@ export function GoalsView({
   companionEnabled,
   today,
   existingCommitments,
+  plans,
+  plannedGoalIds,
 }: {
   goals: GoalWithProgress[]
   /**
@@ -70,7 +75,26 @@ export function GoalsView({
   today: string
   /** What the account already keeps in a week — the plan panel's load warning reads it. */
   existingCommitments: number
+  /**
+   * Each goal's plan as it actually stands, by goal id.
+   *
+   * Loaded for every goal rather than fetched when one is picked: the picker is a client
+   * control and a fetch on change would put a spinner between choosing a goal and seeing
+   * its plan, on a page that already has the rows.
+   */
+  plans: Record<string, GoalPlanRow>
+  /** Goals that have had a plan APPLIED — the ones re-planning has to warn about. */
+  plannedGoalIds: string[]
 }) {
+  // Something to show, not merely a goal that exists. `getGoalPlan` answers for every
+  // goal — its null means "no such goal", not "nothing planned" — so without this the
+  // editor opened on a goal with nothing in it and announced "This goal has 0 milestones,
+  // 0 habits and 0 tasks". An empty plan is what the Plan button is for.
+  const hasPlan = (plan?: GoalPlanRow) =>
+    plan !== undefined &&
+    plan.milestones.length + plan.habits.length + plan.setupTasks.length > 0
+
+  const [confirmReplan, setConfirmReplan] = React.useState(false)
   const [detailGoalId, setDetailGoalId] = React.useState<string | null>(null)
   const [goalDialogOpen, setGoalDialogOpen] = React.useState(false)
   const [editingGoal, setEditingGoal] = React.useState<GoalWithProgress | null>(
@@ -204,12 +228,19 @@ export function GoalsView({
                   ))}
                 </SelectContent>
               </Select>
+              {/* Straight through for a goal that has never been planned; through the
+                  confirmation for one that has. The predicate is an APPLIED proposal, not
+                  "the goal has milestones" — the question being asked is "replace the plan
+                  you generated?", and a goal whose steps were all typed by hand has no
+                  previous plan to replace. */}
               <Button
                 onClick={() =>
-                  void proposal.generate({
-                    kind: "goal_plan",
-                    goalId: planGoalId,
-                  })
+                  plannedGoalIds.includes(planGoalId)
+                    ? setConfirmReplan(true)
+                    : void proposal.generate({
+                        kind: "goal_plan",
+                        goalId: planGoalId,
+                      })
                 }
                 disabled={busy || !planGoalId}
                 aria-busy={busy}
@@ -250,6 +281,30 @@ export function GoalsView({
               proposal.apply({ kind: "goal_plan", payload: next })
             }
             onDiscard={proposal.discard}
+          />
+        </div>
+      )}
+
+      {/* The plan as it stands, when there is no proposal in flight for this goal.
+          `active` wins: a proposal you are part-way through reviewing is a task, and
+          swapping it for the editor underneath would lose the pruning you had done. */}
+      {!active && planGoalId && hasPlan(plans[planGoalId]) && (
+        <div className="mb-5">
+          <PlanEditor
+            plan={plans[planGoalId]}
+            goalId={planGoalId}
+            goalTitle={goalTitleFor(planGoalId)}
+            goal={{
+              targetDate: goalFor(planGoalId)?.targetDate ?? null,
+              targetValue: goalFor(planGoalId)?.targetValue ?? null,
+              currentValue: goalFor(planGoalId)?.currentValue ?? null,
+              unit: goalFor(planGoalId)?.unit ?? null,
+            }}
+            goalOptions={goalOptions}
+            habitRows={habitRows.filter((row) => row.goalId === planGoalId)}
+            today={today}
+            existingCommitments={existingCommitments}
+            onReplan={() => setConfirmReplan(true)}
           />
         </div>
       )}
@@ -299,6 +354,24 @@ export function GoalsView({
         open={detailGoal !== null}
         onOpenChange={(open) => !open && setDetailGoalId(null)}
         onEdit={openEditGoal}
+      />
+
+      {/* Named for what it replaces, and explicit about what it does NOT.
+          "Will delete previous plan" is true of the stored proposal and false of everything
+          that proposal created — and deleting a habit cascades its entries, so a dialog
+          that left the question open would be one click from weeks of logged history.
+          The last line is the part people get wrong: nothing is removed, so applying the
+          next plan ADDS to what is here. */}
+      <ConfirmDialog
+        open={confirmReplan}
+        onOpenChange={setConfirmReplan}
+        title="Plan this goal again?"
+        description="The previous plan is replaced. Your milestones, habits and tasks are kept exactly as they are — you will review the new plan before anything is created, and whatever you apply is added alongside them."
+        confirmLabel="Plan again"
+        destructive={false}
+        onConfirm={() =>
+          void proposal.generate({ kind: "goal_plan", goalId: planGoalId })
+        }
       />
     </div>
   )

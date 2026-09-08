@@ -5,6 +5,7 @@ import { db } from "@/db"
 import { requireUserId } from "@/lib/session"
 import { goals, milestones } from "@/modules/goals/schema"
 import { habits } from "@/modules/habits/schema"
+import { tasks } from "@/modules/todos/schema"
 
 import { aiProposals } from "./schema"
 import type { GoalPromptContext } from "./service"
@@ -133,4 +134,125 @@ export async function buildGoalContext(
     existingHabits: practice,
     today,
   }
+}
+
+/**
+ * A goal's plan as it actually stands — the rows themselves, each carrying its id.
+ *
+ * **This is what the panel edits once a plan has been applied**, and the id on every row
+ * is the whole reason the design works. Applying a plan is a one-way fan-out of creates:
+ * `addMilestone`, `createHabit`, `createTask`, with nothing recording which row came from
+ * which payload entry. So "re-open the plan and have edits cascade" cannot be answered by
+ * the stored payload — there is no correspondence to follow, and matching by title breaks
+ * the first time a milestone is renamed anywhere else.
+ *
+ * Reading the real rows sidesteps that entirely: the panel edits the things themselves,
+ * every one addressable by id, and there is one source of truth rather than a payload and
+ * a table that drift. The alternative — a `proposal_items` mapping — buys the same cascade
+ * and a divergence problem with it, on a goal whose milestones the detail dialog now makes
+ * easy to edit directly.
+ *
+ * `done` milestones and completed tasks come too. Hiding them would make the timeline lie
+ * about what has happened, and the editor draws them struck through rather than dropping
+ * them.
+ *
+ * Archived habits do not. A retired practice keeps its history and is not part of the plan
+ * any more — the same exclusion every other habit read makes.
+ */
+export type GoalPlanRow = {
+  milestones: {
+    id: string
+    title: string
+    dueDate: string | null
+    done: boolean
+  }[]
+  habits: {
+    id: string
+    title: string
+    period: "day" | "week" | "month"
+    targetCount: number
+    targetAmount: number | null
+    unit: string | null
+  }[]
+  setupTasks: {
+    id: string
+    title: string
+    dueDate: string | null
+    done: boolean
+  }[]
+}
+
+export async function getGoalPlan(goalId: string): Promise<GoalPlanRow | null> {
+  const userId = await requireUserId()
+
+  // The goal itself first, and its absence is a null rather than three empty lists: a goal
+  // that was deleted and one that has nothing on it are different answers, and the caller
+  // shows a different thing for each.
+  const goal = await db.query.goals.findFirst({
+    where: and(eq(goals.id, goalId), eq(goals.userId, userId)),
+    columns: { id: true },
+  })
+  if (!goal) return null
+
+  const [milestoneRows, habitRows, taskRows] = await Promise.all([
+    db.query.milestones.findMany({
+      where: and(eq(milestones.userId, userId), eq(milestones.goalId, goalId)),
+      columns: { id: true, title: true, dueDate: true, done: true },
+      // The order the goal dialog shows them in, so the two surfaces agree about which
+      // step is third.
+      orderBy: [asc(milestones.sortOrder), asc(milestones.createdAt)],
+    }),
+    db.query.habits.findMany({
+      where: and(
+        eq(habits.userId, userId),
+        eq(habits.goalId, goalId),
+        isNull(habits.archivedAt),
+      ),
+      columns: {
+        id: true,
+        title: true,
+        period: true,
+        targetCount: true,
+        targetAmount: true,
+        unit: true,
+      },
+      orderBy: [asc(habits.sortOrder), asc(habits.createdAt)],
+    }),
+    db.query.tasks.findMany({
+      where: and(eq(tasks.userId, userId), eq(tasks.goalId, goalId)),
+      columns: { id: true, title: true, dueDate: true, status: true },
+      orderBy: [asc(tasks.sortOrder), asc(tasks.createdAt)],
+    }),
+  ])
+
+  return {
+    milestones: milestoneRows,
+    habits: habitRows,
+    setupTasks: taskRows.map(({ status, ...task }) => ({
+      ...task,
+      done: status === "done",
+    })),
+  }
+}
+
+/**
+ * Goal ids that have had a plan applied — the predicate for the re-plan confirmation.
+ *
+ * Keyed on an APPLIED proposal rather than on "the goal has milestones", because the
+ * question the dialog asks is "you already generated a plan for this, replace it?" — and a
+ * goal whose milestones were all typed by hand has no previous plan to warn about.
+ */
+export async function getPlannedGoalIds(): Promise<string[]> {
+  const userId = await requireUserId()
+  const rows = await db.query.aiProposals.findMany({
+    where: and(
+      eq(aiProposals.userId, userId),
+      eq(aiProposals.kind, "goal_plan"),
+      eq(aiProposals.status, "applied"),
+    ),
+    columns: { targetId: true },
+  })
+  return [
+    ...new Set(rows.flatMap((row) => (row.targetId ? [row.targetId] : []))),
+  ]
 }

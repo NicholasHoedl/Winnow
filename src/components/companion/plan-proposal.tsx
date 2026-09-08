@@ -9,96 +9,12 @@ import {
   planWarnings,
   proposedQuota,
   type Excluded,
-  type PlanWarning,
 } from "@/modules/companion/service"
 import { PLAN_CAPS, type GoalPlanPayload } from "@/modules/companion/validation"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
-/**
- * A title that is always editable but reads as text.
- *
- * No click-to-edit mode: a borderless input that reveals its edges on hover and focus.
- * Fifteen rows with a mode each is fifteen chances to be in the wrong one, and the whole
- * point of this surface is to fix two or three things quickly and move on.
- */
-function EditableTitle({
-  value,
-  onChange,
-  disabled,
-  className,
-  label,
-  autoFocus,
-}: {
-  value: string
-  onChange: (next: string) => void
-  disabled: boolean
-  className?: string
-  label: string
-  /** Set on a row that was just added, so typing is the next thing you do. */
-  autoFocus?: boolean
-}) {
-  return (
-    <input
-      value={value}
-      aria-label={label}
-      disabled={disabled}
-      autoFocus={autoFocus}
-      onChange={(event) => onChange(event.target.value)}
-      className={cn(
-        "hover:bg-muted focus:bg-muted -mx-1 min-w-0 flex-1 truncate rounded px-1 outline-none",
-        "focus:ring-ring focus:ring-1",
-        disabled && "pointer-events-none line-through opacity-60",
-        className,
-      )}
-    />
-  )
-}
-
-function EditableDate({
-  value,
-  onChange,
-  disabled,
-  label,
-  warning,
-}: {
-  value: string
-  onChange: (next: string) => void
-  disabled: boolean
-  label: string
-  warning?: PlanWarning
-}) {
-  return (
-    <span className="flex shrink-0 items-center gap-1.5">
-      {warning && (
-        <AlertTriangle
-          className={cn(
-            "size-3.5",
-            warning.kind === "tight" ? "text-brand-accent" : "text-destructive",
-          )}
-          aria-hidden
-        />
-      )}
-      <span className="sr-only">{warning?.message}</span>
-      <input
-        type="date"
-        value={value}
-        aria-label={label}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "hover:bg-muted focus:bg-muted focus:ring-ring rounded px-1 font-mono text-xs outline-none focus:ring-1",
-          disabled && "pointer-events-none opacity-60",
-          warning
-            ? warning.kind === "tight"
-              ? "text-brand-accent"
-              : "text-destructive"
-            : "text-muted-foreground",
-        )}
-      />
-    </span>
-  )
-}
+import { EditableDate, EditableTitle } from "./plan-fields"
 
 /**
  * The proposal renderer: a plan on a time spine.

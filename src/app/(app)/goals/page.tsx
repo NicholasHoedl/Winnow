@@ -1,7 +1,11 @@
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { aiReady } from "@/modules/companion/ai-settings"
-import { getPendingProposals } from "@/modules/companion/queries"
+import {
+  getGoalPlan,
+  getPendingProposals,
+  getPlannedGoalIds,
+} from "@/modules/companion/queries"
 import { getGoalOptions, getGoals } from "@/modules/goals/queries"
 import { weeklyCommitments } from "@/modules/companion/service"
 import { getHabitStrip, getLiveHabits } from "@/modules/habits/queries"
@@ -60,6 +64,20 @@ export default async function GoalsPage() {
   // the rows this page has already loaded rather than by a query of its own.
   const existingCommitments = weeklyCommitments(habitRows)
 
+  // Every goal's plan, so picking one in the tool shows it without a round trip. Sequential
+  // per goal but parallel across them, and each is three indexed reads on rows this account
+  // already holds — the alternative was a fetch on every change of the picker.
+  const plannedGoalIds = await getPlannedGoalIds()
+  const plans = Object.fromEntries(
+    (
+      await Promise.all(
+        goals.map(
+          async (goal) => [goal.id, await getGoalPlan(goal.id)] as const,
+        ),
+      )
+    ).flatMap(([id, plan]) => (plan ? [[id, plan] as const] : [])),
+  )
+
   return (
     <GoalsView
       goals={goals}
@@ -74,6 +92,8 @@ export default async function GoalsPage() {
       companionEnabled={aiReady(aiSettings)}
       today={todayInZone(new Date(), timeZone)}
       existingCommitments={existingCommitments}
+      plans={plans}
+      plannedGoalIds={plannedGoalIds}
     />
   )
 }

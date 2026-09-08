@@ -640,3 +640,84 @@ test("a proposed rate is judged against the goal's number", async ({
 
   await removeGoal(page, goalTitle)
 })
+
+/**
+ * A plan does not end at Apply.
+ *
+ * Reported from real use: accepting a proposal made the panel vanish, and selecting the
+ * same goal again showed nothing — so the only way back to the plan was to generate a new
+ * one, which proposes a second ladder beside the first.
+ *
+ * The panel that comes back is NOT the proposal one. Applying is a one-way fan-out of
+ * creates and nothing records which row came from which payload entry, so there is no
+ * correspondence to reopen; the editor reads the goal's REAL rows instead, each addressable
+ * by its own id. That is what makes an edit here reach the goal rather than a snapshot of
+ * it, and it is what this test proves — the assertion is made in the goal's detail dialog,
+ * on the other side of the write.
+ */
+test("an applied plan reopens for editing, and edits reach the goal", async ({
+  page,
+}) => {
+  const goalTitle = `E2E reopen ${Date.now()}`
+  await createGoal(page, goalTitle)
+  await planGoal(page, goalTitle)
+  await page.getByRole("button", { name: "Apply" }).click()
+  await expect(page.getByText("Proposed plan")).toHaveCount(0)
+
+  // Selecting the goal again brings the plan back — as the plan it now IS, not as a
+  // proposal awaiting a decision.
+  await page.getByRole("combobox", { name: "Goal" }).click()
+  await page.getByRole("option", { name: goalTitle }).click()
+  await expect(page.getByText("Your plan")).toBeVisible()
+  await expect(page.getByLabel("Milestone 1 title")).toHaveValue(
+    "STUB first milestone",
+  )
+
+  // The edit, and the proof it landed: the goal's own dialog is a different read of the
+  // same row, so a change that only touched the panel's state cannot pass here.
+  const renamed = `${goalTitle} reopened`
+  await page.getByLabel("Milestone 1 title").fill(renamed)
+  await page.getByLabel("Milestone 1 title").blur()
+
+  await openGoalDetail(page, goalTitle)
+  await expect(page.getByRole("dialog")).toContainText(renamed)
+  await page.keyboard.press("Escape")
+})
+
+/**
+ * Planning a goal twice asks first, and says what it will not do.
+ *
+ * "Will delete previous plan" is true of the stored proposal and false of everything that
+ * proposal created — and deleting a habit cascades its entries, so a dialog leaving that
+ * open would sit one click from weeks of logged history.
+ */
+test("re-planning an applied goal confirms first, and keeps what exists", async ({
+  page,
+}) => {
+  const goalTitle = `E2E replan ${Date.now()}`
+  await createGoal(page, goalTitle)
+  await planGoal(page, goalTitle)
+  await page.getByRole("button", { name: "Apply" }).click()
+  // Both waits, and both are needed. `Milestone 1 title` is the label in the PROPOSAL
+  // panel as well, holding the same stub value — so waiting on it alone matched the panel
+  // that had not cleared yet and clicked Plan before the page knew this goal was planned.
+  // The editor only renders once the refresh brings back real rows, so its heading is the
+  // signal that the write landed.
+  await expect(page.getByText("Proposed plan")).toHaveCount(0)
+  await expect(page.getByText("Your plan")).toBeVisible()
+
+  await page.getByRole("button", { name: "Plan", exact: true }).click()
+
+  // The dialog, and the promise it makes.
+  const confirm = page.getByRole("alertdialog")
+  await expect(confirm).toContainText("Plan this goal again?")
+  await expect(confirm).toContainText("kept exactly as they are")
+  await confirm.getByRole("button", { name: "Plan again" }).click()
+
+  // A fresh proposal to review — and the milestones the first plan created are still on
+  // the goal, which is the half that had to be true.
+  await expect(page.getByText("Proposed plan")).toBeVisible()
+  await openGoalDetail(page, goalTitle)
+  await expect(page.getByRole("dialog")).toContainText("STUB first milestone")
+  await page.keyboard.press("Escape")
+})
