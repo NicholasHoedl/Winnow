@@ -40,9 +40,34 @@ export function AppSidebar({ userName }: { userName: string }) {
               space — it is a label from a multi-tenant product, in an app that will only
               ever have one tenant. Nothing replaces it: a workspace switcher with one
               workspace is chrome pretending to be a control. */}
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium">{userName}</p>
           </div>
+          {/* Settings, beside the name rather than in the footer with Sign out. Both are
+              about the account, and the footer put the one you visit most next to the
+              one you use least. Icon-only, like the mobile header's gear: the name
+              truncates already, and a word beside it in a 256px sidebar would be the
+              thing that made it. */}
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            aria-current={settingsActive ? "page" : undefined}
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-md transition-colors",
+              settingsActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+            )}
+          >
+            <LinkPending className="size-4">
+              <Settings
+                className={cn(
+                  "size-4",
+                  settingsActive && "text-sidebar-primary",
+                )}
+              />
+            </LinkPending>
+          </Link>
         </div>
       </div>
 
@@ -88,25 +113,8 @@ export function AppSidebar({ userName }: { userName: string }) {
         })}
       </nav>
 
-      <div className="border-sidebar-border flex flex-col gap-1 border-t p-3">
-        <Link
-          href="/settings"
-          aria-current={settingsActive ? "page" : undefined}
-          className={cn(
-            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            settingsActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
-          )}
-        >
-          <LinkPending className="size-4">
-            <Settings
-              className={cn("size-4", settingsActive && "text-sidebar-primary")}
-            />
-          </LinkPending>
-          Settings
-        </Link>
-        <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="border-sidebar-border border-t p-3">
+        <div className="flex items-center justify-between gap-2">
           <ModeToggle />
           <form action={signOutAction}>
             <Button
