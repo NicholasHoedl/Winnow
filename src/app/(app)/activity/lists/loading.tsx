@@ -1,21 +1,22 @@
 import { ActivityHeader } from "../_components/activity-header"
 
-// Routines shaped skeleton — the section's real heading and strip, a button-shaped action
-// and a line for the description, then a stack of routine cards.
+// Lists shaped skeleton. The heading and the strip are real — neither depends on data —
+// so only the description, the field and the rows wait, and nothing above them moves when
+// the query lands.
 export default function Loading() {
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
       <ActivityHeader
-        action={<div className="bg-muted h-9 w-32 animate-pulse rounded-lg" />}
         description={
           <span className="bg-muted block h-3 w-72 max-w-full animate-pulse rounded" />
         }
       />
-      <div className="flex flex-col gap-4">
+      <div className="max-w-xl space-y-2">
+        <div className="bg-muted h-9 w-full animate-pulse rounded-lg" />
         {Array.from({ length: 3 }).map((_, i) => (
           <div
             key={i}
-            className="bg-card h-40 animate-pulse rounded-xl border"
+            className="bg-card h-10 animate-pulse rounded-md border"
           />
         ))}
       </div>

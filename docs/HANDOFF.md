@@ -1,15 +1,17 @@
 # Handoff
 
-Last updated: **2026-09-08**. T24 — a total for the month — carries **`0041`, the first
-migration since T23**: everything on `main` between the two deploys by a rebuild alone, this
-does not (runbook §4). Between T23 and T24 there was a run of small fixes from real use — a
+Last updated: **2026-09-09**. T25 gave the Activity section a strip of five pages — Tasks,
+Habits, Routines, Lists, Repeating tasks — with no migration (ADR-0020). T24 before it — a
+total for the month — carries **`0041`, the first migration since T23**: everything on `main`
+between T23 and T24 deploys by a rebuild alone, T24 does not (runbook §4). Between T23 and
+T24 there was a run of small fixes from real use — a
 time-aware greeting, Settings split into pages, the goal planner reopening an applied plan,
 practice grouped by cadence on the dashboard — shipped without entries here; `git log` has
 them. §1 still describes the deploy as of 2026-08-25 and nothing about the running stack
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T24 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T25 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -416,6 +418,28 @@ ADR-0019 is the authority on the shape and on what it beat.
   stop carrying forward.
 - The dashboard's "of $X" still shows the category sum when no total is set — exactly what
   it showed before, with the same weakness the total exists to fix.
+
+**T25 is shipped: the Activity section's tools are destinations in a strip.** No migration.
+ADR-0020 is the authority.
+
+- **Five pills under the heading of every Activity page — Tasks · Habits · Routines · Lists
+  · Repeating tasks** — the Settings strip, on the section that needed it. The heading is
+  "Activity" on all five, the lit pill names the page, and the page's one primary action
+  sits beside the heading. Not a `layout.tsx`: that action belongs to the page, so each page
+  renders a shared `ActivityHeader` and its `loading.tsx` renders the same one.
+- **Lists and Repeating tasks are pages now** (`/activity/lists`, `/activity/repeating`),
+  built from the two dialogs' bodies. The ⋮ menu is gone, and so are the sub-pages' "←
+  Activity" links.
+- **The Tasks page is tasks — the routines row and the habit strip are gone from it** (the
+  same-day amendment to ADR-0020). Each had earned its place while `/activity` was the only
+  door to it; with a pill for each a hundred pixels above, the user asked for the overlap
+  removed. Routines run from their page; a habit logs from its page and from the dashboard
+  card, which carries T12d's phone-width case now. `/activity` runs two queries fewer.
+- **`ACTIVITY_PAGES` in `components/shared/activity-pages.ts` feeds the strip and the
+  palette**, as `SETTINGS_PAGES` does. `pageAction` in the suite lost its two Activity
+  entries; `manager-renames` and `task-skip` go to the pages instead.
+- **`revalidateTaskViews` names the two new paths.** Revalidating `/activity` does not reach
+  its children — the trap §4 already records — and both pages write through it.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
@@ -1065,6 +1089,12 @@ Do not reopen these without new information:
   library. A plan naming a library does not settle it.
 
 ### The Activity page (T10a–T10b, revisited by T12d)
+
+**T25 put a strip of five pages under the heading (ADR-0020)** — Tasks, Habits, Routines,
+Lists, Repeating tasks — and then took the routines row and the habit strip OFF the Tasks
+page. Read the bullets below as history: "habits are a strip above the task list" and
+"routines have a Run button each again" were true from T12d/T13 until T25. The strip is the
+way to every page in the section, and the dashboard card is where a habit logs at a glance.
 
 **ADR-0013 is the authority.** The short version, and the parts that bite:
 

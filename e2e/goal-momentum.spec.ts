@@ -124,7 +124,7 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
   const habitTitle = `E2E momentum practice ${stamp}`
 
   const goalId = await seedGoal({ title: goalTitle, createdAt: OLD_ENOUGH })
-  // Three-a-week, matching what the dialog's defaults produced — the caption the strip
+  // Three-a-week, matching what the dialog's defaults produced — the caption the card
   // shows ("this week") is read further down, so the cadence is load-bearing here.
   await seedHabit({ title: habitTitle, goalId })
 
@@ -134,12 +134,12 @@ test("a goal worked through a habit reads as moving, not stalled", async ({
   const card = goalCard(page, goalTitle)
   await expect(card.getByText("Stalled")).toBeVisible()
 
-  // One session flips it, logged from the strip rather than through a task. The strip is
-  // on `/activity`, which is where practice is logged — the goal card only reads it.
-  await page.goto("/activity")
+  // One session flips it, logged from the dashboard card rather than through a task. The
+  // card is where practice is logged at a glance (the `/activity` strip that used to do
+  // this went in T25) — the goal card only reads it.
+  await page.goto("/")
   await page
-    .getByTestId("habit-chip")
-    .filter({ hasText: habitTitle })
+    .locator('[data-card="goals"]')
     .getByRole("button", { name: `Log ${habitTitle}` })
     .click()
 

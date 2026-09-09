@@ -1,15 +1,7 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import {
-  ArrowLeft,
-  MoreVertical,
-  Pencil,
-  Play,
-  Plus,
-  Trash2,
-} from "lucide-react"
+import { MoreVertical, Pencil, Play, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import type { ProposalRow } from "@/modules/companion/queries"
@@ -39,6 +31,7 @@ import { RoutineDialog } from "./routine-dialog"
 import { RoutineTool } from "./routine-tool"
 import { type ListOption, RoutineItemDialog } from "./routine-item-dialog"
 import { RunRoutineDialog } from "./run-routine-dialog"
+import { ActivityHeader } from "../../_components/activity-header"
 
 function ItemRow({
   item,
@@ -276,27 +269,15 @@ export function RoutinesView({
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <Link
-        href="/activity"
-        className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        To-dos
-      </Link>
-
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Routines</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            A named set of tasks you can spin up whenever the occasion comes
-            round.
-          </p>
-        </div>
-        <Button className="sm:shrink-0" onClick={() => openRoutine(null)}>
-          <Plus className="size-4" />
-          New routine
-        </Button>
-      </div>
+      <ActivityHeader
+        action={
+          <Button onClick={() => openRoutine(null)}>
+            <Plus className="size-4" />
+            New routine
+          </Button>
+        }
+        description="A named set of tasks you can spin up whenever the occasion comes round."
+      />
 
       {/* Above the list: the tool proposes what the list then holds, so it reads top to
           bottom. Gated on `aiReady`, so it simply is not here when the companion is off —

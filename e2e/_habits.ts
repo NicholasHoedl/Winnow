@@ -58,8 +58,9 @@ export async function seedHabit(fields: {
 /**
  * Reading a habit's quota off its meter.
  *
- * Shared because the quota is drawn on three surfaces — the dashboard card, `/activity`'s
- * strip and `/activity/habits` — and two spec files assert on it. One copy means the next
+ * Shared because the quota is drawn on two surfaces — the dashboard card and
+ * `/activity/habits` (three, until T25 took the strip off `/activity`) — and two spec files
+ * assert on it. One copy means the next
  * change to how a quota is drawn costs one edit here rather than fifteen scattered ones,
  * which is the same reasoning that produced `_goals.ts`.
  *

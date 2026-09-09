@@ -3,13 +3,16 @@ import { test, expect } from "./_test"
 import { pageAction } from "./_menu"
 
 /**
- * The two "manager" dialogs can now rename what they list.
+ * The two "managers" can rename what they list.
  *
  * `renameList` and `updateCategory` both existed from the modules that introduced them and
  * neither had a caller: every manager offered create and delete and nothing in between, so
  * fixing a typo in a name meant deleting the row — which detaches every task or transaction
  * filed under it — and making a new one. These tests pin the round trip, and in the
  * category's case also pin what deliberately CANNOT be edited.
+ *
+ * Lists are a PAGE of the Activity section now (ADR-0020) and categories are still a
+ * dialog on `/budget`, which is why the two tests scope differently.
  *
  * Both work against rows they create themselves, so neither touches real data.
  */
@@ -18,31 +21,29 @@ test("a list can be renamed, and keeps its tasks", async ({ page }) => {
   const before = `E2E list ${Date.now()}`
   const after = `${before} renamed`
 
-  await page.goto("/activity")
-  await pageAction(page, "Manage lists")
-  const dialog = page.getByRole("dialog")
+  await page.goto("/activity/lists")
 
-  await dialog.getByLabel("New list name").fill(before)
-  await dialog.getByRole("button", { name: "Add list" }).click()
-  await expect(dialog.getByText(before, { exact: true })).toBeVisible()
+  await page.getByLabel("New list name").fill(before)
+  await page.getByRole("button", { name: "Add list" }).click()
+  await expect(page.getByText(before, { exact: true })).toBeVisible()
 
   // The rename affordance loads the row into the same field the create form uses — so
   // the field's label changing is itself the signal that the form has switched modes.
-  await dialog.getByRole("button", { name: `Rename ${before}` }).click()
-  const field = dialog.getByLabel("List name")
+  await page.getByRole("button", { name: `Rename ${before}` }).click()
+  const field = page.getByLabel("List name")
   await expect(field).toHaveValue(before)
 
   await field.fill(after)
-  await dialog.getByRole("button", { name: `Save ${before}` }).click()
-  await expect(dialog.getByText(after, { exact: true })).toBeVisible()
-  await expect(dialog.getByText(before, { exact: true })).toHaveCount(0)
+  await page.getByRole("button", { name: `Save ${before}` }).click()
+  await expect(page.getByText(after, { exact: true })).toBeVisible()
+  await expect(page.getByText(before, { exact: true })).toHaveCount(0)
 
   // Back to create mode: the label reverts, and the field is empty rather than still
   // holding the name that was just saved.
-  await expect(dialog.getByLabel("New list name")).toHaveValue("")
+  await expect(page.getByLabel("New list name")).toHaveValue("")
 
-  await dialog.getByRole("button", { name: `Delete ${after}` }).click()
-  await expect(dialog.getByText(after, { exact: true })).toHaveCount(0)
+  await page.getByRole("button", { name: `Delete ${after}` }).click()
+  await expect(page.getByText(after, { exact: true })).toHaveCount(0)
 })
 
 test("a category can be renamed, but not switched between income and expense", async ({

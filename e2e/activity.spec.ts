@@ -147,119 +147,27 @@ test("the goal filter works on a phone, and nothing scrolls sideways", async ({
 })
 
 /**
- * T10b, amended by T12a and again by T12d: what each surface on /activity may DO.
+ * T10b, amended by T12a, T12d and T25: what the Tasks page may DO about practice.
  *
  * The rule has not changed — **the rail never offers an action the task list beside it
- * already offers** — but where habits sit has, so it is worth restating rather than quietly
- * patching.
+ * already offers** — and T25 answered it by subtraction. Running a routine CREATES tasks
+ * and logging a habit is not a task at all, which is why each earned a surface on this page
+ * (a Run button per routine, a `+1` per habit) while the page was the only door to either.
+ * The section's strip made both pages one pill away, and the user asked for the overlap
+ * gone: the Tasks page is tasks. Routines run from `/activity/routines` (`routines.spec.ts`
+ * proves the tasks land here); a habit logs from `/activity/habits` and from the dashboard
+ * card, which is what carries the phone-shaped case the strip existed for.
  *
- * Running a routine CREATES tasks, so it gets a button in the rail. A habit used to BE a
- * repeating task, whose tick was already a row in the list, so the rail showed a streak and
- * nothing clickable; T12a made it a quota with a log, generating no tasks at all, and the
- * `+1` appeared. T12d moved that `+1` out of the rail entirely — not because the rule
- * changed, but because the rail is `lg:` only, so on a phone the rule was being satisfied by
- * a surface that did not exist and a habit could not be logged from this page at all.
- *
- * Three assertions keep it honest across the move. The chip still has **no checkbox** — a
+ * Two assertions keep it honest across the move. The card still has **no checkbox** — a
  * quota is not done-or-not-done, and a checkbox would lie about what "done" means for a
- * rate. It has **exactly one button**, which also pins "no chevron, no title link". And the
- * habit creates **no task**, which is what holds the two primitives apart.
+ * rate. And the habit creates **no task**, which is what holds the two primitives apart.
  */
 
-const ROUTINE = `E2E rail routine ${STAMP}`
-const RITEM = `E2E rail step ${STAMP}`
 const HABIT = `E2E rail habit ${STAMP}`
 
-test("a routine runs from its own button on the activity page", async ({
+test("a habit makes no task, and logs from the dashboard at every width", async ({
   page,
 }) => {
-  // --- A routine with one step, built on its own page.
-  await page.goto("/activity/routines")
-  await page.getByRole("button", { name: "New routine", exact: true }).click()
-  const routineDialog = page.getByRole("dialog")
-  await routineDialog.getByLabel("Name", { exact: true }).fill(ROUTINE)
-  await routineDialog.getByRole("button", { name: "Add", exact: true }).click()
-  await expect(visibleCard(page, ROUTINE)).toHaveCount(1)
-
-  await visibleCard(page, ROUTINE)
-    .getByRole("button", { name: "Add task", exact: true })
-    .click()
-  const itemDialog = page.getByRole("dialog")
-  await itemDialog.getByLabel("Title", { exact: true }).fill(RITEM)
-  await itemDialog.getByLabel("Days from run", { exact: true }).fill("0")
-  await itemDialog.getByRole("button", { name: "Add", exact: true }).click()
-  // Load-bearing, and its absence was a 60-second flake. `.click()` waits for the click to
-  // dispatch, NOT for the server action behind it — `addRoutineItem` does three sequential
-  // round trips before returning. Navigating straight after it let `/activity` render from
-  // a read taken before the INSERT landed, so the routine arrived with zero items and the
-  // run dialog offered "Create 0 tasks". The dialog only closes on `ok`, so waiting for it
-  // to hide is waiting for the write to be committed.
-  await expect(itemDialog).toBeHidden()
-
-  // --- The line counts it, links to it, and runs it.
-  await page.goto("/activity")
-  // ONE copy now. There used to be two — the rail's and the phone's — and exactly one was
-  // ever shown; T13 removed the rail, so this renders once at every width. The visible
-  // filter stays because proving "exactly one" is the assertion that would have caught the
-  // duplicate if it ever came back.
-  const line = page.getByTestId("routines-line").filter({ visible: true })
-  await expect(line).toHaveCount(1)
-  await expect(line).toContainText("Routines")
-
-  // **This assertion was inverted in T13, deliberately.** It used to pin the OPPOSITE:
-  // `toHaveCount(0)` on a per-routine Run button, because a button each is what let the
-  // rail reach 724px for three goals, two routines and three habits. That tripwire fired
-  // on this change, which is exactly what it was for — and the answer this time is that
-  // the constraint it guarded is gone rather than being ignored. There is no rail, so
-  // length costs no height; the buttons live in an `overflow-x-auto` row, the same
-  // containment the habit strip below uses. See `routines-line.tsx`, which argues it at
-  // the point of the reversal, and ADR-0013's T13 amendment.
-  //
-  // What is still pinned: the row must not make the PAGE scroll sideways. That is
-  // `mobile-layout.spec.ts`, which caught a 4px overflow here on the first attempt.
-  await line.getByRole("button", { name: `Run ${ROUTINE}` }).click()
-
-  // Asserted BEFORE it is clicked, on purpose. This button's label is derived from the
-  // routine's item count, so a stale read renames it — and clicking a locator whose text
-  // depends on the very thing that might be wrong turns a bad read into a silent 60s hang.
-  // Asserting first fails in ten seconds saying "Create 1 task was never visible", which
-  // points at the count. The test this replaced checked "1 step" in the rail for the same
-  // reason; the rail no longer shows a step count, so the check moved here.
-  const runDialog = page.getByRole("dialog")
-  const create = runDialog.getByRole("button", {
-    name: "Create 1 task",
-    exact: true,
-  })
-  await expect(create).toBeVisible()
-  await create.click()
-  await expect(page.getByText("Added 1 task")).toBeVisible()
-
-  // The task the run created is on the board below the line that created it.
-  await expect(visibleCard(page, RITEM)).toHaveCount(1)
-
-  // --- Cleanup.
-  await page.goto("/activity")
-  await page.getByRole("button", { name: "All", exact: true }).click()
-  const rows = visibleCard(page, RITEM)
-  for (let i = 0; i < 5; i++) {
-    const before = await rows.count()
-    if (before === 0) break
-    await rows.first().getByRole("button", { name: "Task actions" }).click()
-    await page.getByRole("menuitem", { name: "Delete" }).click()
-    await expect(rows).toHaveCount(before - 1)
-  }
-  await expect(rows).toHaveCount(0)
-
-  await page.goto("/activity/routines")
-  await visibleCard(page, ROUTINE)
-    .getByRole("button", { name: /^Actions for / })
-    .click()
-  await page.getByRole("menuitem", { name: "Delete" }).click()
-  await page.getByRole("button", { name: "Delete", exact: true }).click()
-  await expect(visibleCard(page, ROUTINE)).toHaveCount(0)
-})
-
-test("a habit is logged from the strip, at every width", async ({ page }) => {
   // A habit built on its own page. Default cadence, which the dialog opens on: 3 × a week.
   await page.goto("/activity/habits")
   await page.getByRole("button", { name: "New habit", exact: true }).click()
@@ -268,44 +176,35 @@ test("a habit is logged from the strip, at every width", async ({ page }) => {
   await habitDialog.getByRole("button", { name: "Add", exact: true }).click()
   await expect(visibleCard(page, HABIT)).toHaveCount(1)
 
-  // --- Desktop.
+  // The load-bearing negative: a habit creates NO task — and, since T25, nothing else on
+  // the Tasks page either. Before T12a this same title would have been a row in the list.
   await page.goto("/activity")
-  const chip = page.getByTestId("habit-chip").filter({ hasText: HABIT })
-  await expect(chip).toHaveCount(1)
+  await expect(visibleCard(page, HABIT)).toHaveCount(0)
+  await expect(page.getByText(HABIT)).toHaveCount(0)
+
+  // --- Desktop: the dashboard card logs it.
+  await page.goto("/")
+  const card = page.locator('[data-card="goals"]')
   // Still no checkbox, and still for a reason — see the block comment above.
-  await expect(chip.getByRole("checkbox")).toHaveCount(0)
-  // Exactly one: the log control. No chevron and no title link, which is what keeps a tap
-  // on a phone unambiguous. The quota meter beside it is a `progressbar`, not a control —
-  // it reports, it cannot be operated — so it does not count against this.
-  await expect(chip.getByRole("button")).toHaveCount(1)
-  await chip.getByRole("button", { name: `Log ${HABIT}` }).click()
-  await expect(meter(chip, HABIT)).toHaveAttribute(
+  await expect(card.getByRole("checkbox")).toHaveCount(0)
+  await card.getByRole("button", { name: `Log ${HABIT}` }).click()
+  await expect(meter(card, HABIT)).toHaveAttribute(
     "aria-valuetext",
     announces(1, 3, "this week"),
   )
 
-  // The load-bearing negative: a habit creates NO task. Before T12a this same title would
-  // have been a row in the list beside the rail.
-  //
-  // It is also the ONLY thing testing the `data-rail` attribute on the chip. `visibleCard`
-  // is `div.bg-card:not([data-rail])`, so dropping that attribute inverts this to 1 — and
-  // then every prefix cleanup loop in the suite can match a chip and hang waiting for a
-  // "Task actions" button it does not have.
-  await expect(visibleCard(page, HABIT)).toHaveCount(0)
-
-  // --- A phone. The whole reason the strip exists: below `lg` the rail is not rendered, so
-  // until T12d this action was simply unavailable here.
+  // --- A phone. Logging a practice is the most phone-shaped action in the app — the reason
+  // the strip sat on `/activity` from T12d — and the card is what carries that now, at
+  // every width, so it is asserted at one.
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto("/activity")
-  await expect(chip).toBeVisible()
-  await chip.getByRole("button", { name: `Log ${HABIT}` }).click()
-  await expect(meter(chip, HABIT)).toHaveAttribute(
+  await page.goto("/")
+  await expect(card).toBeVisible()
+  await card.getByRole("button", { name: `Log ${HABIT}` }).click()
+  await expect(meter(card, HABIT)).toHaveAttribute(
     "aria-valuetext",
     announces(2, 3, "this week"),
   )
-
-  // Two horizontal scrollers now share this screen — the goal chips and this strip — which
-  // is the specific risk the placement manages. Neither may push the page sideways.
+  // Nothing on the dashboard may push the page sideways at this width either.
   const overflows = await page.evaluate(
     () =>
       document.documentElement.scrollWidth >

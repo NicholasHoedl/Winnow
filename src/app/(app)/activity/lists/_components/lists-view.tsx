@@ -7,32 +7,21 @@ import { toast } from "sonner"
 import { createList, deleteList, renameList } from "@/modules/todos/actions"
 import type { List } from "@/modules/todos/queries"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 
-export function ListManager({
-  lists,
-  open,
-  onOpenChange,
-}: {
-  lists: List[]
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+import { ActivityHeader } from "../../_components/activity-header"
+
+/**
+ * Lists — create, rename, delete — as a page of the Activity section.
+ *
+ * This was `ListManager`, a dialog behind the ⋮ menu on `/activity`. The body is the same:
+ * one field with two jobs (the shape `CalendarManager` uses — a row-level edit input would
+ * be a second place to type a list name), a row per list. What changed is where it lives,
+ * and ADR-0020 says why that is a destination now.
+ */
+export function ListsView({ lists }: { lists: List[] }) {
   const [name, setName] = React.useState("")
   const [pending, startTransition] = React.useTransition()
-  /**
-   * One field, two jobs — the shape `CalendarManager` already uses. A dedicated row-level
-   * edit input would be a second place to type a list name, and this dialog is four lines
-   * tall; the cost of reusing the field is that the list below it is the only thing saying
-   * WHICH name is being edited, which is why the edit affordance also focuses the input.
-   */
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -53,6 +42,8 @@ export function ListManager({
     })
   }
 
+  // The list below the field is the only thing saying WHICH name is being edited, which is
+  // why the edit affordance also focuses the input.
   function startEdit(list: List) {
     setEditingId(list.id)
     setName(list.name)
@@ -77,16 +68,12 @@ export function ListManager({
   const editingName = lists.find((list) => list.id === editingId)?.name
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Lists</DialogTitle>
-          <DialogDescription>
-            Group tasks into lists. Renaming one keeps its tasks; deleting one
-            keeps them too (they become unlisted).
-          </DialogDescription>
-        </DialogHeader>
+    <div className="mx-auto w-full max-w-5xl p-6">
+      <ActivityHeader description="Group tasks into lists. Renaming one keeps its tasks; deleting one keeps them too — they become unlisted." />
 
+      {/* Narrower than the page: a name field and a column of names do not want 900px,
+          and the rows would read as a table with one column. */}
+      <div className="max-w-xl">
         <form onSubmit={submit} className="flex gap-2">
           <Input
             ref={inputRef}
@@ -120,9 +107,11 @@ export function ListManager({
           )}
         </form>
 
-        <ul className="flex flex-col gap-1">
+        <ul className="mt-4 flex flex-col gap-1">
           {lists.length === 0 ? (
-            <li className="text-muted-foreground text-sm">No lists yet.</li>
+            <li className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
+              No lists yet. A task can be filed under one from its dialog.
+            </li>
           ) : (
             lists.map((list) => (
               <li
@@ -153,7 +142,7 @@ export function ListManager({
             ))
           )}
         </ul>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

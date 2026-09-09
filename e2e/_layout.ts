@@ -41,6 +41,8 @@ export const ROUTES = [
   "/activity",
   "/activity/habits",
   "/activity/routines",
+  "/activity/lists",
+  "/activity/repeating",
   "/budget",
   "/calendar",
   "/goals",
@@ -269,9 +271,9 @@ export async function seedWideContent(
   const today = new Date().toLocaleDateString("en-CA")
   await seedTask({ title: `${prefix} ${LONG_TITLE}`, dueDate: today })
   await seedGoal({ title: `${prefix} ${LONG_TITLE}` })
-  // The unbreakable one goes on a habit because a habit title is drawn on four surfaces —
-  // the dashboard practice card, `/activity`'s strip, `/activity/habits`, and inside a
-  // goal — which is the widest spread any single field has.
+  // The unbreakable one goes on a habit because a habit title is drawn on three surfaces —
+  // the dashboard practice card, `/activity/habits`, and inside a goal (four, until T25
+  // took the strip off `/activity`) — which is the widest spread any single field has.
   await seedHabit({ title: `${prefix} ${UNBREAKABLE}` })
 
   // **Prove the seed reaches the screen before any sweep measures it.**
@@ -280,7 +282,8 @@ export async function seedWideContent(
   // for the wrong reason, and the pass looks exactly like a real one. This file's own
   // opening note says a sweep over whatever the account happens to hold measures the
   // account rather than the layout; content seeded but never rendered is the same fault
-  // wearing a fixture. `/activity` draws the task and the habit strip, `/goals` the goal.
+  // wearing a fixture. `/activity` draws the task, `/activity/habits` the habit, `/goals`
+  // the goal.
   await page.goto("/activity")
   // `.first()` on all of these: a title is drawn more than once on a page — a goal
   // appears both on its card and in the plan tool's picker — and a strict-mode
@@ -288,6 +291,7 @@ export async function seedWideContent(
   await expect(
     page.getByText(LONG_TITLE, { exact: false }).first(),
   ).toBeVisible()
+  await page.goto("/activity/habits")
   await expect(
     page.getByText(UNBREAKABLE, { exact: false }).first(),
   ).toBeVisible()

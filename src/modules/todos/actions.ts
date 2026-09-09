@@ -48,6 +48,10 @@ const idSchema = z.string().uuid()
 // goal (T2) changed both. One path now, because they are one page.
 function revalidateTaskViews(): void {
   revalidatePath("/activity")
+  // Named on their own: revalidating a segment does not reach its children. Lists and
+  // rules are written from these two pages and read back on them.
+  revalidatePath("/activity/lists")
+  revalidatePath("/activity/repeating")
   revalidateHubs()
 }
 

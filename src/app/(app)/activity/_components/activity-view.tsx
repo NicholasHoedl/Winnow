@@ -2,23 +2,11 @@
 
 import * as React from "react"
 import Link from "next/link"
-import {
-  ArrowRight,
-  Filter,
-  MoreVertical,
-  Plus,
-  Repeat,
-  Search,
-  Settings2,
-  X,
-} from "lucide-react"
+import { ArrowRight, Filter, Plus, Search, X } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption, GoalWithProgress } from "@/modules/goals/queries"
-import type { HabitStripCard } from "@/modules/habits/queries"
-import type { RoutineWithItems } from "@/modules/routines/queries"
-import { useLogHabit } from "@/modules/habits/use-log-habit"
 import {
   clearTaskRecurrenceException,
   deleteTask,
@@ -28,7 +16,7 @@ import {
   skipTaskOccurrence,
   toggleTaskStatus,
 } from "@/modules/todos/actions"
-import type { List, TaskSeries, TaskWithSeries } from "@/modules/todos/queries"
+import type { List, TaskWithSeries } from "@/modules/todos/queries"
 import {
   bucketTasks,
   searchTasks,
@@ -47,14 +35,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { RoutinesLine } from "./routines-line"
-import { HabitStrip } from "./habit-strip"
-import { ListManager } from "./list-manager"
+import { ActivityHeader } from "./activity-header"
 import { QuickAdd } from "./quick-add"
-import { RecurrenceManager } from "./recurrence-manager"
 import { TaskDialog } from "./task-dialog"
 import { TaskItem } from "./task-item"
-import { RunRoutineDialog } from "../routines/_components/run-routine-dialog"
 
 // Just a STATUS filter. "Due today" and "Overdue" were chips until T5a; the sections below
 // say the same thing without hiding everything else to do it.
@@ -80,27 +64,16 @@ export function ActivityView({
   goalOptions,
   goals,
   events,
-  rules,
-  routines,
-  habits,
-  today,
   selectedGoalId: initialGoalId,
   timeZone,
 }: {
   tasks: TaskWithSeries[]
   lists: List[]
-  /** Every recurrence rule, including ones with no instance due right now. */
-  rules: TaskSeries[]
   /** Just id and title, for the task dialog's goal picker. */
   goalOptions: GoalOption[]
   /** The full goals, with progress and momentum, for the rail. */
   goals: GoalWithProgress[]
   events: EventOption[]
-  routines: RoutineWithItems[]
-  /** Every live habit with its current-period count — the strip above the list. */
-  habits: HabitStripCard[]
-  /** The user's own today, for the run dialog's default anchor. */
-  today: string
   selectedGoalId: string | null
   timeZone: string
 }) {
@@ -114,18 +87,12 @@ export function ActivityView({
   const [editingTask, setEditingTask] = React.useState<TaskWithSeries | null>(
     null,
   )
-  const [listManagerOpen, setListManagerOpen] = React.useState(false)
-  const [rulesOpen, setRulesOpen] = React.useState(false)
   const [confirmSeries, setConfirmSeries] =
     React.useState<TaskWithSeries | null>(null)
   // `isPending` is wanted now, for the task list's reorder: it is true exactly while an
   // optimistic write is open, which is the window a hard navigation would throw away.
   const [writing, startTransition] = React.useTransition()
   useWriteGuard(writing)
-  // The strip's own transition lives inside the hook, so ticking a task cannot grey out a
-  // Log button and logging cannot grey out the list. Shared with `/activity/habits` and the
-  // dashboard card — the handler used to exist here and there, verbatim.
-  const { pendingId: habitPendingId, log: logHabit } = useLogHabit()
 
   /**
    * Which goal scopes the list — and that is now ALL this page knows about goals.
@@ -138,9 +105,6 @@ export function ActivityView({
   const [selectedGoalId, setSelectedGoalId] = React.useState<string | null>(
     initialGoalId,
   )
-  // Which routine the run dialog is for. The id, for the same reason `detailGoalId` is an
-  // id: a captured routine would not see its items change underneath it.
-  const [runRoutineId, setRunRoutineId] = React.useState<string | null>(null)
 
   /**
    * Select a goal, and put it in the URL — without a refetch.
@@ -307,12 +271,6 @@ export function ActivityView({
     ? (goals.find((goal) => goal.id === selectedGoalId) ?? null)
     : null
 
-  // Same resolve-don't-capture rule as `activeGoal`: derived every render, so the dialog
-  // shows the goal as it is now rather than as it was when it was opened.
-  const runRoutine = runRoutineId
-    ? (routines.find((routine) => routine.id === runRoutineId) ?? null)
-    : null
-
   const scopedTasks = activeGoal
     ? optimisticTasks.filter((task) => task.goalId === activeGoal.id)
     : optimisticTasks
@@ -369,74 +327,27 @@ export function ActivityView({
     // that the eye loses the line, and the habit strip's "open" arrow sat stranded ~570px
     // to the right of the last chip. Its siblings — Habits, Routines, Goals — are all List.
     <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            Activity
-          </h1>
-        </div>
-        {/* Secondary actions behind one named menu, rather than a row of bare icons.
-            On a phone there is no hover, so an icon is the only thing you get and
-            "repeating tasks" is not guessable from a loop glyph — while on any width the
-            row of them was chrome standing between the heading and the list. One trigger
-            costs less room AND says what everything inside it does. Same shape as the
-            per-row "Task actions" menu this page already uses. */}
-        <div className="flex flex-wrap gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Activity actions"
-                />
-              }
-            >
-              <MoreVertical className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setRulesOpen(true)}>
-                <Repeat className="size-4" />
-                Repeating tasks
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setListManagerOpen(true)}>
-                <Settings2 className="size-4" />
-                Manage lists
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* The section's shared heading and strip. The ⋮ menu that stood here — Repeating
+          tasks, Manage lists — is gone: both are pages in the strip now (ADR-0020), and
+          the one action left is the page's own. */}
+      <ActivityHeader
+        action={
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             New task
           </Button>
-        </div>
-      </header>
+        }
+      />
 
       {/* One column at every width now. The `lg:grid-cols-[17.5rem_minmax(0,1fr)]` that was
           here spent 280px on the goal rail; T13 moved goals to `/goals` and the task list
-          gets the width back. */}
-      <div className="mb-4">
-        <RoutinesLine
-          routines={routines}
-          onRun={(routine) => setRunRoutineId(routine.id)}
-        />
-      </div>
-
+          gets the width back. The routines row (T13) and the habit strip (T12d) that stood
+          here went in T25: this page is tasks, and each of those has a pill of its own in
+          the strip above — see ADR-0020's amendment. */}
       <div>
         <div className="min-w-0">
           <div className="mb-4">
             <QuickAdd />
-          </div>
-
-          {/* Between the quick-add and the filters, at every width. On a phone that puts
-              the quick-add row between this scroller and the goal chips above it, which is
-              what makes two horizontal scrollers on one screen readable. */}
-          <div className="mb-4">
-            <HabitStrip
-              habits={habits}
-              pendingId={habitPendingId}
-              onLog={logHabit}
-            />
           </div>
 
           {/* Its own row rather than squeezed into the toolbar below. That row already wraps
@@ -627,24 +538,6 @@ export function ActivityView({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
       />
-      <RecurrenceManager
-        rules={rules}
-        open={rulesOpen}
-        onOpenChange={setRulesOpen}
-      />
-      <ListManager
-        lists={lists}
-        open={listManagerOpen}
-        onOpenChange={setListManagerOpen}
-      />
-      {runRoutine && (
-        <RunRoutineDialog
-          routine={runRoutine}
-          today={today}
-          open
-          onOpenChange={(open) => !open && setRunRoutineId(null)}
-        />
-      )}
       <ConfirmDialog
         open={confirmSeries !== null}
         onOpenChange={(open) => !open && setConfirmSeries(null)}

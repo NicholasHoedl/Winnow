@@ -36,6 +36,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command"
+import { ACTIVITY_PAGES } from "@/components/shared/activity-pages"
 import { navItems } from "@/components/shared/nav-items"
 import { SETTINGS_PAGES } from "@/components/shared/settings-pages"
 import { search } from "@/modules/search/actions"
@@ -103,18 +104,23 @@ const RESULT_LABEL: Record<SearchResultType, string> = {
 
 type NavCommand = { href: string; label: string; icon: LucideIcon }
 
-// The sub-routes are listed by hand for the same reason /settings is: they are real
-// destinations that deliberately don't get a nav tab, so the palette is the only place
-// they're discoverable without being on /activity already.
+// The sub-routes are real destinations that deliberately don't get a nav tab, so the
+// palette is one of the two places they're discoverable — the other is their section's own
+// strip, which draws from the same list (ADR-0020), so a page cannot be in one and missing
+// from the other. They used to be listed here by hand.
 //
 // `/review` used to be listed here as "Weekly review" for exactly that reason, and was
 // REMOVED from this list in T13 when it took the freed nav slot — `...navItems` now
 // supplies it. Leaving both would put one page in this menu twice under two different
-// names, which reads as two pages. Anything promoted to a tab has to leave here.
+// names, which reads as two pages. Anything promoted to a tab has to leave here — which is
+// why Tasks is filtered out below: `navItems` already lists it as "Activity".
 const NAV_COMMANDS: NavCommand[] = [
   ...navItems,
-  { href: "/activity/habits", label: "Habits", icon: Flame },
-  { href: "/activity/routines", label: "Routines", icon: ListChecks },
+  ...ACTIVITY_PAGES.filter((page) => page.href !== "/activity").map((page) => ({
+    href: page.href,
+    label: page.label,
+    icon: page.icon,
+  })),
   { href: "/settings", label: "Settings", icon: Settings },
   // One entry per settings page, from the same list the tab strip and the overview draw
   // from, so a page cannot exist in one place and be missing from another. Listed as

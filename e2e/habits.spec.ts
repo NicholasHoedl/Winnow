@@ -10,10 +10,9 @@ import { announces, deleteHabitsMatching, meter, seedHabit } from "./_habits"
  * turns out to be enough, because the behaviour worth pinning is what happens as you log:
  * the streak turns over when the QUOTA is met, not when the first entry lands.
  *
- * `visibleCard` works on this page and not on /activity: the strip's chips carry
- * `data-rail` and are excluded by construction — the attribute means "not a row in the task
- * list", which is what that selector has always used it for, and the rail was simply the
- * only place that used to be true. Strip state is read through the `habit-chip` testid.
+ * `visibleCard` works on this page; the dashboard card is found by `data-card` and read
+ * through its meters. The strip that used to draw a habit on `/activity` went in T25 — the
+ * Tasks page is tasks — so the two surfaces here are this page and the card.
  */
 
 const PREFIX = "E2E habit"
@@ -236,33 +235,35 @@ test("a daily habit counts days, not weeks", async ({ page }) => {
 /**
  * The executable form of the invariant `getHabitStrip` rests on.
  *
- * The strip loads about a month of entries and this page loads 400 days, so the two could
- * in principle disagree. They cannot, and the reason is worth stating: the strip shows only
- * `adherence` for the period containing today, which every window containing today produces
- * identically. The agreement is by construction, not by matching window sizes — which is
- * why a cheaper query here was safe when a cheaper streak would not have been.
+ * The dashboard card loads about a month of entries (`getHabitStrip`, which fed the
+ * `/activity` strip until T25 and feeds the card still) and this page loads 400 days, so
+ * the two could in principle disagree. They cannot, and the reason is worth stating: the
+ * cheap read shows only `adherence` for the period containing today, which every window
+ * containing today produces identically. The agreement is by construction, not by matching
+ * window sizes — which is why a cheaper query there was safe when a cheaper streak would
+ * not have been.
  */
-test("the strip logs the same habit the page shows", async ({ page }) => {
+test("the dashboard card logs the same habit the page shows", async ({
+  page,
+}) => {
   const title = `${PREFIX} strip ${Date.now()}`
   await addHabit(page, title)
 
-  await page.goto("/activity")
-  const chip = page.getByTestId("habit-chip").filter({ hasText: title })
-  await expect(chip).toHaveCount(1)
-  await expect(meter(chip, title)).toHaveAttribute(
+  await page.goto("/")
+  const card = page.locator('[data-card="goals"]')
+  await expect(meter(card, title)).toHaveAttribute(
     "aria-valuetext",
     announces(0, 3, "this week"),
   )
 
-  await chip.getByRole("button", { name: `Log ${title}` }).click()
-  await expect(meter(chip, title)).toHaveAttribute(
+  await card.getByRole("button", { name: `Log ${title}` }).click()
+  await expect(meter(card, title)).toHaveAttribute(
     "aria-valuetext",
     announces(1, 3, "this week"),
   )
 
-  // Same row underneath, not a second tally kept somewhere else. The strip used to carry
-  // the cadence on its own line above a bare `1/3`; both surfaces state the whole thing the
-  // same way now, which is what lets this compare them at all.
+  // Same row underneath, not a second tally kept somewhere else. Both surfaces state the
+  // whole thing the same way, which is what lets this compare them at all.
   await page.goto("/activity/habits")
   await expect(meter(visibleCard(page, title), title)).toHaveAttribute(
     "aria-valuetext",
@@ -410,24 +411,25 @@ test("a measured habit counts what you logged, not that you logged", async ({
  *
  * `getHabitStrip` picks columns by hand rather than taking the row — that is what lets it
  * cost four fields instead of thirteen. Leaving `targetAmount` and `unit` out of that list
- * would not have failed anywhere: the strip would simply have shown every measured habit
- * as though its target were one session, on the surface most used from a phone.
+ * would not have failed anywhere: the dashboard card would simply have shown every measured
+ * habit as though its target were one session, on the surface most used from a phone.
  */
-test("the strip shows a measured habit in its own units", async ({ page }) => {
+test("the dashboard card shows a measured habit in its own units", async ({
+  page,
+}) => {
   const title = `${PREFIX} pages ${Date.now()}`
   await addMeasuredHabit(page, title, 30, "pages")
 
-  await page.goto("/activity")
-  const chip = page.getByTestId("habit-chip").filter({ hasText: title })
-  await expect(chip).toHaveCount(1)
-  await expect(meter(chip, title)).toHaveAttribute(
+  await page.goto("/")
+  const card = page.locator('[data-card="goals"]')
+  await expect(meter(card, title)).toHaveAttribute(
     "aria-valuetext",
     announces(0, 30, "today", "pages"),
   )
 
-  // And it is loggable from here, which is the whole reason the strip exists.
-  await logAmount(page, chip, title, 12.5)
-  await expect(meter(chip, title)).toHaveAttribute(
+  // And it is loggable from here, in its own units.
+  await logAmount(page, card, title, 12.5)
+  await expect(meter(card, title)).toHaveAttribute(
     "aria-valuetext",
     announces(12.5, 30, "today", "pages"),
   )

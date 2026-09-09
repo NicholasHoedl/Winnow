@@ -1,7 +1,5 @@
 import { test, expect } from "./_test"
 
-import { pageAction } from "./_menu"
-
 import { visibleCard } from "./_card"
 
 // Browser coverage for T5a-S5: skipping ONE cycle of a repeating task.
@@ -17,10 +15,9 @@ import { visibleCard } from "./_card"
 // cleaned up inline and leaked three rules before anyone noticed — the same lesson T4-S12
 // learned about water logs, with a longer tail.
 test.afterEach(async ({ page }) => {
-  await page.goto("/activity")
-  await pageAction(page, "Repeating tasks")
-  const dialog = page.getByRole("dialog")
-  const strays = dialog.getByRole("button", { name: /^Stop repeating E2E / })
+  // Repeating tasks are a page of the Activity section now (ADR-0020), not a dialog.
+  await page.goto("/activity/repeating")
+  const strays = page.getByRole("button", { name: /^Stop repeating E2E / })
   // Bounded rather than `while`: a button that fails to remove its rule must end the loop
   // and let the assertion below report it, not spin.
   for (let i = 0; i < 10; i++) {
@@ -79,24 +76,21 @@ test("skipping one cycle survives a reload, and can be undone", async ({
   // whose current cycle is skipped: both "Stop repeating" and the series editor hang off a
   // task row, and there is no row. An earlier version of this spec tried the row menu,
   // found nothing to click, and silently left the rule behind on every run.
-  await page.goto("/activity")
   await stopRepeating(page, title)
 })
 
-/** Stop a rule from the Repeating tasks dialog. Works with no materialized instance. */
+/** Stop a rule from the Repeating tasks page. Works with no materialized instance. */
 async function stopRepeating(
   page: import("@playwright/test").Page,
   title: string,
 ) {
-  await pageAction(page, "Repeating tasks")
-  const dialog = page.getByRole("dialog")
-  await expect(dialog.getByText(title)).toBeVisible()
-  await dialog.getByRole("button", { name: `Stop repeating ${title}` }).click()
+  await page.goto("/activity/repeating")
+  await expect(page.getByText(title)).toBeVisible()
+  await page.getByRole("button", { name: `Stop repeating ${title}` }).click()
   await page
     .getByRole("button", { name: "Stop repeating", exact: true })
     .click()
-  await expect(dialog.getByText(title)).toHaveCount(0)
-  await page.keyboard.press("Escape")
+  await expect(page.getByText(title)).toHaveCount(0)
 }
 
 test("a one-off task is not offered a skip", async ({ page }) => {

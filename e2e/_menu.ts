@@ -12,9 +12,10 @@ import type { Page } from "./_test"
  * part that will move: adding a page, or splitting one, changes which menu an action lives
  * under and nothing else. One map, one place to fix.
  */
+// `/activity` has no entries any more: its secondary actions became pages in the section's
+// strip (ADR-0020), reached with `page.goto`. The pattern this helper exists for is the one
+// Meals and Budget still use.
 const MENU_FOR: Record<string, string> = {
-  "Repeating tasks": "Activity actions",
-  "Manage lists": "Activity actions",
   "Copy a day": "Meals actions",
   "Food library": "Meals actions",
   "Set targets": "Meals actions",

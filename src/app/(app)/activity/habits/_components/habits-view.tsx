@@ -4,11 +4,9 @@
 // menu, and the `+1` with its undo toast — the same shape `routines-view.tsx` uses.
 
 import * as React from "react"
-import Link from "next/link"
 import {
   Archive,
   ArchiveRestore,
-  ArrowLeft,
   MoreVertical,
   Pencil,
   Plus,
@@ -50,6 +48,8 @@ import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { HabitDialog } from "@/components/habits/habit-dialog"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
+
+import { ActivityHeader } from "../../_components/activity-header"
 
 /**
  * When a habit was retired, in the local zone.
@@ -314,27 +314,20 @@ export function HabitsView({
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <Link
-        href="/activity"
-        className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1 text-sm"
-      >
-        <ArrowLeft className="size-4" />
-        Activity
-      </Link>
-
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Habits</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+      <ActivityHeader
+        action={
+          <Button onClick={() => openDialog(null)}>
+            <Plus className="size-4" />
+            New habit
+          </Button>
+        }
+        description={
+          <>
             How often you meant to, and how often you did — over the last{" "}
             {days.length} days.
-          </p>
-        </div>
-        <Button onClick={() => openDialog(null)}>
-          <Plus className="size-4" />
-          New habit
-        </Button>
-      </div>
+          </>
+        }
+      />
 
       {cards.length === 0 ? (
         <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
