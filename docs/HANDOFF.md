@@ -1,9 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-09**. T26 finished lists — the by-list view, `#list` in quick-add
-and a default list — with migration `0042`, one nullable column that rides the port step
-T24 already needs. T25 before it gave the Activity section a strip of five pages — Tasks,
-Habits, Routines, Lists, Repeating tasks — with no migration (ADR-0020). T24 before that — a
+Last updated: **2026-09-09**. T27 gave each goal one editor and put the plan tool in a
+dialog beside New goal (ADR-0021); no migration. T26 finished lists — the by-list view,
+`#list` in quick-add and a default list — with migration `0042`, one nullable column that
+rides the port step T24 already needs. T25 before it gave the Activity section a strip of
+five pages — Tasks, Habits, Routines, Lists, Repeating tasks — with no migration
+(ADR-0020). T24 before that — a
 total for the month — carries **`0041`, the first migration since T23**: everything on `main`
 between T23 and T24 deploys by a rebuild alone, T24 does not (runbook §4). Between T23 and
 T24 there was a run of small fixes from real use — a
@@ -13,7 +15,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T26 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T27 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -464,6 +466,29 @@ column, `user_preferences.default_list_id` — rides the port step `0041` alread
 - **A default list on the Defaults page** prefills the task dialog and files quick-adds
   typed without a tag; a tag wins. The action checks the list is yours. Explicit rather
   than remembered-last: per account, discoverable, and it reads like the other defaults.
+
+**T27 is shipped: one editor per goal, and the plan tool in a dialog.** No migration.
+ADR-0021 is the authority, including on what it does to ADR-0013 and ADR-0015.
+
+- **Three surfaces became one.** The detail dialog, the "Edit goal" dialog it hopped to,
+  and the plan tool's "Your plan" editor above the list all edited the same rows; the goal
+  card now opens `goal-editor-dialog.tsx` — Details (the fields, folded, saved as one form),
+  progress, practice, milestones, tasks, Delete. `goal-form.tsx` is the one copy of the
+  fields; `goal-dialog.tsx` is create-only. `goal-detail-dialog.tsx` and `plan-editor.tsx`
+  are gone, and with them T10's "reopen an applied plan" — the editor holds every row a plan
+  created.
+- **Tasks are in the editor, and ADR-0013's rule stands.** Real rows by id — rename, date,
+  add, delete — and no checkbox: completing a task is the Tasks page's action. The T10 plan
+  editor had done this on the page for a month; what the ADR objected to was a read-only
+  COPY.
+- **Plan a goal is a button beside New goal.** `plan-goal-dialog.tsx` picks the goal and
+  confirms a re-plan; `plan-review-dialog.tsx` holds `PlanProposal` in its `dialog` frame —
+  pinned header and footer, the plan scrolling between, the refinement box at its foot.
+  Escape leaves the proposal pending and a note under the header reopens it; a pending one
+  opens on load. `ToolPanel` stays for the other three tools.
+- `companion.spec` drives the tool through the button and the dialogs; `ai-settings.spec`
+  asserts the button's absence when AI is off (its heading assertion would now pass
+  vacuously); the mobile sweep's goal fixture seeds a task as well.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

@@ -1,9 +1,13 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Archive,
+  ArrowRight,
+  ChevronDown,
   ListPlus,
+  ListTodo,
   MoreVertical,
   Pause,
   Pencil,
@@ -15,6 +19,7 @@ import { toast } from "sonner"
 
 import { dueStatus } from "@/lib/date"
 import { cn } from "@/lib/utils"
+import type { EventOption } from "@/modules/calendar/queries"
 import {
   addMilestone,
   deleteGoal,
@@ -33,7 +38,13 @@ import { archiveHabit, deleteHabit } from "@/modules/habits/actions"
 import type { HabitRow, HabitStripCard } from "@/modules/habits/queries"
 import { periodPhrase } from "@/modules/habits/service"
 import { useLogHabit } from "@/modules/habits/use-log-habit"
-import { createTask } from "@/modules/todos/actions"
+import {
+  createTask,
+  deleteTask,
+  restoreTask,
+  updateTask,
+} from "@/modules/todos/actions"
+import { EditableDate, EditableTitle } from "@/components/companion/plan-fields"
 import {
   useDateLocale,
   usePreferences,
@@ -61,73 +72,185 @@ import { Progress } from "@/components/ui/progress"
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { DeleteGoalDialog } from "./delete-goal-dialog"
+import { GoalForm } from "./goal-form"
 import { formatGoalDate, windowLabel } from "./goal-format"
 
+/** A task linked to the goal, in the shape `getGoalPlan` returns it. */
+export type GoalTask = {
+  id: string
+  title: string
+  dueDate: string | null
+  done: boolean
+}
+
+function SectionHeading({
+  children,
+  action,
+}: {
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        {children}
+      </h3>
+      {action}
+    </div>
+  )
+}
+
 /**
- * Everything about one goal that isn't its tasks.
+ * One row of the Tasks section.
  *
- * This is the old `GoalCard` body lifted out of the goals page, with **one block
- * deliberately dropped: the linked-task list.** On the goals page that list was the only
- * way to see a goal's work, and T5a made exactly one row actionable as a compromise —
- * telling you a goal had stalled and then sending you to another page to act was the shape
- * of advice nobody takes. On `/activity` the compromise is unnecessary: selecting this goal
- * filters the task list beside it to precisely these tasks, all of them checkable, sortable
- * and editable. A read-only copy in here would be a second place to keep in step.
- *
- * A dialog rather than a side sheet because the app has no Sheet primitive and goal editing
- * is already a dialog — one overlay pattern, not two.
- *
- * **Every row in here has to survive a 320px phone.** The dialog is `overflow-y-auto`, and
- * the CSS overflow spec promotes the paired `visible` axis to `auto` — so a row too wide
- * for it gets a horizontal scrollbar rather than being clipped, silently. That is why the
- * two-field rows stack below `sm` and why every flex child that holds text carries
- * `min-w-0`. `e2e/mobile-layout.spec.ts` measures this dialog at 320, 375 and 393.
+ * The title is typed into directly, like the plan panels' rows, but it is COMMITTED on
+ * blur or Enter rather than on every keystroke — a server action per character, each
+ * revalidating the page, is what the old plan editor did and it is why typing there felt
+ * like wading. `draft` is null while the row is not being edited, so a rename made on the
+ * Tasks page shows here without an effect to copy it in.
  */
-export function GoalDetailDialog({
+function TaskRow({
+  task,
+  index,
+  goalId,
+  pending,
+  run,
+  onRemove,
+}: {
+  task: GoalTask
+  index: number
+  goalId: string
+  pending: boolean
+  run: (action: () => Promise<{ ok: boolean; error?: string }>) => void
+  onRemove: (task: GoalTask) => void
+}) {
+  const [draft, setDraft] = React.useState<string | null>(null)
+
+  function commit() {
+    const title = draft?.trim()
+    setDraft(null)
+    // An empty title is a cleared field, not a request to save nothing — Delete is the
+    // trash button, deliberately, as it is for a milestone.
+    if (!title || title === task.title) return
+    run(() =>
+      updateTask(task.id, { title, dueDate: task.dueDate ?? "", goalId }),
+    )
+  }
+
+  return (
+    <li className="flex items-baseline gap-2 text-sm">
+      <ListTodo className="text-muted-foreground size-3.5 shrink-0 self-center" />
+      <EditableTitle
+        value={draft ?? task.title}
+        disabled={task.done || pending}
+        label={`Task ${index + 1} title`}
+        className={cn(task.done && "line-through")}
+        onChange={setDraft}
+        onBlur={commit}
+        onEnter={commit}
+      />
+      <EditableDate
+        value={task.dueDate ?? ""}
+        disabled={task.done}
+        label={`Task ${index + 1} date`}
+        onChange={(dueDate) =>
+          run(() => updateTask(task.id, { title: task.title, dueDate, goalId }))
+        }
+      />
+      <button
+        type="button"
+        aria-label={`Delete ${task.title}`}
+        onClick={() => onRemove(task)}
+        className="text-muted-foreground hover:text-destructive shrink-0"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </li>
+  )
+}
+
+/**
+ * Everything about one goal, in one place.
+ *
+ * Three surfaces used to share this job. The detail dialog held the milestones and the
+ * practice; an "Edit goal" button on it hopped to a second dialog for the goal's own
+ * fields; and the plan tool's "Your plan" panel, above the list, edited the same
+ * milestones and habits again plus the goal's tasks. T27 folded them into this
+ * (ADR-0021): the fields under Details, then progress, practice, milestones and tasks,
+ * each written as you go, and Delete at the foot.
+ *
+ * **Tasks are here, and ADR-0013's rule still holds.** That ADR dropped the goal card's
+ * task list because it was a read-only COPY — two lists of the same rows that drift, and
+ * only one of them actionable. These rows are the real ones, addressed by id, and they can
+ * be renamed, dated, added and deleted here; what they cannot be is ticked. Completing a
+ * task is the Tasks page's and the dashboard's action already, and a second checkbox for
+ * it is exactly the drift the rule exists to refuse. The link beside the heading is the
+ * way to that list, filtered to this goal.
+ *
+ * **The fields save as a form; the rows write on their own.** Deliberately two behaviours:
+ * a title, a date and a number target validate as a set, and a milestone or a task is one
+ * row with one write. The Details section says which it is.
+ *
+ * A dialog rather than a page because the app has one overlay pattern, and this dialog is
+ * the widest thing the app draws inside a fixed-width box. **Every row in here has to
+ * survive a 320px phone.** `DialogContent` is `overflow-y-auto`, and the CSS overflow spec
+ * promotes the paired `visible` axis to `auto` — so a row too wide for it gets a horizontal
+ * scrollbar rather than being clipped, silently. That is why the two-field rows stack below
+ * `sm` and why every flex child that holds text carries `min-w-0`.
+ * `e2e/mobile-layout.spec.ts` measures this dialog at 320, 375 and 393.
+ */
+export function GoalEditorDialog({
   goal,
   habits,
   habitRows,
+  tasks,
   goalOptions,
+  events,
   open,
   onOpenChange,
-  onEdit,
 }: {
   goal: GoalWithProgress | null
   /**
    * The habits serving THIS goal, already filtered by the caller.
    *
-   * Note what this is not: a task list. ADR-0013 dropped that deliberately and it stays
-   * dropped — two lists of the same rows drift and only one can be acted on. A habit is a
-   * different thing. It has no checkbox, it appears nowhere else on this page, and logging
-   * one is the only way to move a goal whose work is a practice rather than a checklist.
+   * `HabitStripCard` is five fields and a current-period reading — enough to DRAW a
+   * practice, and missing every column `HabitDialog` needs to EDIT one. `habitRows` are
+   * the same habits in full for that; widening the strip would have pushed those columns
+   * onto the dashboard and `/activity` too.
    */
   habits: HabitStripCard[]
-  /**
-   * The same habits as full rows, for the edit dialog.
-   *
-   * Two shapes rather than one, and the split is deliberate. `HabitStripCard` is five
-   * fields and a current-period reading — enough to DRAW a practice, and missing every
-   * column `HabitDialog` needs to EDIT one. Widening the strip would have pushed those
-   * columns onto the dashboard and `/activity` too, which is the cost its own note refuses.
-   * `getLiveHabits` loads them separately and carries no entries at all.
-   */
   habitRows: HabitRow[]
+  /** The tasks linked to this goal, done ones included — see the note above. */
+  tasks: GoalTask[]
   /** For the habit dialog's goal picker. */
   goalOptions: GoalOption[]
+  /** For the Details form's target-date link. */
+  events: EventOption[]
   open: boolean
   onOpenChange: (open: boolean) => void
-  onEdit: (goal: GoalWithProgress) => void
 }) {
   const { timeZone } = usePreferences()
   const locale = useDateLocale()
-  // The same hook the dashboard card, `/activity`'s strip and the habits page use. It
-  // returns `pendingId` rather than a boolean, so logging one habit does not disable the
-  // rest — a shared flag disabled every habit at once when this was first written.
+  // The same hook the dashboard card and the habits page use. It returns `pendingId`
+  // rather than a boolean, so logging one habit does not disable the rest.
   const { pendingId, log } = useLogHabit()
   const [newMilestone, setNewMilestone] = React.useState("")
   const [newDue, setNewDue] = React.useState("")
+  const [newTask, setNewTask] = React.useState("")
   const [confirmDelete, setConfirmDelete] = React.useState(false)
   const [pending, startTransition] = React.useTransition()
+
+  // The Details form is folded until asked for. It is seven fields, and the working view
+  // — what is moving, what is next — is what this opens for; the fields are one click
+  // down rather than a dialog away. Folded again on every open, so a goal always presents
+  // the same face first.
+  const [detailsOpen, setDetailsOpen] = React.useState(false)
+  const openKeyRef = React.useRef<string | null>(null)
+  const openKey = open ? (goal?.id ?? null) : null
+  if (openKey !== openKeyRef.current) {
+    openKeyRef.current = openKey
+    if (openKey !== null) setDetailsOpen(false)
+  }
 
   // Which milestone is open for editing, and its draft. One id rather than a per-row flag:
   // two rows in edit mode at once is a state nothing on screen can explain.
@@ -209,7 +332,15 @@ export function GoalDetailDialog({
     })
   }
 
-  // Deleting a single milestone is cleanly reversible, so undo rather than confirm.
+  /** Undated, for the reason `makeTask` gives — it lands in Someday, linked here. */
+  function addTask() {
+    const title = newTask.trim()
+    if (!title || !goal) return
+    setNewTask("")
+    run(() => createTask({ title, goalId: goal.id }))
+  }
+
+  // Deleting a single milestone or task is cleanly reversible, so undo rather than confirm.
   function removeMilestone(milestone: MilestoneRow) {
     startTransition(async () => {
       const result = await deleteMilestone(milestone.id)
@@ -227,6 +358,29 @@ export function GoalDetailDialog({
               if (!restored.ok) toast.error(restored.error)
             }),
         },
+      })
+    })
+  }
+
+  function removeTask(task: GoalTask) {
+    startTransition(async () => {
+      const result = await deleteTask(task.id)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      const restorable = result.task
+      toast("Task deleted", {
+        action: restorable
+          ? {
+              label: "Undo",
+              onClick: () =>
+                startTransition(async () => {
+                  const back = await restoreTask(restorable)
+                  if (!back.ok) toast.error(back.error)
+                }),
+            }
+          : undefined,
       })
     })
   }
@@ -285,6 +439,34 @@ export function GoalDetailDialog({
               </p>
             )}
 
+            {/* The goal's own fields, folded. See the note at the top of this file for why
+                these save as one form while everything below writes as you go. */}
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                aria-expanded={detailsOpen}
+                onClick={() => setDetailsOpen((value) => !value)}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase"
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 transition-transform",
+                    !detailsOpen && "-rotate-90",
+                  )}
+                />
+                Details
+              </button>
+              {detailsOpen && (
+                <GoalForm
+                  goal={goal}
+                  events={events}
+                  open={open && detailsOpen}
+                  submitLabel="Save changes"
+                  onSaved={() => setDetailsOpen(false)}
+                />
+              )}
+            </div>
+
             {/* Driven by the discriminated progress rather than by `milestones.length`, so
                 the three cases are exhaustive and "nothing to measure" can't be rendered as
                 0%. The bar's width is clamped but the printed figure isn't — an overshot
@@ -337,29 +519,27 @@ export function GoalDetailDialog({
               </div>
             )}
 
-            {/* The practice that serves this goal.
-                `habits.goal_id` has existed since T12a and this page never showed it, so a
-                goal could read "Moving" here with nothing on screen saying what was moving
-                it. Above the milestones because a habit is the thing you do repeatedly and a
-                milestone is the thing that then happens. */}
+            {/* The practice that serves this goal. Above the milestones because a habit is
+                the thing you do repeatedly and a milestone is the thing that then happens. */}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                  Practice
-                </h3>
-                {/* Named for what it adds. A bare "Add" collides with the milestone
-                    row's own Add button, which leaves both reachable only by position. */}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  className="h-7 px-2"
-                  onClick={() => openHabitDialog(null)}
-                >
-                  <Plus className="size-3.5" />
-                  Add a practice
-                </Button>
-              </div>
+              <SectionHeading
+                action={
+                  // Named for what it adds. A bare "Add" collides with the milestone
+                  // row's own Add button, which leaves both reachable only by position.
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2"
+                    onClick={() => openHabitDialog(null)}
+                  >
+                    <Plus className="size-3.5" />
+                    Add a practice
+                  </Button>
+                }
+              >
+                Practice
+              </SectionHeading>
               {habits.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   None yet. A practice is something you repeat — three classes a
@@ -372,11 +552,9 @@ export function GoalDetailDialog({
                     return (
                       <li key={habit.id} className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
-                          {/* Two lines, not one. This is the DETAIL view for the
-                              goal — the place you come to read what its practice
-                              actually is — and `truncate` cut a real habit title
-                              off mid-word. `line-clamp-2` still bounds the row so
-                              the meter below it stays put. */}
+                          {/* Two lines, not one: this is where you come to read what
+                              the practice actually is, and `truncate` cut a real title
+                              off mid-word. `line-clamp-2` still bounds the row. */}
                           <p className="line-clamp-2 text-sm break-words">
                             {habit.title}
                           </p>
@@ -449,9 +627,7 @@ export function GoalDetailDialog({
             </div>
 
             <div className="flex flex-col gap-2">
-              <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                Milestones
-              </h3>
+              <SectionHeading>Milestones</SectionHeading>
               {goal.milestones.length === 0 ? (
                 <p className="text-muted-foreground text-sm">
                   None yet. Break the goal into steps you can tick off.
@@ -575,16 +751,12 @@ export function GoalDetailDialog({
                           </span>
                         )}
                         {/* Make it a task, one way, with nothing stored pointing back.
-                            A milestone is "the next thing"; a task is a thing you do. There
-                            was no bridge between them, so breaking a milestone into work meant
-                            retyping its title on another page.
-                            **The new task links to the GOAL, not to the milestone**, and that
-                            is the whole design. T12c removed `milestoneIndex` from the
-                            companion's payload precisely because a stored position into the
-                            milestones array silently repointed every task after any milestone
-                            that was deleted. Create-and-forget gets the workflow without
-                            reviving that class of bug — and a goal is where tasks have always
-                            attached in the data model anyway. */}
+                            **The new task links to the GOAL, not to the milestone**: T12c
+                            removed `milestoneIndex` from the companion's payload precisely
+                            because a stored position into the milestones array silently
+                            repointed every task after any milestone that was deleted.
+                            Create-and-forget gets the workflow without reviving that bug —
+                            and the task appears in the Tasks section below at once. */}
                         {!milestone.done && (
                           <button
                             type="button"
@@ -648,16 +820,58 @@ export function GoalDetailDialog({
               </div>
             </div>
 
-            <div className="flex justify-between gap-2 border-t pt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onEdit(goal)}
+            {/* The goal's tasks — see the note at the top of this file for what these rows
+                may and may not do, and why. */}
+            <div className="flex flex-col gap-2">
+              <SectionHeading
+                action={
+                  <Link
+                    href={`/activity?goal=${goal.id}`}
+                    className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+                  >
+                    Show on the Tasks page
+                    <ArrowRight className="size-3" />
+                  </Link>
+                }
               >
-                <Pencil className="size-4" />
-                Edit goal
-              </Button>
+                Tasks
+              </SectionHeading>
+              {tasks.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  None yet. Make one from a milestone above, or add one here —
+                  it lands in Someday, linked to this goal.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1.5">
+                  {tasks.map((task, index) => (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      index={index}
+                      goalId={goal.id}
+                      pending={pending}
+                      run={run}
+                      onRemove={removeTask}
+                    />
+                  ))}
+                </ul>
+              )}
+              <Input
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    addTask()
+                  }
+                }}
+                placeholder="Add a task"
+                aria-label="Add a task"
+                className="h-8"
+              />
+            </div>
+
+            <div className="flex justify-end border-t pt-3">
               <Button
                 type="button"
                 variant="ghost"
@@ -680,8 +894,8 @@ export function GoalDetailDialog({
         milestoneCount={goal.milestones.length}
         habitCount={habits.length}
         onConfirm={(practice: PracticeOnDelete) => {
-          // Closes the detail dialog too — leaving it open over a goal that no longer
-          // exists would render a stale title until the refresh landed.
+          // Closes the editor too — leaving it open over a goal that no longer exists
+          // would render a stale title until the refresh landed.
           onOpenChange(false)
           run(() => deleteGoal(goal.id, practice))
         }}

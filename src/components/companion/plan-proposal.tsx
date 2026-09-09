@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { EditableDate, EditableTitle } from "./plan-fields"
+import { RefinementBox } from "./refinement-box"
 
 /**
  * The proposal renderer: a plan on a time spine.
@@ -37,6 +38,8 @@ export function PlanProposal({
   pending,
   onApply,
   onDiscard,
+  frame = "card",
+  refine = null,
 }: {
   payload: GoalPlanPayload
   onChange: (next: GoalPlanPayload) => void
@@ -64,6 +67,18 @@ export function PlanProposal({
   pending: boolean
   onApply: (finalized: GoalPlanPayload) => void
   onDiscard: () => void
+  /**
+   * Where this is drawn. A `card` is the T13 shape — bordered, capping its own height on a
+   * phone so the footer stays reachable. In a `dialog` the frame is the dialog's: no
+   * border, and the body takes whatever height is left between the pinned header and the
+   * pinned footer, scrolling inside it (ADR-0021).
+   */
+  frame?: "card" | "dialog"
+  /**
+   * The refinement box, drawn at the foot of the plan. `ToolPanel` used to hold it beneath
+   * the job's input; a job with no panel has nowhere else to put it.
+   */
+  refine?: React.ComponentProps<typeof RefinementBox> | null
 }) {
   const [excluded, setExcluded] = React.useState<{
     milestones: Set<number>
@@ -212,7 +227,12 @@ export function PlanProposal({
   }
 
   return (
-    <div className="bg-card flex flex-col overflow-hidden rounded-xl border lg:min-h-0">
+    <div
+      className={cn(
+        "bg-card flex flex-col overflow-hidden",
+        frame === "card" ? "rounded-xl border lg:min-h-0" : "min-h-0 flex-1",
+      )}
+    >
       <div className="flex items-start justify-between gap-3 border-b p-4">
         <div className="min-w-0">
           <p className="text-brand-accent text-xs font-medium">Proposed plan</p>
@@ -222,7 +242,14 @@ export function PlanProposal({
 
       {/* Capped on a phone so the footer's Apply stays reachable without scrolling past a
           long plan; on desktop it fills whatever the pinned column gives it. */}
-      <div className="max-h-[55svh] overflow-y-auto p-4 lg:max-h-none lg:min-h-0 lg:flex-1">
+      <div
+        className={cn(
+          "p-4",
+          frame === "card"
+            ? "max-h-[55svh] overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1"
+            : "min-h-0 flex-1 overflow-y-auto",
+        )}
+      >
         {/* A judgement about the plan as a whole rather than any one row. The app noticing
             "there is no practice here" is the same division as every other warning: the
             model proposes, the app checks. */}
@@ -464,6 +491,11 @@ export function PlanProposal({
               })}
             </ul>
           </section>
+        )}
+        {refine && (
+          <div className="mt-6">
+            <RefinementBox {...refine} />
+          </div>
         )}
       </div>
 

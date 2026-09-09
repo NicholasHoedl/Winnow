@@ -88,6 +88,19 @@ test.afterEach(async () => {
   await deleteHabitsMatching("STUB")
 })
 
+/**
+ * And no plan left pending on `/goals`, whatever the test did.
+ *
+ * Since T27 a pending plan opens its review DIALOG on load (ADR-0021), and a modal on
+ * load is a wall for every other spec that visits the page: the goal specs run after this
+ * file and click goal cards, and each of them failed on a leftover proposal before this
+ * hook existed. The `beforeEach` above protects THIS file's tests from each other; this
+ * protects everyone else from this file.
+ */
+test.afterEach(async ({ page }) => {
+  await clearQueue(page, "/goals")
+})
+
 async function createGoal(page: Page, title: string) {
   await page.goto("/goals")
   await addGoal(page, { title })
@@ -101,12 +114,14 @@ async function removeGoal(page: Page, title: string) {
 /** Tasks survive their goal's deletion (ON DELETE set null), so clean them separately. */
 async function planGoal(page: Page, goalTitle: string) {
   await page.goto("/goals")
-  // `getByRole("combobox")`, not `getByLabel("Goal")`. The tool panel is a `<section>` named
-  // "Plan a goal", and `getByLabel` matches substrings — so a label lookup for "Goal" found
-  // the region AND the select. Naming the role disambiguates without weakening anything.
+  // A button beside New goal since T27 (ADR-0021): it opens a dialog to pick the goal,
+  // and the proposal opens in a dialog of its own when it arrives.
+  await page.getByRole("button", { name: "Plan a goal" }).click()
+  // `getByRole("combobox")`, not `getByLabel("Goal")`: the dialog names its select "Goal"
+  // as a label and as an aria-label, and the role lookup is the unambiguous one.
   await page.getByRole("combobox", { name: "Goal" }).click()
   await page.getByRole("option", { name: goalTitle }).click()
-  // `exact`, because "Revise the plan" also matches a loose "Plan".
+  // `exact`, because "Plan a goal" and "Revise the plan" also match a loose "Plan".
   await page.getByRole("button", { name: "Plan", exact: true }).click()
   await expect(page.getByText("Proposed plan")).toBeVisible()
 }
@@ -646,16 +661,14 @@ test("a proposed rate is judged against the goal's number", async ({
  *
  * Reported from real use: accepting a proposal made the panel vanish, and selecting the
  * same goal again showed nothing — so the only way back to the plan was to generate a new
- * one, which proposes a second ladder beside the first.
- *
- * The panel that comes back is NOT the proposal one. Applying is a one-way fan-out of
- * creates and nothing records which row came from which payload entry, so there is no
- * correspondence to reopen; the editor reads the goal's REAL rows instead, each addressable
- * by its own id. That is what makes an edit here reach the goal rather than a snapshot of
- * it, and it is what this test proves — the assertion is made in the goal's detail dialog,
- * on the other side of the write.
+ * one, which proposes a second ladder beside the first. T10 answered with a "Your plan"
+ * editor above the list; T27 (ADR-0021) folded that into the goal's own editor, which is
+ * where every row a plan creates already lives. Applying is a one-way fan-out of creates
+ * and nothing records which row came from which payload entry, so there is no proposal to
+ * reopen — the editor reads the goal's REAL rows, each addressable by its own id, and an
+ * edit there reaches the goal rather than a snapshot of it.
  */
-test("an applied plan reopens for editing, and edits reach the goal", async ({
+test("an applied plan's rows are in the goal editor, and edits there reach the goal", async ({
   page,
 }) => {
   const goalTitle = `E2E reopen ${Date.now()}`
@@ -664,24 +677,30 @@ test("an applied plan reopens for editing, and edits reach the goal", async ({
   await page.getByRole("button", { name: "Apply" }).click()
   await expect(page.getByText("Proposed plan")).toHaveCount(0)
 
-  // Selecting the goal again brings the plan back — as the plan it now IS, not as a
-  // proposal awaiting a decision.
-  await page.getByRole("combobox", { name: "Goal" }).click()
-  await page.getByRole("option", { name: goalTitle }).click()
-  await expect(page.getByText("Your plan")).toBeVisible()
-  await expect(page.getByLabel("Milestone 1 title")).toHaveValue(
-    "STUB first milestone",
-  )
+  // Every kind the plan created, in one place: the milestone, the practice, the task.
+  await openGoalDetail(page, goalTitle)
+  const editor = page.getByRole("dialog")
+  await expect(editor.getByText("STUB first milestone")).toBeVisible()
+  await expect(editor.getByText("STUB practice")).toBeVisible()
+  await expect(editor.getByLabel("Task 1 title")).toHaveValue("STUB setup task")
 
-  // The edit, and the proof it landed: the goal's own dialog is a different read of the
-  // same row, so a change that only touched the panel's state cannot pass here.
+  // The edit, and the proof it landed: a reload is a different read of the same row, so a
+  // change that only touched the dialog's state cannot pass here.
   const renamed = `${goalTitle} reopened`
-  await page.getByLabel("Milestone 1 title").fill(renamed)
-  await page.getByLabel("Milestone 1 title").blur()
-
+  await editor
+    .getByRole("button", { name: "Edit STUB first milestone" })
+    .click()
+  await editor.getByLabel("Edit STUB first milestone").fill(renamed)
+  await editor.getByRole("button", { name: "Save", exact: true }).click()
+  await expect(editor.getByText(renamed)).toBeVisible()
+  await page.keyboard.press("Escape")
+  await page.reload()
   await openGoalDetail(page, goalTitle)
   await expect(page.getByRole("dialog")).toContainText(renamed)
   await page.keyboard.press("Escape")
+
+  await removeGoal(page, goalTitle)
+  await deleteTasksMatching("STUB setup task")
 })
 
 /**
@@ -698,14 +717,17 @@ test("re-planning an applied goal confirms first, and keeps what exists", async 
   await createGoal(page, goalTitle)
   await planGoal(page, goalTitle)
   await page.getByRole("button", { name: "Apply" }).click()
-  // Both waits, and both are needed. `Milestone 1 title` is the label in the PROPOSAL
-  // panel as well, holding the same stub value — so waiting on it alone matched the panel
-  // that had not cleared yet and clicked Plan before the page knew this goal was planned.
-  // The editor only renders once the refresh brings back real rows, so its heading is the
-  // signal that the write landed.
   await expect(page.getByText("Proposed plan")).toHaveCount(0)
-  await expect(page.getByText("Your plan")).toBeVisible()
+  // The page has to know the goal is planned before Plan is pressed again. The predicate
+  // is a refreshed read of applied proposals, and the rows Apply created arrive in the same
+  // refresh — so their presence in the editor is the signal that it landed.
+  await openGoalDetail(page, goalTitle)
+  await expect(page.getByRole("dialog")).toContainText("STUB first milestone")
+  await page.keyboard.press("Escape")
 
+  await page.getByRole("button", { name: "Plan a goal" }).click()
+  await page.getByRole("combobox", { name: "Goal" }).click()
+  await page.getByRole("option", { name: goalTitle }).click()
   await page.getByRole("button", { name: "Plan", exact: true }).click()
 
   // The dialog, and the promise it makes.
@@ -715,9 +737,20 @@ test("re-planning an applied goal confirms first, and keeps what exists", async 
   await confirm.getByRole("button", { name: "Plan again" }).click()
 
   // A fresh proposal to review — and the milestones the first plan created are still on
-  // the goal, which is the half that had to be true.
+  // the goal, which is the half that had to be true. Closing the review is not a decision:
+  // the proposal stays pending, the page says so, and the queue cleaner discards it before
+  // the next test.
   await expect(page.getByText("Proposed plan")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(page.getByText("is waiting")).toBeVisible()
   await openGoalDetail(page, goalTitle)
   await expect(page.getByRole("dialog")).toContainText("STUB first milestone")
   await page.keyboard.press("Escape")
+
+  // And the way back: the note reopens the review, where it is discarded — the tidy end,
+  // rather than leaving a modal for the next visitor to this page.
+  await page.getByRole("button", { name: "Review it" }).click()
+  await expect(page.getByText("Proposed plan")).toBeVisible()
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  await expect(page.getByText("is waiting")).toHaveCount(0)
 })

@@ -1,6 +1,7 @@
 import { test, expect } from "./_test"
 
 import { seedGoal, seedMilestone, deleteGoalsMatching } from "./_goals"
+import { deleteTasksMatching, seedTask } from "./_tasks"
 import { seedHabit, deleteHabitsMatching } from "./_habits"
 import {
   ROUTES,
@@ -116,6 +117,13 @@ for (const width of [320, 375, 393]) {
         unit: "pages",
         targetAmount: 20,
       })
+      // A task linked to the goal, for the Tasks section the editor draws since T27: an
+      // editable title beside a date field and a delete — the row shape the plan editor
+      // had, now inside the narrowest box the app draws.
+      await seedTask({
+        title: `${PREFIX} book the first class and pay for the whole term`,
+        goalId,
+      })
 
       await page.goto("/goals")
       await page.getByRole("button", { name: `Open ${title}` }).click()
@@ -128,6 +136,9 @@ for (const width of [320, 375, 393]) {
 `,
       ).toEqual([])
 
+      // Tasks before the goal: `tasks.goal_id` is `set null`, so the other order leaves
+      // the task behind, unlinked.
+      await deleteTasksMatching(PREFIX)
       await deleteHabitsMatching(PREFIX)
       await deleteGoalsMatching(PREFIX)
     })

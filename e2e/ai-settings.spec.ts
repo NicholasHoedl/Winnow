@@ -178,8 +178,13 @@ test("turning the companion off removes every tool panel", async ({ page }) => {
   // Asserted on CONTENT rather than a status code, as before. `src/app/(app)/loading.tsx`
   // is a boundary around the WHOLE group, so Next streams the shell before any page
   // component runs and the response commits as 200 whatever the page decides.
+  // The plan tool has been a BUTTON since T27 (ADR-0021), so a heading assertion would
+  // pass there whatever the setting — it is asserted by role, after the page has proven
+  // itself rendered, and the three panels by theirs.
+  await page.goto("/goals", { waitUntil: "domcontentloaded" })
+  await expect(page.getByRole("heading", { name: "Goals" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Plan a goal" })).toHaveCount(0)
   for (const [route, panel] of [
-    ["/goals", "Plan a goal"],
     ["/activity/routines", "Build a routine"],
     ["/review", "Read my week"],
     ["/budget", "Read transactions"],

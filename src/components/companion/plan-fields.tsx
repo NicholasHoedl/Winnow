@@ -7,7 +7,7 @@ import type { PlanWarning } from "@/modules/companion/service"
 
 // The two fields both plan panels are built out of, shared rather than copied.
 //
-// `PlanProposal` reviews a payload the model produced; `PlanEditor` edits the rows that
+// `PlanProposal` reviews a payload the model produced; the goal editor edits the rows that
 // payload became. The semantics of the surrounding panels differ sharply — a checkbox
 // means "do not create this" in one and a trash button means "delete this" in the other —
 // but a title you can type over and a date you can pick are the same control in both, and
@@ -27,6 +27,8 @@ export function EditableTitle({
   className,
   label,
   autoFocus,
+  onBlur,
+  onEnter,
 }: {
   value: string
   onChange: (next: string) => void
@@ -35,6 +37,13 @@ export function EditableTitle({
   label: string
   /** Set on a row that was just added, so typing is the next thing you do. */
   autoFocus?: boolean
+  /**
+   * For a row that COMMITS rather than writing on every keystroke — the goal editor's
+   * tasks. The proposal panels leave both unset: they edit a payload in memory, where a
+   * write per keystroke costs nothing.
+   */
+  onBlur?: () => void
+  onEnter?: () => void
 }) {
   return (
     <input
@@ -43,6 +52,17 @@ export function EditableTitle({
       disabled={disabled}
       autoFocus={autoFocus}
       onChange={(event) => onChange(event.target.value)}
+      onBlur={onBlur}
+      onKeyDown={
+        onEnter
+          ? (event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                onEnter()
+              }
+            }
+          : undefined
+      }
       className={cn(
         "hover:bg-muted focus:bg-muted -mx-1 min-w-0 flex-1 truncate rounded px-1 outline-none",
         "focus:ring-ring focus:ring-1",
