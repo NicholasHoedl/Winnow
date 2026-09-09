@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { and, eq, inArray, sql } from "drizzle-orm"
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
@@ -16,6 +16,7 @@ import { toRule, type Transaction } from "./queries"
 import {
   budgets,
   categories,
+  monthlyBudgets,
   transactionRecurrences,
   transactions,
 } from "./schema"
@@ -251,13 +252,14 @@ export async function restoreTransaction(tx: unknown): Promise<ActionResult> {
 
 /** Writes a whole month's budgets in one transaction. Replaces the old per-category
  * action: the dialog used to fire one round-trip per category in sequence, so a
- * failure part-way through left some categories saved and the rest not. */
+ * failure part-way through left some categories saved and the rest not. The month's
+ * total rides in the same transaction — see `monthlyTotal` on the schema. */
 export async function setBudgets(input: unknown): Promise<ActionResult> {
   const userId = await requireUserId()
   const parsed = setBudgetsSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { month, entries } = parsed.data
+  const { month, entries, monthlyTotal } = parsed.data
   const periodMonth = monthKey(month)
   const ids = entries.map((e) => e.categoryId)
   if (new Set(ids).size !== ids.length) {
@@ -317,6 +319,30 @@ export async function setBudgets(input: unknown): Promise<ActionResult> {
             inArray(budgets.categoryId, toClear),
           ),
         )
+    }
+    if (monthlyTotal !== undefined) {
+      const wanted = amountToMinor(monthlyTotal, currency)
+      // Written only when it differs from the figure already in effect for this month.
+      // A January total stands for March by there being NO March row, and the dialog
+      // sends the total back on every month it is saved in — so without this check every
+      // save would pin a row to its month and a later change would stop carrying forward.
+      const inEffect = await tx.query.monthlyBudgets.findFirst({
+        where: and(
+          eq(monthlyBudgets.userId, userId),
+          lte(monthlyBudgets.effectiveFrom, periodMonth),
+        ),
+        orderBy: [desc(monthlyBudgets.effectiveFrom)],
+        columns: { amountCents: true },
+      })
+      if (wanted !== (inEffect?.amountCents ?? 0)) {
+        await tx
+          .insert(monthlyBudgets)
+          .values({ userId, effectiveFrom: periodMonth, amountCents: wanted })
+          .onConflictDoUpdate({
+            target: [monthlyBudgets.userId, monthlyBudgets.effectiveFrom],
+            set: { amountCents: wanted, updatedAt: new Date() },
+          })
+      }
     }
   })
 

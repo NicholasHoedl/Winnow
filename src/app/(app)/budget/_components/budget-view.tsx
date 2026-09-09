@@ -62,10 +62,13 @@ function formatMonth(month: string, locale: string): string {
 function Stat({
   label,
   value,
+  hint,
   className,
 }: {
   label: string
   value: string
+  /** A second, smaller line under the figure — what is left of a budget, say. */
+  hint?: React.ReactNode
   className?: string
 }) {
   return (
@@ -84,6 +87,11 @@ function Stat({
       >
         {value}
       </span>
+      {hint && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {hint}
+        </span>
+      )}
     </div>
   )
 }
@@ -162,6 +170,10 @@ export function BudgetView({
     }
     return map
   }, [summary])
+
+  const hasBudget = summary.totalBudgetedCents > 0
+  const overBudget =
+    hasBudget && summary.expenseCents > summary.totalBudgetedCents
 
   function handleDelete(tx: Transaction) {
     startTransition(async () => {
@@ -292,8 +304,15 @@ export function BudgetView({
       </div>
 
       {/* A tighter gap on a phone buys each column ~5px, which is the difference between
-          this fitting at 375px and not. Three narrow stats do not need 16px between them. */}
-      <div className="grid grid-cols-3 gap-2 rounded-xl border p-4 sm:gap-4">
+          this fitting at 375px and not. Three narrow stats do not need 16px between them.
+          A fourth would not fit beside them at all — `$12,345.67` is 96px and a quarter of
+          a phone is less — so with a budget to show the grid goes two by two on a phone. */}
+      <div
+        className={cn(
+          "grid gap-2 rounded-xl border p-4 sm:gap-4",
+          hasBudget ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3",
+        )}
+      >
         <Stat
           label="Income"
           value={money(summary.incomeCents)}
@@ -305,6 +324,24 @@ export function BudgetView({
           value={money(summary.netCents)}
           className={summary.netCents < 0 ? "text-destructive" : "text-success"}
         />
+        {hasBudget && (
+          <Stat
+            // "Budget" is the total you set. "Budgeted" is the category limits added
+            // up, which is what the month is measured against until a total exists.
+            label={summary.monthlyBudgetCents > 0 ? "Budget" : "Budgeted"}
+            value={money(summary.totalBudgetedCents)}
+            hint={
+              overBudget ? (
+                <span className="text-destructive">
+                  {money(summary.expenseCents - summary.totalBudgetedCents)}{" "}
+                  over
+                </span>
+              ) : (
+                `${money(summary.totalBudgetedCents - summary.expenseCents)} left`
+              )
+            }
+          />
+        )}
       </div>
 
       <div className="mt-4">
@@ -456,6 +493,7 @@ export function BudgetView({
         month={month}
         categories={expenseCategories}
         budgetedByCategory={budgetedByCategory}
+        monthlyBudgetCents={summary.monthlyBudgetCents}
         open={budgetsOpen}
         onOpenChange={setBudgetsOpen}
       />

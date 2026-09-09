@@ -8,6 +8,7 @@ import {
   formatCents,
   minorToAmount,
   monthKey,
+  monthlyBudgetInEffect,
   monthRange,
   parseTransactionQuickAdd,
   savingsRate,
@@ -107,6 +108,63 @@ describe("summarizeMonth", () => {
       budgetedCents: 0,
       remainingCents: -300,
     })
+  })
+
+  // The reason a total exists: rent is not budgeted, so the sum of the categories is not
+  // what the month is measured against.
+  it("measures the month against the total when one is set, not the category sum", () => {
+    const summary = summarizeMonth(
+      [{ categoryId: "rent", amountCents: 100000, type: "expense" }],
+      [{ categoryId: "food", amountCents: 3000 }],
+      250000,
+    )
+    expect(summary.totalBudgetedCents).toBe(250000)
+    expect(summary.monthlyBudgetCents).toBe(250000)
+    // The category's own limit is untouched by the total.
+    expect(
+      summary.byCategory.find((c) => c.categoryId === "food")?.budgetedCents,
+    ).toBe(3000)
+  })
+
+  it("falls back to the category sum when there is no total", () => {
+    const summary = summarizeMonth(
+      [],
+      [
+        { categoryId: "food", amountCents: 3000 },
+        { categoryId: "fun", amountCents: 500 },
+      ],
+      0,
+    )
+    expect(summary.totalBudgetedCents).toBe(3500)
+    expect(summary.monthlyBudgetCents).toBe(0)
+  })
+})
+
+describe("monthlyBudgetInEffect", () => {
+  // Deliberately out of date order.
+  const rows = [
+    { effectiveFrom: "2026-03-01", amountCents: 250000 },
+    { effectiveFrom: "2026-01-01", amountCents: 300000 },
+  ]
+
+  it("is the latest row starting on or before the month", () => {
+    expect(monthlyBudgetInEffect(rows, "2026-01")).toBe(300000)
+    expect(monthlyBudgetInEffect(rows, "2026-02")).toBe(300000)
+    expect(monthlyBudgetInEffect(rows, "2026-03")).toBe(250000)
+    // A date inside the month resolves like the month.
+    expect(monthlyBudgetInEffect(rows, "2026-12-15")).toBe(250000)
+  })
+
+  it("is 0 before the first row, and with no rows at all", () => {
+    expect(monthlyBudgetInEffect(rows, "2025-12")).toBe(0)
+    expect(monthlyBudgetInEffect([], "2026-06")).toBe(0)
+  })
+
+  it("reads a 0 row as the total cleared from that month on", () => {
+    const cleared = [...rows, { effectiveFrom: "2026-05-01", amountCents: 0 }]
+    expect(monthlyBudgetInEffect(cleared, "2026-06")).toBe(0)
+    // …while the months before it keep their figure.
+    expect(monthlyBudgetInEffect(cleared, "2026-04")).toBe(250000)
   })
 })
 
@@ -358,5 +416,19 @@ describe("summarizeMonths", () => {
 
   it("returns nothing for an empty month list", () => {
     expect(summarizeMonths(txns, budgets, [])).toEqual([])
+  })
+
+  it("applies a standing total from its month on, leaving earlier months alone", () => {
+    const rows = summarizeMonths(
+      txns,
+      budgets,
+      ["2026-05", "2026-06", "2026-07"],
+      [{ effectiveFrom: "2026-06-01", amountCents: 400000 }],
+    )
+    // May: no total yet, so the category sum as before.
+    expect(rows[0].summary.totalBudgetedCents).toBe(5000)
+    expect(rows[0].summary.monthlyBudgetCents).toBe(0)
+    expect(rows[1].summary.totalBudgetedCents).toBe(400000)
+    expect(rows[2].summary.totalBudgetedCents).toBe(400000)
   })
 })

@@ -9,13 +9,13 @@ import { EXPORT_KEYS, INSERT_ORDER, USER_TABLES } from "./tables"
 
 describe("USER_TABLES", () => {
   it("finds every user-owned table exactly once", () => {
-    // 26 since `notes` was dropped: 25 at T9a (`ai_proposals`), 27 at T12a (`habits` and
-    // `habit_entries`), 26 now. An exact count rather than a floor on purpose — it should
-    // be a deliberate edit to add a table to everyone's backup OR to remove one, and this
-    // is the line that makes someone notice they did. It fired on the notes removal, which
-    // is exactly the job.
-    expect(USER_TABLES.length).toBe(26)
-    expect(new Set(EXPORT_KEYS).size).toBe(26)
+    // 27 with `monthly_budgets`: 25 at T9a (`ai_proposals`), 27 at T12a (`habits` and
+    // `habit_entries`), 26 once `notes` was dropped, 27 now. An exact count rather than a
+    // floor on purpose — it should be a deliberate edit to add a table to everyone's
+    // backup OR to remove one, and this is the line that makes someone notice they did.
+    // It fired on the notes removal, which is exactly the job.
+    expect(USER_TABLES.length).toBe(27)
+    expect(new Set(EXPORT_KEYS).size).toBe(27)
   })
 
   it("uses the export's key for the one table whose name differs", () => {

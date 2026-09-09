@@ -5,8 +5,19 @@ import { eq, inArray } from "drizzle-orm"
 import { Pool } from "pg"
 
 import { users } from "../src/db/schema"
-import { addDays, dowOf, todayInZone, weekRange } from "../src/lib/date"
-import { budgets, categories, transactions } from "../src/modules/budget/schema"
+import {
+  addDays,
+  dowOf,
+  shiftMonth,
+  todayInZone,
+  weekRange,
+} from "../src/lib/date"
+import {
+  budgets,
+  categories,
+  monthlyBudgets,
+  transactions,
+} from "../src/modules/budget/schema"
 import { calendars, events } from "../src/modules/calendar/schema"
 import { goals, milestones } from "../src/modules/goals/schema"
 import { habitEntries, habits } from "../src/modules/habits/schema"
@@ -472,6 +483,19 @@ async function main() {
     periodMonth: monthStart,
     amountCents: dollars(b.amt),
   }))
+
+  // The total for the month — a standing figure, set three months back so the trend
+  // window shows both the months before it (a gap in the chart's budget line) and the
+  // months it covers. Rent is not in the category budgets above; this is what the month
+  // is really measured against.
+  const monthlyBudgetRows = [
+    {
+      id: seedId("monthly-budget:standing"),
+      userId,
+      effectiveFrom: `${shiftMonth(month, -3)}-01`,
+      amountCents: dollars(3200),
+    },
+  ]
 
   // ---------------------------------------------------------------- calendar
   const eventRows = personalCal
@@ -1013,6 +1037,11 @@ async function main() {
       (v) => db.delete(budgets).where(inArray(budgets.id, v)),
     ],
     [
+      "monthly_budgets",
+      ids(monthlyBudgetRows),
+      (v) => db.delete(monthlyBudgets).where(inArray(monthlyBudgets.id, v)),
+    ],
+    [
       "transactions",
       ids([...spend, ...income, rentRow]),
       (v) => db.delete(transactions).where(inArray(transactions.id, v)),
@@ -1043,6 +1072,7 @@ async function main() {
   await db.insert(categories).values(categoryRows)
   await db.insert(transactions).values([...spend, ...income, rentRow])
   await db.insert(budgets).values(budgetRows)
+  await db.insert(monthlyBudgets).values(monthlyBudgetRows)
   if (eventRows.length) await db.insert(events).values(eventRows)
   await db.insert(foods).values(foodRows)
   await db.insert(mealEntries).values(mealRows)
@@ -1076,6 +1106,7 @@ async function main() {
   console.log(`  categories     ${categoryRows.length}`)
   console.log(`  transactions   ${spend.length + income.length + 1}`)
   console.log(`  budgets        ${budgetRows.length}`)
+  console.log(`  monthly total  ${monthlyBudgetRows.length}`)
   console.log(
     `  events         ${eventRows.length}${eventRows.length ? "" : " (no calendar found — skipped)"}`,
   )

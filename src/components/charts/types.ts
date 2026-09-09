@@ -12,3 +12,14 @@ export type ChartSeries = {
   className: string
   points: ChartPoint[]
 }
+
+/**
+ * A line drawn over a bar chart, one point per slot. A `null` point is a GAP — no value
+ * for that slot — which a bar series cannot express, because a bar of 0 is a value.
+ */
+export type OverlaySeries = {
+  name: string
+  /** A `stroke-*` class, as for a line series. */
+  className: string
+  points: (ChartPoint | null)[]
+}

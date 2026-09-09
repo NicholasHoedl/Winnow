@@ -7,8 +7,8 @@
 
 import { cn } from "@/lib/utils"
 
-import { barLayout, niceScale, scaleY } from "./geometry"
-import type { ChartSeries } from "./types"
+import { barLayout, linePath, niceScale, scaleY, slotCenter } from "./geometry"
+import type { ChartSeries, OverlaySeries } from "./types"
 
 const VIEW_W = 400
 const AXIS_W = 46 // room for a money tick label
@@ -20,6 +20,7 @@ const PAD_T = 6
 export function BarChart({
   labels,
   series,
+  overlay,
   formatValue,
   ariaLabel,
   height = 130,
@@ -28,6 +29,11 @@ export function BarChart({
   /** One x-axis label per slot; every series is indexed against these. */
   labels: string[]
   series: ChartSeries[]
+  /**
+   * A dashed line over the bars — a limit the bars are read against, such as a monthly
+   * budget over monthly spend. It shares the y-axis, so it is drawn to the same scale.
+   */
+  overlay?: OverlaySeries
   formatValue: (value: number) => string
   ariaLabel: string
   height?: number
@@ -36,7 +42,10 @@ export function BarChart({
   const plotW = VIEW_W - AXIS_W
   const plotH = height - AXIS_H - PAD_T
 
-  const values = series.flatMap((s) => s.points.map((p) => p.value))
+  const values = [
+    ...series.flatMap((s) => s.points.map((p) => p.value)),
+    ...(overlay?.points ?? []).flatMap((p) => (p ? [p.value] : [])),
+  ]
   const scale = niceScale(
     values.length ? Math.min(...values) : 0,
     values.length ? Math.max(...values) : 0,
@@ -44,6 +53,25 @@ export function BarChart({
   const yOf = (value: number) => PAD_T + scaleY(value, scale, plotH)
   const zeroY = yOf(0)
   const slots = barLayout(labels.length, plotW)
+
+  // The overlay's runs of consecutive points, each drawn as its own open path so a gap
+  // stays a gap rather than being bridged by a line drawn straight across it.
+  const overlayRuns: { x: number; y: number }[][] = []
+  if (overlay) {
+    let run: { x: number; y: number }[] = []
+    overlay.points.forEach((point, index) => {
+      if (!point) {
+        if (run.length) overlayRuns.push(run)
+        run = []
+        return
+      }
+      run.push({
+        x: AXIS_W + slotCenter(index, labels.length, plotW),
+        y: yOf(point.value),
+      })
+    })
+    if (run.length) overlayRuns.push(run)
+  }
 
   return (
     <svg
@@ -114,6 +142,38 @@ export function BarChart({
           </g>
         )
       })}
+
+      {overlay && (
+        <g>
+          {overlayRuns.map((run) => (
+            <path
+              key={run[0].x}
+              d={linePath(run)}
+              fill="none"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              className={overlay.className}
+            />
+          ))}
+          {/* A point per value, as LineChart draws them: the hit area for the tooltip,
+              and the only mark a run of one month leaves. */}
+          {overlay.points.map((point, index) =>
+            point ? (
+              <circle
+                key={labels[index]}
+                cx={AXIS_W + slotCenter(index, labels.length, plotW)}
+                cy={yOf(point.value)}
+                r={4}
+                className={cn(overlay.className, "fill-transparent")}
+              >
+                <title>{`${labels[index]} · ${overlay.name}: ${point.display}`}</title>
+              </circle>
+            ) : null,
+          )}
+        </g>
+      )}
     </svg>
   )
 }

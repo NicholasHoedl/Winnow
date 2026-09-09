@@ -10,6 +10,7 @@ import {
   inArray,
   isNull,
   lt,
+  lte,
   or,
 } from "drizzle-orm"
 
@@ -23,6 +24,7 @@ import { escapeLike } from "@/modules/search/service"
 import {
   budgets,
   categories,
+  monthlyBudgets,
   transactionRecurrences,
   transactions,
 } from "./schema"
@@ -267,7 +269,7 @@ export async function getBudgetTrends(
   const { start } = monthRange(months[0])
   const { nextStart } = monthRange(months[months.length - 1])
 
-  const [txns, budgetRows] = await Promise.all([
+  const [txns, budgetRows, monthlyRows] = await Promise.all([
     db.query.transactions.findMany({
       where: and(
         eq(transactions.userId, userId),
@@ -284,15 +286,24 @@ export async function getBudgetTrends(
       ),
       columns: { categoryId: true, amountCents: true, periodMonth: true },
     }),
+    // Every total set before the window ends, not only those inside it: the one in
+    // effect for the first month may have been set years earlier. A handful of rows.
+    db.query.monthlyBudgets.findMany({
+      where: and(
+        eq(monthlyBudgets.userId, userId),
+        lt(monthlyBudgets.effectiveFrom, nextStart),
+      ),
+      columns: { effectiveFrom: true, amountCents: true },
+    }),
   ])
-  return summarizeMonths(txns, budgetRows, months)
+  return summarizeMonths(txns, budgetRows, months, monthlyRows)
 }
 
 export async function getBudgetSummary(month: string) {
   const userId = await requireUserId()
   await ensureRecurringTransactions(userId)
   const { start, nextStart } = monthRange(month)
-  const [txns, budgetRows] = await Promise.all([
+  const [txns, budgetRows, monthlyRow] = await Promise.all([
     db.query.transactions.findMany({
       where: and(
         eq(transactions.userId, userId),
@@ -305,8 +316,18 @@ export async function getBudgetSummary(month: string) {
       where: and(eq(budgets.userId, userId), eq(budgets.periodMonth, start)),
       columns: { categoryId: true, amountCents: true },
     }),
+    // The total in effect: the latest row starting on or before this month — the one
+    // indexed read off the unique that the schema note promises.
+    db.query.monthlyBudgets.findFirst({
+      where: and(
+        eq(monthlyBudgets.userId, userId),
+        lte(monthlyBudgets.effectiveFrom, start),
+      ),
+      orderBy: [desc(monthlyBudgets.effectiveFrom)],
+      columns: { amountCents: true },
+    }),
   ])
-  return summarizeMonth(txns, budgetRows)
+  return summarizeMonth(txns, budgetRows, monthlyRow?.amountCents ?? 0)
 }
 
 /**

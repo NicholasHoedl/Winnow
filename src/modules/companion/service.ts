@@ -681,6 +681,16 @@ export type SummaryPromptContext = {
   daysOnTarget: number
   spent: string
   earned: string
+  /**
+   * The month the week ends in, against the total set for it; null when there is none.
+   *
+   * Month-to-date rather than the week's spend over the month's total: the money line is
+   * the week, a budget is the month, and the review refuses that slice for the same
+   * reason (`getRangeSummary`). And only a TOTAL counts — with category budgets alone the
+   * sum is not a ceiling, rent is not in it, and "of $1,230 budgeted" would have the model
+   * call an under-budget month over.
+   */
+  monthToDate: { spent: string; budgeted: string } | null
   /** "Chapter one · Write the book" — a milestone or goal task with its goal. */
   goalMovement: string[]
 }
@@ -746,6 +756,11 @@ export function buildSummaryMessages(
     }; ${week.daysOnTarget} of ${week.daysWithTarget} days with a calorie target were met.`,
     `Money: ${week.spent} spent, ${week.earned} in.`,
   ]
+  if (week.monthToDate) {
+    lines.push(
+      `Month to date: ${week.monthToDate.spent} spent of the month's ${week.monthToDate.budgeted} budget.`,
+    )
+  }
   if (week.taskTitles.length > 0) {
     lines.push(
       `What was finished: ${week.taskTitles.join("; ")}${

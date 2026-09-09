@@ -4,7 +4,7 @@
 import { accentForKey } from "@/lib/colors"
 import { BarChart } from "@/components/charts/bar-chart"
 import { LineChart } from "@/components/charts/line-chart"
-import type { ChartSeries } from "@/components/charts/types"
+import type { ChartSeries, OverlaySeries } from "@/components/charts/types"
 import type { Category } from "@/modules/budget/queries"
 import {
   currencySymbol,
@@ -112,6 +112,26 @@ export function TrendsSection({
     },
   ]
 
+  // The total set for each month, over the bars it caps. Only the months that had one:
+  // a month without a total is a gap in the line, not a zero, and a window that never
+  // had one gets no line and no legend entry for it.
+  const budgetLine: OverlaySeries | undefined = trends.some(
+    (t) => t.summary.monthlyBudgetCents > 0,
+  )
+    ? {
+        name: "Budget",
+        className: "stroke-primary",
+        points: trends.map((t) =>
+          t.summary.monthlyBudgetCents > 0
+            ? {
+                value: t.summary.monthlyBudgetCents,
+                display: money(t.summary.monthlyBudgetCents),
+              }
+            : null,
+        ),
+      }
+    : undefined
+
   const net: ChartSeries[] = [
     {
       name: "Net",
@@ -164,8 +184,13 @@ export function TrendsSection({
           <BarChart
             labels={labels}
             series={inOut}
+            overlay={budgetLine}
             formatValue={tick}
-            ariaLabel={`Income and expenses for the last ${trends.length} months`}
+            ariaLabel={
+              budgetLine
+                ? `Income and expenses, with the monthly budget, for the last ${trends.length} months`
+                : `Income and expenses for the last ${trends.length} months`
+            }
           />
           <div className="text-muted-foreground mt-2 flex gap-4 text-xs">
             {inOut.map((series) => (
@@ -180,6 +205,12 @@ export function TrendsSection({
                 {series.name}
               </span>
             ))}
+            {budgetLine && (
+              <span className="flex items-center gap-1.5">
+                <span className="border-primary w-3 border-t-2 border-dashed" />
+                Budget
+              </span>
+            )}
           </div>
         </ChartCard>
 

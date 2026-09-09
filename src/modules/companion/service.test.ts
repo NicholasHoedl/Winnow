@@ -502,6 +502,7 @@ describe("buildSummaryMessages", () => {
     daysOnTarget: 3,
     spent: "$412.30",
     earned: "$0.00",
+    monthToDate: null,
     goalMovement: ["Chapter one · Write the book"],
     // A week already OVER by default, which is the premise every case below was written
     // under — "5 of 7 days logged" only reads correctly for a complete week.
@@ -515,6 +516,24 @@ describe("buildSummaryMessages", () => {
     const [, user] = buildSummaryMessages(week)
     expect(user.content).toContain("$412.30 spent")
     expect(user.content).not.toContain("41230")
+  })
+
+  // The budget is the month's and the money line is the week's, so the total arrives as
+  // a month-to-date clause of its own, never as a denominator under the week's spend.
+  it("states the month's spend against its total when one is set", () => {
+    const [, user] = buildSummaryMessages({
+      ...week,
+      monthToDate: { spent: "$1,980.00", budgeted: "$3,000.00" },
+    })
+    expect(user.content).toContain(
+      "$1,980.00 spent of the month's $3,000.00 budget",
+    )
+    expect(user.content).not.toContain("198000")
+  })
+
+  it("says nothing about a budget when no total is set", () => {
+    const [, user] = buildSummaryMessages(week)
+    expect(user.content).not.toContain("budget")
   })
 
   it("says how many task titles were left out rather than silently truncating", () => {

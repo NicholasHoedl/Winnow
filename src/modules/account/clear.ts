@@ -5,6 +5,7 @@ import type { db } from "@/db"
 import {
   budgets,
   categories,
+  monthlyBudgets,
   transactionRecurrences,
   transactions,
 } from "@/modules/budget/schema"
@@ -71,6 +72,7 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
     .delete(transactionRecurrences)
     .where(eq(transactionRecurrences.userId, userId))
   await tx.delete(budgets).where(eq(budgets.userId, userId))
+  await tx.delete(monthlyBudgets).where(eq(monthlyBudgets.userId, userId))
   await tx.delete(categories).where(eq(categories.userId, userId))
   await tx.delete(subtasks).where(eq(subtasks.userId, userId))
   await tx.delete(tasks).where(eq(tasks.userId, userId))

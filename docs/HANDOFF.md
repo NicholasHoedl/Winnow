@@ -1,12 +1,15 @@
 # Handoff
 
-Last updated: **2026-09-03**. Two features reported from real use (T22, T23), and a pass
-over the test suite that came out of asking why it was getting slower. §1 still describes
-the deploy as of 2026-08-25 and nothing about the running stack was re-checked; the green
-baseline in §3 HAS moved and is re-measured below.
+Last updated: **2026-09-08**. T24 — a total for the month — carries **`0041`, the first
+migration since T23**: everything on `main` between the two deploys by a rebuild alone, this
+does not (runbook §4). Between T23 and T24 there was a run of small fixes from real use — a
+time-aware greeting, Settings split into pages, the goal planner reopening an applied plan,
+practice grouped by cadence on the dashboard — shipped without entries here; `git log` has
+them. §1 still describes the deploy as of 2026-08-25 and nothing about the running stack
+was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T23 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T24 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -386,6 +389,33 @@ costs 35s to make. **Render-bound specs got 38–48% faster and `companion` got 
 a net of −0.5% and two failures.** The idea is dead; what survived is the finding that
 fewer renders beats faster ones, which is what T23's follow-up acted on. Do not re-spike it
 without reading that paragraph.
+
+**T24 is shipped: a total for the month.** Migration `0041` (`monthly_budgets`) — the first
+since T23, so the next deploy needs the runbook's §4 temporary-port step, not just a rebuild.
+ADR-0019 is the authority on the shape and on what it beat.
+
+- **One figure, effective-dated, not a row per month.** Set it once and it stands until it
+  is changed; a change starts a new row from its month and every earlier month keeps the
+  figure it was measured against. `macro_targets` has the same shape for the same reason. A
+  0 row is "no total from here on" — the app's idiom for an unset budget (`budgetedCents >
+0`), so no consumer gained a null path.
+- **`totalBudgetedCents` became "the total when set, else the category sum".** That is why
+  the dashboard card, the review's Money card and the first-run guard did not change: they
+  read the one field and never learn which kind they got. `MonthSummary.monthlyBudgetCents`
+  is there for the surfaces that must know — the budgets dialog (a "Total for the month"
+  field above the categories, with a live warning when the categories add up to more), the
+  page header's Budget/Budgeted stat, the trend chart's dashed budget line (`BarChart`
+  grew an `overlay` whose points can be null, so a month before the first row is a gap and
+  not a zero), and the companion.
+- **The companion's month-to-date line is gated on a TOTAL, never the category sum.** The
+  sum is not a ceiling — rent is not in it — and "of $1,230 budgeted" would have the model
+  call an under-budget month over. Month-to-date rather than the week's spend over the
+  month's budget, for the reason `getRangeSummary` gives.
+- **`setBudgets` writes the total only when it differs from the figure in effect** for the
+  month. Without that, every save would pin a row to its month and a later change would
+  stop carrying forward.
+- The dashboard's "of $X" still shows the category sum when no total is set — exactly what
+  it showed before, with the same weakness the total exists to fix.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

@@ -199,7 +199,7 @@ The app publishes on `127.0.0.1:3000` only — deliberately. Nothing on the LAN 
 
 ## 4. Migrate and seed — the one-time awkward step
 
-The database starts empty and needs **every migration** plus the account — 41 at the time
+The database starts empty and needs **every migration** plus the account — 42 at the time
 of writing, and the count in `drizzle/meta/_journal.json` is the authority rather than this
 sentence. It is written that way because the number here has already gone stale twice in one
 day: it said 35 when there were 39, was corrected, and was stale again two migrations later.

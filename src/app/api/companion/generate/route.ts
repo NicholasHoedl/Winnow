@@ -169,7 +169,7 @@ export async function POST(request: Request): Promise<Response> {
       ),
     )
   } else {
-    const { review, currency } = await getWeeklyReview(input.weekOf)
+    const { review, currency, monthMoney } = await getWeeklyReview(input.weekOf)
 
     // The app decides whether the week is worth narrating, BEFORE spending a call. A
     // model handed three data points writes a confident paragraph about your habits and
@@ -213,6 +213,18 @@ export async function POST(request: Request): Promise<Response> {
           // never sees integer cents and is never asked to divide by a hundred.
           spent: formatCents(review.money.expenseCents, currency),
           earned: formatCents(review.money.incomeCents, currency),
+          // The month the week ends in, against its total — and only a total, never the
+          // category sum; the field's note says why.
+          monthToDate:
+            monthMoney.monthlyBudgetCents > 0
+              ? {
+                  spent: formatCents(monthMoney.expenseCents, currency),
+                  budgeted: formatCents(
+                    monthMoney.monthlyBudgetCents,
+                    currency,
+                  ),
+                }
+              : null,
           goalMovement: [
             ...review.milestones.map((m) => `${m.title} · ${m.goalTitle}`),
             ...review.goalTasks.map((t) => `${t.title} · ${t.goalTitle}`),

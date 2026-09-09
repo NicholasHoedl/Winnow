@@ -8,6 +8,7 @@ import { EXPORT_VERSION } from "./payload"
 import {
   budgets,
   categories,
+  monthlyBudgets,
   transactionRecurrences,
   transactions,
 } from "@/modules/budget/schema"
@@ -58,6 +59,7 @@ export async function exportUserData() {
     categoryRows,
     transactionRows,
     budgetRows,
+    monthlyBudgetRows,
     calendarRows,
     eventRows,
     eventExceptionRows,
@@ -116,6 +118,10 @@ export async function exportUserData() {
     }),
     db.query.budgets.findMany({
       where: eq(budgets.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
+    db.query.monthlyBudgets.findMany({
+      where: eq(monthlyBudgets.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
     // Calendars and their exceptions were both missing: a backup taken before this
@@ -201,6 +207,7 @@ export async function exportUserData() {
     categories: categoryRows,
     transactions: transactionRows,
     budgets: budgetRows,
+    monthlyBudgets: monthlyBudgetRows,
     calendars: calendarRows,
     events: eventRows,
     eventExceptions: eventExceptionRows,

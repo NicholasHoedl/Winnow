@@ -288,6 +288,13 @@
       "when": 1787007314934,
       "tag": "0040_pink_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788922659155,
+      "tag": "0041_monthly_budgets",
+      "breakpoints": true
     }
   ]
 }

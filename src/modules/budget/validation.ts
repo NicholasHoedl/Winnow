@@ -59,8 +59,14 @@ const monthField = z
 
 // The dialog submits every expense category at once so the whole month is written
 // in a single transaction. An amount of 0 (or a cleared field) clears that budget.
+//
+// `monthlyTotal` is the month's total, standing from this month on until it is next
+// changed — 0 (or a cleared field) means no total from here. Optional: when it is absent
+// the action leaves the standing figure alone, so a caller with only categories to write
+// cannot clear the total by omission.
 export const setBudgetsSchema = z.object({
   month: monthField,
+  monthlyTotal: dollars.optional(),
   entries: z
     .array(z.object({ categoryId: z.string().uuid(), amount: dollars }))
     .max(200, "Too many categories"),

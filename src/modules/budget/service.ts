@@ -101,17 +101,28 @@ export type MonthSummary = {
   incomeCents: number
   expenseCents: number
   netCents: number
+  /**
+   * What the month's spend is measured against: the total set for the month when there
+   * is one, else the category budgets added up. Every "spent of $X" reads this and none
+   * of them needs to know which it got — the dashboard card, the review and the
+   * first-run guard were written against the sum and work unchanged against a total.
+   */
   totalBudgetedCents: number
+  /** The total set for the month; 0 when none is in effect. */
+  monthlyBudgetCents: number
   /** Expense spend vs budget. Income never appears here. */
   byCategory: CategoryRollup[]
   incomeByCategory: IncomeRollup[]
 }
 
 /** Roll a month's transactions + budgets into income/expense/net totals and
- * per-category spent-vs-budgeted (expense spend only; income isn't budgeted). */
+ * per-category spent-vs-budgeted (expense spend only; income isn't budgeted).
+ * `monthlyBudgetCents` is the total in effect for the month — see
+ * {@link monthlyBudgetInEffect} — and 0 means there isn't one. */
 export function summarizeMonth(
   transactions: MoneyTransaction[],
   budgets: MoneyBudget[],
+  monthlyBudgetCents = 0,
 ): MonthSummary {
   let incomeCents = 0
   let expenseCents = 0
@@ -135,10 +146,10 @@ export function summarizeMonth(
   }
 
   const budgetByCategory = new Map<string, number>()
-  let totalBudgetedCents = 0
+  let categoryBudgetedCents = 0
   for (const budget of budgets) {
     budgetByCategory.set(budget.categoryId, budget.amountCents)
-    totalBudgetedCents += budget.amountCents
+    categoryBudgetedCents += budget.amountCents
   }
 
   // A row for every category that has spend OR a budget this month.
@@ -168,7 +179,12 @@ export function summarizeMonth(
     incomeCents,
     expenseCents,
     netCents: incomeCents - expenseCents,
-    totalBudgetedCents,
+    // A total wins over the sum outright rather than combining with it: the categories
+    // are limits on parts of the month and the total is a limit on all of it, so adding
+    // them would count the budgeted part twice.
+    totalBudgetedCents:
+      monthlyBudgetCents > 0 ? monthlyBudgetCents : categoryBudgetedCents,
+    monthlyBudgetCents,
     byCategory,
     incomeByCategory,
   }
@@ -191,6 +207,27 @@ export type DatedTransaction = MoneyTransaction & { date: string }
 export type DatedBudget = MoneyBudget & { periodMonth: string }
 export type MonthlySummary = { month: string; summary: MonthSummary }
 
+/** A standing total: in force from `effectiveFrom` (a first-of-month) until a later row. */
+export type DatedMonthlyBudget = { effectiveFrom: string; amountCents: number }
+
+/**
+ * The total in effect for `month` ('YYYY-MM' or any date in it): the latest row starting
+ * on or before its first day, 0 when none does. The resolution `targetsForDate` gives
+ * macro targets, over rows in any order.
+ */
+export function monthlyBudgetInEffect(
+  rows: DatedMonthlyBudget[],
+  month: string,
+): number {
+  const key = monthKey(month)
+  let inEffect: DatedMonthlyBudget | undefined
+  for (const row of rows) {
+    if (row.effectiveFrom > key) continue
+    if (!inEffect || row.effectiveFrom > inEffect.effectiveFrom) inEffect = row
+  }
+  return inEffect?.amountCents ?? 0
+}
+
 /** Bucket transactions + budgets by month and roll each one up. `months` drives the
  * output, so a month with no activity still yields a zero row — a trend chart needs
  * the gap, not a missing point. */
@@ -198,6 +235,7 @@ export function summarizeMonths(
   transactions: DatedTransaction[],
   budgets: DatedBudget[],
   months: string[],
+  monthlyBudgets: DatedMonthlyBudget[] = [],
 ): MonthlySummary[] {
   const txByMonth = new Map<string, DatedTransaction[]>()
   for (const tx of transactions) {
@@ -220,6 +258,9 @@ export function summarizeMonths(
     summary: summarizeMonth(
       txByMonth.get(month) ?? [],
       budgetsByMonth.get(month) ?? [],
+      // Resolved per month, not once for the window: a total changed mid-window applies
+      // from its own month, and the months before keep the figure they had.
+      monthlyBudgetInEffect(monthlyBudgets, month),
     ),
   }))
 }

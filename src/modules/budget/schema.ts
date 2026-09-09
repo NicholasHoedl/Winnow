@@ -165,3 +165,40 @@ export const budgets = pgTable(
     index("budgets_user_period").on(table.userId, table.periodMonth),
   ],
 )
+
+// The total for a month, as ONE figure — for the person whose rent and utilities are what
+// they are and who wants a ceiling on the rest, not a limit per category. Effective-dated
+// like `macro_targets` (the note there says why there is no `effective_to`): the row in
+// effect for month M is the latest with `effective_from <= M`, so it is set once and
+// stands until it is changed, and a change starts a new row from its month while every
+// earlier month keeps the figure it was measured against.
+//
+// A 0 is "no total from this month on". That is the app's idiom for an unset budget
+// everywhere (`budgetedCents > 0`), and it is what lets the total be cleared from March
+// without January's row going with it. Not a nullable `category_id` on `budgets`: NULLs
+// are distinct in a unique key, and a per-month row cannot stand for the months after it.
+export const monthlyBudgets = pgTable(
+  "monthly_budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  // The unique doubles as the index the "latest not after M" lookup needs.
+  (table) => [
+    unique("monthly_budgets_user_effective").on(
+      table.userId,
+      table.effectiveFrom,
+    ),
+  ],
+)
