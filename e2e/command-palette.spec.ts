@@ -31,8 +31,32 @@ test("jumps to a page via a nav command", async ({ page }) => {
   await page.getByRole("button", { name: "Search" }).first().click()
   await page.getByPlaceholder(PLACEHOLDER).fill("Settings")
 
-  await page.getByRole("option", { name: "Settings" }).click()
+  // `exact`, as every option lookup in this suite should be. Settings is a set of pages
+  // now and each has a palette entry — "Settings · Region" and seven more — so the
+  // substring match this used to rely on resolves to nine options and strict mode refuses
+  // the click. The overview is the one entry named exactly "Settings".
+  await page.getByRole("option", { name: "Settings", exact: true }).click()
   await expect(page).toHaveURL(/\/settings$/)
+})
+
+test("finds a settings page by what it holds, not by the word Settings", async ({
+  page,
+}) => {
+  // The palette entries are the only way a settings page is reachable by search, and the
+  // whole reason they carry the "Settings · " prefix: someone looking for where the model
+  // is configured types "AI", not "settings", and has to land on the right page rather
+  // than the overview.
+  await page.goto("/")
+  await page.getByRole("button", { name: "Search" }).first().click()
+  await page.getByPlaceholder(PLACEHOLDER).fill("AI compan")
+
+  await page
+    .getByRole("option", { name: "Settings · AI companion", exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/settings\/ai$/)
+  await expect(
+    page.getByRole("heading", { name: "AI companion", exact: true }),
+  ).toBeVisible()
 })
 
 test("g then b navigates to Budget", async ({ page }) => {

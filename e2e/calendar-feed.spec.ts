@@ -33,7 +33,7 @@ const PREFIX = "E2E feed"
 
 /** The subscribe URL as the settings page renders it. */
 async function feedUrl(page: Page): Promise<string> {
-  await page.goto("/settings")
+  await page.goto("/settings/data")
   const url = await page.getByTestId("feed-url").innerText()
   expect(url).toContain("/api/calendar/")
   return url.trim()

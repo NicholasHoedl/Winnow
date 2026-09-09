@@ -65,13 +65,13 @@ test("an unrecognised calendar param falls back to the saved preference", async 
  * default costs a round trip and is a no-op for the test that never touched it.
  */
 test.afterEach(async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await page
     .getByRole("group", { name: "Dashboard calendar opens on", exact: true })
     .getByRole("button", { name: "Month" })
     .click()
-  await page.getByRole("button", { name: "Save preferences" }).click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await page.getByRole("button", { name: "Save defaults" }).click()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 })
 
 // Reported from real use: set the dashboard to open on week, and the Month button stops
@@ -88,10 +88,10 @@ test("month is reachable when the dashboard opens on week", async ({
     exact: true,
   })
 
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await setting.getByRole("button", { name: "Week" }).click()
-  await page.getByRole("button", { name: "Save preferences" }).click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await page.getByRole("button", { name: "Save defaults" }).click()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 
   // It opens on week, which is the part that already worked.
   await page.goto("/")

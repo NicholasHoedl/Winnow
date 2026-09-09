@@ -634,7 +634,8 @@ export async function regenerateFeedToken(): Promise<ActionResult> {
       set: { token, createdAt: new Date() },
     })
 
-  // The settings page renders the URL, so it has to re-read.
-  revalidatePath("/settings")
+  // The Data settings page renders the URL, so it has to re-read. The exact segment,
+  // not "/settings" — that would revalidate the overview and leave this page stale.
+  revalidatePath("/settings/data")
   return { ok: true }
 }

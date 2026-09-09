@@ -15,15 +15,26 @@ import {
   aiSettingsSchema,
   appearancePreferencesSchema,
   dashboardCardSchema,
+  defaultPreferencesSchema,
   notificationPreferencesSchema,
-  userPreferencesSchema,
+  regionPreferencesSchema,
 } from "./validation"
 
-export async function setUserPreferences(
+/**
+ * Writes only the region columns — the Region settings page's form.
+ *
+ * Same shape as `setNotificationPreferences` below and for the same reason: each page
+ * submits its whole form, and `set: parsed.data` means this can only ever touch the seven
+ * keys `regionPreferencesSchema` parses. The Defaults page cannot be clobbered from here.
+ *
+ * Revalidates the whole layout, as `setUserPreferences` did: time zone, week start,
+ * currency and time format change how the server renders every page.
+ */
+export async function setRegionPreferences(
   input: unknown,
 ): Promise<ActionResult> {
   const userId = await requireUserId()
-  const parsed = userPreferencesSchema.safeParse(input)
+  const parsed = regionPreferencesSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
   await db
@@ -31,8 +42,29 @@ export async function setUserPreferences(
     .values({ userId, ...parsed.data })
     .onConflictDoUpdate({ target: userPreferences.userId, set: parsed.data })
 
-  // Timezone / week-start / currency / time-format affect rendering app-wide,
-  // so revalidate everything under the root layout.
+  revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/**
+ * Writes only the defaults columns — the Defaults settings page's form.
+ *
+ * Whole-layout revalidation here too. These are not display formats, but each one is read
+ * by a server render somewhere: the landing page by sign-in, the calendar views by `/` and
+ * `/calendar`, the momentum window by every goal card, the meal type by quick-add.
+ */
+export async function setDefaultPreferences(
+  input: unknown,
+): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = defaultPreferencesSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+
+  await db
+    .insert(userPreferences)
+    .values({ userId, ...parsed.data })
+    .onConflictDoUpdate({ target: userPreferences.userId, set: parsed.data })
+
   revalidatePath("/", "layout")
   return { ok: true }
 }
@@ -132,8 +164,9 @@ export async function setAiApiKey(input: unknown): Promise<ActionResult> {
 
   // The key alone changes nothing the server renders — `aiReady` does not consider it, so
   // a local endpoint needs none. Revalidating anyway would be a whole-layout rerender for
-  // no visible difference.
-  revalidatePath("/settings")
+  // no visible difference. The AI page shows the key HINT, though, so that one segment
+  // re-reads — "/settings" alone would refresh the overview and not the page with the hint.
+  revalidatePath("/settings/ai")
   return { ok: true }
 }
 

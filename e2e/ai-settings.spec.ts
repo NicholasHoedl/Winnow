@@ -52,7 +52,7 @@ function section(page: Page) {
 
 /** Put the stub configuration back, whatever the test did. */
 test.afterEach(async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/ai")
   const ai = section(page)
   await ai.getByRole("button", { name: "On", exact: true }).click()
   // `Custom` is the stub's honest provider: an OpenAI-compatible endpoint at an address
@@ -76,7 +76,7 @@ test.afterEach(async ({ page }) => {
 })
 
 test("a saved API key is never sent to the browser", async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/ai")
   const ai = section(page)
 
   await ai.getByLabel("API key").fill(KEY)
@@ -106,7 +106,7 @@ test("a saved API key is never sent to the browser", async ({ page }) => {
 test("a second key replaces the first, under a different button label", async ({
   page,
 }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/ai")
   const ai = section(page)
 
   await ai.getByLabel("API key").fill(KEY)
@@ -137,7 +137,7 @@ test("a second key replaces the first, under a different button label", async ({
 test("settings survive a reload, and the key survives a settings change", async ({
   page,
 }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/ai")
   const ai = section(page)
 
   await ai.getByLabel("API key").fill(KEY)
@@ -163,7 +163,7 @@ test("settings survive a reload, and the key survives a settings change", async 
 })
 
 test("turning the companion off removes every tool panel", async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/ai")
   const ai = section(page)
   await ai.getByRole("button", { name: "Off", exact: true }).click()
   await ai.getByRole("button", { name: "Save AI settings" }).click()

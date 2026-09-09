@@ -25,30 +25,45 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
-// The Preferences settings section owns exactly these. Deliberately excludes the
-// notification fields below: each section submits its whole form, so sharing one schema
-// would let either section overwrite the other's just-saved values (Zod strips what isn't
-// declared here).
-//
-// It began as regional/formatting only, and is now better described as **the defaults that
-// change how the app behaves for you** — `goalMomentumDays` was the first that was not
-// about formatting, and the two below are the second and third. Kept as one section rather
-// than split, because a section per preference is a settings page nobody can scan; if this
-// grows much further, split it by SUBJECT (a Nutrition section, a Calendar section) rather
-// than by whether a field formats something.
-export const userPreferencesSchema = z.object({
+/**
+ * Region & formats — owned by the Region settings page alone.
+ *
+ * The preferences schema used to be one object of fifteen fields behind one Save button,
+ * with a note saying that if it grew further it should be split by SUBJECT rather than by
+ * whether a field formats something. It grew further. These seven are the regional ones:
+ * how a date, a time, an amount of money or a weight READS, and which day a week begins
+ * on. None of them change what the app does — only how it shows it.
+ *
+ * Its own schema for the reason every settings section has one: each page submits its
+ * whole form, and `setRegionPreferences` writes exactly the keys parsed here (`set:
+ * parsed.data`), so a save on this page cannot touch a field the Defaults page owns. The
+ * partition — every one of the fifteen in exactly one of the two — is asserted in
+ * `validation.test.ts`, because a field that landed in neither would simply stop being
+ * saveable, with nothing on screen to say so.
+ */
+export const regionPreferencesSchema = z.object({
   timeZone: z.string().refine(isValidTimeZone, "Unknown time zone"),
   weekStartsOn: z.union([z.literal(0), z.literal(1)]),
   currency: z.enum(CURRENCY_CODES as [string, ...string[]]),
   use24HourTime: z.boolean(),
+  dateFormat: z.enum(DATE_FORMATS),
+  weightUnit: z.enum(WEIGHT_UNITS),
+  volumeUnit: z.enum(VOLUME_UNITS),
+})
+export type RegionPreferencesInput = z.infer<typeof regionPreferencesSchema>
+
+/**
+ * Defaults — owned by the Defaults settings page alone: the eight that change what the
+ * app DOES for you rather than how it reads. Where signing in lands, which view a
+ * calendar opens on, what quick-add files a meal under, how far back a goal looks before
+ * calling itself stalled.
+ */
+export const defaultPreferencesSchema = z.object({
   defaultTaskPriority: z.enum(["low", "medium", "high"]),
   goalMomentumDays: z.union([z.literal(7), z.literal(14), z.literal(30)]),
   balanceMacroTargets: z.boolean(),
   defaultCalendarView: z.enum(CALENDAR_VIEWS as [string, ...string[]]),
   slateHorizonDays: z.union([z.literal(3), z.literal(7), z.literal(14)]),
-  dateFormat: z.enum(DATE_FORMATS),
-  weightUnit: z.enum(WEIGHT_UNITS),
-  volumeUnit: z.enum(VOLUME_UNITS),
   dashboardCalendarView: z.enum(CALENDAR_CARD_VIEWS),
   // Validated against the nav itself rather than a duplicated list of paths. A hand-written
   // copy here would be a second thing to keep in step with `navItems`, and the failure would
@@ -60,18 +75,32 @@ export const userPreferencesSchema = z.object({
   //
   // No `.transform()` here, deliberately, and it is worth saying why since the link pickers
   // elsewhere do use one. Every other field in THIS schema has an input type identical to
-  // its output, which is what lets the settings form be typed `useForm<UserPreferencesInput>`
+  // its output, which is what lets the settings form be typed `useForm<DefaultPreferencesInput>`
   // against `z.infer`. A transform makes the two differ and the resolver stops type-checking
   // against the form. The Select emits `null` directly instead.
   defaultMealType: z.enum(MEAL_TYPES).nullable(),
-  // `dashboardCollapsed` is deliberately ABSENT.
+  // `dashboardCollapsed` is deliberately ABSENT from both schemas.
   //
-  // It is part of `UserPreferences`, but the settings form is not one of its writers — the
-  // chevron on each card is the only control, through `setDashboardCard`. `setUserPreferences`
-  // updates exactly the keys this schema parses, so leaving it out means saving anything on
-  // /settings cannot touch the column. Including it would have made the round trip depend on
-  // react-hook-form carrying an unregistered array through `handleSubmit`, and RHF is known
-  // here to drop fields it thinks you did not mean to submit.
+  // It is part of `UserPreferences`, but no settings form is one of its writers — the
+  // chevron on each card is the only control, through `setDashboardCard`. Every preferences
+  // action updates exactly the keys its schema parses, so leaving it out means saving
+  // anything under /settings cannot touch the column. Including it would have made the round
+  // trip depend on react-hook-form carrying an unregistered array through `handleSubmit`,
+  // and RHF is known here to drop fields it thinks you did not mean to submit.
+})
+export type DefaultPreferencesInput = z.infer<typeof defaultPreferencesSchema>
+
+/**
+ * The two together — every user-editable preference except the ones with a section of
+ * their own below (notifications, appearance, the AI companion).
+ *
+ * Composed from the two page schemas rather than declared a third time, so it cannot drift
+ * from them. Kept for anything that writes a whole preferences row at once rather than one
+ * page's worth.
+ */
+export const userPreferencesSchema = z.object({
+  ...regionPreferencesSchema.shape,
+  ...defaultPreferencesSchema.shape,
 })
 export type UserPreferencesInput = z.infer<typeof userPreferencesSchema>
 

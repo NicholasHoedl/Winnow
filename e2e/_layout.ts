@@ -46,7 +46,16 @@ export const ROUTES = [
   "/goals",
   "/meals",
   "/review",
+  // The overview and every settings page. The tab strip wraps at phone width rather than
+  // scrolling, which is exactly the kind of row this sweep exists to measure.
   "/settings",
+  "/settings/account",
+  "/settings/security",
+  "/settings/appearance",
+  "/settings/region",
+  "/settings/defaults",
+  "/settings/ai",
+  "/settings/data",
 ] as const
 
 export type Fault = {

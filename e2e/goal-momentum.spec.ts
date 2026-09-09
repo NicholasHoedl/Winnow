@@ -200,10 +200,10 @@ test("the momentum window follows the setting", async ({ page }) => {
   // indistinguishable to a screen reader as well as to this line.
   const window = page.getByRole("group", { name: "Goal momentum window" })
 
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await window.getByRole("button", { name: "1 week" }).click()
-  await page.getByRole("button", { name: "Save preferences" }).click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await page.getByRole("button", { name: "Save defaults" }).click()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 
   await page.goto("/goals")
   await openDetail(page, goalTitle)
@@ -214,10 +214,10 @@ test("the momentum window follows the setting", async ({ page }) => {
 
   // Put it back — the suite runs serially against a persistent database, so a changed
   // setting would silently retune every later assertion about the copy.
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await window.getByRole("button", { name: "2 weeks" }).click()
-  await page.getByRole("button", { name: "Save preferences" }).click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await page.getByRole("button", { name: "Save defaults" }).click()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 })
 
 /**

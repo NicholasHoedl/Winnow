@@ -17,14 +17,14 @@ import { pageAction } from "./_menu"
 function preferencesForm(page: Page) {
   return page
     .locator("form")
-    .filter({ has: page.getByRole("button", { name: "Save preferences" }) })
+    .filter({ has: page.getByRole("button", { name: "Save defaults" }) })
 }
 
 async function savePreferences(page: Page) {
   await preferencesForm(page)
-    .getByRole("button", { name: "Save preferences" })
+    .getByRole("button", { name: "Save defaults" })
     .click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 }
 
 /**
@@ -63,7 +63,7 @@ async function selected(
 }
 
 test("the calendar opens on the view you chose", async ({ page }) => {
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   const was = await selected(page, "Calendar opens on", [
     "Month",
     "Week",
@@ -100,7 +100,7 @@ test("the calendar opens on the view you chose", async ({ page }) => {
     page.getByRole("link", { name: "month", exact: true }),
   ).toHaveAttribute("aria-current", "page")
 
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await segmented(page, "Calendar opens on")
     .getByRole("button", { name: was, exact: true })
     .click()
@@ -112,7 +112,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
 }) => {
   const DATE = "2019-04-01" // Far enough back to own its own target period.
 
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   // Scoped to its own control for the same reason as the calendar test above: "On" / "Off"
   // are the least distinctive option words in the whole form, and are one addition away from
   // colliding with something.
@@ -153,7 +153,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
   await page.getByRole("button", { name: "Cancel" }).click()
 
   // With it off, carbs is yours to type again.
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await segmented(page, "Balance macro targets")
     .getByRole("button", { name: "Off", exact: true })
     .click()
@@ -177,7 +177,7 @@ test("balancing derives carbs from calories, protein and fat", async ({
   await page.getByRole("button", { name: "Cancel" }).click()
 
   if (wasOn) {
-    await page.goto("/settings")
+    await page.goto("/settings/defaults")
     await segmented(page, "Balance macro targets")
       .getByRole("button", { name: "On", exact: true })
       .click()

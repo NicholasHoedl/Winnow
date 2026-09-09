@@ -31,7 +31,7 @@ async function exportPayload(page: Page) {
  * exists to raise, so it must not be able to fire for this reason.
  */
 async function provision(page: Page) {
-  await page.goto("/settings")
+  await page.goto("/settings/data")
   await expect(page.getByRole("button", { name: "Choose file" })).toBeVisible()
   await page.goto("/calendar")
   await expect(page.getByRole("button", { name: "Add event" })).toBeVisible()
@@ -57,7 +57,7 @@ async function provision(page: Page) {
 
 /** Choose a file and type the confirmation, but stop short of confirming. */
 async function stageImport(page: Page, payload: unknown, name = "winnow.json") {
-  await page.goto("/settings")
+  await page.goto("/settings/data")
   await expect(page.getByRole("button", { name: "Choose file" })).toBeVisible()
   await page.getByLabel("Backup file").setInputFiles({
     name,

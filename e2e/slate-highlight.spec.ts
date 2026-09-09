@@ -37,10 +37,10 @@ function horizon(page: Page) {
 }
 
 async function setHorizon(page: Page, label: string) {
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   await horizon(page).getByRole("button", { name: label, exact: true }).click()
-  await page.getByRole("button", { name: "Save preferences" }).click()
-  await expect(page.getByText("Preferences saved")).toBeVisible()
+  await page.getByRole("button", { name: "Save defaults" }).click()
+  await expect(page.getByText("Defaults saved")).toBeVisible()
 }
 
 /** The label of whichever horizon option is currently selected. */
@@ -90,7 +90,7 @@ test("a highlighted event reaches the dashboard from inside the horizon", async 
   const flagged = `E2E highlight ${stamp}`
   const plain = `E2E plain ${stamp}`
 
-  await page.goto("/settings")
+  await page.goto("/settings/defaults")
   const was = await selectedHorizon(page)
   await setHorizon(page, "1 week")
 

@@ -1,16 +1,12 @@
-// Settings shaped skeleton — a stack of section cards under the header.
+// Inside the settings layout, so the heading and tab strip are already on screen and only
+// the card area waits. Two cards, not four: no settings page holds more than two now, and
+// a skeleton taller than what replaces it is a jump rather than a placeholder.
 export default function Loading() {
   return (
-    <div className="mx-auto w-full max-w-3xl p-6">
-      <div className="mb-6 space-y-2">
-        <div className="bg-muted h-8 w-36 animate-pulse rounded" />
-        <div className="bg-muted h-3 w-64 animate-pulse rounded" />
-      </div>
-      <div className="flex flex-col gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-card h-36 animate-pulse rounded-xl border" />
-        ))}
-      </div>
+    <div className="flex flex-col gap-8">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="bg-card h-48 animate-pulse rounded-xl border" />
+      ))}
     </div>
   )
 }

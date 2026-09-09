@@ -30,7 +30,7 @@ async function savedTheme(page: Page) {
  * account on the wrong value while its cleanup reported success.
  */
 async function chooseTheme(page: Page, label: string, value: string) {
-  await page.goto("/settings")
+  await page.goto("/settings/appearance")
   // Wait for next-themes to have read storage before clicking. It writes `light` or
   // `dark` onto <html> once mounted, and until then `theme` is undefined and the
   // control's onClick does nothing — a click that lands early is a silent no-op the
@@ -53,7 +53,7 @@ test.beforeEach(async ({ page }) => {
   // click below and overwrites it, so the control snaps back and the assertion reads a
   // button that was pressed a moment ago. Seeding removes the race everywhere except
   // where it is the point: the adoption test clears this again on purpose.
-  await page.goto("/settings")
+  await page.goto("/settings/appearance")
   await page.evaluate(() => localStorage.setItem("theme", "system"))
 })
 
@@ -80,7 +80,7 @@ test("a device that has never seen the account adopts its appearance", async ({
 
   // Become a fresh device: same session, no remembered appearance.
   await page.evaluate(() => localStorage.removeItem("theme"))
-  await page.goto("/settings")
+  await page.goto("/settings/appearance")
 
   await expect(
     page.getByRole("button", { name: "Light", exact: true }),
@@ -95,7 +95,7 @@ test("a device with its own preference is not overruled by the account", async (
   await chooseTheme(page, "Dark", "dark")
 
   // Reloading must not pull the previous value back down over it.
-  await page.goto("/settings")
+  await page.goto("/settings/appearance")
   await expect(
     page.getByRole("button", { name: "Dark", exact: true }),
   ).toHaveAttribute("aria-pressed", "true")

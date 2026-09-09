@@ -37,6 +37,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { navItems } from "@/components/shared/nav-items"
+import { SETTINGS_PAGES } from "@/components/shared/settings-pages"
 import { search } from "@/modules/search/actions"
 import { MIN_QUERY_LENGTH } from "@/modules/search/service"
 import type { SearchResult, SearchResultType } from "@/modules/search/types"
@@ -115,6 +116,14 @@ const NAV_COMMANDS: NavCommand[] = [
   { href: "/activity/habits", label: "Habits", icon: Flame },
   { href: "/activity/routines", label: "Routines", icon: ListChecks },
   { href: "/settings", label: "Settings", icon: Settings },
+  // One entry per settings page, from the same list the tab strip and the overview draw
+  // from, so a page cannot exist in one place and be missing from another. Listed as
+  // "Settings · Region" rather than "Region": on its own, the word finds nothing.
+  ...SETTINGS_PAGES.map((page) => ({
+    href: page.href,
+    label: `Settings · ${page.label}`,
+    icon: page.icon,
+  })),
 ]
 
 // Create actions. Tasks open a create-in-place dialog via the create-intent bus; the

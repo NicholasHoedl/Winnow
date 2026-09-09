@@ -7,13 +7,8 @@ import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
 
 import { signOutAction } from "@/app/(app)/actions"
-import { changePassword, updateProfile } from "@/modules/account/actions"
-import {
-  changePasswordSchema,
-  profileSchema,
-  type ChangePasswordInput,
-  type ProfileInput,
-} from "@/modules/account/validation"
+import { updateProfile } from "@/modules/account/actions"
+import { profileSchema, type ProfileInput } from "@/modules/account/validation"
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -94,84 +89,6 @@ function ProfileForm({
   )
 }
 
-function PasswordForm() {
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<ChangePasswordInput>({
-    resolver: standardSchemaResolver(changePasswordSchema),
-    defaultValues: {
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    },
-  })
-
-  const onSubmit = handleSubmit(async (data) => {
-    const result = await changePassword(data)
-    if (!result.ok) {
-      if (result.fieldErrors) {
-        for (const [name, message] of Object.entries(result.fieldErrors)) {
-          setError(name as keyof ChangePasswordInput, { message })
-        }
-      }
-      toast.error(result.error)
-      return
-    }
-    toast.success("Password changed")
-    reset()
-  })
-
-  return (
-    <form onSubmit={onSubmit}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="currentPassword">Current password</FieldLabel>
-          <Input
-            id="currentPassword"
-            type="password"
-            autoComplete="current-password"
-            {...register("currentPassword")}
-          />
-          <FieldError errors={[errors.currentPassword]} />
-        </Field>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-            <Input
-              id="newPassword"
-              type="password"
-              autoComplete="new-password"
-              {...register("newPassword")}
-            />
-            <FieldError errors={[errors.newPassword]} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="confirmPassword">
-              Confirm new password
-            </FieldLabel>
-            <Input
-              id="confirmPassword"
-              type="password"
-              autoComplete="new-password"
-              {...register("confirmPassword")}
-            />
-            <FieldError errors={[errors.confirmPassword]} />
-          </Field>
-        </div>
-        <div>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Changing…" : "Change password"}
-          </Button>
-        </div>
-      </FieldGroup>
-    </form>
-  )
-}
-
 export function AccountSection({
   defaultName,
   email,
@@ -183,11 +100,10 @@ export function AccountSection({
     <SettingsSection title="Account">
       <div className="flex flex-col gap-6">
         <ProfileForm defaultName={defaultName} email={email} />
-        <Separator />
-        <div>
-          <h3 className="mb-3 text-sm font-semibold">Change password</h3>
-          <PasswordForm />
-        </div>
+        {/* The password form lived here under its own sub-heading until Settings split
+            into pages; it is `SecuritySection` now. Sign-out stays, because it is about
+            THIS device's session rather than the account's credentials — and because it
+            is the only way out below 768px, which the note below explains. */}
         <Separator />
         {/* The ONLY way to sign out below 768px, and until this existed there was none.
             `app-sidebar.tsx` is `hidden md:flex`, the bottom nav carries destinations
