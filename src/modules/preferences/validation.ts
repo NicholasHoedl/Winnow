@@ -79,6 +79,9 @@ export const defaultPreferencesSchema = z.object({
   // against `z.infer`. A transform makes the two differ and the resolver stops type-checking
   // against the form. The Select emits `null` directly instead.
   defaultMealType: z.enum(MEAL_TYPES).nullable(),
+  // A list id, or null for none. Whose list it is cannot be a schema's business — the
+  // action checks that — and the column's `set null` covers a list deleted later.
+  defaultListId: z.string().uuid().nullable(),
   // `dashboardCollapsed` is deliberately ABSENT from both schemas.
   //
   // It is part of `UserPreferences`, but no settings form is one of its writers — the

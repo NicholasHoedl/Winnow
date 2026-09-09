@@ -8,7 +8,7 @@ import { ActivityView } from "./_components/activity-view"
 export default async function ActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ goal?: string }>
+  searchParams: Promise<{ goal?: string; list?: string }>
 }) {
   // Awaited before the rest: the momentum window is measured in the user's own days, so
   // `getGoals` cannot start until the time zone is known. Everything else runs in parallel
@@ -44,6 +44,7 @@ export default async function ActivityPage({
       // Read from the URL rather than held only in the client, so a search result can deep
       // link to one goal's work and a reload keeps you where you were.
       selectedGoalId={params.goal ?? null}
+      selectedListId={params.list ?? null}
       timeZone={timeZone}
     />
   )

@@ -96,13 +96,18 @@ export type TaskFormValues = {
   endDate?: string
 }
 
-function emptyValues(today: string, priority: Priority): TaskFormValues {
+function emptyValues(
+  today: string,
+  priority: Priority,
+  listId: string,
+): TaskFormValues {
   return {
     title: "",
     notes: "",
     dueDate: today, // new tasks default to today; the field is still clearable
     priority,
-    listId: "",
+    // The default list, or "" for none — a preference, like the priority above it.
+    listId,
     goalId: "",
     eventId: "",
     repeat: "none",
@@ -170,7 +175,8 @@ export function TaskDialog({
   const locale = useDateLocale()
   const isEdit = !!task
   const isRecurring = !!task?.series
-  const { defaultTaskPriority, timeZone, use24HourTime } = usePreferences()
+  const { defaultTaskPriority, defaultListId, timeZone, use24HourTime } =
+    usePreferences()
   // Stable per open session so the reset effect below doesn't loop.
   const today = React.useMemo(
     () => todayInZone(new Date(), timeZone),
@@ -188,7 +194,7 @@ export function TaskDialog({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<TaskFormValues>({
-    defaultValues: emptyValues(today, defaultTaskPriority),
+    defaultValues: emptyValues(today, defaultTaskPriority, defaultListId ?? ""),
   })
 
   // Default the scope when the dialog (re)opens for a task — during render so the reset
@@ -203,7 +209,7 @@ export function TaskDialog({
   React.useEffect(() => {
     if (!open) return
     if (!task) {
-      const base = emptyValues(today, defaultTaskPriority)
+      const base = emptyValues(today, defaultTaskPriority, defaultListId ?? "")
       reset({
         ...base,
         title: initialTitle ?? base.title,
@@ -256,6 +262,7 @@ export function TaskDialog({
     scope,
     today,
     defaultTaskPriority,
+    defaultListId,
     reset,
     initialTitle,
     initialDueDate,

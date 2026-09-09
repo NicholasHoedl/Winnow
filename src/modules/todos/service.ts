@@ -4,6 +4,7 @@
 
 import { dueStatus } from "@/lib/date"
 import type { Cycle } from "@/lib/recurrence"
+import { TAG, stripSpans, tagKey } from "@/lib/tags"
 
 export type TaskSummaryInput = {
   dueDate: string | null
@@ -191,4 +192,37 @@ export function sortByCompletion<T extends TaskCompletionInput>(
     if (!b.completedAt) return -1
     return b.completedAt.getTime() - a.completedAt.getTime()
   })
+}
+
+// --- Lists ---
+
+/** Sentinel for "tasks with no list" in `?list=` — a filter value, not an id. */
+export const UNFILED = "none"
+
+export type ListOption = { id: string; name: string }
+
+export type ParsedListTag = {
+  /** The list the tag named, or null — including when there was no tag. */
+  listId: string | null
+  /** The line with the tag taken out and the gap tidied; empty when the tag was all of it. */
+  cleaned: string
+}
+
+/**
+ * Pull a `#list` out of a quick-add line.
+ *
+ * The sibling of the budget's `parseTransactionQuickAdd`, on the same matcher: only the
+ * FIRST tag is read, and it is stripped whether or not it names a list — a `#` is an
+ * instruction, and one that sometimes stayed in the title would make it two things. Both
+ * sides go through `tagKey`, so "Home projects" is reachable as `#home-projects`.
+ */
+export function parseListTag(text: string, lists: ListOption[]): ParsedListTag {
+  const hit = TAG.exec(text)
+  if (!hit) return { listId: null, cleaned: text.trim() }
+  const key = tagKey(hit[1])
+  const list = lists.find((candidate) => tagKey(candidate.name) === key)
+  const cleaned = stripSpans(text, [[hit.index, hit.index + hit[0].length]])
+    .replace(/\s{2,}/g, " ")
+    .trim()
+  return { listId: list?.id ?? null, cleaned }
 }

@@ -2,6 +2,8 @@
 // yen for JPY, …); the major amount appears only at the input/display boundary via
 // these helpers. No DB — unit-testable directly.
 
+import { TAG, stripSpans } from "@/lib/tags"
+
 // Minor-unit exponent for a currency: 2 for USD/EUR (cents), 0 for JPY/KRW, 3 for
 // BHD/KWD. Read from Intl so we don't maintain a table; defaults to 2 if the code
 // is somehow unknown (Intl throws on invalid ISO codes).
@@ -309,20 +311,8 @@ const AMOUNT_MARKED = new RegExp(
   String.raw`([+-])?\$\s?(${NUM})|([+-])\s?(${NUM})`,
 )
 const AMOUNT_BARE = new RegExp(String.raw`\b(${NUM})\b`)
-const CATEGORY_TAG = /#([\p{L}\p{N}_-]+)/u
-
-// Remove non-overlapping [start, end) ranges from `text`, joining the gaps.
-function stripSpans(text: string, spans: Array<[number, number]>): string {
-  const sorted = [...spans].sort((a, b) => a[0] - b[0])
-  let out = ""
-  let cursor = 0
-  for (const [start, end] of sorted) {
-    if (start < cursor) continue
-    out += text.slice(cursor, start)
-    cursor = end
-  }
-  return out + text.slice(cursor)
-}
+// The `#tag` matcher and the span-stripper live in `lib/tags.ts` since T26, shared with
+// the task quick-add's `#list` — one rule for what a `#` means on every capture surface.
 
 /**
  * Parse a quick-add line into a transaction payload, or null when there's no amount.
@@ -351,7 +341,7 @@ export function parseTransactionQuickAdd(
   ]
 
   let categoryId = ""
-  const tag = CATEGORY_TAG.exec(text)
+  const tag = TAG.exec(text)
   if (tag) {
     spans.push([tag.index, tag.index + tag[0].length])
     const name = tag[1].toLowerCase()

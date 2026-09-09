@@ -1,7 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-09**. T25 gave the Activity section a strip of five pages — Tasks,
-Habits, Routines, Lists, Repeating tasks — with no migration (ADR-0020). T24 before it — a
+Last updated: **2026-09-09**. T26 finished lists — the by-list view, `#list` in quick-add
+and a default list — with migration `0042`, one nullable column that rides the port step
+T24 already needs. T25 before it gave the Activity section a strip of five pages — Tasks,
+Habits, Routines, Lists, Repeating tasks — with no migration (ADR-0020). T24 before that — a
 total for the month — carries **`0041`, the first migration since T23**: everything on `main`
 between T23 and T24 deploys by a rebuild alone, T24 does not (runbook §4). Between T23 and
 T24 there was a run of small fixes from real use — a
@@ -11,7 +13,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T25 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T26 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -440,6 +442,28 @@ ADR-0020 is the authority.
   entries; `manager-renames` and `task-skip` go to the pages instead.
 - **`revalidateTaskViews` names the two new paths.** Revalidating `/activity` does not reach
   its children — the trap §4 already records — and both pages write through it.
+
+**T26 is shipped: lists are a view, not only a picker.** Migration `0042` — one nullable
+column, `user_preferences.default_list_id` — rides the port step `0041` already needs.
+
+- **Why they existed and what was missing.** SPEC §7.1 chose lists over tags in the first
+  tranche and promised "views: by list"; the picker shipped and the view never did, so a
+  list was write-only — filed into from the dialog, a repeating task's template and a
+  routine step, visible nowhere. Not a weak feature, an unfinished one. Kept rather than
+  removed because a list is the app's only STANDING context (Home, Work): a goal has an end
+  and a stall badge, a routine makes tasks.
+- **The Tasks page filters by list** beside the goal filter, on the same `replaceState`
+  contract — `?list=<id>`, or `?list=none` for **Unfiled**, the tasks with no list. The two
+  filters combine; `filterUrl` keeps both in the address. A row wears its list as a badge;
+  the Lists page counts open tasks per list and links each name to the filtered view, with
+  Unfiled on top.
+- **`#home` in either quick-add files a task as it is captured.** `parseListTag` in
+  `todos/service.ts` shares `lib/tags.ts` with the budget's `#category`; a tag is stripped
+  whether or not it matches — the budget's rule, and the user's choice. A multi-word name
+  is reachable as one word (`tagKey`: `#home-projects`).
+- **A default list on the Defaults page** prefills the task dialog and files quick-adds
+  typed without a tag; a tag wins. The action checks the list is yours. Explicit rather
+  than remembered-last: per account, discoverable, and it reads like the other defaults.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

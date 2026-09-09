@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { ArrowRight, Filter, Plus, Search, X } from "lucide-react"
+import { ArrowRight, Filter, Folder, Plus, Search, X } from "lucide-react"
 import { toast } from "sonner"
 
 import type { EventOption } from "@/modules/calendar/queries"
@@ -21,7 +21,9 @@ import {
   bucketTasks,
   searchTasks,
   sortByCompletion,
+  UNFILED,
 } from "@/modules/todos/service"
+import { tagKey } from "@/lib/tags"
 
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -58,6 +60,15 @@ const SECTIONS = [
   { key: "someday", label: "Someday" },
 ] as const
 
+/** The page's address for a pair of filters — either, both, or neither. */
+function filterUrl(goalId: string | null, listId: string | null): string {
+  const params = new URLSearchParams()
+  if (goalId) params.set("goal", goalId)
+  if (listId) params.set("list", listId)
+  const query = params.toString()
+  return query ? `/activity?${query}` : "/activity"
+}
+
 export function ActivityView({
   tasks,
   lists,
@@ -65,6 +76,7 @@ export function ActivityView({
   goals,
   events,
   selectedGoalId: initialGoalId,
+  selectedListId: initialListId,
   timeZone,
 }: {
   tasks: TaskWithSeries[]
@@ -75,6 +87,8 @@ export function ActivityView({
   goals: GoalWithProgress[]
   events: EventOption[]
   selectedGoalId: string | null
+  /** `?list=`: a list id, `UNFILED`, or null for every task. */
+  selectedListId: string | null
   timeZone: string
 }) {
   // "all", not "active". The search box narrows what the FILTER has already chosen rather
@@ -121,10 +135,28 @@ export function ActivityView({
    */
   function selectGoal(goalId: string | null) {
     setSelectedGoalId(goalId)
+    // The other filter rides along, and only while it resolves: a stale list id in state
+    // is not something to write back into the address.
     window.history.replaceState(
       null,
       "",
-      goalId ? `/activity?goal=${goalId}` : "/activity",
+      filterUrl(goalId, activeList ? selectedListId : null),
+    )
+  }
+
+  const [selectedListId, setSelectedListId] = React.useState<string | null>(
+    initialListId,
+  )
+
+  // The list filter — the "by list" view SPEC §7.1 promised in the first tranche and
+  // this page never had — on the goal filter's contract: a query param written without a
+  // navigation, so a search result can deep link and a reload lands where you were.
+  function selectList(listId: string | null) {
+    setSelectedListId(listId)
+    window.history.replaceState(
+      null,
+      "",
+      filterUrl(activeGoal?.id ?? null, listId),
     )
   }
 
@@ -271,9 +303,27 @@ export function ActivityView({
     ? (goals.find((goal) => goal.id === selectedGoalId) ?? null)
     : null
 
-  const scopedTasks = activeGoal
-    ? optimisticTasks.filter((task) => task.goalId === activeGoal.id)
-    : optimisticTasks
+  // Resolved the same way, with one value that is not a list: `UNFILED` is the tasks that
+  // have none. A stale id — the list was deleted — falls back to every task.
+  const activeList: { id: string; name: string } | null =
+    selectedListId === UNFILED
+      ? { id: UNFILED, name: "Unfiled" }
+      : (lists.find((list) => list.id === selectedListId) ?? null)
+
+  const scopedTasks = optimisticTasks.filter(
+    (task) =>
+      (!activeGoal || task.goalId === activeGoal.id) &&
+      (!activeList ||
+        (activeList.id === UNFILED
+          ? task.listId === null
+          : task.listId === activeList.id)),
+  )
+
+  // Id → name once per render, for the badge on each row.
+  const listNames = React.useMemo(
+    () => new Map(lists.map((list) => [list.id, list.name])),
+    [lists],
+  )
 
   // Applied BEFORE the open/done split, which is exactly what makes the box narrow whatever
   // the filter has already chosen instead of reaching past it.
@@ -305,6 +355,11 @@ export function ActivityView({
       return activeGoal
         ? `Nothing completed for ${activeGoal.title} yet.`
         : "Nothing completed yet. Tick something off and it will show up here."
+    }
+    if (activeList) {
+      return activeList.id === UNFILED
+        ? "Nothing unfiled — every task has a list."
+        : `Nothing in ${activeList.name} yet. Type #${tagKey(activeList.name)} in quick-add to file a task here.`
     }
     if (activeGoal) {
       return filter === "active" && done.length > 0
@@ -347,7 +402,7 @@ export function ActivityView({
       <div>
         <div className="min-w-0">
           <div className="mb-4">
-            <QuickAdd />
+            <QuickAdd lists={lists} />
           </div>
 
           {/* Its own row rather than squeezed into the toolbar below. That row already wraps
@@ -422,32 +477,83 @@ export function ActivityView({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
+            {/* The list filter, the same shape as the goal's, plus Unfiled: the tasks
+                with no list, which is the pile to triage from. Hidden at zero lists, when
+                every task is unfiled and the menu would say so three different ways. */}
+            {lists.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant={activeList ? "secondary" : "ghost"}
+                      size="sm"
+                      aria-label="Filter by list"
+                    />
+                  }
+                >
+                  <Folder className="size-3.5" />
+                  List
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => selectList(null)}>
+                    All lists
+                  </DropdownMenuItem>
+                  {lists.map((list) => (
+                    <DropdownMenuItem
+                      key={list.id}
+                      onClick={() => selectList(list.id)}
+                    >
+                      {list.name}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuItem onClick={() => selectList(UNFILED)}>
+                    Unfiled
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {/* Says what you are looking at, and undoes it. Without this the list can be
                 short for two very different reasons — you're done, or you're filtered —
                 and nothing on screen tells them apart. */}
-            {activeGoal && (
-              <div className="ml-auto flex items-center gap-1">
-                {/* The way back to the goal itself, which the rail used to be. Without it
-                    this page names a goal and offers no way to reach it. */}
-                <Link
-                  href="/goals"
-                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
-                >
-                  Goals
-                  <ArrowRight className="size-3" />
-                </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  // Named for what it DOES, not what it shows. Its visible text is the goal
-                  // title, and naming the action keeps this unambiguous to a screen reader
-                  // and to a test locator alike.
-                  aria-label={`Clear the ${activeGoal.title} filter`}
-                  onClick={() => selectGoal(null)}
-                >
-                  <X className="size-4" />
-                  {activeGoal.title}
-                </Button>
+            {(activeGoal || activeList) && (
+              <div className="ml-auto flex flex-wrap items-center gap-1">
+                {activeGoal && (
+                  <>
+                    {/* The way back to the goal itself, which the rail used to be. Without
+                        it this page names a goal and offers no way to reach it. */}
+                    <Link
+                      href="/goals"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+                    >
+                      Goals
+                      <ArrowRight className="size-3" />
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      // Named for what it DOES, not what it shows. Its visible text is the
+                      // goal title, and naming the action keeps this unambiguous to a
+                      // screen reader and to a test locator alike.
+                      aria-label={`Clear the ${activeGoal.title} filter`}
+                      onClick={() => selectGoal(null)}
+                    >
+                      <X className="size-4" />
+                      {activeGoal.title}
+                    </Button>
+                  </>
+                )}
+                {activeList && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Clear the ${activeList.name} filter`}
+                    onClick={() => selectList(null)}
+                  >
+                    <X className="size-4" />
+                    {activeList.name}
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -491,6 +597,7 @@ export function ActivityView({
                             onEdit={openEdit}
                             onDelete={handleDelete}
                             onSkip={handleSkip}
+                            listName={listNames.get(task.listId ?? "")}
                           />
                         )}
                       />
@@ -519,6 +626,7 @@ export function ActivityView({
                           onEdit={openEdit}
                           onDelete={handleDelete}
                           onSkip={handleSkip}
+                          listName={listNames.get(task.listId ?? "")}
                         />
                       ))}
                     </div>

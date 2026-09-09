@@ -3,6 +3,7 @@ import { cache } from "react"
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   gte,
@@ -348,4 +349,35 @@ export async function getCompletedInRange(
     if (completedOn < start || completedOn > end) return []
     return [{ id: row.id, title: row.title, completedOn, goalId: row.goalId }]
   })
+}
+
+export type ListTaskCounts = {
+  /** Open tasks per list id. A list with none is simply absent. */
+  byList: Record<string, number>
+  /** Open tasks with no list — the Lists page's Unfiled row. */
+  unfiled: number
+}
+
+/**
+ * Open tasks per list, for the Lists page.
+ *
+ * A count query rather than `getTasks`: that page holds no tasks and should not load every
+ * row, its subtasks and its rules to say how many there are. It also skips the two
+ * lazy-on-read generators `getTasks` runs, and may — a rule with no instance yet is not an
+ * open task, on this page or any other.
+ */
+export async function getListTaskCounts(): Promise<ListTaskCounts> {
+  const userId = await requireUserId()
+  const rows = await db
+    .select({ listId: tasks.listId, open: count() })
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.status, "open")))
+    .groupBy(tasks.listId)
+  const byList: Record<string, number> = {}
+  let unfiled = 0
+  for (const row of rows) {
+    if (row.listId) byList[row.listId] = row.open
+    else unfiled = row.open
+  }
+  return { byList, unfiled }
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "user_preferences" ADD COLUMN "default_list_id" uuid;--> statement-breakpoint
+ALTER TABLE "user_preferences" ADD CONSTRAINT "user_preferences_default_list_id_lists_id_fk" FOREIGN KEY ("default_list_id") REFERENCES "public"."lists"("id") ON DELETE set null ON UPDATE no action;

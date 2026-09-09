@@ -5,6 +5,7 @@ import {
   CalendarOff,
   ChevronDown,
   ChevronRight,
+  Folder,
   ListChecks,
   MoreVertical,
   Pencil,
@@ -46,6 +47,7 @@ export function TaskItem({
   onEdit,
   onDelete,
   onSkip,
+  listName,
 }: {
   task: TaskWithSeries
   timeZone: string
@@ -54,6 +56,8 @@ export function TaskItem({
   onDelete: (task: TaskWithSeries) => void
   /** Skip just this cycle. Only offered for a generated instance. */
   onSkip: (task: TaskWithSeries) => void
+  /** The task's list, by name, drawn as a badge — you cannot use what you cannot see. */
+  listName?: string
 }) {
   const locale = useDateLocale()
   const done = task.status === "done"
@@ -95,7 +99,8 @@ export function TaskItem({
           {(task.dueDate ||
             task.priority !== "medium" ||
             series ||
-            subtasks.length > 0) && (
+            subtasks.length > 0 ||
+            listName) && (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {flexible && series ? (
                 // Flexible: show the period, not a specific date or "overdue".
@@ -152,6 +157,15 @@ export function TaskItem({
                   className="text-xs font-normal capitalize"
                 >
                   {task.priority}
+                </Badge>
+              )}
+              {listName && (
+                <Badge
+                  variant="outline"
+                  className="text-muted-foreground inline-flex items-center gap-1 text-xs font-normal"
+                >
+                  <Folder className="size-3" />
+                  {listName}
                 </Badge>
               )}
             </div>

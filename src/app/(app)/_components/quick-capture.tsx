@@ -5,6 +5,7 @@ import { Plus, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
+import { parseListTag, type ListOption } from "@/modules/todos/service"
 import { restoreIfEmpty } from "@/lib/forms"
 import { parseNaturalDate } from "@/lib/nl-date"
 import { todayInZone } from "@/lib/date"
@@ -27,14 +28,15 @@ function formatDue(date: string, locale: string): string {
 
 /**
  * Dashboard quick-capture: type a task in natural language ("call mom tomorrow",
- * "pay rent friday") — the due date is parsed out and the remaining text becomes the
- * title. Falls back to today's date when no date phrase is present.
+ * "pay rent friday #home") — the due date and the `#list` are parsed out and the remaining
+ * text becomes the title. Falls back to today's date when no date phrase is present, and
+ * to the default list when no tag is.
  */
-export function QuickCapture() {
+export function QuickCapture({ lists }: { lists: ListOption[] }) {
   const locale = useDateLocale()
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
-  const { timeZone } = usePreferences()
+  const { timeZone, defaultListId } = usePreferences()
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -42,19 +44,26 @@ export function QuickCapture() {
     if (!trimmed) return
 
     const today = todayInZone(new Date(), timeZone)
-    const { date, cleaned } = parseNaturalDate(trimmed, today)
-    const title = cleaned || trimmed
-    const dueDate = date ?? today
+    // The date first, then the tag: neither parser knows about the other's phrase, and
+    // the tag matcher stops at a space, so the order only decides which one tidies up.
+    const dated = parseNaturalDate(trimmed, today)
+    const tagged = parseListTag(dated.cleaned, lists)
+    const title = tagged.cleaned || trimmed
+    const dueDate = dated.date ?? today
+    const listId = tagged.listId ?? defaultListId ?? ""
+    const listName = lists.find((list) => list.id === listId)?.name
 
     // Cleared here, synchronously, not after the await: the field is free for the next
     // entry immediately, and a second Enter has nothing left to resubmit.
     setText("")
 
     startTransition(async () => {
-      const result = await createTask({ title, dueDate })
+      const result = await createTask({ title, dueDate, listId })
       if (result.ok) {
         toast.success(`Added “${title}”`, {
-          description: `Due ${formatDue(dueDate, locale)}`,
+          description: `Due ${formatDue(dueDate, locale)}${
+            listName ? ` · ${listName}` : ""
+          }`,
         })
       } else {
         toast.error(result.error)

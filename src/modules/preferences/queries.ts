@@ -137,6 +137,9 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
     defaultMealType: MEAL_TYPES.includes(row.defaultMealType as MealType)
       ? (row.defaultMealType as MealType)
       : null,
+    // Not narrowed: a uuid or null is all the column can hold, and `set null` on the
+    // foreign key is what keeps it pointing at a list that exists.
+    defaultListId: row.defaultListId,
   }
 }
 

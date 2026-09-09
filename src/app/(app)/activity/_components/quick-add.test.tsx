@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 
+import { DEFAULT_PREFERENCES } from "@/lib/preferences"
 import { createTask } from "@/modules/todos/actions"
+import { PreferencesProvider } from "@/components/preferences/preferences-provider"
 
 import { QuickAdd } from "./quick-add"
 
@@ -16,6 +18,27 @@ vi.mock("sonner", () => ({ toast }))
 function deferred<T>() {
   let resolve!: (value: T) => void
   return { promise: new Promise<T>((r) => (resolve = r)), resolve }
+}
+
+const LISTS = [{ id: "11111111-1111-4111-8111-111111111111", name: "Home" }]
+
+/**
+ * The bar inside the provider it reads its default list from. `lists` is the picker's
+ * data; the provider is what a `#`-less line falls back to.
+ */
+function renderBar(
+  options: { lists?: typeof LISTS; defaultListId?: string | null } = {},
+) {
+  return render(
+    <PreferencesProvider
+      value={{
+        ...DEFAULT_PREFERENCES,
+        defaultListId: options.defaultListId ?? null,
+      }}
+    >
+      <QuickAdd lists={options.lists ?? []} />
+    </PreferencesProvider>,
+  )
 }
 
 /**
@@ -48,7 +71,7 @@ describe("QuickAdd", () => {
     const gate = deferred<{ ok: true }>()
     vi.mocked(createTask).mockReturnValue(gate.promise)
 
-    render(<QuickAdd />)
+    renderBar()
     const button = screen.getByRole("button", { name: "Add task" })
     expect(button).not.toHaveAttribute("aria-busy", "true")
 
@@ -72,7 +95,7 @@ describe("QuickAdd", () => {
     const gate = deferred<{ ok: true }>()
     vi.mocked(createTask).mockReturnValue(gate.promise)
 
-    render(<QuickAdd />)
+    renderBar()
     const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
     fireEvent.change(input, { target: { value: "Pay rent" } })
     fireEvent.submit(input.closest("form")!)
@@ -81,20 +104,68 @@ describe("QuickAdd", () => {
     // inside the window submit nothing rather than resubmitting the first entry.
     expect(input.value).toBe("")
     gate.resolve({ ok: true })
+    // No list: no tag was typed and no default is set, so the action is told so.
     await waitFor(() =>
-      expect(createTask).toHaveBeenCalledWith({ title: "Pay rent" }),
+      expect(createTask).toHaveBeenCalledWith({
+        title: "Pay rent",
+        listId: "",
+      }),
     )
   })
 
   it("restores the text when the write fails", async () => {
     vi.mocked(createTask).mockResolvedValue({ ok: false, error: "Nope." })
 
-    render(<QuickAdd />)
+    renderBar()
     const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
     fireEvent.change(input, { target: { value: "Pay rent" } })
     fireEvent.submit(input.closest("form")!)
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Nope."))
     expect(input.value).toBe("Pay rent")
+  })
+
+  // T26: the bar files as it captures. The tag comes out of the title, and the id it
+  // named goes to the action — the parsing itself is `parseListTag`'s unit test.
+  it("files by a #list, with the tag taken out of the title", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+
+    renderBar({ lists: LISTS })
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Fix the tap #home" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() =>
+      expect(createTask).toHaveBeenCalledWith({
+        title: "Fix the tap",
+        listId: LISTS[0].id,
+      }),
+    )
+  })
+
+  it("falls back to the default list when no tag was typed, and a tag wins over it", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    const other = { id: "22222222-2222-4222-8222-222222222222", name: "Work" }
+
+    renderBar({ lists: [...LISTS, other], defaultListId: other.id })
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+
+    fireEvent.change(input, { target: { value: "Pay rent" } })
+    fireEvent.submit(input.closest("form")!)
+    await waitFor(() =>
+      expect(createTask).toHaveBeenLastCalledWith({
+        title: "Pay rent",
+        listId: other.id,
+      }),
+    )
+
+    fireEvent.change(input, { target: { value: "Fix the tap #home" } })
+    fireEvent.submit(input.closest("form")!)
+    await waitFor(() =>
+      expect(createTask).toHaveBeenLastCalledWith({
+        title: "Fix the tap",
+        listId: LISTS[0].id,
+      }),
+    )
   })
 })

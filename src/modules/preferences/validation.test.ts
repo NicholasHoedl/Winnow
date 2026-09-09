@@ -37,6 +37,7 @@ const DEFAULTS = [
   "dashboardCalendarView",
   "landingPage",
   "defaultMealType",
+  "defaultListId",
 ] as const
 
 const keys = (schema: { shape: object }) => Object.keys(schema.shape).sort()

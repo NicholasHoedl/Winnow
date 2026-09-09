@@ -11,7 +11,7 @@ import {
 // Relative import (not "@/db/schema") so drizzle-kit resolves it without aliases.
 import { users } from "../../db/schema"
 // Reuse the existing "priority" enum rather than declaring a second one.
-import { priorityEnum } from "../todos/schema"
+import { lists, priorityEnum } from "../todos/schema"
 
 // One preferences row per user (singleton — same shape as macro_targets).
 //
@@ -96,6 +96,14 @@ export const userPreferences = pgTable("user_preferences", {
    * quick-added entry has always been — so null is both the default and a real choice.
    */
   defaultMealType: text("default_meal_type"),
+  /**
+   * The list a new task is filed under unless you pick another: the dialog opens on it,
+   * and quick-add uses it when no `#list` was typed. `set null` when the list goes — a
+   * default pointing at nothing is "No list", not an error.
+   */
+  defaultListId: uuid("default_list_id").references(() => lists.id, {
+    onDelete: "set null",
+  }),
   // Pre-selected priority when creating a new task.
   defaultTaskPriority: priorityEnum("default_task_priority")
     .notNull()

@@ -1,25 +1,35 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { createList, deleteList, renameList } from "@/modules/todos/actions"
-import type { List } from "@/modules/todos/queries"
+import type { List, ListTaskCounts } from "@/modules/todos/queries"
+import { UNFILED } from "@/modules/todos/service"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 import { ActivityHeader } from "../../_components/activity-header"
 
 /**
- * Lists — create, rename, delete — as a page of the Activity section.
+ * Lists — create, rename, delete — as a page of the Activity section, and since T26 the
+ * way INTO each one: a name links to the Tasks page filtered to it, with its open count
+ * beside it, and Unfiled heads the column as the pile to triage from.
  *
- * This was `ListManager`, a dialog behind the ⋮ menu on `/activity`. The body is the same:
+ * This was `ListManager`, a dialog behind the ⋮ menu on `/activity`. The form is the same:
  * one field with two jobs (the shape `CalendarManager` uses — a row-level edit input would
- * be a second place to type a list name), a row per list. What changed is where it lives,
- * and ADR-0020 says why that is a destination now.
+ * be a second place to type a list name), a row per list. ADR-0020 says why it is a
+ * destination now.
  */
-export function ListsView({ lists }: { lists: List[] }) {
+export function ListsView({
+  lists,
+  counts,
+}: {
+  lists: List[]
+  counts: ListTaskCounts
+}) {
   const [name, setName] = React.useState("")
   const [pending, startTransition] = React.useTransition()
   const [editingId, setEditingId] = React.useState<string | null>(null)
@@ -69,7 +79,7 @@ export function ListsView({ lists }: { lists: List[] }) {
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <ActivityHeader description="Group tasks into lists. Renaming one keeps its tasks; deleting one keeps them too — they become unlisted." />
+      <ActivityHeader description="A list is a standing place for tasks — Home, Work, Errands — which is what a goal is not. Renaming one keeps its tasks; deleting one keeps them too, unfiled. Type #home in quick-add to file a task as you capture it." />
 
       {/* Narrower than the page: a name field and a column of names do not want 900px,
           and the rows would read as a table with one column. */}
@@ -108,6 +118,20 @@ export function ListsView({ lists }: { lists: List[] }) {
         </form>
 
         <ul className="mt-4 flex flex-col gap-1">
+          {/* Unfiled first, always, and dashed: it is not a list you made but the tasks
+              that have none, and its count is the thing worth glancing at — a growing pile
+              here is the sign the lists are not being used. */}
+          <li className="flex items-center justify-between gap-2 rounded-md border border-dashed p-2 text-sm">
+            <Link
+              href={`/activity?list=${UNFILED}`}
+              className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+            >
+              Unfiled
+            </Link>
+            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+              {counts.unfiled} open
+            </span>
+          </li>
           {lists.length === 0 ? (
             <li className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
               No lists yet. A task can be filed under one from its dialog.
@@ -118,8 +142,16 @@ export function ListsView({ lists }: { lists: List[] }) {
                 key={list.id}
                 className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
               >
-                <span className="min-w-0 truncate">{list.name}</span>
-                <span className="flex shrink-0 items-center">
+                <Link
+                  href={`/activity?list=${list.id}`}
+                  className="min-w-0 truncate font-medium hover:underline"
+                >
+                  {list.name}
+                </Link>
+                <span className="flex shrink-0 items-center gap-1">
+                  <span className="text-muted-foreground pr-1 text-xs tabular-nums">
+                    {counts.byList[list.id] ?? 0} open
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon-sm"

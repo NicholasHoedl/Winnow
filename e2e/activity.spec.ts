@@ -2,6 +2,7 @@ import { test, expect, type Page } from "./_test"
 
 import { visibleCard } from "./_card"
 import { addGoal, deleteGoalsMatching } from "./_goals"
+import { deleteListsMatching, seedList } from "./_lists"
 import { announces, meter } from "./_habits"
 
 /**
@@ -46,6 +47,9 @@ test.afterEach(async ({ page }) => {
     await page.getByRole("button", { name: "All", exact: true }).click()
   }
   await deleteGoalsMatching("E2E act ")
+  // After the tasks: `tasks.list_id` is `set null`, so a list deleted first would only
+  // unfile its tasks and leave them for the loop above to miss.
+  await deleteListsMatching("E2E act list ")
 })
 
 test("the goal filter scopes the list, and the URL remembers which", async ({
@@ -224,4 +228,64 @@ test("a habit makes no task, and logs from the dashboard at every width", async 
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await page.getByRole("button", { name: "Delete habit", exact: true }).click()
   await expect(visibleCard(page, HABIT)).toHaveCount(0)
+})
+
+/** Like `createLinkedTask`, choosing a list rather than a goal. */
+async function createListedTask(page: Page, title: string, listName: string) {
+  await page.getByRole("button", { name: "New task" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByLabel("Title", { exact: true }).fill(title)
+  await dialog.getByLabel("List", { exact: true }).click()
+  await page.getByRole("option", { name: listName }).click()
+  await dialog.getByRole("button", { name: "Create" }).click()
+  await expect(dialog).toBeHidden()
+}
+
+// T26: the "by list" view SPEC §7.1 promised, on the goal filter's contract. The part a
+// list filter can get wrong that a goal filter cannot is Unfiled — the complement, which
+// must be exactly the tasks with no list and nothing else.
+test("the list filter scopes the list, and Unfiled is the rest", async ({
+  page,
+}) => {
+  const LIST_A = `E2E act list alpha ${STAMP}`
+  const LIST_B = `E2E act list bravo ${STAMP}`
+  const IN_A = `E2E act task in alpha ${STAMP}`
+  const IN_B = `E2E act task in bravo ${STAMP}`
+  const LOOSE = `E2E act task loose ${STAMP}`
+  const listA = await seedList({ name: LIST_A })
+  await seedList({ name: LIST_B })
+
+  await page.goto("/activity")
+  await createListedTask(page, IN_A, LIST_A)
+  await createListedTask(page, IN_B, LIST_B)
+  const input = page.getByLabel("Quick add task")
+  await input.fill(LOOSE)
+  await input.press("Enter")
+  await expect(visibleCard(page, LOOSE)).toHaveCount(1)
+  // The row says which list it is in.
+  await expect(visibleCard(page, IN_A)).toContainText(LIST_A)
+
+  await page.getByRole("button", { name: "Filter by list" }).click()
+  await page.getByRole("menuitem", { name: LIST_A }).click()
+  await expect(visibleCard(page, IN_A)).toHaveCount(1)
+  await expect(visibleCard(page, IN_B)).toHaveCount(0)
+  await expect(visibleCard(page, LOOSE)).toHaveCount(0)
+  await expect(page).toHaveURL(new RegExp(`list=${listA}`))
+
+  // Unfiled is the complement: the loose one, and only that one.
+  await page.getByRole("button", { name: "Filter by list" }).click()
+  await page.getByRole("menuitem", { name: "Unfiled" }).click()
+  await expect(visibleCard(page, LOOSE)).toHaveCount(1)
+  await expect(visibleCard(page, IN_A)).toHaveCount(0)
+  await expect(visibleCard(page, IN_B)).toHaveCount(0)
+  await expect(page).toHaveURL(/list=none/)
+
+  // The URL is the state, as it is for the goal filter.
+  await page.reload()
+  await expect(visibleCard(page, LOOSE)).toHaveCount(1)
+  await expect(visibleCard(page, IN_A)).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Clear the Unfiled filter" }).click()
+  await expect(visibleCard(page, IN_A)).toHaveCount(1)
+  await expect(page).toHaveURL(/\/activity$/)
 })

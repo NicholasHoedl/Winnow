@@ -14,7 +14,7 @@ import { getRoutineNames } from "@/modules/routines/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getMacroSummary } from "@/modules/meals/queries"
-import { getTasks } from "@/modules/todos/queries"
+import { getLists, getTasks } from "@/modules/todos/queries"
 import { formatLongDate, greeting } from "@/lib/format"
 import { dateLocale } from "@/lib/preferences"
 import type { DashboardCard } from "@/lib/preferences"
@@ -106,6 +106,10 @@ export default async function DashboardPage({
     // that would fetch every routine's full item list to read one string per row.
     getRoutineNames(),
   ])
+  // For quick-capture's `#list`. `cache()`d, and the app shell has already run it for
+  // this request, so it is a lookup rather than a query — which is why it is not in the
+  // `Promise.all` above.
+  const lists = await getLists()
 
   const name = session?.user?.name ?? "there"
 
@@ -228,7 +232,7 @@ export default async function DashboardPage({
 
       <Reveal delay={0.03}>
         <div className="mb-4">
-          <QuickCapture />
+          <QuickCapture lists={lists} />
         </div>
       </Reveal>
 

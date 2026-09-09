@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache"
 
-import { sql } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 
 import { db } from "@/db"
 import { type ActionResult, invalid } from "@/lib/action-result"
 import { requireUserId } from "@/lib/session"
 import { resolveBaseUrl } from "@/modules/companion/ai-settings"
+import { lists } from "@/modules/todos/schema"
 
 import { userPreferences } from "./schema"
 import {
@@ -59,6 +60,19 @@ export async function setDefaultPreferences(
   const userId = await requireUserId()
   const parsed = defaultPreferencesSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
+
+  // The list has to be yours. The column is a plain foreign key, which proves the list
+  // exists and nothing more — the same hole `checkTaskLinks` closes for a task's own list.
+  if (parsed.data.defaultListId) {
+    const owned = await db.query.lists.findFirst({
+      where: and(
+        eq(lists.id, parsed.data.defaultListId),
+        eq(lists.userId, userId),
+      ),
+      columns: { id: true },
+    })
+    if (!owned) return { ok: false, error: "Unknown list." }
+  }
 
   await db
     .insert(userPreferences)

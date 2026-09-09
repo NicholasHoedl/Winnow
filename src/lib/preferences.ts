@@ -100,6 +100,8 @@ export type UserPreferences = {
   dashboardCalendarView: CalendarCardView
   landingPage: string
   defaultMealType: MealType | null
+  /** A list id, or null for none. See the column's note in `preferences/schema.ts`. */
+  defaultListId: string | null
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -127,6 +129,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   dashboardCalendarView: "month",
   landingPage: "/",
   defaultMealType: null,
+  defaultListId: null,
 }
 
 /**

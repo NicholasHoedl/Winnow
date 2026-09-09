@@ -5,12 +5,15 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
+import { parseListTag, type ListOption } from "@/modules/todos/service"
 import { restoreIfEmpty } from "@/lib/forms"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 
-export function QuickAdd() {
+export function QuickAdd({ lists }: { lists: ListOption[] }) {
+  const { defaultListId } = usePreferences()
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
 
@@ -18,6 +21,12 @@ export function QuickAdd() {
     event.preventDefault()
     const trimmed = title.trim()
     if (!trimmed) return
+
+    // `#home` files it as it is captured; a line with no tag goes to the default list, if
+    // one is set. The tag is stripped from the title either way — see `parseListTag`. A
+    // line that was ONLY a tag keeps its text as the title rather than saving a blank.
+    const { listId, cleaned } = parseListTag(trimmed, lists)
+    const taskTitle = cleaned || trimmed
 
     // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
     setTitle("")
@@ -28,7 +37,10 @@ export function QuickAdd() {
       // because opening it is already an act of deliberate scheduling. Until T5a both
       // paths defaulted to today, which made "no due date" a state you had to go out of
       // your way to produce, and left the Someday bucket permanently empty.
-      const result = await createTask({ title: trimmed })
+      const result = await createTask({
+        title: taskTitle,
+        listId: listId ?? defaultListId ?? "",
+      })
       if (!result.ok) {
         toast.error(result.error)
         setTitle(restoreIfEmpty(trimmed))
@@ -41,7 +53,7 @@ export function QuickAdd() {
       <Input
         value={title}
         onChange={(event) => setTitle(event.target.value)}
-        placeholder="Add a task…"
+        placeholder="Add a task… (#list files it)"
         aria-label="Quick add task"
       />
       <Button

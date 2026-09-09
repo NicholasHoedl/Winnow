@@ -16,6 +16,7 @@ import {
   type UserPreferences,
 } from "@/lib/preferences"
 import { navItems } from "@/components/shared/nav-items"
+import type { List } from "@/modules/todos/queries"
 import { setDefaultPreferences } from "@/modules/preferences/actions"
 import {
   defaultPreferencesSchema,
@@ -37,6 +38,7 @@ import { SettingsSection } from "./settings-section"
 
 /** A Select item cannot carry an empty value — the same sentinel the link pickers use. */
 const NO_MEAL_TYPE = "__none__"
+const NO_LIST = "__none__"
 
 const MEAL_TYPE_LABELS: Record<string, string> = {
   other: "Other",
@@ -77,8 +79,11 @@ function Group({
  */
 export function DefaultsSection({
   preferences,
+  lists,
 }: {
   preferences: UserPreferences
+  /** For the default-list picker. */
+  lists: List[]
 }) {
   const router = useRouter()
   const {
@@ -229,6 +234,46 @@ export function DefaultsSection({
                   />
                 )}
               />
+            </Field>
+
+            <Field>
+              <FieldLabel htmlFor="default-list-trigger">
+                Default list
+              </FieldLabel>
+              <Controller
+                control={control}
+                name="defaultListId"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? NO_LIST}
+                    onValueChange={(v) =>
+                      field.onChange(v === NO_LIST ? null : v)
+                    }
+                  >
+                    <SelectTrigger id="default-list-trigger" className="w-full">
+                      <SelectValue>
+                        {(val) =>
+                          lists.find((list) => list.id === val)?.name ??
+                          "No list"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_LIST}>No list</SelectItem>
+                      {lists.map((list) => (
+                        <SelectItem key={list.id} value={list.id}>
+                          {list.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <p className="text-muted-foreground text-xs">
+                Where a new task is filed unless you pick another — the dialog
+                opens on it, and quick-add uses it when you don&apos;t type a
+                #list.
+              </p>
             </Field>
           </Group>
 
