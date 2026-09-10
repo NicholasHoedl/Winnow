@@ -5,7 +5,7 @@ import { visibleCard } from "./_card"
 // Browser coverage for T3-S7: the trend charts render as real server-side SVG with
 // accessible names, and each shape carries a <title> so hovering names its value.
 
-test("the budget page renders labelled trend charts", async ({ page }) => {
+test("the Trends page renders labelled trend charts", async ({ page }) => {
   const payee = `E2E trend ${Date.now()}`
 
   // `TrendsSection` returns a "once there are a few months of activity" placeholder when
@@ -22,16 +22,16 @@ test("the budget page renders labelled trend charts", async ({ page }) => {
   await seedDialog.waitFor({ state: "hidden" })
   await expect(visibleCard(page, payee)).toBeVisible()
 
-  await page.goto("/budget")
+  await page.goto("/budget/trends")
 
   // Scoped to the Trends section, not the page.
   //
   // `page.locator("svg[role=img]")` used to be page-wide, which quietly assumed nothing
-  // else above the charts was an accessible icon. A repeating transaction breaks that: its
-  // "Repeating" badge is a lucide <svg role="img"> with no <title>, it sits in the
-  // transaction list ABOVE Trends, and `.first()` therefore resolved to the badge — so
-  // `.locator("title")` waited 30s for a child that a badge never has. The charts were
-  // fine the whole time. Any icon added anywhere above this section would do it again.
+  // else above the charts was an accessible icon. While the charts sat under the ledger, a
+  // repeating transaction's "Repeating" badge — a lucide <svg role="img"> with no <title>
+  // — resolved first, and `.locator("title")` waited 30s for a child a badge never has.
+  // The charts have a page of their own since T30; the scoping stays, since any icon
+  // added above this section would do it again.
   const trends = page
     .locator("section")
     .filter({ has: page.getByRole("heading", { name: "Trends" }) })
@@ -55,8 +55,9 @@ test("the budget page renders labelled trend charts", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Trends" })).toBeVisible()
 
-  // Cleanup — the suite shares a persistent database and a stray row inflates the month's
-  // totals, which `transaction-filters.spec.ts` asserts on.
+  // Cleanup, back on the ledger — the suite shares a persistent database and a stray row
+  // inflates the month's totals, which `transaction-filters.spec.ts` asserts on.
+  await page.goto("/budget")
   const row = visibleCard(page, payee)
   await row.getByRole("button", { name: "Transaction actions" }).click()
   await page.getByRole("menuitem", { name: "Delete" }).click()

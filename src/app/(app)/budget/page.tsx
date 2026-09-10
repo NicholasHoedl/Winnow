@@ -1,6 +1,5 @@
 import {
   getBudgetSummary,
-  getBudgetTrends,
   getCategories,
   getMonthTransactions,
 } from "@/modules/budget/queries"
@@ -14,15 +13,11 @@ import {
   getAiSettings,
   getUserPreferences,
 } from "@/modules/preferences/queries"
-import { dateLocale } from "@/lib/preferences"
 import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
 import { ImportTool } from "./_components/import-tool"
-import { IncomeSavingsSection } from "./_components/income-savings-section"
-import { TrendsSection } from "./_components/trends-section"
-
-const TREND_MONTHS = 6
+import { monthParam } from "./_lib/month"
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -36,6 +31,14 @@ function oneOf<T extends string>(
     : undefined
 }
 
+/**
+ * The ledger — the Budget section's hub. Since T30 it holds the month's stats, quick add,
+ * the transaction list and the AI import; the by-category bars are on /budget/budgets,
+ * the charts on /budget/trends, and the category and budget editors are pages of their
+ * own (ADR-0024). The stats stay here because the month's totals are what the ledger is
+ * read against, and the import stays because ADR-0015 puts a tool on the page of the
+ * rows it makes.
+ */
 export default async function BudgetPage({
   searchParams,
 }: {
@@ -49,13 +52,9 @@ export default async function BudgetPage({
   }>
 }) {
   const params = await searchParams
-  const { timeZone, currency, dateFormat } = await getUserPreferences()
+  const { timeZone, currency } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone) // YYYY-MM-DD
-  const currentMonth = today.slice(0, 7) // YYYY-MM
-  const month =
-    params.month && /^\d{4}-\d{2}$/.test(params.month)
-      ? params.month
-      : currentMonth
+  const month = monthParam(params.month, today)
 
   // Every filter is validated here, the same way `month` is — the query builds SQL
   // from these, so an unrecognised value is dropped rather than passed through.
@@ -73,12 +72,11 @@ export default async function BudgetPage({
   // The summary comes from its own unfiltered read rather than being derived from the
   // rendered `transactions` array — otherwise filtering the list would silently
   // report the header stats for only the filtered subset.
-  const [categories, transactions, summary, trends, aiSettings, pending] =
+  const [categories, transactions, summary, aiSettings, pending] =
     await Promise.all([
       getCategories(),
       getMonthTransactions(month, filters),
       getBudgetSummary(month),
-      getBudgetTrends(month, TREND_MONTHS),
       getAiSettings(),
       // `import` only. Without the filter this page would auto-open whatever proposal was
       // newest — a plan, a narrated week — because the view opens `pending[0]`.
@@ -93,25 +91,9 @@ export default async function BudgetPage({
       transactions={transactions}
       summary={summary}
       filters={filters}
-      // Rendered here, on the server, so their SVG charts stay server components.
-      incomeSavings={
-        <IncomeSavingsSection
-          summary={summary}
-          categories={categories}
-          currency={currency}
-        />
-      }
-      trends={
-        <TrendsSection
-          trends={trends}
-          categories={categories}
-          currency={currency}
-          locale={dateLocale(dateFormat)}
-        />
-      }
-      // Passed as an element for the same reason the two sections above are: the page
-      // composes, the view places. Null when the companion is off, so `BudgetView` renders
-      // nothing rather than reasoning about it — a budget is not an AI feature.
+      // Passed as an element: the page composes, the view places. Null when the
+      // companion is off, so `BudgetView` renders nothing rather than reasoning about
+      // it — a budget is not an AI feature.
       importTool={
         aiReady(aiSettings) ? (
           <ImportTool

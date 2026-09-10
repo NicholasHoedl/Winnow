@@ -1,21 +1,10 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
-import { LinkPending } from "@/components/shared/link-pending"
-import {
-  ChevronLeft,
-  ChevronRight,
-  FolderCog,
-  Plus,
-  Wallet,
-  MoreVertical,
-} from "lucide-react"
+import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
-import { accentForKey } from "@/lib/colors"
-import { shiftMonth } from "@/lib/date"
 import {
   deleteTransaction,
   deleteTransactionRecurrence,
@@ -33,31 +22,13 @@ import {
 } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
-import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { DateJumpButton } from "@/components/shared/date-jump-button"
+import { Button } from "@/components/ui/button"
 
+import { BudgetHeader } from "./budget-header"
 import { BudgetQuickAdd } from "./budget-quick-add"
-import { BudgetsDialog } from "./budgets-dialog"
-import { CategoryManager } from "./category-manager"
 import { TransactionDialog } from "./transaction-dialog"
 import { TransactionFilters } from "./transaction-filters"
 import { TransactionItem } from "./transaction-item"
-import { useDateLocale } from "@/components/preferences/preferences-provider"
-
-function formatMonth(month: string, locale: string): string {
-  const [year, m] = month.split("-").map(Number)
-  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(locale, {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  })
-}
 
 function Stat({
   label,
@@ -96,6 +67,14 @@ function Stat({
   )
 }
 
+/**
+ * The ledger: the month's stats, quick add, the transaction list with its filters, and
+ * the AI import under it.
+ *
+ * Until T30 this was the whole Budget section — the by-category bars, both charts and
+ * two editor dialogs behind a ⋮ menu sat here too. They are pages in the strip now
+ * (ADR-0024), and what is left is the ledger the way the Tasks page is tasks.
+ */
 export function BudgetView({
   month,
   today,
@@ -103,8 +82,6 @@ export function BudgetView({
   transactions,
   summary,
   filters,
-  incomeSavings,
-  trends,
   importTool,
 }: {
   month: string
@@ -113,25 +90,18 @@ export function BudgetView({
   transactions: TransactionWithSeries[]
   summary: MonthSummary
   filters: Filters
-  // Server-rendered analysis sections. Passed in rather than imported so the SVG
-  // charts inside them stay server components — this view is a client component.
-  incomeSavings?: React.ReactNode
-  trends?: React.ReactNode
   /**
    * "Read transactions", or null when the companion is off.
    *
-   * A CLIENT element unlike the two above — it holds its own state — but passed the same
-   * way, because the page is what knows whether the feature is configured and this view
-   * should not have to ask.
+   * A client element that holds its own state, passed in rather than imported because the
+   * page is what knows whether the feature is configured and this view should not have
+   * to ask.
    */
   importTool?: React.ReactNode
 }) {
-  const locale = useDateLocale()
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] =
     React.useState<TransactionWithSeries | null>(null)
-  const [categoriesOpen, setCategoriesOpen] = React.useState(false)
-  const [budgetsOpen, setBudgetsOpen] = React.useState(false)
   const [stoppingTx, setStoppingTx] = React.useState<Transaction | null>(null)
   const [, startTransition] = React.useTransition()
   const { currency } = usePreferences()
@@ -148,28 +118,10 @@ export function BudgetView({
     [categories],
   )
 
-  // Categories with spend or a budget this month, alphabetized by name.
-  const rows = [...summary.byCategory].sort((a, b) =>
-    categoryName(a.categoryId).localeCompare(categoryName(b.categoryId)),
-  )
-
-  const expenseCategories = categories.filter((c) => c.kind === "expense")
-
-  // The stats and the per-category rollup always describe the whole month; only the
-  // transaction list narrows. Say so when a filter is on, or the numbers read wrong.
+  // The stats always describe the whole month; only the transaction list narrows. Say so
+  // when a filter is on, or the numbers read wrong.
   const isFiltered =
     !!filters.q || !!filters.categoryId || !!filters.type || !!filters.sort
-
-  // The budgets dialog only needs "what is budgeted per category this month", which
-  // the summary already carries — no separate budgets fetch. Memoized so the dialog's
-  // seeding effect doesn't see a new object on every render.
-  const budgetedByCategory = React.useMemo(() => {
-    const map: Record<string, number> = {}
-    for (const row of summary.byCategory) {
-      if (row.categoryId) map[row.categoryId] = row.budgetedCents
-    }
-    return map
-  }, [summary])
 
   const hasBudget = summary.totalBudgetedCents > 0
   const overBudget =
@@ -224,84 +176,16 @@ export function BudgetView({
 
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
-      <header className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            Budget
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          {/* One named menu instead of a row of bare icons — see the note on /activity. A
-              phone has no hover, so the glyph is all you get, and none of these is guessable
-              from it. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Budget actions"
-                />
-              }
-            >
-              <MoreVertical className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setCategoriesOpen(true)}>
-                <FolderCog className="size-4" />
-                Manage categories
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBudgetsOpen(true)}>
-                <Wallet className="size-4" />
-                Set budgets
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+      <BudgetHeader
+        month={month}
+        today={today}
+        action={
           <Button onClick={openCreate}>
             <Plus className="size-4" />
             Add
           </Button>
-        </div>
-      </header>
-
-      <div className="mb-4 flex items-center justify-center gap-1">
-        <Link
-          href={`/budget?month=${shiftMonth(month, -1)}`}
-          aria-label="Previous month"
-          className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
-        >
-          {/* Same-route param change: the segment is not remounted, so `loading.tsx`
-              never fires and nothing else in the app indicates this. */}
-          <LinkPending className="size-4">
-            <ChevronLeft className="size-4" />
-          </LinkPending>
-        </Link>
-        <span className="min-w-40 text-center text-sm font-medium">
-          {formatMonth(month, locale)}
-        </span>
-        <Link
-          href={`/budget?month=${shiftMonth(month, 1)}`}
-          aria-label="Next month"
-          className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
-        >
-          <LinkPending className="size-4">
-            <ChevronRight className="size-4" />
-          </LinkPending>
-        </Link>
-        <DateJumpButton
-          selected={`${month}-01`}
-          hrefFor={(d) => `/budget?month=${d.slice(0, 7)}`}
-          ariaLabel="Jump to a month"
-        />
-        {month !== currentMonth && (
-          <Link
-            href="/budget"
-            className={cn(buttonVariants({ variant: "link", size: "sm" }))}
-          >
-            This month
-          </Link>
-        )}
-      </div>
+        }
+      />
 
       {/* A tighter gap on a phone buys each column ~5px, which is the difference between
           this fitting at 375px and not. Three narrow stats do not need 16px between them.
@@ -348,83 +232,6 @@ export function BudgetView({
         <BudgetQuickAdd date={defaultDate} categories={categories} />
       </div>
 
-      {rows.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold">
-            By category
-            {isFiltered && (
-              <span className="text-muted-foreground ml-2 text-xs font-normal">
-                whole month
-              </span>
-            )}
-          </h2>
-          <div className="divide-y rounded-xl border">
-            {rows.map((row) => {
-              // Keyed by id so a category keeps its colour across months, sorts,
-              // and both pages that render it.
-              const accent = accentForKey(row.categoryId ?? "__uncat__")
-              const hasBudget = row.budgetedCents > 0
-              const percent = hasBudget
-                ? Math.round((row.spentCents / row.budgetedCents) * 100)
-                : 0
-              const over = row.remainingCents < 0
-              return (
-                <div
-                  key={row.categoryId ?? "__uncat__"}
-                  className="flex flex-col gap-1.5 p-3"
-                >
-                  <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span className="flex min-w-0 items-center gap-2 font-medium">
-                      <span
-                        className={cn(
-                          "size-2 shrink-0 rounded-full",
-                          accent.bar,
-                        )}
-                      />
-                      <span className="truncate">
-                        {categoryName(row.categoryId)}
-                      </span>
-                    </span>
-                    <span className="text-muted-foreground shrink-0 tabular-nums">
-                      {money(row.spentCents)}
-                      {hasBudget && (
-                        <span className="text-muted-foreground/70">
-                          {" "}
-                          / {money(row.budgetedCents)}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  {hasBudget && (
-                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
-                      <div
-                        className={cn(
-                          "h-full rounded-full",
-                          over ? "bg-destructive" : accent.bar,
-                        )}
-                        style={{ width: `${Math.min(percent, 100)}%` }}
-                      />
-                    </div>
-                  )}
-                  {hasBudget && (
-                    <div
-                      className={cn(
-                        "text-right text-xs tabular-nums",
-                        over ? "text-destructive" : "text-muted-foreground",
-                      )}
-                    >
-                      {over
-                        ? `${money(-row.remainingCents)} over`
-                        : `${money(row.remainingCents)} left`}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
       <section className="mt-6">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold">Transactions</h2>
@@ -457,12 +264,9 @@ export function BudgetView({
         )}
       </section>
 
-      {/* Above the analysis sections and below the ledger: it proposes rows for the list
-          you just scrolled past, so it reads in that order. */}
+      {/* Under the ledger: it proposes rows for the list you just scrolled past, so it
+          reads in that order. */}
       {importTool && <div className="mt-6">{importTool}</div>}
-
-      {incomeSavings}
-      {trends}
 
       <TransactionDialog
         defaultDate={defaultDate}
@@ -483,19 +287,6 @@ export function BudgetView({
           if (stoppingTx) stopRepeating(stoppingTx)
           setStoppingTx(null)
         }}
-      />
-      <CategoryManager
-        categories={categories}
-        open={categoriesOpen}
-        onOpenChange={setCategoriesOpen}
-      />
-      <BudgetsDialog
-        month={month}
-        categories={expenseCategories}
-        budgetedByCategory={budgetedByCategory}
-        monthlyBudgetCents={summary.monthlyBudgetCents}
-        open={budgetsOpen}
-        onOpenChange={setBudgetsOpen}
       />
     </div>
   )

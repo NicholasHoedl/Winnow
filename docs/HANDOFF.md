@@ -1,6 +1,8 @@
 # Handoff
 
-Last updated: **2026-09-09**. T29 made body weight a trend to watch — a smoothed line, a
+Last updated: **2026-09-10**. T30 gave the Budget section the Activity treatment — a strip
+of four pages, Transactions · Budgets · Categories · Trends, the month riding on the pills
+(ADR-0024); no migration. T29 made body weight a trend to watch — a smoothed line, a
 rate, a goal weight as a readout, a switch — with migration `0044`, two additive
 preference columns (ADR-0023). T28 made a due date a day or a deadline and the Slate a
 tracked-events-only card (ADR-0022), with migration `0043` — a rename and one defaulted
@@ -20,7 +22,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T29 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T30 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -559,6 +561,29 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   `formatWeightRate`; the preference-schema contract test lists both new fields.
 - `ARCHITECTURE.md` had said the app was imperial by decision with no units preference;
   the kg/lb preference has existed since the Region page. Corrected.
+
+**T30 is shipped: the Budget section's tools are destinations in a strip.** No migration.
+**ADR-0024 is the authority**, amending ADR-0020's line that Meals and Budget keep their
+⋮ menus.
+
+- **Four pills under a "Budget" heading on every page — Transactions · Budgets ·
+  Categories · Trends.** The hub, `/budget`, is the ledger: the month's stats, quick add,
+  the filtered list, Add, and the AI import under the list (ADR-0015). The by-category bars
+  moved to `/budget/budgets`, over the "Set budgets" dialog's body as the page's form; the
+  "Manage categories" dialog's body is `/budget/categories`; the two charts are
+  `/budget/trends`. The ⋮ menu is gone; Meals is the last page with one.
+- **The month rides on the pills** (`withMonth` in `components/shared/budget-pages.ts`),
+  and the month navigation moved from the ledger into `BudgetHeader`, building its links
+  from the current path — moving a month on Trends stays on Trends. Categories reads no
+  month and carries it anyway, so a round trip keeps it.
+- **Not a `layout.tsx`**, for ADR-0020's reason; each page renders `BudgetHeader` and its
+  `loading.tsx` renders the same. `budget/_lib/month.ts` is the one `?month=` parser.
+- **`revalidateBudget` names all four paths.** Same trap as `/activity`'s children.
+- **`BUDGET_PAGES` feeds the strip and the palette**, the palette prefixing "Budget ·".
+- e2e: `budgets-dialog.spec` is `budgets-page.spec`, driving the page; `manager-renames`
+  and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
+  including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
+  is Meals-only. Unit: `budget-pages.test.ts`.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

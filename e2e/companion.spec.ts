@@ -1,7 +1,5 @@
 import { test, expect, type Page } from "./_test"
 
-import { pageAction } from "./_menu"
-
 import { goalCard, visibleCard } from "./_card"
 import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
 import { announces, deleteHabitsMatching, meter } from "./_habits"
@@ -497,31 +495,28 @@ test("a summary refinement replaces it in place", async ({ page }) => {
  * category, the same class of mistake that once deleted the account's API key.
  */
 async function ensureFoodCategory(page: Page): Promise<boolean> {
-  await page.goto("/budget")
-  await pageAction(page, "Manage categories")
-  const dialog = page.getByRole("dialog")
-  await expect(dialog).toBeVisible()
+  // Categories are a page of the Budget section since T30 (ADR-0024). Scoped to `main`
+  // so the count below reads the list and nothing else.
+  await page.goto("/budget/categories")
+  const main = page.getByRole("main")
+  await expect(main.getByRole("button", { name: "Add category" })).toBeVisible()
 
-  if ((await dialog.getByText("Food", { exact: true }).count()) > 0) {
-    await page.keyboard.press("Escape")
-    return false
-  }
+  if ((await main.getByText("Food", { exact: true }).count()) > 0) return false
 
   // The kind select defaults to Expense, which is what `checkCategory`'s type match needs.
-  await dialog.getByLabel("Name").fill("Food")
-  await dialog.getByRole("button", { name: "Add category" }).click()
-  await expect(dialog.getByText("Food", { exact: true })).toBeVisible()
-  await page.keyboard.press("Escape")
+  await main.getByLabel("Name").fill("Food")
+  await main.getByRole("button", { name: "Add category" }).click()
+  await expect(main.getByText("Food", { exact: true })).toBeVisible()
   return true
 }
 
 async function removeFoodCategory(page: Page) {
-  await page.goto("/budget")
-  await pageAction(page, "Manage categories")
+  await page.goto("/budget/categories")
   await page.getByRole("button", { name: "Delete Food" }).click()
   await page.getByRole("button", { name: "Delete category" }).click()
-  await expect(page.getByText("Food", { exact: true })).toHaveCount(0)
-  await page.keyboard.press("Escape")
+  await expect(
+    page.getByRole("main").getByText("Food", { exact: true }),
+  ).toHaveCount(0)
 }
 
 test("pasted transactions are extracted, pruned and applied", async ({

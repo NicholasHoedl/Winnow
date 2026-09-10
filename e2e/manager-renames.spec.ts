@@ -1,7 +1,5 @@
 import { test, expect } from "./_test"
 
-import { pageAction } from "./_menu"
-
 /**
  * The two "managers" can rename what they list.
  *
@@ -11,8 +9,10 @@ import { pageAction } from "./_menu"
  * filed under it — and making a new one. These tests pin the round trip, and in the
  * category's case also pin what deliberately CANNOT be edited.
  *
- * Lists are a PAGE of the Activity section now (ADR-0020) and categories are still a
- * dialog on `/budget`, which is why the two tests scope differently.
+ * Both are pages now — lists in the Activity section (ADR-0020), categories in the Budget
+ * section (ADR-0024). The category test scopes to `main` so the delete confirmation's
+ * description, which quotes the name, cannot satisfy an exact-text lookup meant for the
+ * list.
  *
  * Both work against rows they create themselves, so neither touches real data.
  */
@@ -52,38 +52,35 @@ test("a category can be renamed, but not switched between income and expense", a
   const before = `E2E category ${Date.now()}`
   const after = `${before} renamed`
 
-  await page.goto("/budget")
-  await pageAction(page, "Manage categories")
-  const dialog = page.getByRole("dialog")
+  await page.goto("/budget/categories")
+  const main = page.getByRole("main")
 
-  await dialog.getByLabel("Name").fill(before)
-  await dialog.getByRole("button", { name: "Add category" }).click()
-  await expect(dialog.getByText(before, { exact: true })).toBeVisible()
+  await main.getByLabel("Name").fill(before)
+  await main.getByRole("button", { name: "Add category" }).click()
+  await expect(main.getByText(before, { exact: true })).toBeVisible()
 
-  await dialog.getByRole("button", { name: `Edit ${before}` }).click()
-  await expect(dialog.getByLabel("Name")).toHaveValue(before)
+  await main.getByRole("button", { name: `Edit ${before}` }).click()
+  await expect(main.getByLabel("Name")).toHaveValue(before)
 
   // Kind is locked while editing, on purpose: flipping it under existing transactions
   // leaves them pointing at a category that no longer matches their type, and the
   // transaction dialog filters its picker by kind — so re-opening one of those would
   // silently drop its category. Renaming has no such consequence.
-  await expect(dialog.getByLabel("Kind")).toBeDisabled()
+  await expect(main.getByLabel("Kind")).toBeDisabled()
 
-  await dialog.getByLabel("Name").fill(after)
-  await dialog.getByRole("button", { name: "Save category" }).click()
+  await main.getByLabel("Name").fill(after)
+  await main.getByRole("button", { name: "Save category" }).click()
   await expect(page.getByText("Category updated")).toBeVisible()
-  await expect(dialog.getByText(after, { exact: true })).toBeVisible()
+  await expect(main.getByText(after, { exact: true })).toBeVisible()
 
   // The form is back to adding, which is what makes the kind select usable again.
-  await expect(
-    dialog.getByRole("button", { name: "Add category" }),
-  ).toBeVisible()
-  await expect(dialog.getByLabel("Kind")).toBeEnabled()
+  await expect(main.getByRole("button", { name: "Add category" })).toBeVisible()
+  await expect(main.getByLabel("Kind")).toBeEnabled()
 
-  await dialog.getByRole("button", { name: `Delete ${after}` }).click()
+  await main.getByRole("button", { name: `Delete ${after}` }).click()
   await page
     .getByRole("alertdialog")
     .getByRole("button", { name: "Delete category" })
     .click()
-  await expect(dialog.getByText(after, { exact: true })).toHaveCount(0)
+  await expect(main.getByText(after, { exact: true })).toHaveCount(0)
 })

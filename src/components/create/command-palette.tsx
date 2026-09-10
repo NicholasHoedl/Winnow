@@ -37,6 +37,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { ACTIVITY_PAGES } from "@/components/shared/activity-pages"
+import { BUDGET_PAGES } from "@/components/shared/budget-pages"
 import { navItems } from "@/components/shared/nav-items"
 import { SETTINGS_PAGES } from "@/components/shared/settings-pages"
 import { search } from "@/modules/search/actions"
@@ -119,6 +120,13 @@ const NAV_COMMANDS: NavCommand[] = [
   ...ACTIVITY_PAGES.filter((page) => page.href !== "/activity").map((page) => ({
     href: page.href,
     label: page.label,
+    icon: page.icon,
+  })),
+  // The Budget section's sub-pages, from the list its strip draws from (ADR-0024).
+  // Prefixed like the Settings pages: alone, "Trends" or "Categories" finds nothing.
+  ...BUDGET_PAGES.filter((page) => page.href !== "/budget").map((page) => ({
+    href: page.href,
+    label: `Budget · ${page.label}`,
     icon: page.icon,
   })),
   { href: "/settings", label: "Settings", icon: Settings },

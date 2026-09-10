@@ -12,15 +12,13 @@ import type { Page } from "./_test"
  * part that will move: adding a page, or splitting one, changes which menu an action lives
  * under and nothing else. One map, one place to fix.
  */
-// `/activity` has no entries any more: its secondary actions became pages in the section's
-// strip (ADR-0020), reached with `page.goto`. The pattern this helper exists for is the one
-// Meals and Budget still use.
+// `/activity` and `/budget` have no entries any more: their secondary actions became pages
+// in each section's strip (ADR-0020, ADR-0024), reached with `page.goto`. Meals is the one
+// page the pattern this helper exists for is still used on.
 const MENU_FOR: Record<string, string> = {
   "Copy a day": "Meals actions",
   "Food library": "Meals actions",
   "Set targets": "Meals actions",
-  "Manage categories": "Budget actions",
-  "Set budgets": "Budget actions",
 }
 
 export async function pageAction(page: Page, action: string): Promise<void> {

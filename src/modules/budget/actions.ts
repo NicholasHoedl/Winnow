@@ -42,6 +42,12 @@ const idSchema = z.string().uuid()
 
 function revalidateBudget() {
   revalidatePath("/budget")
+  // Named on their own: revalidating a segment does not reach its children — the trap the
+  // handoff records for `/activity`. All three read what the writes here change: the
+  // limits, the categories, the month's totals.
+  revalidatePath("/budget/budgets")
+  revalidatePath("/budget/categories")
+  revalidatePath("/budget/trends")
   revalidateHubs()
 }
 
@@ -75,7 +81,7 @@ export async function createCategory(input: unknown): Promise<ActionResult> {
   if (!parsed.success) return invalid(parsed.error)
 
   await db.insert(categories).values({ userId, ...parsed.data })
-  revalidatePath("/budget")
+  revalidateBudget()
   return { ok: true }
 }
 
