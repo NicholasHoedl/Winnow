@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 
-import { Segmented } from "./segmented"
+import { Segmented } from "@/components/shared/segmented"
 import { SettingsSection } from "./settings-section"
 
 /** A Select item cannot carry an empty value — the same sentinel the link pickers use. */
@@ -172,7 +172,7 @@ export function DefaultsSection({
             </Field>
 
             <Field>
-              <FieldLabel>Highlighted events show</FieldLabel>
+              <FieldLabel>Tracked events show</FieldLabel>
               <Controller
                 control={control}
                 name="slateHorizonDays"
@@ -181,14 +181,14 @@ export function DefaultsSection({
                     value={field.value}
                     onChange={field.onChange}
                     options={SLATE_HORIZON_OPTIONS}
-                    label="Highlighted events show"
+                    label="Tracked events show"
                   />
                 )}
               />
               <p className="text-muted-foreground text-xs">
-                How far ahead the dashboard reaches for events you&apos;ve
-                highlighted. Today and tomorrow always show everything, so this
-                only decides how early a highlighted event turns up.
+                How far ahead the dashboard looks for events you track. Only
+                tracked events reach the dashboard; the rest stay on the
+                calendar.
               </p>
             </Field>
           </Group>

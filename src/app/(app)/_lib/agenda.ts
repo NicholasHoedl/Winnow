@@ -8,6 +8,12 @@ import { addDays, dueStatus, todayInZone } from "@/lib/date"
 /** The only fields the agenda reads off a task; callers pass their richer rows. */
 export type AgendaTask = {
   dueDate: string | null
+  /**
+   * How the date binds — see `tasks.due_kind`. "by" is a deadline and shows from the day it
+   * is set; "on" is a day and shows on it. Absent reads as "on", which is what every row
+   * was before T28.
+   */
+  dueKind?: "on" | "by"
   status: "open" | "done"
   /** Set when a routine run created this task — see `tasks.routine_id`. */
   routineId?: string | null
@@ -149,11 +155,11 @@ export function buildTodayAgenda<
 
 // --- Slate -----------------------------------------------------------------------------
 
-/** What a band needs off an occurrence beyond its time: which day, and whether it is flagged. */
+/** What a band needs off an occurrence beyond its time: which day, and whether it is tracked. */
 export type SlateOccurrence = AgendaOccurrence & {
   /** "YYYY-MM-DD", local. */
   date: string
-  event: { highlighted: boolean }
+  event: { tracked: boolean }
 }
 
 export type SlateBand<T, E> = {
@@ -171,6 +177,15 @@ export type SlateBand<T, E> = {
 
 export type Slate<T, E> = {
   overdue: T[]
+  /**
+   * Deadlines still ahead — `dueKind: "by"` with a date after today — nearest first.
+   *
+   * A block of its own rather than a band, and beside Overdue rather than among the days:
+   * it is the same kind of thing as Overdue, a list of dated tasks asking for attention
+   * before their day, and not the same kind of thing as a band, which IS a day. The horizon
+   * does not apply to it; a deadline reaches as far as it is set.
+   */
+  dueBy: T[]
   bands: SlateBand<T, E>[]
 }
 
@@ -194,28 +209,27 @@ function bandLabel(date: string, locale: string): string {
 }
 
 /**
- * Everything with a date on it, nearest first.
+ * Everything worth seeing today, nearest first.
  *
  * Replaces three components that split one question — *what has a date?* — along an arbitrary
  * line: the agenda held today, `Tomorrow` held exactly one more day and no tasks at all, and
- * "Coming up" held every remaining task in a flat list. A task due tomorrow appeared in the
- * last of those with a "tomorrow" badge while tomorrow's *events* sat in a different column.
+ * "Coming up" held every remaining task in a flat list. T28 then narrowed the question to
+ * *what is worth seeing today?*, and the parts are:
  *
- * **Today's band is `buildTodayAgenda`, called rather than reimplemented.** Overdue, the
- * routine groups and the all-day → task → timed sort are all its work, and its thirteen tests
- * go on pinning the behaviour that actually ships.
+ * - **Overdue** and **Today** are `buildTodayAgenda`, called rather than reimplemented: the
+ *   routine groups and the all-day → task → timed sort are its work, and its thirteen tests
+ *   go on pinning the behaviour that actually ships. A deadline whose day has come is a task
+ *   due today like any other, so it lands here; the row is what says "due by today".
+ * - **Due by** holds the deadlines still ahead. A `by` date means the task is wanted before
+ *   it, so the task shows from the day it is set — which is the whole difference between
+ *   `by` and `on`, and why the horizon has no say over it.
+ * - **Each following day**, out to the horizon, holds that day's TRACKED events and nothing
+ *   else. A task due ON a day is for that day; previewing it in a "Sat 23" band was noise,
+ *   and so was every untracked event of today and tomorrow, which the card used to draw
+ *   unasked. Tracked is the only way onto the card for an event, today included.
+ * - **Later** takes the undated tasks. Whatever has a day has a day it will appear on.
  *
- * The bands after it are deliberately not symmetrical with it:
- *
- * - **Tomorrow** shows every event *and* every task due then. Events because that is what
- *   `Tomorrow` did; tasks because "Coming up" did, and merging must not lose either.
- * - **Beyond tomorrow**, only HIGHLIGHTED events — plus any task due that day. Showing every
- *   event a week out would bury the card in standups, which is the whole reason the flag
- *   exists rather than a blanket lookahead.
- * - **Later** takes what is left: tasks dated past the horizon, and undated ones.
- *
- * `horizonDays` therefore only ever *adds* days to look at. No value of it can hide a row that
- * today or tomorrow would have shown.
+ * `horizonDays` therefore governs tracked events and nothing else. Empty days are omitted.
  */
 export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   tasks: T[],
@@ -225,7 +239,7 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   horizonDays: number,
   routineNames: ReadonlyMap<string, string> = new Map(),
   /**
-   * Defaulted, unlike `formatLongDate`'s required one, and only because twelve tests in
+   * Defaulted, unlike `formatLongDate`'s required one, and only because the tests in
    * `agenda.test.ts` call this positionally and none of them is about formatting — they
    * assert which BAND a row lands in. The one production caller (`(app)/page.tsx`) passes it
    * explicitly, so the default is reached by tests and nothing else.
@@ -237,15 +251,15 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
   const dates = Array.from({ length: horizonDays + 1 }, (_, i) =>
     addDays(today, i),
   )
-  const lastDate = dates[dates.length - 1]
 
-  const onDay = (date: string) => occurrences.filter((o) => o.date === date)
-  // Filtered ONCE, not inside each band's helper. `getTasks` is bounded only by `userId`,
-  // so this array holds every task the account has ever completed and that set only grows —
-  // and `onBoard` costs an `Intl.DateTimeFormat` per done row. Filtering per band re-paid
-  // that for every day in the horizon, and again for `later`.
+  // Filtered here, never in SQL, for the reason `calendar/queries.ts` gives: the flag can
+  // live on an exception, so it is only knowable after `applyExceptions` has run.
+  const tracked = occurrences.filter((o) => o.event.tracked)
+  const onDay = (date: string) => tracked.filter((o) => o.date === date)
+  // Filtered ONCE, not inside each helper. `getTasks` is bounded only by `userId`, so this
+  // array holds every task the account has ever completed and that set only grows — and
+  // `onBoard` costs an `Intl.DateTimeFormat` per done row.
   const board = tasks.filter((task) => onBoard(task, today, timeZone))
-  const dueOn = (date: string) => board.filter((task) => task.dueDate === date)
 
   const agenda = buildTodayAgenda(
     tasks,
@@ -255,45 +269,42 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
     routineNames,
   )
 
+  // `> today` rather than "not overdue and not today": a deadline that has arrived belongs
+  // to Today, and one that has passed to Overdue, and both are the agenda's to place. The
+  // sort is stable, so two deadlines on one day keep the list's own order.
+  const dueBy = board
+    .filter(
+      (task) =>
+        task.dueKind === "by" && task.dueDate !== null && task.dueDate > today,
+    )
+    .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))
+
   const bands: SlateBand<T, E>[] = [
     { date: today, label: "Today", items: agenda.items, groups: agenda.groups },
   ]
 
   for (const date of dates.slice(1)) {
-    const isTomorrow = date === dates[1]
-    const events = onDay(date).filter((o) => isTomorrow || o.event.highlighted)
-    const items: AgendaItem<T, E>[] = [
-      ...events.map((occurrence) => ({
-        kind: "event" as const,
-        time: occurrence.time,
-        occurrence,
-      })),
-      ...dueOn(date).map((task) => ({
-        kind: "task" as const,
-        time: null,
-        task,
-      })),
-    ]
+    const items: AgendaItem<T, E>[] = onDay(date).map((occurrence) => ({
+      kind: "event" as const,
+      time: occurrence.time,
+      occurrence,
+    }))
     items.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""))
 
     // An empty day is omitted rather than shown as a bare heading. Most days between here
-    // and the horizon have nothing flagged on them, and a column of empty dates would make
+    // and the horizon have nothing tracked on them, and a column of empty dates would make
     // the card look busy while saying nothing.
     if (items.length === 0) continue
     bands.push({
       date,
-      label: isTomorrow ? "Tomorrow" : bandLabel(date, locale),
+      label: date === dates[1] ? "Tomorrow" : bandLabel(date, locale),
       items,
       groups: [],
     })
   }
 
-  // Everything still on the list that no band above claimed: dated past the horizon, or
-  // never dated at all. `dueDate > lastDate` is a plain string compare, which is sound for
-  // ISO dates and is how `dueStatus` does it too.
-  const later = board.filter(
-    (task) => task.dueDate === null || task.dueDate > lastDate,
-  )
+  // Undated only. A dated task has a day it will appear on — or a Due by row already.
+  const later = board.filter((task) => task.dueDate === null)
   if (later.length > 0) {
     bands.push({
       date: null,
@@ -303,5 +314,5 @@ export function buildSlate<T extends AgendaTask, E extends SlateOccurrence>(
     })
   }
 
-  return { overdue: agenda.overdue, bands }
+  return { overdue: agenda.overdue, dueBy, bands }
 }

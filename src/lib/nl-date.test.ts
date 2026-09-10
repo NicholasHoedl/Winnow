@@ -100,10 +100,12 @@ describe("parseNaturalDate — no match / invalid", () => {
     expect(parseNaturalDate("buy milk", TODAY)).toEqual({
       date: null,
       cleaned: "buy milk",
+      kind: "on",
     })
     expect(parseNaturalDate("  buy milk  ", TODAY)).toEqual({
       date: null,
       cleaned: "buy milk",
+      kind: "on",
     })
   })
 
@@ -119,28 +121,35 @@ describe("parseNaturalDate — cleaned text", () => {
     expect(parseNaturalDate("Call Mom Tomorrow", TODAY)).toEqual({
       date: "2026-07-25",
       cleaned: "Call Mom",
+      kind: "on",
     })
   })
 
   it("collapses the gap left by a mid-sentence date phrase", () => {
-    expect(parseNaturalDate("email boss tomorrow about report", TODAY)).toEqual({
-      date: "2026-07-25",
-      cleaned: "email boss about report",
-    })
+    expect(parseNaturalDate("email boss tomorrow about report", TODAY)).toEqual(
+      {
+        date: "2026-07-25",
+        cleaned: "email boss about report",
+        kind: "on",
+      },
+    )
   })
 
   it("swallows a dangling preposition before the date", () => {
     expect(parseNaturalDate("call mom on friday", TODAY)).toEqual({
       date: "2026-07-24",
       cleaned: "call mom",
+      kind: "on",
     })
     expect(parseNaturalDate("pay rent by monday", TODAY)).toEqual({
       date: "2026-07-27",
       cleaned: "pay rent",
+      kind: "by",
     })
     expect(parseNaturalDate("submit report by 8/5", TODAY)).toEqual({
       date: "2026-08-05",
       cleaned: "submit report",
+      kind: "by",
     })
   })
 
@@ -148,6 +157,38 @@ describe("parseNaturalDate — cleaned text", () => {
     expect(parseNaturalDate("tomorrow", TODAY)).toEqual({
       date: "2026-07-25",
       cleaned: "",
+      kind: "on",
     })
+  })
+})
+
+describe("parseNaturalDate — due kind", () => {
+  function kind(text: string) {
+    return parseNaturalDate(text, TODAY).kind
+  }
+
+  it("reads 'by' as a deadline, and every other way of saying a date as a day", () => {
+    expect(kind("pay rent by friday")).toBe("by")
+    expect(kind("passport by 8/5")).toBe("by")
+    expect(kind("call mom on friday")).toBe("on")
+    expect(kind("gym monday")).toBe("on")
+    expect(kind("call mom tomorrow")).toBe("on")
+  })
+
+  it("reads 'due by' as a deadline and plain 'due' as a day", () => {
+    expect(parseNaturalDate("report due by friday", TODAY)).toEqual({
+      date: "2026-07-24",
+      cleaned: "report",
+      kind: "by",
+    })
+    expect(parseNaturalDate("report due friday", TODAY)).toEqual({
+      date: "2026-07-24",
+      cleaned: "report",
+      kind: "on",
+    })
+  })
+
+  it("is 'on' when there is no date at all", () => {
+    expect(kind("buy milk")).toBe("on")
   })
 })

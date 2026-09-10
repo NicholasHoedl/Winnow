@@ -21,6 +21,16 @@ import { goals } from "../goals/schema"
 export const priorityEnum = pgEnum("priority", ["low", "medium", "high"])
 export const statusEnum = pgEnum("status", ["open", "done"])
 
+/**
+ * How a due date binds.
+ *
+ * `on`: the task is for that day. The Slate shows it there and nowhere sooner. `by`: the date
+ * is a deadline, and the task is worth seeing from the moment it exists — it sits in the
+ * Slate's "Due by" block, dated, until its day, when it joins Today. Before T28 every date
+ * read as `on`, which made "renew the passport by the 30th" invisible until the 30th.
+ */
+export const taskDueKindEnum = pgEnum("task_due_kind", ["on", "by"])
+
 // Recurring-task enums. Kept task-local (not shared with the calendar module) so todos
 // stays independent of calendar; tasks only ever repeat daily/weekly/monthly.
 export const taskRecurrenceFreqEnum = pgEnum("task_recurrence_freq", [
@@ -136,6 +146,8 @@ export const tasks = pgTable(
     // Date-only (no time-of-day). `mode: "string"` returns 'YYYY-MM-DD' and avoids
     // the UTC-midnight off-by-one that `mode: "date"` causes in negative offsets.
     dueDate: date("due_date", { mode: "string" }),
+    // Meaningless without a date, and left at its default then. See the enum.
+    dueKind: taskDueKindEnum("due_kind").notNull().default("on"),
     priority: priorityEnum("priority").notNull().default("medium"),
     status: statusEnum("status").notNull().default("open"),
     // Manual position WITHIN a date section (overdue / today / upcoming / someday), not

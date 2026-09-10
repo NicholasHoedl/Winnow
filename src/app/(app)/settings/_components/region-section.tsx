@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { Segmented } from "./segmented"
+import { Segmented } from "@/components/shared/segmented"
 import { SettingsSection } from "./settings-section"
 
 const TIME_FORMAT_OPTIONS: readonly { value: boolean; label: string }[] = [

@@ -21,6 +21,7 @@ const task = {
   title: "Water the plants",
   notes: "the fiddle-leaf fig especially",
   dueDate: "2026-07-26",
+  dueKind: "by" as const,
   priority: "high" as const,
   status: "open" as const,
   sortOrder: 4,
@@ -49,6 +50,11 @@ describe("restorableTask", () => {
 
   it("keeps the task's manual position", () => {
     expect(restorableTask(task, "me").sortOrder).toBe(4)
+  })
+
+  it("keeps which way the date binds", () => {
+    // Undone as `on`, a deadline would leave the dashboard's Due by block until its day.
+    expect(restorableTask(task, "me").dueKind).toBe("by")
   })
 
   it("preserves the T2 goal and event links", () => {

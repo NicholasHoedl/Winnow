@@ -152,15 +152,16 @@ export default async function DashboardPage({
   // up to five fields per goal that was crossing into a client component to be ignored.
   const goalRows = goals.map((goal) => ({ id: goal.id, title: goal.title }))
 
-  // Everything with a date on it, in one pass: overdue, then a band per day out to the
-  // horizon, then whatever is further off than that.
+  // Everything worth seeing today, in one pass: overdue, the deadlines still ahead, then a
+  // band per day out to the horizon — today's tasks and the tracked events — and the
+  // undated tasks after that.
   //
   // The whole task list goes in, not a pre-filtered slice. Three cards used to split it
   // between them and the split leaked — the "not in the agenda" set here read `overdue` and
   // `items` but never `groups`, so a task a routine created for today was drawn in its
   // routine block AND again under "Coming up". One function assigning every task to exactly
-  // one band is why that class of bug is now unreachable rather than merely fixed.
-  const { overdue, bands } = buildSlate(
+  // one place is why that class of bug is now unreachable rather than merely fixed.
+  const { overdue, dueBy, bands } = buildSlate(
     tasks,
     slateEvents,
     new Date(),
@@ -260,6 +261,7 @@ export default async function DashboardPage({
           <Reveal delay={0.05}>
             <Slate
               overdue={overdue}
+              dueBy={dueBy}
               bands={bands}
               calendars={calendars}
               use24Hour={use24HourTime}

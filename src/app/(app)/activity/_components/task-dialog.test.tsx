@@ -52,6 +52,7 @@ function task(over: Record<string, unknown> = {}): TaskWithSeries {
     title: "Water the plants",
     notes: null,
     dueDate: "2026-09-10",
+    dueKind: "on",
     priority: "medium",
     status: "open",
     listId: null,
@@ -117,6 +118,34 @@ describe("TaskDialog", () => {
 
     await waitFor(() => expect(createTask).toHaveBeenCalledTimes(1))
     expect(createTaskRecurrence).not.toHaveBeenCalled()
+  })
+
+  it("sends the due kind the toggle says", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    show()
+
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Renew passport" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Due by" }))
+    fireEvent.click(screen.getByRole("button", { name: "Create" }))
+
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(createTask).mock.calls[0][0]).toMatchObject({
+      dueKind: "by",
+    })
+  })
+
+  it("offers the kind only while there is a date to bind", () => {
+    // A new task prefills today, so the toggle is there; clear the date and it goes.
+    show()
+    const toggle = () => screen.queryByRole("group", { name: "Due on or by" })
+    expect(toggle()).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText("Due date"), {
+      target: { value: "" },
+    })
+    expect(toggle()).not.toBeInTheDocument()
   })
 
   it("edits a one-off through updateTask, by id", async () => {

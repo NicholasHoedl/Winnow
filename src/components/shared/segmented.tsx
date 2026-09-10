@@ -3,7 +3,8 @@
 import { cn } from "@/lib/utils"
 
 /** A small inline choice control for 2–3 short options — the settings pages' stand-in
- * for a radio group (week start, time format, priority, on/off). */
+ * for a radio group (week start, time format, priority, on/off). Shared since T28, when
+ * the task dialog needed the same control for "on this date / by this date". */
 export function Segmented<T extends string | number | boolean>({
   value,
   onChange,
@@ -39,7 +40,9 @@ export function Segmented<T extends string | number | boolean>({
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
           className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            // `whitespace-nowrap`: in a two-column form cell the pill can be narrower than
+            // its labels, and an option broken over two lines reads as two options.
+            "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
             value === o.value
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",

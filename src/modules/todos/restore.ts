@@ -49,6 +49,9 @@ export function restorableTask(task: RestorableTask, userId: string) {
     title: task.title,
     notes: task.notes,
     dueDate: task.dueDate,
+    // Which way the date binds. Dropped, a deadline undone would come back as a task for
+    // that day only and leave the Slate's "Due by" block until the day itself.
+    dueKind: task.dueKind,
     priority: task.priority,
     status: task.status,
     // Manual position. Losing this on undo would drop the task back to the top of its

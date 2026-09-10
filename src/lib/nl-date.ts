@@ -62,7 +62,11 @@ const MONTH_ALT = Object.keys(MONTHS).join("|")
 // The coming date with weekday `target`. skipToday=false → today counts when it
 // matches (0..6 days ahead); skipToday=true → always in the future (1..7 ahead), so
 // "next friday" lands a week out only when today is already that weekday.
-function comingWeekday(today: string, target: number, skipToday: boolean): string {
+function comingWeekday(
+  today: string,
+  target: number,
+  skipToday: boolean,
+): string {
   let delta = (target - dowOf(today) + 7) % 7
   if (delta === 0 && skipToday) delta = 7
   return addDays(today, delta)
@@ -101,13 +105,20 @@ function findDate(lower: string, today: string): Match | null {
       if (!m) return null
       const n = Number(m[1])
       const days = m[2].startsWith("week") ? n * 7 : n
-      return { date: addDays(today, days), start: m.index, end: m.index + m[0].length }
+      return {
+        date: addDays(today, days),
+        start: m.index,
+        end: m.index + m[0].length,
+      }
     },
     // "next friday" → the following-week occurrence.
     () => weekday(new RegExp(`\\bnext (${WEEKDAY_ALT})\\b`), true),
     // "this/on/by/due friday" and bare "friday" → the coming occurrence (today counts).
     () =>
-      weekday(new RegExp(`\\b(?:this|on|by|due(?: on)?) (${WEEKDAY_ALT})\\b`), false),
+      weekday(
+        new RegExp(`\\b(?:this|on|by|due(?: on)?) (${WEEKDAY_ALT})\\b`),
+        false,
+      ),
     () => weekday(new RegExp(`\\b(${WEEKDAY_ALT})\\b`), false),
     // "aug 5", "august 5th", "5 aug", "5th of august".
     () => {
@@ -148,7 +159,11 @@ function findDate(lower: string, today: string): Match | null {
   function rel(re: RegExp, days: number): Match | null {
     const m = re.exec(lower)
     return m
-      ? { date: addDays(today, days), start: m.index, end: m.index + m[0].length }
+      ? {
+          date: addDays(today, days),
+          start: m.index,
+          end: m.index + m[0].length,
+        }
       : null
   }
   function weekday(re: RegExp, skipToday: boolean): Match | null {
@@ -169,26 +184,41 @@ function findDate(lower: string, today: string): Match | null {
   return null
 }
 
-export type ParsedDate = { date: string | null; cleaned: string }
+export type ParsedDate = {
+  date: string | null
+  cleaned: string
+  /**
+   * How the date binds — `tasks.due_kind`. "by" when the phrase was introduced by "by"
+   * ("pay rent by friday", "due by the 30th"); "on" for every other way of saying a date,
+   * including a bare weekday. Always "on" when there is no date.
+   */
+  kind: "on" | "by"
+}
 
 /**
- * Pull a due date out of `text`, returning the date (YYYY-MM-DD) and the text with the
- * date phrase — plus a dangling leading "on/by/due" — removed. `today` is the wall-date
- * to resolve relative phrases against (pass `todayInZone(new Date(), tz)`).
+ * Pull a due date out of `text`, returning the date (YYYY-MM-DD), the text with the
+ * date phrase — plus a dangling leading "on/by/due" — removed, and whether that
+ * preposition made it a deadline. `today` is the wall-date to resolve relative phrases
+ * against (pass `todayInZone(new Date(), tz)`).
  */
 export function parseNaturalDate(text: string, today: string): ParsedDate {
   const lower = text.toLowerCase()
   const hit = findDate(lower, today)
-  if (!hit) return { date: null, cleaned: text.trim() }
+  if (!hit) return { date: null, cleaned: text.trim(), kind: "on" }
 
   // Swallow a preposition immediately before the date phrase ("call mom on friday").
   let start = hit.start
   const before = text.slice(0, start)
-  const prep = /\b(on|by|due(?: on)?)\s+$/i.exec(before)
+  const prep = /\b(on|by|due(?: on| by)?)\s+$/i.exec(before)
   if (prep) start = prep.index
+  // Judged on the whole span being cut, not on `prep` alone: the weekday matcher takes
+  // its own preposition ("by monday" is one hit), so the "by" can sit in either part.
+  const kind = /^(?:due\s+)?by\b/i.test(text.slice(start, hit.end))
+    ? "by"
+    : "on"
 
   const cleaned = (text.slice(0, start) + text.slice(hit.end))
     .replace(/\s{2,}/g, " ")
     .trim()
-  return { date: hit.date, cleaned }
+  return { date: hit.date, cleaned, kind }
 }

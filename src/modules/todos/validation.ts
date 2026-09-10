@@ -13,6 +13,14 @@ export type Priority = (typeof PRIORITIES)[number]
 // already makes above.
 export const STATUSES = ["open", "done"] as const
 
+/**
+ * Mirrors `taskDueKindEnum`. "on": the task is for that day, and the dashboard shows it
+ * there and nowhere sooner. "by": the date is a deadline, and the task shows from the day
+ * it is made. Same duplication as `STATUSES`, for the same reason.
+ */
+export const DUE_KINDS = ["on", "by"] as const
+export type DueKind = (typeof DUE_KINDS)[number]
+
 export const taskInputSchema = z.object({
   title: z.string().trim().min(1, "Title is required").max(200),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -24,6 +32,9 @@ export const taskInputSchema = z.object({
       "Enter a valid date",
     )
     .optional(),
+  // Defaulted, so every caller that never thought about it — the recurrence generator, a
+  // routine run, the goal editor's task rows — keeps making the dated kind it always made.
+  dueKind: z.enum(DUE_KINDS).default("on"),
   priority: z.enum(PRIORITIES).default("medium"),
   listId: z.string().uuid("Invalid list").or(z.literal("")).optional(),
   // Optional cross-module links (T2); empty string = no link (nullified server-side).
@@ -116,6 +127,7 @@ export const restoreTaskSchema = z.object({
   title: z.string().trim().min(1).max(200),
   notes: z.string().max(2000).nullable(),
   dueDate: dayOrNull,
+  dueKind: z.enum(DUE_KINDS),
   priority: z.enum(PRIORITIES),
   status: z.enum(STATUSES),
   sortOrder: z.number().int().min(0).max(1_000_000),

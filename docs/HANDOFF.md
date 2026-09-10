@@ -1,9 +1,12 @@
 # Handoff
 
-Last updated: **2026-09-09**. T27 gave each goal one editor and put the plan tool in a
-dialog beside New goal (ADR-0021); no migration. T26 finished lists — the by-list view,
-`#list` in quick-add and a default list — with migration `0042`, one nullable column that
-rides the port step T24 already needs. T25 before it gave the Activity section a strip of
+Last updated: **2026-09-09**. T28 made a due date a day or a deadline and the Slate a
+tracked-events-only card (ADR-0022), with migration `0043` — a rename and one defaulted
+column, the **third** migration waiting on the port step with `0041` and `0042`. T27
+before it gave each goal one editor and put the plan tool in a dialog beside New goal
+(ADR-0021); no migration. T26 finished lists — the by-list view, `#list` in quick-add and a
+default list — with migration `0042`, one nullable column that rides the port step T24
+already needs. T25 before it gave the Activity section a strip of
 five pages — Tasks, Habits, Routines, Lists, Repeating tasks — with no migration
 (ADR-0020). T24 before that — a
 total for the month — carries **`0041`, the first migration since T23**: everything on `main`
@@ -15,7 +18,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T27 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T28 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -145,7 +148,9 @@ as such in a trailing group. **Nothing is truncated** — the habits card capped
 a `+N more`, and the goals card capped at four SILENTLY, which was worse. Losing the caps
 also retired the unmet-first re-sort, which existed only to make a cut safe.
 
-**T16 is shipped: `Slate`, and events you can highlight.** Migration `0037`.
+**T16 is shipped: `Slate`, and events you can highlight.** Migration `0037`. _Read with
+T28, which changed two of the rules below: the flag is `tracked` now, the Slate shows
+tracked events ONLY — today included — and a dated task is no longer previewed in a band._
 
 - **One card replaces three.** `today-agenda`, "Coming up" and `Tomorrow` were three
   components answering one question — _what has a date on it?_ — split along an arbitrary
@@ -490,6 +495,40 @@ ADR-0021 is the authority, including on what it does to ADR-0013 and ADR-0015.
   asserts the button's absence when AI is off (its heading assertion would now pass
   vacuously); the mobile sweep's goal fixture seeds a task as well.
 
+**T28 is shipped: a due date is a day or a deadline, and the Slate shows only tracked
+events.** Migration `0043` (`due_kind_and_tracked`). **ADR-0022 is the authority.**
+
+- **`tasks.due_kind`, `on | by`, default `on`.** `on` is a day: the task is on the Slate on
+  that day, in Today, and nowhere sooner — not previewed in a "Sat 23" band, not in Later.
+  `by` is a deadline: it sits in a **Due by** block between Overdue and Today from the day
+  it is set, with its date and no horizon, joins Today on the day with a "Due by today"
+  marker, and goes Overdue after it like anything else. Later is undated tasks only.
+  `buildSlate` returns `{ overdue, dueBy, bands }`; `AgendaTask.dueKind` is optional and
+  absent reads as `on`, which keeps `buildTodayAgenda`'s thirteen tests untouched.
+- **Tracked events are the only events on the Slate, today included.** T16 drew all of
+  today and tomorrow and applied the flag from the day after; the user called that "not
+  good" on sight. The horizon governs how far ahead tracked events are looked for and
+  nothing else. The star on a Slate event row went with the untracked rows it told them
+  from. The dashboard's month grid still holds every event.
+- **`highlighted` → `tracked`, down to the columns.** `0043` RENAMES `events.highlighted`
+  and `event_exceptions.highlighted` — not drop-and-add, so every flag survives. drizzle-kit
+  refuses its rename prompt without a TTY (§4 has the procedure that produced a
+  drizzle-authored snapshot anyway). `import.ts` maps `highlighted` in a pre-0043 backup
+  through `RENAMED_COLUMNS`; `EXPORT_VERSION` is unchanged, for the reason `parseImport`
+  gives about removals.
+- **Setting the kind.** The task dialog shows a "Due on / Due by" `Segmented` once a date
+  is set (the control moved to `components/shared/` for it). Quick capture on
+  the dashboard reads "by" — only "by" — as a deadline: `parseNaturalDate` returns `kind`,
+  judged on the whole span it cuts, because the weekday matcher swallows its own
+  preposition. The companion's setup tasks are deadlines. Everything else defaults to `on`.
+- **The Tasks page** keeps its sections and gains two badge strings: "By Sep 23" in the
+  attention tint, and "Due by today".
+- e2e: `slate-tracked.spec.ts` (was `slate-highlight`) adds the negative T16's spec could
+  not — an untracked event on TODAY is absent; `due-by.spec.ts` seeds the three cases and
+  drives quick capture and the dialog; `seedTask` takes `dueKind`. Unit: `agenda.test.ts`
+  rewritten for the band rules, `slate.test.tsx`, `task-dialog.test.tsx`, `nl-date`,
+  `validation`, `restore`, `import`.
+
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped
 after a verified-empty pre-flight dump — the user had written nothing in it). Anything you
@@ -754,7 +793,11 @@ screen reader started announcing "1 week, button, pressed" twice with no way to 
 controls apart, while `goal-momentum.spec.ts` broke on a strict-mode violation. It is now
 `role="group"` + `aria-label`, and specs scope to `getByRole("group", { name })`. **Adding a
 segmented preference whose labels collide with an existing one is a live accessibility bug,
-not just a test problem.**
+not just a test problem.** The control lives in `components/shared/segmented.tsx` since T28,
+when the task dialog took it for the due kind — and its group is named "Due on or by", not
+"Due date kind", because Playwright's `getByLabel` is a substring match: the first name
+made `routines.spec.ts`'s bare `getByLabel("Due date")` resolve to the input AND the group,
+and strict mode failed the spec. A group label must not contain a sibling field's label.
 
 **And scoping to the group is only half of it — the group name needs `exact: true`.** Adding
 `dashboardCalendarView` in 2026-08-17 gave the form a second Month/Week control, and
@@ -990,6 +1033,29 @@ written by hand in migration `0033`. Two consequences travel with that:
   task's routine came from the same file, the exact cross-account hole
   `findDanglingReference` exists to close. `UNDECLARED_REFERENCES` restates it, and
   `tables.test.ts` asserts the restatement is still there.
+
+**drizzle-kit will not generate a column RENAME without a TTY, and the agent's shell has
+none.** When a table loses one column and gains another in the same diff it asks "created
+or renamed?", and without a terminal it throws (`Interactive prompts require a TTY`) rather
+than guessing — piping keystrokes does not help, it checks `isTTY` first. Answering "create"
+by splitting the change would silently drop the column's data, which for T28's
+`highlighted → tracked` meant every flag ever set. The procedure that worked, and that
+leaves a snapshot drizzle itself wrote: (1) keep the OLD column in the schema beside the
+new one and `pnpm db:generate --name <x>` — additions only, no prompt; (2) remove the old
+column and generate again — drops only, no prompt; (3) fold: rewrite the first `.sql` by
+hand as `ALTER TABLE … RENAME COLUMN`, replace the first snapshot's contents with the
+second's while keeping the first's `id` and `prevId`, delete the second `.sql` and
+snapshot, and drop its `_journal.json` entry; (4) `pnpm db:generate` must then say "No
+schema changes". Migration `0043` was made this way.
+
+**A migration applied to the dev database breaks a `pnpm start` that was built before
+it.** `pnpm dev`, `pnpm start` and the e2e suite's own server all read `.env`'s database;
+only the first two share it, and only `pnpm start` serves a build frozen at build time. T28
+renamed `events.highlighted` → `tracked`, `pnpm db:migrate` ran, and the production build
+still running on port 3000 — made an hour earlier — failed every dashboard and calendar
+load with `column "highlighted" does not exist` while every check against the dev server
+passed. An added column is harmless to an old build; a rename or a drop is not. After such
+a migration: stop `pnpm start`, `pnpm build`, `pnpm start`.
 
 If you ever need a real declared reference, the fix is to move `priorityEnum` (and `lists`)
 somewhere neutral so routines stops importing todos — not to add the import and hope.

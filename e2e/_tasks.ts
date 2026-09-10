@@ -16,6 +16,8 @@ import { seedUserId, withTestDb } from "./_test-db"
 export async function seedTask(fields: {
   title: string
   dueDate?: string | null
+  /** How the date binds — "by" is a deadline (T28). Defaults to "on", like the column. */
+  dueKind?: "on" | "by"
   goalId?: string | null
   status?: "open" | "done"
 }): Promise<string> {
@@ -23,13 +25,14 @@ export async function seedTask(fields: {
   return withTestDb(async (client) => {
     const userId = await seedUserId(client)
     const { rows } = await client.query<{ id: string }>(
-      `insert into tasks (user_id, title, due_date, goal_id, status, completed_at)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into tasks (user_id, title, due_date, due_kind, goal_id, status, completed_at)
+       values ($1, $2, $3, $4, $5, $6, $7)
        returning id`,
       [
         userId,
         fields.title,
         fields.dueDate ?? null,
+        fields.dueKind ?? "on",
         fields.goalId ?? null,
         done ? "done" : "open",
         done ? new Date() : null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { restoreTaskSchema } from "./validation"
+import { restoreTaskSchema, taskInputSchema } from "./validation"
 
 // `restoreTask` is a Server Action, so its parameter type guards nothing at runtime — the
 // browser can post anything. T5a-S1 added this schema, and the risk it carries is the
@@ -20,6 +20,7 @@ const row = {
   title: "Water the plants",
   notes: null,
   dueDate: "2026-07-26",
+  dueKind: "on",
   priority: "medium",
   status: "open",
   sortOrder: 0,
@@ -79,6 +80,27 @@ describe("restoreTaskSchema", () => {
     ).toBe(false)
     expect(
       restoreTaskSchema.safeParse({ ...row, status: "skipped" }).success,
+    ).toBe(false)
+    expect(
+      restoreTaskSchema.safeParse({ ...row, dueKind: "soon" }).success,
+    ).toBe(false)
+  })
+})
+
+describe("taskInputSchema — due kind", () => {
+  // Every caller that never heard of the column — the goal editor's task rows, the
+  // recurrence generator, a routine run — keeps making the dated kind it always made.
+  it("defaults to on when the caller says nothing", () => {
+    const parsed = taskInputSchema.parse({ title: "Sweep" })
+    expect(parsed.dueKind).toBe("on")
+  })
+
+  it("accepts by, and nothing else", () => {
+    expect(
+      taskInputSchema.parse({ title: "Sweep", dueKind: "by" }).dueKind,
+    ).toBe("by")
+    expect(
+      taskInputSchema.safeParse({ title: "Sweep", dueKind: "soon" }).success,
     ).toBe(false)
   })
 })

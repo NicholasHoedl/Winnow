@@ -49,7 +49,7 @@ const SERIES_EVENT = {
   notes: null,
   calendarId: CALENDAR_ID,
   allDay: false,
-  highlighted: false,
+  tracked: false,
   startAt: "2026-09-10T14:00:00.000Z",
   endAt: "2026-09-10T14:30:00.000Z",
   recurrenceFreq: "weekly",

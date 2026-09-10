@@ -44,7 +44,7 @@ picked up — it is **not** code-level detail yet.
 | T13 — Tools move to their artifacts; notes goes    | ✅ shipped        |
 | T14 — Balanced macros, quieter phone, view default | ✅ shipped        |
 | T15 — Goals and habits become one dashboard card   | ✅ shipped        |
-| T16 — Slate, and events you can highlight          | ✅ shipped        |
+| T16 — Slate, and events you can highlight (→ T28)  | ✅ shipped        |
 | T17 — Dashboard cards fold to their header         | ✅ shipped        |
 | T18 — A habit's quota is one box per log           | ✅ shipped        |
 | T19 — A habit can be an amount                     | ✅ shipped        |

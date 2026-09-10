@@ -250,6 +250,15 @@ async function main() {
       priority: "high" as const,
       listId: workList.id,
     },
+    // A deadline (T28): "by", so it sits in the Slate's Due by block from today.
+    {
+      key: "passport",
+      title: "Renew the passport",
+      dueDate: day(12),
+      dueKind: "by" as const,
+      priority: "medium" as const,
+      listId: homeList.id,
+    },
     // Someday — no due date.
     {
       key: "pg-book",
@@ -265,6 +274,7 @@ async function main() {
     title: t.title,
     notes: "notes" in t ? t.notes : null,
     dueDate: t.dueDate,
+    dueKind: "dueKind" in t ? t.dueKind : ("on" as const),
     priority: t.priority,
     status: "open" as const,
     createdAt: at(day(-7), 9),
@@ -550,7 +560,7 @@ async function main() {
           d: day(2),
           from: [10, 0],
           to: [11, 0],
-          highlighted: true,
+          tracked: true,
         },
         {
           key: "flight",
@@ -559,7 +569,7 @@ async function main() {
           d: day(5),
           from: [6, 30],
           to: [8, 0],
-          highlighted: true,
+          tracked: true,
         },
         {
           key: "one-on-one",
@@ -578,7 +588,7 @@ async function main() {
         startAt: at(e.d, e.from[0], e.from[1]),
         endAt: at(e.d, e.to[0], e.to[1]),
         allDay: "allDay" in e ? Boolean(e.allDay) : false,
-        highlighted: "highlighted" in e ? Boolean(e.highlighted) : false,
+        tracked: "tracked" in e ? Boolean(e.tracked) : false,
         recurrenceFreq: "freq" in e ? e.freq : ("none" as const),
         recurrenceWeekdays: "weekdays" in e ? (e.weekdays ?? 0) : 0,
       }))

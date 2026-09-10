@@ -61,17 +61,17 @@ export const events = pgTable("events", {
   endAt: timestamp("end_at", { withTimezone: true }),
   allDay: boolean("all_day").notNull().default(false),
   /**
-   * Surface this on the dashboard before its day arrives.
+   * Show this on the dashboard.
    *
-   * The dashboard otherwise shows today's and tomorrow's events only. A highlighted one
-   * appears as soon as it is within `slateHorizonDays` — which is the whole point: a flight
-   * three days out is worth seeing now, and a standup is not.
+   * The Slate shows tracked events only, out to `slateHorizonDays`, and no others — not even
+   * today's. A flight is worth seeing on the dashboard and a standup is not, and before T28
+   * every event of today and tomorrow arrived unasked, which buried the ones that were.
    *
    * On the SERIES, so a one-off event needs nothing else. A recurring event would otherwise
-   * be highlighted on every occurrence forever, so `event_exceptions.highlighted` can
-   * override one date — see the note there.
+   * be tracked on every occurrence forever, so `event_exceptions.tracked` can override one
+   * date — see the note there. Was `highlighted` until migration 0043.
    */
-  highlighted: boolean("highlighted").notNull().default(false),
+  tracked: boolean("tracked").notNull().default(false),
   recurrenceFreq: recurrenceFreqEnum("recurrence_freq")
     .notNull()
     .default("none"),
@@ -117,12 +117,12 @@ export const eventExceptions = pgTable(
     allDay: boolean("all_day"),
     /**
      * Null inherits the series' flag, like every override here — which is what lets you
-     * highlight ONE standup without pinning the weekly series to the dashboard for good.
+     * track ONE standup without pinning the weekly series to the dashboard for good.
      *
-     * `false` is therefore meaningfully different from null: it un-highlights this one
-     * date of a series that is otherwise highlighted.
+     * `false` is therefore meaningfully different from null: it untracks this one date of
+     * a series that is otherwise tracked.
      */
-    highlighted: boolean("highlighted"),
+    tracked: boolean("tracked"),
     title: text("title"),
     notes: text("notes"),
     calendarId: uuid("calendar_id").references(() => calendars.id, {

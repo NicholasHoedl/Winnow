@@ -13,7 +13,7 @@ import {
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption } from "@/modules/goals/queries"
 import type { List, TaskWithSeries } from "@/modules/todos/queries"
-import { type Priority } from "@/modules/todos/validation"
+import { type DueKind, type Priority } from "@/modules/todos/validation"
 import { type ActionResult } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
 import { cn } from "@/lib/utils"
@@ -43,9 +43,20 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { RecurrenceFields } from "@/components/shared/recurrence-fields"
+import { Segmented } from "@/components/shared/segmented"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 const NO_LIST = "none"
+
+/**
+ * Which way a due date binds (T28). "On" is a day: the dashboard shows the task on it and
+ * not before. "By" is a deadline: the dashboard shows the task from now until then, and on
+ * the day says "due by today".
+ */
+const DUE_KIND_OPTIONS = [
+  { value: "on", label: "Due on" },
+  { value: "by", label: "Due by" },
+] as const satisfies readonly { value: DueKind; label: string }[]
 // Sentinel for the optional goal/event links (a Select item can't carry an empty value).
 const NO_LINK = "none"
 
@@ -83,6 +94,7 @@ export type TaskFormValues = {
   title: string
   notes?: string
   dueDate?: string
+  dueKind: DueKind
   priority: Priority
   listId?: string
   goalId?: string
@@ -105,6 +117,7 @@ function emptyValues(
     title: "",
     notes: "",
     dueDate: today, // new tasks default to today; the field is still clearable
+    dueKind: "on",
     priority,
     // The default list, or "" for none — a preference, like the priority above it.
     listId,
@@ -126,6 +139,7 @@ function toTaskInput(v: TaskFormValues) {
     title: v.title,
     notes: v.notes,
     dueDate: v.dueDate,
+    dueKind: v.dueKind,
     priority: v.priority,
     listId: v.listId,
     goalId: v.goalId,
@@ -224,6 +238,7 @@ export function TaskDialog({
         title: series.title,
         notes: series.notes ?? "",
         dueDate: "",
+        dueKind: "on",
         priority: series.priority,
         listId: series.listId ?? "",
         // Links live on concrete task rows, not the rule (the pickers are hidden here).
@@ -244,6 +259,7 @@ export function TaskDialog({
       title: task.title,
       notes: task.notes ?? "",
       dueDate: task.dueDate ?? "",
+      dueKind: task.dueKind,
       priority: task.priority,
       listId: task.listId ?? "",
       goalId: task.goalId ?? "",
@@ -304,6 +320,8 @@ export function TaskDialog({
   const repeat = watch("repeat")
   // A concrete due date only applies to a one-off instance, not a repeating schedule.
   const showDue = !showRecurrence || repeat === "none"
+  // The kind only means something once there is a date to bind.
+  const hasDue = !!watch("dueDate")
 
   const title = !task
     ? "New task"
@@ -391,6 +409,24 @@ export function TaskDialog({
                     {...register("dueDate")}
                   />
                   <FieldError errors={[errors.dueDate]} />
+                  {/* The group's name must NOT contain "Due date": Playwright's
+                      `getByLabel` is a substring match, and `routines.spec.ts` fills the
+                      input above with a bare `getByLabel("Due date")` — a group named
+                      "Due date kind" made that resolve to two elements. */}
+                  {hasDue && (
+                    <Controller
+                      control={control}
+                      name="dueKind"
+                      render={({ field }) => (
+                        <Segmented
+                          value={field.value}
+                          onChange={field.onChange}
+                          options={DUE_KIND_OPTIONS}
+                          label="Due on or by"
+                        />
+                      )}
+                    />
+                  )}
                 </Field>
               )}
 

@@ -1,18 +1,19 @@
 "use client"
 
-// The dashboard's Slate: everything with a date on it, nearest first.
+// The dashboard's Slate: everything worth seeing today, nearest first.
 //
 // Replaces `today-agenda`, `dashboard-task-list` ("Coming up") and `tomorrow`, which split one
 // question — *what has a date?* — along an arbitrary line, and duplicated heavily doing it: the
 // event row in two of them was character-identical apart from padding, and each had its own
-// copy of the same date formatter. One row component each now, and one gutter.
+// copy of the same date formatter. One row component each now, and one gutter. T28 narrowed
+// the question: overdue, the deadlines still ahead, today, then only TRACKED events by day.
 //
 // Tasks stay checkable here (optimistic); today's routine tasks stay draggable. Tapping
 // anything else jumps to the module that owns it.
 
 import * as React from "react"
 import Link from "next/link"
-import { ListChecks, Sparkles, Star } from "lucide-react"
+import { ListChecks, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -35,8 +36,8 @@ import { useWriteGuard } from "@/components/shared/use-write-guard"
  *  never collide with a routine id. */
 const LOOSE = "loose"
 
-/** How many rows the Later band shows before pointing at /activity. */
-const LATER_SHOWN = 10
+/** How many rows the Due by block and the Later band each show before pointing at /activity. */
+const ROWS_SHOWN = 10
 
 /** "12 Sep" — the one date formatter, where there used to be two byte-identical copies
  *  under two names in two files. */
@@ -65,12 +66,19 @@ function TaskRow({
   done,
   onToggle,
   showDate = false,
+  dueByToday = false,
 }: {
   task: TaskWithSeries
   done: boolean
   onToggle: () => void
-  /** The Later band only, where a row's day is the whole reason it is down there. */
+  /** Overdue and Due by, where a row's day is the whole reason it is up there. */
   showDate?: boolean
+  /**
+   * A deadline whose day has come. It sits among today's tasks like any other — that is
+   * what `buildSlate` does with it — and this is what says it was a "by" date rather than
+   * something to do today. The same attention colour as the Due by block it came from.
+   */
+  dueByToday?: boolean
 }) {
   const locale = useDateLocale()
   return (
@@ -105,6 +113,11 @@ function TaskRow({
       {showDate && task.dueDate && !done && (
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
           {shortDate(task.dueDate, locale)}
+        </span>
+      )}
+      {dueByToday && !done && (
+        <span className="text-brand-accent shrink-0 text-xs font-medium">
+          Due by today
         </span>
       )}
     </div>
@@ -143,15 +156,10 @@ function EventRow({
       <span className="line-clamp-3 min-w-0 flex-1 text-sm font-medium">
         {occurrence.event.title}
       </span>
-      {/* An icon, not a colour: the accent border already means *which calendar*, so
-          highlight has to be an orthogonal channel. Same treatment as the stalled goal
-          marker, and for the same reason — the dashboard runs tight below 1400px. */}
-      {occurrence.event.highlighted && (
-        <>
-          <Star className="text-brand-accent size-3 shrink-0" aria-hidden />
-          <span className="sr-only">Highlighted</span>
-        </>
-      )}
+      {/* No "tracked" marker. Every event here is — since T28 tracked is the only way onto
+          the card — so the row's presence is the whole statement, and the star that used
+          to distinguish flagged rows went with the unflagged rows it distinguished them
+          from. */}
     </Link>
   )
 }
@@ -162,6 +170,9 @@ function EventRow({
  * At module level rather than inside `Slate`: a component declared during render is a new
  * type on every pass, so React remounts its whole subtree — and here that subtree owns a
  * DndContext mid-drag.
+ *
+ * Today's band only — the one band whose order is real — which is why a deadline can be
+ * flagged here unconditionally: a "by" task in this list is one whose day has come.
  */
 function TaskList({
   rows,
@@ -185,6 +196,7 @@ function TaskList({
           task={task}
           done={isDone(task)}
           onToggle={() => onToggle(task.id)}
+          dueByToday={task.dueKind === "by"}
         />
       )}
     />
@@ -193,12 +205,15 @@ function TaskList({
 
 export function Slate({
   overdue,
+  dueBy,
   bands,
   calendars,
   use24Hour,
   collapsed,
 }: {
   overdue: TaskWithSeries[]
+  /** Deadlines still ahead, nearest first — see `Slate.dueBy` in `_lib/agenda.ts`. */
+  dueBy: TaskWithSeries[]
   bands: SlateBand<TaskWithSeries, EventOccurrence>[]
   calendars: Calendar[]
   use24Hour: boolean
@@ -286,6 +301,7 @@ export function Slate({
   // and an empty `items`.
   const empty =
     overdue.length === 0 &&
+    dueBy.length === 0 &&
     bands.every((band) => band.items.length === 0 && band.groups.length === 0)
 
   if (empty) {
@@ -342,6 +358,45 @@ export function Slate({
           </div>
         )}
 
+        {/* The same shape as Overdue — a tinted block with a count and dated rows — because
+            it is the same kind of thing: dated tasks asking for attention before their
+            day. In the attention colour rather than the alarm one: nothing here is late.
+            Capped like Later, and for the same reason; the count gives way to the link so
+            the header never has to hold both. */}
+        {dueBy.length > 0 && (
+          <div className="border-brand-accent/30 bg-brand-accent/[0.06] rounded-lg border p-3">
+            <div className="mb-1.5 flex items-baseline justify-between gap-2">
+              <h3 className="text-brand-accent text-xs font-semibold tracking-wide uppercase">
+                Due by
+              </h3>
+              {dueBy.length > ROWS_SHOWN ? (
+                <Link
+                  href="/activity"
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                >
+                  +{dueBy.length - ROWS_SHOWN} more
+                </Link>
+              ) : (
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {dueBy.length}
+                </span>
+              )}
+            </div>
+            <ol className="flex flex-col gap-0.5">
+              {dueBy.slice(0, ROWS_SHOWN).map((task) => (
+                <li key={task.id}>
+                  <TaskRow
+                    task={task}
+                    done={isDone(task)}
+                    onToggle={() => toggle(task.id)}
+                    showDate
+                  />
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
         {bands.map((band, bandIndex) => {
           const isToday = bandIndex === 0 && band.date !== null
           const isLater = band.date === null
@@ -355,7 +410,7 @@ export function Slate({
           const tasks = band.items.flatMap((item) =>
             item.kind === "task" ? [item.task] : [],
           )
-          const shown = isLater ? tasks.slice(0, LATER_SHOWN) : tasks
+          const shown = isLater ? tasks.slice(0, ROWS_SHOWN) : tasks
 
           return (
             <div key={band.date ?? "later"}>
@@ -363,12 +418,12 @@ export function Slate({
                 <h3 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
                   {band.label}
                 </h3>
-                {isLater && tasks.length > LATER_SHOWN && (
+                {isLater && tasks.length > ROWS_SHOWN && (
                   <Link
                     href="/activity"
                     className="text-muted-foreground hover:text-foreground text-xs"
                   >
-                    +{tasks.length - LATER_SHOWN} more
+                    +{tasks.length - ROWS_SHOWN} more
                   </Link>
                 )}
               </div>
@@ -441,7 +496,6 @@ export function Slate({
                       task={task}
                       done={isDone(task)}
                       onToggle={() => toggle(task.id)}
-                      showDate={isLater}
                     />
                   ))
                 )}

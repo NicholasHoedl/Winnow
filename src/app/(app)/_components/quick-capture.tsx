@@ -28,9 +28,9 @@ function formatDue(date: string, locale: string): string {
 
 /**
  * Dashboard quick-capture: type a task in natural language ("call mom tomorrow",
- * "pay rent friday #home") — the due date and the `#list` are parsed out and the remaining
- * text becomes the title. Falls back to today's date when no date phrase is present, and
- * to the default list when no tag is.
+ * "pay rent by friday #home") — the due date, whether "by" made it a deadline, and the
+ * `#list` are parsed out and the remaining text becomes the title. Falls back to today's
+ * date when no date phrase is present, and to the default list when no tag is.
  */
 export function QuickCapture({ lists }: { lists: ListOption[] }) {
   const locale = useDateLocale()
@@ -58,12 +58,18 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
     setText("")
 
     startTransition(async () => {
-      const result = await createTask({ title, dueDate, listId })
+      const result = await createTask({
+        title,
+        dueDate,
+        dueKind: dated.kind,
+        listId,
+      })
       if (result.ok) {
         toast.success(`Added “${title}”`, {
-          description: `Due ${formatDue(dueDate, locale)}${
-            listName ? ` · ${listName}` : ""
-          }`,
+          description: `${dated.kind === "by" ? "Due by" : "Due"} ${formatDue(
+            dueDate,
+            locale,
+          )}${listName ? ` · ${listName}` : ""}`,
         })
       } else {
         toast.error(result.error)
@@ -85,8 +91,9 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
         // phone — `try “pay rent frida` — on the app's primary capture surface. A
         // placeholder cannot be made responsive from CSS, so the length has to work at the
         // narrowest width rather than the widest. One example still teaches that a date can
-        // be typed in the sentence, which is the only thing this hint is for.
-        placeholder="Quick add — try “pay rent friday”"
+        // be typed in the sentence — and, since T28, that "by" makes it a deadline — which
+        // is all this hint is for.
+        placeholder="Quick add — try “pay rent by friday”"
         aria-label="Quick add a task"
         className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
       />

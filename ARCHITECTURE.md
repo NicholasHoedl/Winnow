@@ -218,10 +218,14 @@ Three things about it are load-bearing rather than cosmetic:
   agenda's `overdue` and `items` but not its `groups`, so a task a routine created
   for today was printed twice. `buildSlate` assigns every task to exactly one
   band, which is a different thing from fixing the arithmetic.
-- **The horizon governs highlighted events only.** Today and tomorrow show
-  everything they hold; days 2..N out to `slateHorizonDays` carry only events
-  flagged `highlighted`. Showing everything out there would bury the flag in
-  routine calendar noise, and the flag is the point.
+- **Only tracked events reach Slate, and the horizon says how far ahead it looks
+  for them.** Today included, since T28: the card drew all of today and tomorrow
+  before that and read as a second calendar under the month grid, which still
+  holds every event. The flag is `events.tracked` (`highlighted` until `0043`).
+- **A due date is a day or a deadline** (`tasks.due_kind`, ADR-0022). A day is
+  shown in Today on its day and nowhere sooner; a deadline sits in a Due by block
+  above Today from the day it is set, then joins Today marked "due by today".
+  Later holds undated tasks only.
 - **Height is reached for, never forced.** The grid uses `min-h`, which fills
   spare space but never adds any, and Slate caps with internal scroll — so no
   volume of data turns this back into a scrolling page.
@@ -287,7 +291,7 @@ a classic, easy-to-introduce bug.
 > the server must read — zone, week start, currency, time format, default task
 > priority, digest, the goal momentum window (T8), the account's saved `theme`, whether
 > macro targets balance (T14), which view the calendar opens on (T14), how far ahead Slate
-> reaches for highlighted events (T16), and which dashboard cards are folded (T17 —
+> reaches for tracked events (T16), and which dashboard cards are folded (T17 —
 > `dashboard_collapsed`, the one column here holding a LIST rather than a single setting;
 > ADR-0016 explains why).
 > `theme` is **mirrored, not moved**: it is applied before first paint from
@@ -334,23 +338,24 @@ hand-designed here, they follow Auth.js's documented schema.
 
 **tasks**
 
-| field                   | type                                             | notes                                             |
-| ----------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| id                      | uuid (pk)                                        |                                                   |
-| user_id                 | uuid (fk → users)                                |                                                   |
-| list_id                 | uuid (fk → lists, nullable, ON DELETE SET NULL)  | a task may belong to no list                      |
-| series_id               | uuid (fk → task_recurrences, ON DELETE SET NULL) | null for a one-off; see the generator below       |
-| occurrence_date         | date, nullable                                   | the cycle key of a generated instance             |
-| goal_id                 | uuid (fk → goals, ON DELETE SET NULL)            | T2 cross-module link                              |
-| event_id                | uuid (fk → events, ON DELETE SET NULL)           | T2 cross-module link                              |
-| title                   | text, required                                   |                                                   |
-| notes                   | text, nullable                                   |                                                   |
-| due_date                | date, nullable                                   | date-only; **null is a real state** — see Someday |
-| priority                | enum(low, medium, high)                          | default medium                                    |
-| status                  | enum(open, done)                                 |                                                   |
-| sort_order              | int, not null, default 0                         | manual position **within a date section**         |
-| completed_at            | timestamptz, nullable                            | set when status → done                            |
-| created_at / updated_at | timestamptz                                      |                                                   |
+| field                   | type                                             | notes                                                              |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------------ |
+| id                      | uuid (pk)                                        |                                                                    |
+| user_id                 | uuid (fk → users)                                |                                                                    |
+| list_id                 | uuid (fk → lists, nullable, ON DELETE SET NULL)  | a task may belong to no list                                       |
+| series_id               | uuid (fk → task_recurrences, ON DELETE SET NULL) | null for a one-off; see the generator below                        |
+| occurrence_date         | date, nullable                                   | the cycle key of a generated instance                              |
+| goal_id                 | uuid (fk → goals, ON DELETE SET NULL)            | T2 cross-module link                                               |
+| event_id                | uuid (fk → events, ON DELETE SET NULL)           | T2 cross-module link                                               |
+| title                   | text, required                                   |                                                                    |
+| notes                   | text, nullable                                   |                                                                    |
+| due_date                | date, nullable                                   | date-only; **null is a real state** — see Someday                  |
+| due_kind                | enum(on, by), default on                         | T28 — a day, or a deadline shown from the day it is set (ADR-0022) |
+| priority                | enum(low, medium, high)                          | default medium                                                     |
+| status                  | enum(open, done)                                 |                                                                    |
+| sort_order              | int, not null, default 0                         | manual position **within a date section**                          |
+| completed_at            | timestamptz, nullable                            | set when status → done                                             |
+| created_at / updated_at | timestamptz                                      |                                                                    |
 
 Plus `unique(series_id, occurrence_date)`. NULLs are DISTINCT in Postgres, so
 one-off tasks (both null) never collide — the constraint only binds generated rows.
@@ -487,23 +492,23 @@ which are overdue, and a way through.
 
 **events**
 
-| field                   | type                                       | notes                                        |
-| ----------------------- | ------------------------------------------ | -------------------------------------------- |
-| id                      | uuid (pk)                                  |                                              |
-| user_id                 | uuid (fk → users)                          |                                              |
-| calendar_id             | uuid, nullable (fk → calendars, cascade)   | deleting a calendar takes its events         |
-| title                   | text, required                             |                                              |
-| notes                   | text, nullable                             |                                              |
-| start_at                | timestamptz                                | the ANCHOR instant — see the model below     |
-| end_at                  | timestamptz, nullable                      | nullable to allow open-ended/point events    |
-| all_day                 | boolean                                    |                                              |
-| highlighted             | boolean, not null, default false           | T16 — reaches the dashboard ahead of its day |
-| recurrence_freq         | enum(none, daily, weekly, monthly, yearly) |                                              |
-| recurrence_interval     | int, default 1                             | e.g. every 2 weeks                           |
-| recurrence_weekdays     | int, default 0                             | 7-bit BYDAY mask; 0 = the anchor's weekday   |
-| recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                   |
-| recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null                |
-| created_at / updated_at | timestamptz                                |                                              |
+| field                   | type                                       | notes                                                                           |
+| ----------------------- | ------------------------------------------ | ------------------------------------------------------------------------------- |
+| id                      | uuid (pk)                                  |                                                                                 |
+| user_id                 | uuid (fk → users)                          |                                                                                 |
+| calendar_id             | uuid, nullable (fk → calendars, cascade)   | deleting a calendar takes its events                                            |
+| title                   | text, required                             |                                                                                 |
+| notes                   | text, nullable                             |                                                                                 |
+| start_at                | timestamptz                                | the ANCHOR instant — see the model below                                        |
+| end_at                  | timestamptz, nullable                      | nullable to allow open-ended/point events                                       |
+| all_day                 | boolean                                    |                                                                                 |
+| tracked                 | boolean, not null, default false           | T16 — the only way onto the dashboard's Slate (T28); `highlighted` until `0043` |
+| recurrence_freq         | enum(none, daily, weekly, monthly, yearly) |                                                                                 |
+| recurrence_interval     | int, default 1                             | e.g. every 2 weeks                                                              |
+| recurrence_weekdays     | int, default 0                             | 7-bit BYDAY mask; 0 = the anchor's weekday                                      |
+| recurrence_monthly_mode | enum(day_of_month, nth_weekday)            | how a monthly series lands                                                      |
+| recurrence_end_date     | date, nullable                             | INCLUSIVE; open-ended if null                                                   |
+| created_at / updated_at | timestamptz                                |                                                                                 |
 
 **These five columns map onto an RRULE on the way out, and only on the way out**
 (`modules/calendar/ical.ts`, T5c-a). Four things the schema leaves implicit have
@@ -554,18 +559,18 @@ in a week beginning Tuesday while an identical one-off was not.
 
 **event_exceptions** — per-occurrence overrides and skips
 
-| field                   | type                                      | notes                                                                                               |
-| ----------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| id                      | uuid (pk)                                 |                                                                                                     |
-| user_id                 | uuid (fk → users)                         |                                                                                                     |
-| event_id                | uuid (fk → events, ON DELETE cascade)     |                                                                                                     |
-| original_date           | date, not null                            | the RECURRENCE-ID — see below                                                                       |
-| canceled                | boolean, not null, default false          | "skip this day"                                                                                     |
-| start_at / end_at       | timestamptz, nullable                     | null = inherit from the series                                                                      |
-| all_day / title / notes | nullable                                  | null = inherit                                                                                      |
-| highlighted             | boolean, NULLABLE                         | null = inherit; `false` un-highlights one date of a highlighted series, which is why it is nullable |
-| calendar_id             | uuid, nullable (fk → calendars, set null) |                                                                                                     |
-| created_at / updated_at | timestamptz                               |                                                                                                     |
+| field                   | type                                      | notes                                                                                                                  |
+| ----------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| id                      | uuid (pk)                                 |                                                                                                                        |
+| user_id                 | uuid (fk → users)                         |                                                                                                                        |
+| event_id                | uuid (fk → events, ON DELETE cascade)     |                                                                                                                        |
+| original_date           | date, not null                            | the RECURRENCE-ID — see below                                                                                          |
+| canceled                | boolean, not null, default false          | "skip this day"                                                                                                        |
+| start_at / end_at       | timestamptz, nullable                     | null = inherit from the series                                                                                         |
+| all_day / title / notes | nullable                                  | null = inherit                                                                                                         |
+| tracked                 | boolean, NULLABLE                         | null = inherit; `false` untracks one date of a tracked series, which is why it is nullable; `highlighted` until `0043` |
+| calendar_id             | uuid, nullable (fk → calendars, set null) |                                                                                                                        |
+| created_at / updated_at | timestamptz                               |                                                                                                                        |
 
 Plus `unique(event_id, original_date)`, which makes re-saving the same day an
 upsert rather than a duplicate.

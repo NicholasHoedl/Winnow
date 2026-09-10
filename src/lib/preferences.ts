@@ -30,8 +30,8 @@ export type CalendarView = "month" | "week" | "day" | "agenda"
 export const CALENDAR_VIEWS: CalendarView[] = ["month", "week", "day", "agenda"]
 
 /**
- * How far ahead Slate reaches for highlighted events. A closed set for the reason
- * `MomentumDays` is one: "how early do I want to see a flagged event" has a few honest
+ * How far ahead Slate reaches for tracked events. A closed set for the reason
+ * `MomentumDays` is one: "how early do I want to see a tracked event" has a few honest
  * answers, not 365.
  */
 export type SlateHorizonDays = 3 | 7 | 14

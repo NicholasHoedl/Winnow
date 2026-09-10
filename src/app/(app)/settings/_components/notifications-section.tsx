@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 
-import { Segmented } from "./segmented"
+import { Segmented } from "@/components/shared/segmented"
 import { SettingsSection } from "./settings-section"
 
 const DIGEST_OPTIONS: readonly { value: boolean; label: string }[] = [

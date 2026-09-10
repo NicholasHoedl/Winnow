@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { Segmented } from "./segmented"
+import { Segmented } from "@/components/shared/segmented"
 import { SettingsSection } from "./settings-section"
 
 /** One entry in the model dropdown. Mirrors `AiModel`, but the action returns plain data

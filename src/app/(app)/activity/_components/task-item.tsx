@@ -64,6 +64,20 @@ export function TaskItem({
   const status = dueStatus(task.dueDate, new Date(), timeZone)
   const series = task.series
   const flexible = !!series?.flexible
+  // A "by" date is a deadline (T28): the badge says so, and while it is still ahead it
+  // takes the attention colour the dashboard's Due by block uses, not the alarm one.
+  const deadline = task.dueKind === "by"
+  const dueLabel = !task.dueDate
+    ? null
+    : status === "overdue"
+      ? "Overdue"
+      : status === "due-today"
+        ? deadline
+          ? "Due by today"
+          : "Due today"
+        : deadline
+          ? `By ${formatDue(task.dueDate, locale)}`
+          : formatDue(task.dueDate, locale)
 
   const subtasks = task.subtasks
   const doneCount = subtasks.filter((sub) => sub.done).length
@@ -113,7 +127,7 @@ export function TaskItem({
                 </Badge>
               ) : (
                 <>
-                  {task.dueDate && (
+                  {dueLabel && (
                     <Badge
                       variant="outline"
                       className={cn(
@@ -122,13 +136,12 @@ export function TaskItem({
                           "bg-destructive/10 text-destructive border-transparent",
                         status === "due-today" &&
                           "bg-primary/10 text-primary border-transparent",
+                        status === "upcoming" &&
+                          deadline &&
+                          "bg-brand-accent/10 text-brand-accent border-transparent",
                       )}
                     >
-                      {status === "overdue"
-                        ? "Overdue"
-                        : status === "due-today"
-                          ? "Due today"
-                          : formatDue(task.dueDate, locale)}
+                      {dueLabel}
                     </Badge>
                   )}
                   {series && (

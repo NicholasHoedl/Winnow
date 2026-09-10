@@ -106,7 +106,7 @@ export async function createTask(input: unknown): Promise<ActionResult> {
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, dueDate, priority, listId, goalId, eventId } =
+  const { title, notes, dueDate, dueKind, priority, listId, goalId, eventId } =
     parsed.data
   const links = {
     listId: nullify(listId),
@@ -121,6 +121,7 @@ export async function createTask(input: unknown): Promise<ActionResult> {
     title,
     notes: nullify(notes),
     dueDate: nullify(dueDate),
+    dueKind,
     priority,
     ...links,
   })
@@ -139,7 +140,7 @@ export async function updateTask(
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  const { title, notes, dueDate, priority, listId, goalId, eventId } =
+  const { title, notes, dueDate, dueKind, priority, listId, goalId, eventId } =
     parsed.data
   const links = {
     listId: nullify(listId),
@@ -155,6 +156,7 @@ export async function updateTask(
       title,
       notes: nullify(notes),
       dueDate: nullify(dueDate),
+      dueKind,
       priority,
       ...links,
     })

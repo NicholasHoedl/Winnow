@@ -28,6 +28,7 @@ function task(over: Record<string, unknown> = {}): TaskWithSeries {
     title: "Water the plants",
     notes: null,
     dueDate: "2026-09-10",
+    dueKind: "on",
     priority: "medium",
     status: "open",
     listId: null,
@@ -62,6 +63,7 @@ function show(props: Partial<React.ComponentProps<typeof Slate>> = {}) {
     <PreferencesProvider value={DEFAULT_PREFERENCES}>
       <Slate
         overdue={[]}
+        dueBy={[]}
         bands={bands([task()])}
         calendars={[] as unknown as Calendar[]}
         use24Hour={false}
@@ -160,5 +162,44 @@ describe("Slate", () => {
     expect(
       screen.getByText(/Nothing due and nothing scheduled/),
     ).toBeInTheDocument()
+  })
+
+  /**
+   * T28: a deadline is on the board from the day it is set. Which tasks are deadlines is
+   * `buildSlate`'s decision and has its tests; what is pinned here is that the block draws
+   * them with their day, that a deadline whose day has come says so in today's list, and
+   * that a pending deadline keeps the card from calling the day clear.
+   */
+  it("lists a deadline under Due by, with its day", () => {
+    show({
+      bands: bands([]),
+      dueBy: [
+        task({
+          id: "task-2",
+          title: "Renew passport",
+          dueDate: "2026-09-23",
+          dueKind: "by",
+        }),
+      ],
+    })
+
+    expect(screen.getByRole("heading", { name: "Due by" })).toBeInTheDocument()
+    expect(screen.getByText("Renew passport")).toBeInTheDocument()
+    expect(screen.getByText("Sep 23")).toBeInTheDocument()
+    expect(
+      screen.queryByText(/Nothing due and nothing scheduled/),
+    ).not.toBeInTheDocument()
+  })
+
+  it("says 'due by today' on a deadline whose day has come", () => {
+    show({ bands: bands([task({ dueKind: "by" })]) })
+
+    expect(screen.getByText("Due by today")).toBeInTheDocument()
+  })
+
+  it("does not say it of a task that is simply due today", () => {
+    show()
+
+    expect(screen.queryByText("Due by today")).not.toBeInTheDocument()
   })
 })

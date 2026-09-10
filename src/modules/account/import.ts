@@ -137,9 +137,17 @@ export function toInsertRow(
   row: ImportRow,
   userId: string,
 ): Record<string, unknown> {
+  // An older backup's name for a column becomes the current one before projection, or
+  // the projection below drops it — silently, which is the one thing a restore must not
+  // do. The current name wins if a file somehow carries both.
+  const source: ImportRow = { ...row }
+  for (const [from, to] of Object.entries(RENAMED_COLUMNS[table.name] ?? {})) {
+    if (from in source && !(to in source)) source[to] = source[from]
+  }
+
   const out: Record<string, unknown> = {}
   for (const column of table.columns) {
-    const value = row[column]
+    const value = source[column]
     if (value === undefined) continue
     out[column] =
       table.dateColumns.includes(column) && typeof value === "string"
@@ -148,6 +156,20 @@ export function toInsertRow(
   }
   out.userId = userId
   return out
+}
+
+/**
+ * Columns a backup may call by an older name, keyed by drizzle export name: old → new.
+ *
+ * Migration 0043 renamed `highlighted` to `tracked` on events and their exceptions. A file
+ * taken before it still says `highlighted`, and without this every flag in it would be
+ * lost on restore with nothing to say so. `EXPORT_VERSION` is deliberately not bumped for a
+ * rename, for the reason `parseImport` gives about removals: a bump refuses every existing
+ * backup outright, which is worse than reading them.
+ */
+const RENAMED_COLUMNS: Record<string, Record<string, string>> = {
+  events: { highlighted: "tracked" },
+  eventExceptions: { highlighted: "tracked" },
 }
 
 /** The first foreign key that points outside the file, described, or null. */

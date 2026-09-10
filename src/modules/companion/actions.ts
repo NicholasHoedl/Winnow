@@ -176,6 +176,9 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
       const result = await createTask({
         title: task.title,
         dueDate: task.dueDate,
+        // A deadline, not an appointment: "buy running shoes" is wanted before the date the
+        // plan gave it, so it belongs on the dashboard from the day the plan is applied.
+        dueKind: "by",
         goalId,
       })
       if (!result.ok) return failed(task.title)

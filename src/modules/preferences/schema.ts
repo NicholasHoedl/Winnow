@@ -148,12 +148,11 @@ export const userPreferences = pgTable("user_preferences", {
   defaultCalendarView: text("default_calendar_view").notNull().default("month"),
 
   /**
-   * How far ahead the dashboard's Slate reaches for HIGHLIGHTED events.
+   * How far ahead the dashboard's Slate reaches for TRACKED events.
    *
-   * Only highlighted ones. Today and tomorrow show everything regardless, so no setting of
-   * this can hide a row you can see now — it only decides how early a flagged event starts
-   * appearing. Widen it and the card grows a day band per flagged event; narrow it and they
-   * arrive later.
+   * Tracked ones are the only events the Slate shows at all (T28), so this is the whole of
+   * its reach into the calendar. Widen it and the card grows a day band per tracked event;
+   * narrow it and they arrive later. Today is always inside it.
    */
   slateHorizonDays: integer("slate_horizon_days").notNull().default(7),
 

@@ -165,6 +165,35 @@ describe("toInsertRow", () => {
     const row = toInsertRow(tasks(), { id: "t" }, ME)
     expect(row).not.toHaveProperty("priority")
   })
+
+  it("reads a pre-0043 backup's `highlighted` as `tracked`", () => {
+    // The rename would otherwise cost every flag in the file: the projection above drops
+    // what it does not recognise, and it would do so without a word.
+    const events = () => USER_TABLES.find((t) => t.key === "events")!
+    const exceptions = () =>
+      USER_TABLES.find((t) => t.name === "eventExceptions")!
+
+    const event = toInsertRow(events(), { id: "e", highlighted: true }, ME)
+    expect(event.tracked).toBe(true)
+    expect(event).not.toHaveProperty("highlighted")
+
+    // Nullable on an exception, and null is a real value there — inherit — so it has to
+    // come through as null rather than be dropped as "absent".
+    const exception = toInsertRow(
+      exceptions(),
+      { id: "x", highlighted: null },
+      ME,
+    )
+    expect(exception).toHaveProperty("tracked", null)
+
+    // A file that somehow carries both: the current name wins.
+    const both = toInsertRow(
+      events(),
+      { id: "e", highlighted: false, tracked: true },
+      ME,
+    )
+    expect(both.tracked).toBe(true)
+  })
 })
 
 describe("parseImport — referential integrity", () => {
