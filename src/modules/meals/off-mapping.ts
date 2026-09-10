@@ -131,6 +131,35 @@ function isLiquid(product: Record<string, unknown>): boolean {
  * rather than falling back to the 100 g figure. Mixing produces a food whose protein
  * sits on a different basis from its calories — wrong in a way that looks fine.
  */
+/** How many packaged products the search shows. The generic foods come first now. */
+export const OFF_RESULTS_SHOWN = 6
+
+/**
+ * The mapped hits worth showing, in the search service's own order.
+ *
+ * Relevance order is kept on purpose: sorting by scan count, which the service supports,
+ * was tried live for "banana" and surfaced a cocoa powder, banana chips and a soy drink
+ * above every actual banana. What goes is the noise around the relevant rows — an entry
+ * with no calories on its basis (a stub someone scanned and never finished), and the
+ * same product listed under two barcodes — and the tail past what the dialog can show.
+ */
+export function usableProducts(
+  foods: ImportedFood[],
+  limit = OFF_RESULTS_SHOWN,
+): ImportedFood[] {
+  const seen = new Set<string>()
+  const kept: ImportedFood[] = []
+  for (const food of foods) {
+    if (!(food.calories > 0)) continue
+    const key = food.name.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    kept.push(food)
+    if (kept.length >= limit) break
+  }
+  return kept
+}
+
 export function mapOffProduct(raw: unknown): ImportedFood | null {
   if (typeof raw !== "object" || raw === null) return null
   const product = raw as Record<string, unknown>

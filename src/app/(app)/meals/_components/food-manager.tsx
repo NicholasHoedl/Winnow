@@ -14,6 +14,11 @@ import {
 } from "@/modules/meals/actions"
 import type { ImportedFood } from "@/modules/meals/off-mapping"
 import type { Food } from "@/modules/meals/queries"
+import {
+  defaultPortion,
+  scaleReferenceFood,
+  type ReferenceFood,
+} from "@/modules/meals/reference-foods"
 import { foodInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
 import { Button } from "@/components/ui/button"
@@ -32,7 +37,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
-import { FoodDatabaseSearch } from "./food-database-search"
+import { FoodSearch } from "./food-search"
 import { NutritionExtraFields } from "./nutrition-extra-fields"
 
 type FoodFormValues = {
@@ -119,6 +124,11 @@ export function FoodManager({
     )
   }, [open, editing, reset])
 
+  /** Prefill from a reference food at its usual portion. Writes nothing — the form's submit does. */
+  function onPickReference(food: ReferenceFood) {
+    reset({ ...scaleReferenceFood(food, defaultPortion(food)), barcode: null })
+  }
+
   /** Prefill from a food-database result. Writes nothing — the form's submit does. */
   function onPickImported(food: ImportedFood) {
     reset({
@@ -202,13 +212,18 @@ export function FoodManager({
 
         <form onSubmit={onSubmit}>
           <FieldGroup>
-            {/* Import fills the form; "Add food" below is still what writes the row, so
-                the values can be corrected first — the database is often wrong. */}
+            {/* A pick fills the form; "Add food" below is still what writes the row, so
+                the values can be corrected first — the packaged-goods database is often
+                wrong. No library group here: this dialog IS the library. */}
             {!editing && (
-              <FoodDatabaseSearch
-                enabled={offEnabled}
-                onPick={onPickImported}
-              />
+              <Field>
+                <FieldLabel>Find a food</FieldLabel>
+                <FoodSearch
+                  offEnabled={offEnabled}
+                  onPickReference={onPickReference}
+                  onPickImported={onPickImported}
+                />
+              </Field>
             )}
             <div className="grid grid-cols-2 gap-3">
               <Field className="col-span-2">
@@ -295,10 +310,9 @@ export function FoodManager({
               // remove — it told you the library was empty and left you to type. Point
               // at the two ways to fill it that now sit directly above.
               <li className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
-                Your library is empty.{" "}
-                {offEnabled
-                  ? "Search the food database above, scan a barcode, or add one by hand."
-                  : "Add one by hand above."}
+                Your library is empty. Search above for a reference food
+                {offEnabled ? " or a packaged product" : ""}, or add one by
+                hand.
               </li>
             ) : (
               foods.map((food) => (

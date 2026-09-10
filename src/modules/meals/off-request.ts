@@ -59,6 +59,10 @@ export const BARCODE_TIMEOUT_MS = 4000
 export function buildSearchUrl(baseUrl: string, query: string): string {
   const params = new URLSearchParams({
     q: query,
+    // English names where a product has one; the mapper still falls back through the
+    // others. Without it the hits for a common word arrive in whatever language the
+    // most-scanned entry was written in.
+    langs: "en",
     page_size: String(OFF_PAGE_SIZE),
     fields: OFF_FIELDS,
   })

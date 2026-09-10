@@ -4,18 +4,22 @@ import * as React from "react"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
-import { logMeal } from "@/modules/meals/actions"
+import { logMeal, logReferenceFood } from "@/modules/meals/actions"
 import { restoreIfEmpty } from "@/lib/forms"
 import type { Food } from "@/modules/meals/queries"
-import { parseMealQuickAdd } from "@/modules/meals/service"
+import {
+  parseMealQuickAdd,
+  parseQuickAddFallback,
+} from "@/modules/meals/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 
 /**
- * Natural-language meal capture for the viewed day: "banana x2" matches a library food;
- * "lunch 600cal 40p 30c 10f" logs explicit macros. Powered by the S5 parser.
+ * Natural-language meal capture for the viewed day: "banana x2" matches a library food,
+ * or failing that a reference food (T31); "lunch 600cal 40p 30c 10f" logs explicit
+ * macros. Powered by the S5 parser.
  */
 export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
   const [text, setText] = React.useState("")
@@ -30,9 +34,34 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
     // Food[] is structurally assignable to FoodOption[].
     const parsed = parseMealQuickAdd(trimmed, foods)
     if (!parsed) {
-      toast.error(
-        "Couldn’t parse that — try “banana x2” or “lunch 600cal 40p 30c 10f”.",
-      )
+      // Nothing in the library and no macros: the reference foods get the name. The
+      // server resolves it — the index lives there — and refuses with the same "parse
+      // that" wording the bar has always used, handing the text back either way.
+      const fallback = parseQuickAddFallback(trimmed)
+      if (!fallback) {
+        toast.error(
+          "Couldn’t parse that — try “banana x2” or “lunch 600cal 40p 30c 10f”.",
+        )
+        return
+      }
+      setText("")
+      startTransition(async () => {
+        const result = await logReferenceFood({
+          ...fallback,
+          mealType: fallback.mealType || (defaultMealType ?? ""),
+          date,
+        })
+        if (!result.ok) {
+          toast.error(result.error)
+          setText(restoreIfEmpty(trimmed))
+          return
+        }
+        toast.success(`Logged ${result.name}`, {
+          description: `${result.servingLabel}${
+            fallback.servings !== 1 ? ` × ${fallback.servings}` : ""
+          } — saved to your library.`,
+        })
+      })
       return
     }
 
@@ -63,7 +92,7 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
       <Input
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Quick add — “banana x2” or “lunch 600cal 40p”…"
+        placeholder="Quick add — “banana x2”, “2 eggs” or “lunch 600cal 40p”…"
         aria-label="Quick add meal"
       />
       <Button

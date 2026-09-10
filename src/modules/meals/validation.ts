@@ -175,6 +175,22 @@ export const bodyWeightSchema = z.object({
 export const offQuerySchema = z.string().max(200)
 export const offBarcodeSchema = z.string().max(32)
 
+// --- Reference foods (T31, ADR-0025) ---
+/** The bar's query. Trimmed like the names are; bounded like the Open Food Facts one. */
+export const referenceQuerySchema = z.string().trim().min(1).max(100)
+
+/**
+ * The quick-add bar's fall-through: a bare food name and what the bar parsed around it.
+ * The server resolves the name — the reference index lives there — and logs the food at
+ * its usual portion.
+ */
+export const referenceQuickAddSchema = z.object({
+  query: z.string().trim().min(1).max(100),
+  servings: z.number().positive().max(10000),
+  mealType: z.enum(MEAL_TYPES).or(z.literal("")),
+  date: dayField,
+})
+
 export const macroTargetsSchema = z.object({
   calories: macroNumber,
   proteinG: macroNumber,

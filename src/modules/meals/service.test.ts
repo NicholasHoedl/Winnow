@@ -10,6 +10,8 @@ import {
   isLikelyBarcode,
   macroProgress,
   parseMealQuickAdd,
+  parseQuickAddFallback,
+  rankLibraryFoods,
   type RecentEntry,
   recentFrequentFoods,
   sumMacros,
@@ -510,6 +512,62 @@ describe("isLikelyBarcode", () => {
     expect(isLikelyBarcode("301762042200x")).toBe(false)
     expect(isLikelyBarcode("3017-6204-2200")).toBe(false)
     expect(isLikelyBarcode("30176204220 3")).toBe(false)
+  })
+})
+
+describe("parseQuickAddFallback", () => {
+  it("hands over the name with the quantity and meal-type word stripped", () => {
+    expect(parseQuickAddFallback("banana x2")).toEqual({
+      query: "banana",
+      servings: 2,
+      mealType: "",
+    })
+    expect(parseQuickAddFallback("lunch 2x chicken breast")).toEqual({
+      query: "chicken breast",
+      servings: 2,
+      mealType: "lunch",
+    })
+    expect(parseQuickAddFallback("  Apple  ")).toEqual({
+      query: "Apple",
+      servings: 1,
+      mealType: "",
+    })
+  })
+
+  it("is null with no name left to look up", () => {
+    expect(parseQuickAddFallback("x2")).toBeNull()
+    expect(parseQuickAddFallback("   ")).toBeNull()
+    expect(parseQuickAddFallback("lunch")).toBeNull()
+  })
+})
+
+describe("rankLibraryFoods", () => {
+  const lib = [
+    { id: "a", name: "Banana bread" },
+    { id: "b", name: "Bananas, raw" },
+    { id: "c", name: "Dried banana" },
+    { id: "d", name: "Banana" },
+    { id: "e", name: "Oats" },
+  ]
+
+  it("puts an exact name first, then prefixes, then anything containing the query", () => {
+    expect(rankLibraryFoods(lib, [], "banana").map((f) => f.id)).toEqual([
+      "d",
+      "a",
+      "b",
+      "c",
+    ])
+  })
+
+  it("lifts what you log most within a tier, in the quick-pick order", () => {
+    expect(
+      rankLibraryFoods(lib, ["b", null, "a"], "banana").map((f) => f.id),
+    ).toEqual(["d", "b", "a", "c"])
+  })
+
+  it("caps the list and answers nothing for nothing", () => {
+    expect(rankLibraryFoods(lib, [], "banana", 2)).toHaveLength(2)
+    expect(rankLibraryFoods(lib, [], "  ")).toEqual([])
   })
 })
 

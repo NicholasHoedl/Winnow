@@ -74,10 +74,27 @@ next integration. See **ADR-0005** for the full reasoning.
   a path segment, so it is regex-checked (`/^\d{8,14}$/`) at the action and
   again before the URL is built; queries go through `URLSearchParams`.
 - **Reading writes nothing.** Searching the food database touches no table;
-  only an explicit import does.
+  only the form's submit does — there is no separate import step since T31.
 - **The integration is switchable** (`OFF_ENABLED`). Off means zero network
   calls, and the flag is read on the server and passed down as a prop — a
   client component must never touch `process.env`.
+- **It is the third group, not the first.** Since T31 (ADR-0025) the food
+  search lists the library, then the bundled reference foods, then Open Food
+  Facts — a packaged-products catalogue, asked only from three letters and
+  after a longer pause, whose group renders its own failure under the two that
+  answered.
+
+### 1.1b The bundled reference foods (added in T31)
+
+Generic foods — "Bananas, raw", "Chicken, broilers or fryers, breast, …" — come
+from USDA FoodData Central's SR Legacy release, public domain, trimmed by
+`scripts/build-food-reference.ts` into `src/modules/meals/reference/sr-legacy.json`
+(7,793 foods, about 1.2 MB: ten figures per 100 g and up to eight household
+measures each). `reference-data.ts` is `server-only` and loads it once per
+process; `reference-foods.ts` is the pure part — decode, tokenise, score, scale
+— and is unit-tested without the file. The dialog reaches it through a Server
+Action, so the file never ships to a browser, and the primary search path needs
+no network. USDA asks to be named as the source; the dialog does. ADR-0025.
 
 The deployment consequence is in §4.2: the app container now needs outbound
 HTTPS, where before it needed none.

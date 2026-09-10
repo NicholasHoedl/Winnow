@@ -1,7 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-10**. T30 gave the Budget section the Activity treatment — a strip
-of four pages, Transactions · Budgets · Categories · Trends, the month riding on the pills
+Last updated: **2026-09-10**. T31 merged the meals page's two food lookups into one search
+bar and bundled USDA's generic foods with the app (ADR-0025); no migration, a 1.2 MB
+generated file. T30 gave the Budget section the Activity treatment — a strip of four
+pages, Transactions · Budgets · Categories · Trends, the month riding on the pills
 (ADR-0024); no migration. T29 made body weight a trend to watch — a smoothed line, a
 rate, a goal weight as a readout, a switch — with migration `0044`, two additive
 preference columns (ADR-0023). T28 made a due date a day or a deadline and the Slate a
@@ -22,7 +24,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T30 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T31 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -584,6 +586,44 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T31 is shipped: one food search, with generic foods built in.** No migration. **ADR-0025
+is the authority**, amending ADR-0005's alternatives.
+
+- **One "Find a food" bar** in the Log food dialog and the food manager (`food-search.tsx`),
+  three groups in reading order: Your library (client-side, `rankLibraryFoods` — exact,
+  prefix, substring, the quick-pick order within a tier), Reference foods (a Server Action
+  over the bundled index), Packaged products (Open Food Facts, from three letters, after a
+  longer pause). "Create '…'" is the last row. A pick fills the form; the import step is
+  gone, and so is `food-database-search.tsx`.
+- **USDA SR Legacy, bundled.** `pnpm food-reference <json>` (`scripts/build-food-reference.ts`)
+  trims the release to `src/modules/meals/reference/sr-legacy.json` — 7,793 foods, 1.2 MB,
+  ten figures per 100 g and up to eight household measures each. `reference-foods.ts` is
+  the pure part (decode, tokenise, score, scale); `reference-data.ts` is `server-only` and
+  holds the index. Download from the `fdc.nal.usda.gov` host: `www.usda.gov` answers
+  "Access Denied" for the same path.
+- **The scorer** requires every query token to land, pays for an exact head noun and for
+  adjacent tokens in either order (USDA writes "Oil, olive"), and carries a standing bias:
+  one plain word ("raw", "cooked", "all commercial varieties") up, preparation, product
+  and brand words down. Tuned against a dozen everyday queries after the first version put
+  "Chicken breast tenders, breaded" above the roasted breast and "Salmonberries" above
+  salmon; the word lists are a heuristic and the tests pin the cases.
+- **Portions**: a pick takes the food's usual portion — a "medium", else USDA's first
+  measure, else 100 g — scaled by `scaleReferenceFood`; a Portion select under the serving
+  field rewrites the figures for another. No schema change: a library food still has one
+  serving label.
+- **Quick add falls through**: `parseQuickAddFallback` on the client, `logReferenceFood` on
+  the server, which logs the best match at its usual portion and saves it to the library so
+  the next time is answered in the browser. Refusals keep the bar's "Couldn't parse that"
+  wording, so `meals-capture.spec`'s negative still holds.
+- **Open Food Facts**: `langs=en` on the request, and `usableProducts` drops calorie-less
+  hits, collapses duplicate names and caps at six. Relevance order is kept — popularity
+  sort surfaces the wrong things for a generic word, verified live.
+- e2e: `meals-food-db.spec` is `meals-food-search.spec`, driving the reference path offline
+  (pick, portion, log, library) and the quick-add fall-through, with the Open Food Facts
+  assertions still offline-safe; `meals-barcode.spec`'s flag proxy reads the packaged group
+  instead of the old panel. Unit: `reference-foods.test.ts`, `service.test.ts` (fallback,
+  ranking), `off-mapping.test.ts` (`usableProducts`), `off-request.test.ts` (`langs`).
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

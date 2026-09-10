@@ -378,6 +378,71 @@ export function parseMealQuickAdd(
   }
 }
 
+/**
+ * What the quick-add bar hands to the reference foods when nothing in the library
+ * matched: the name with the quantity and a leading meal-type word stripped, or null when
+ * no name is left to look up. The explicit-macro case never reaches here —
+ * `parseMealQuickAdd` answers it first — so this only has to read a food's name the way
+ * that parser does (T31, ADR-0025).
+ */
+export function parseQuickAddFallback(text: string): {
+  query: string
+  servings: number
+  mealType: "" | MealType
+} | null {
+  let work = text
+  let servings = 1
+  const qty = QTY_OP_FIRST.exec(work) ?? QTY_NUM_FIRST.exec(work)
+  if (qty) {
+    const q = parseFloat(qty[1])
+    if (q > 0) servings = q
+    work = blankSpan(work, qty.index, qty[0].length)
+  }
+  let query = collapse(work)
+  let mealType: "" | MealType = ""
+  const lead = LEADING_MEAL_TYPE.exec(query)
+  if (lead) {
+    mealType = lead[1].toLowerCase() as MealType
+    query = query.slice(lead[0].length).trim()
+  }
+  return query ? { query: query.slice(0, 100), servings, mealType } : null
+}
+
+/**
+ * Library foods matching a query, the way the search bar lists them: an exact name first,
+ * then names the query begins, then names containing it — and within a tier the foods
+ * logged most recently and often first, in `recentIds`' order (the quick-pick ranking).
+ */
+export function rankLibraryFoods<T extends { id: string; name: string }>(
+  foods: T[],
+  recentIds: readonly (string | null)[],
+  query: string,
+  limit = 5,
+): T[] {
+  const q = collapse(query).toLowerCase()
+  if (!q) return []
+  const recent = new Map<string, number>()
+  recentIds.forEach((id, index) => {
+    if (id && !recent.has(id)) recent.set(id, index)
+  })
+  return foods
+    .flatMap((food) => {
+      const name = collapse(food.name).toLowerCase()
+      const tier =
+        name === q ? 0 : name.startsWith(q) ? 1 : name.includes(q) ? 2 : -1
+      if (tier < 0) return []
+      return [{ food, tier, recent: recent.get(food.id) ?? Infinity }]
+    })
+    .sort(
+      (a, b) =>
+        a.tier - b.tier ||
+        a.recent - b.recent ||
+        a.food.name.localeCompare(b.food.name),
+    )
+    .slice(0, limit)
+    .map((entry) => entry.food)
+}
+
 // --- Recent / frequent quick-picks ---
 // Pure ranking of a user's logged history into a short quick-pick list for one-tap logging.
 // No DB — unit-testable. Fed by `getRecentEntries` (newest-first).

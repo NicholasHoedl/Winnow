@@ -58,9 +58,12 @@ test("the scan button is absent when the food database is switched off", async (
   await page.getByRole("button", { name: "Log food" }).click()
 
   const scan = page.getByRole("button", { name: "Scan a barcode" })
-  const search = page.getByPlaceholder(/search open food facts/i)
-  // Both are gated on the same flag, so they appear and disappear together.
-  const scanCount = await scan.count()
-  const searchCount = await search.count()
-  expect(scanCount).toBe(searchCount)
+  // The search bar is always there since T31; its "Packaged products" group and the scan
+  // button are gated on the same flag, so they appear and disappear together. Three
+  // letters, because the group waits for that many before asking.
+  await page.getByPlaceholder(/search foods/i).fill("yogurt")
+  // `exact`: the bar's footer mentions packaged products too.
+  const packaged = page.getByText("Packaged products", { exact: true })
+  if ((await scan.count()) === 1) await expect(packaged).toBeVisible()
+  else await expect(packaged).toHaveCount(0)
 })

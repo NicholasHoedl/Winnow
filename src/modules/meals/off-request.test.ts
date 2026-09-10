@@ -16,6 +16,7 @@ describe("buildSearchUrl", () => {
     expect(url.pathname).toBe("/search")
     expect(url.searchParams.get("q")).toBe("oats")
     expect(url.searchParams.get("page_size")).toBe(String(OFF_PAGE_SIZE))
+    expect(url.searchParams.get("langs")).toBe("en")
   })
 
   it("always requests a field list — a full product document is ~100 KB", () => {

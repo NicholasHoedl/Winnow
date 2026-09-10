@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import dynamic from "next/dynamic"
-import { Barcode, Plus } from "lucide-react"
+import { Barcode } from "lucide-react"
 import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
@@ -14,7 +14,18 @@ import {
 } from "@/modules/meals/actions"
 import type { ImportedFood, NutrientBasis } from "@/modules/meals/off-mapping"
 import type { Food, MealEntry } from "@/modules/meals/queries"
-import { MEAL_TYPES, type MealType } from "@/modules/meals/service"
+import {
+  defaultPortion,
+  portionOptions,
+  scaleReferenceFood,
+  type ReferenceFood,
+  type ReferencePortion,
+} from "@/modules/meals/reference-foods"
+import {
+  MEAL_TYPES,
+  type MealType,
+  type QuickPickFood,
+} from "@/modules/meals/service"
 import { mealEntryInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
 import { Button } from "@/components/ui/button"
@@ -27,14 +38,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import {
   Field,
   FieldError,
@@ -51,7 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { FoodDatabaseSearch } from "./food-database-search"
+import { FoodSearch } from "./food-search"
 import { NutritionExtraFields } from "./nutrition-extra-fields"
 
 /**
@@ -118,6 +121,7 @@ const MEAL_LABELS: Record<MealType, string> = {
 export function LogFoodDialog({
   date,
   foods,
+  quickPicks,
   entry,
   offEnabled,
   open,
@@ -125,6 +129,8 @@ export function LogFoodDialog({
 }: {
   date: string
   foods: Food[]
+  /** The quick-pick ranking, so the search lists what you log most first. */
+  quickPicks: QuickPickFood[]
   entry: MealEntry | null
   /** Whether the Open Food Facts integration is switched on for this install. */
   offEnabled: boolean
@@ -146,20 +152,24 @@ export function LogFoodDialog({
     defaultValues: EMPTY,
   })
 
-  const [foodQuery, setFoodQuery] = React.useState("")
   // Set when a food-database result supplied per-100g figures rather than per-serving,
   // so the servings field can say what "1" now means.
   const [importedBasis, setImportedBasis] =
     React.useState<NutrientBasis | null>(null)
+  // The reference food a pick came from, while it is the one in the form: it is what
+  // offers the other portions. Cleared by any other pick, and by opening or closing.
+  const [referenceFood, setReferenceFood] =
+    React.useState<ReferenceFood | null>(null)
+  const [portionIndex, setPortionIndex] = React.useState(0)
   const [scanOpen, setScanOpen] = React.useState(false)
   const [lookingUp, startLookup] = React.useTransition()
 
-  // Reset the food search when the dialog opens/closes — during render, not in an effect
+  // Reset the pick state when the dialog opens/closes — during render, not in an effect
   // (which would be a setState-in-effect), mirroring the tasks dialog's scope reset.
   const wasOpenRef = React.useRef(open)
   if (open !== wasOpenRef.current) {
     wasOpenRef.current = open
-    if (foodQuery !== "") setFoodQuery("")
+    if (referenceFood !== null) setReferenceFood(null)
     if (importedBasis !== null) setImportedBasis(null)
   }
 
@@ -187,9 +197,8 @@ export function LogFoodDialog({
     }
   }, [open, entry, reset])
 
-  function onPickFood(value: string) {
-    const food = foods.find((f) => f.id === value)
-    if (!food) return
+  function onPickFood(food: Food) {
+    setReferenceFood(null)
     setValue("foodId", food.id)
     setValue("name", food.name)
     setValue("servingLabel", food.servingLabel)
@@ -214,6 +223,7 @@ export function LogFoodDialog({
    * is still there to opt out.
    */
   function onPickImported(food: ImportedFood) {
+    setReferenceFood(null)
     setValue("foodId", "")
     setValue("name", food.name)
     setValue("servingLabel", food.servingLabel)
@@ -228,6 +238,52 @@ export function LogFoodDialog({
     setValue("barcode", food.barcode)
     setValue("saveToLibrary", true)
     setImportedBasis(food.basis)
+  }
+
+  /**
+   * Fill the form from a reference food at one of its portions. Per 100 g in the dataset,
+   * scaled here, so the form holds figures for the portion named in the serving label and
+   * "1 serving" means what it says. `saveToLibrary` stays ON, as for an import: the point
+   * is not to look it up again.
+   */
+  function applyPortion(food: ReferenceFood, portion: ReferencePortion) {
+    const scaled = scaleReferenceFood(food, portion)
+    setValue("foodId", "")
+    setValue("name", scaled.name)
+    setValue("servingLabel", scaled.servingLabel)
+    setValue("calories", scaled.calories)
+    setValue("proteinG", scaled.proteinG)
+    setValue("carbsG", scaled.carbsG)
+    setValue("fatG", scaled.fatG)
+    setValue("fiberG", scaled.fiberG)
+    setValue("sugarG", scaled.sugarG)
+    setValue("satFatG", scaled.satFatG)
+    setValue("sodiumMg", scaled.sodiumMg)
+    setValue("barcode", null)
+    setValue("saveToLibrary", true)
+    setImportedBasis(null)
+  }
+
+  function onPickReference(food: ReferenceFood) {
+    const options = portionOptions(food)
+    const usual = defaultPortion(food)
+    const index = Math.max(
+      0,
+      options.findIndex(
+        (portion) =>
+          portion.label === usual.label && portion.grams === usual.grams,
+      ),
+    )
+    setReferenceFood(food)
+    setPortionIndex(index)
+    applyPortion(food, options[index])
+  }
+
+  /** "Create '…'": hand entry, starting from the name that found nothing. */
+  function onCreate(name: string) {
+    setReferenceFood(null)
+    setValue("name", name)
+    setValue("foodId", "")
   }
 
   /**
@@ -277,10 +333,6 @@ export function LogFoodDialog({
   })
 
   const foodId = watch("foodId")
-  const q = foodQuery.trim().toLowerCase()
-  const foodMatches = (
-    q ? foods.filter((food) => food.name.toLowerCase().includes(q)) : foods
-  ).slice(0, 8)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -296,52 +348,22 @@ export function LogFoodDialog({
 
         <form onSubmit={onSubmit}>
           <FieldGroup>
-            {!isEdit && foods.length > 0 && (
+            {/* One bar for every way of finding a food (T31): the library, the bundled
+                reference foods and Open Food Facts, in that order, with hand entry as
+                the last row. It used to be a library picker here and a separate database
+                panel below the scan button. */}
+            {!isEdit && (
               <Field>
-                <FieldLabel>Add from library</FieldLabel>
-                <Command shouldFilter={false} className="rounded-lg border">
-                  <CommandInput
-                    value={foodQuery}
-                    onValueChange={setFoodQuery}
-                    placeholder="Search your foods…"
-                  />
-                  <CommandList className="max-h-44">
-                    <CommandEmpty>
-                      No match — fill in the fields below.
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {foodMatches.map((food) => (
-                        <CommandItem
-                          key={food.id}
-                          value={food.id}
-                          onSelect={() => {
-                            onPickFood(food.id)
-                            setFoodQuery("")
-                          }}
-                        >
-                          <span className="truncate">{food.name}</span>
-                          <span className="text-muted-foreground ml-auto text-xs">
-                            {Math.round(food.calories)} kcal ·{" "}
-                            {food.servingLabel}
-                          </span>
-                        </CommandItem>
-                      ))}
-                      {q && (
-                        <CommandItem
-                          value="__create__"
-                          onSelect={() => {
-                            setValue("name", foodQuery.trim())
-                            setValue("foodId", "")
-                            setFoodQuery("")
-                          }}
-                        >
-                          <Plus className="size-4" />
-                          Create “{foodQuery.trim()}”
-                        </CommandItem>
-                      )}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
+                <FieldLabel>Find a food</FieldLabel>
+                <FoodSearch
+                  foods={foods}
+                  quickPicks={quickPicks}
+                  offEnabled={offEnabled}
+                  onPickFood={onPickFood}
+                  onPickReference={onPickReference}
+                  onPickImported={onPickImported}
+                  onCreate={onCreate}
+                />
               </Field>
             )}
 
@@ -356,13 +378,6 @@ export function LogFoodDialog({
                 <Barcode className="size-4" />
                 {lookingUp ? "Looking up…" : "Scan a barcode"}
               </Button>
-            )}
-
-            {!isEdit && (
-              <FoodDatabaseSearch
-                enabled={offEnabled}
-                onPick={onPickImported}
-              />
             )}
 
             <Field>
@@ -386,6 +401,44 @@ export function LogFoodDialog({
                     Per 100 g — set servings to the amount you had (250 g →
                     2.5).
                   </p>
+                )}
+                {/* A reference food comes with USDA's household measures. Choosing one
+                    rewrites the serving label and every figure for that portion. */}
+                {referenceFood && (
+                  <Select
+                    value={String(portionIndex)}
+                    onValueChange={(value) => {
+                      if (value === null) return
+                      const index = Number(value)
+                      const portion = portionOptions(referenceFood)[index]
+                      if (!portion) return
+                      setPortionIndex(index)
+                      applyPortion(referenceFood, portion)
+                    }}
+                  >
+                    <SelectTrigger className="w-full" aria-label="Portion">
+                      <SelectValue>
+                        {(value) =>
+                          portionOptions(referenceFood)[Number(value)]?.label ??
+                          "Portion"
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    {/* Wider than its trigger, which is half a dialog: USDA's measures
+                        run long, and the weight is the part worth reading. */}
+                    <SelectContent className="max-w-[calc(100vw-3rem)] min-w-72">
+                      {portionOptions(referenceFood).map((portion, index) => (
+                        <SelectItem
+                          key={`${index}-${portion.label}`}
+                          value={String(index)}
+                        >
+                          {portion.label === "100 g"
+                            ? "100 g"
+                            : `${portion.label} (${portion.grams} g)`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
                 <FieldError errors={[errors.servingLabel]} />
               </Field>

@@ -10,7 +10,7 @@ import "server-only"
 
 import { OFF_API_URL, OFF_ENABLED, OFF_SEARCH_URL } from "@/lib/config"
 
-import { mapOffProduct, type ImportedFood } from "./off-mapping"
+import { mapOffProduct, usableProducts, type ImportedFood } from "./off-mapping"
 import {
   BARCODE_TIMEOUT_MS,
   buildProductUrl,
@@ -89,9 +89,11 @@ export async function searchProducts(
 
   return {
     ok: true,
-    data: hits
-      .map(mapOffProduct)
-      .filter((food): food is ImportedFood => food !== null),
+    data: usableProducts(
+      hits
+        .map(mapOffProduct)
+        .filter((food): food is ImportedFood => food !== null),
+    ),
   }
 }
 

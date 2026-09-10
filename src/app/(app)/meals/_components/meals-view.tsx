@@ -338,6 +338,7 @@ export function MealsView({
       <LogFoodDialog
         date={date}
         foods={foods}
+        quickPicks={quickPicks}
         entry={editingEntry}
         offEnabled={offEnabled}
         open={logOpen}

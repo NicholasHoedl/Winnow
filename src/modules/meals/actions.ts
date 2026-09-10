@@ -19,6 +19,12 @@ import { fetchProductByBarcode, searchProducts } from "./off-client"
 import type { ImportedFood } from "./off-mapping"
 import { describeOffFailure } from "./off-request"
 import type { Food, MacroTargets, MealEntry, WaterLog } from "./queries"
+import { findReferenceFoods, resolveReferenceFood } from "./reference-data"
+import {
+  defaultPortion,
+  scaleReferenceFood,
+  type ReferenceFood,
+} from "./reference-foods"
 import { carbsForCalories } from "./service"
 import {
   copiedMealEntry,
@@ -43,6 +49,8 @@ import {
   mealEntryInputSchema,
   offBarcodeSchema,
   offQuerySchema,
+  referenceQuerySchema,
+  referenceQuickAddSchema,
   restoreFoodSchema,
   restoreMacroTargetSchema,
   restoreMealEntrySchema,
@@ -449,6 +457,69 @@ export async function lookupBarcode(
   return result.ok
     ? { ok: true, food: result.data }
     : { ok: false, error: describeOffFailure(result.failure) }
+}
+
+// --- Reference foods (T31, ADR-0025) ---
+
+export type ReferenceSearchResult = { ok: true; foods: ReferenceFood[] }
+
+/**
+ * Search the bundled reference foods. A Server Action rather than a client-side index
+ * because the dataset is over a megabyte, which is fine in a server bundle and not
+ * something to send to a phone for every visit to /meals. Reads only, like the two
+ * lookups above; picking a result fills a form and the form's submit writes the row.
+ */
+export async function searchReferenceFoods(
+  query: unknown,
+): Promise<ReferenceSearchResult> {
+  await requireUserId()
+  const parsed = referenceQuerySchema.safeParse(query)
+  if (!parsed.success) return { ok: true, foods: [] }
+  return { ok: true, foods: findReferenceFoods(parsed.data) }
+}
+
+export type ReferenceQuickAddResult =
+  | { ok: true; name: string; servingLabel: string }
+  | { ok: false; error: string }
+
+const QUICK_ADD_HINT = "Try “banana x2” or “lunch 600cal 40p 30c 10f”."
+
+/**
+ * The quick-add bar's last resort: a name that matched nothing in the library, looked up
+ * among the reference foods and logged at its usual portion. Saved to the library too, so
+ * the next "banana x2" is answered in the browser without asking.
+ *
+ * "Couldn’t parse that" is kept in both refusals on purpose: the bar shows the message
+ * and hands the text back, and those words have meant "not logged" since the bar existed.
+ */
+export async function logReferenceFood(
+  input: unknown,
+): Promise<ReferenceQuickAddResult> {
+  await requireUserId()
+  const parsed = referenceQuickAddSchema.safeParse(input)
+  if (!parsed.success)
+    return { ok: false, error: `Couldn’t parse that — ${QUICK_ADD_HINT}` }
+
+  const food = resolveReferenceFood(parsed.data.query)
+  if (!food) {
+    return {
+      ok: false,
+      error: `Couldn’t parse that — nothing called “${parsed.data.query}” in your library or the reference foods. ${QUICK_ADD_HINT}`,
+    }
+  }
+
+  const scaled = scaleReferenceFood(food, defaultPortion(food))
+  const result = await logMeal({
+    ...scaled,
+    barcode: null,
+    foodId: "",
+    saveToLibrary: true,
+    servings: parsed.data.servings,
+    mealType: parsed.data.mealType,
+    date: parsed.data.date,
+  })
+  if (!result.ok) return { ok: false, error: result.error }
+  return { ok: true, name: scaled.name, servingLabel: scaled.servingLabel }
 }
 
 // --- Targets ---

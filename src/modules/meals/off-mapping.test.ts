@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { mapOffProduct } from "./off-mapping"
+import { mapOffProduct, usableProducts, type ImportedFood } from "./off-mapping"
 
 // Fixtures are trimmed real OFF shapes — the point of most of these tests is that OFF
 // says one thing and means another, so the input has to look like what it really sends.
@@ -326,6 +326,42 @@ describe("mapOffProduct — real OFF responses", () => {
     expect(food?.name).toBe("Pringles Original Potato Crisps")
     expect(food?.sodiumMg).toBe(112)
     expect(food?.fiberG).toBe(1.15)
+  })
+})
+
+describe("usableProducts", () => {
+  const food = (name: string, calories: number): ImportedFood => ({
+    barcode: "",
+    name,
+    servingLabel: "100 g",
+    calories,
+    proteinG: 1,
+    carbsG: 1,
+    fatG: 1,
+    fiberG: null,
+    sugarG: null,
+    sodiumMg: null,
+    satFatG: null,
+    basis: "100g",
+    incomplete: false,
+  })
+
+  it("keeps the service's order, drops calorie-less stubs and duplicate names, and caps", () => {
+    const kept = usableProducts(
+      [
+        food("Bananas", 89),
+        food("Banana bread", 0),
+        food("bananas", 90),
+        food("Banana chips", 528),
+        food("Dried banana", 346),
+      ],
+      3,
+    )
+    expect(kept.map((f) => f.name)).toEqual([
+      "Bananas",
+      "Banana chips",
+      "Dried banana",
+    ])
   })
 })
 

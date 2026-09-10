@@ -62,7 +62,7 @@ test("food-search fills the form from a library food (Enter selects, no submit)"
 
   // Reopen → search → Enter selects the food and fills the form WITHOUT submitting.
   await page.getByRole("button", { name: "Log food" }).click()
-  const search = page.getByPlaceholder(/search your foods/i)
+  const search = page.getByPlaceholder(/search foods/i)
   await search.fill(food)
   await search.press("Enter")
   await expect(page.getByLabel("Food", { exact: true })).toHaveValue(food)
