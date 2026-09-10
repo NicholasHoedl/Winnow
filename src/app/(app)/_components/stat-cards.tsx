@@ -2,8 +2,13 @@ import Link from "next/link"
 import { ArrowUpRight, Utensils, Wallet } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { formatWeight, formatWeightRate } from "@/lib/format"
 import { formatCents, type MonthSummary } from "@/modules/budget/service"
-import type { MacroProgressSet } from "@/modules/meals/service"
+import {
+  weightGoalPhrase,
+  type MacroProgressSet,
+  type WeightReadout,
+} from "@/modules/meals/service"
 
 import { DashboardCard } from "./dashboard-card"
 
@@ -63,6 +68,38 @@ function StatShell({
   )
 }
 
+/**
+ * The weight readout under the macros (T29): the latest reading, then the trend, its
+ * weekly rate and how far the goal is. Two short rows rather than one long one — this
+ * tile is about 290px wide on a laptop — and no estimate here; the meals page has room
+ * for the long form.
+ */
+function WeightLine({
+  readout,
+  unit,
+}: {
+  readout: WeightReadout
+  unit: "lb" | "kg"
+}) {
+  return (
+    <div className="border-border/60 mt-3 border-t pt-2.5 text-xs">
+      <div className="flex items-baseline justify-between gap-x-2">
+        <span className="text-muted-foreground truncate">Weight</span>
+        <span className="shrink-0 tabular-nums">
+          {formatWeight(readout.latestLb, unit)}
+        </span>
+      </div>
+      <p className="text-muted-foreground mt-0.5 truncate tabular-nums">
+        trend {formatWeight(readout.trendLb, unit)}
+        {readout.ratePerWeekLb !== null &&
+          ` · ${formatWeightRate(readout.ratePerWeekLb, unit)}`}
+        {readout.goal &&
+          ` · ${weightGoalPhrase(readout.goal, unit, { eta: false })}`}
+      </p>
+    </div>
+  )
+}
+
 function Bar({ percent, accent }: { percent: number; accent: string }) {
   return (
     <div className="bg-muted h-1.5 overflow-hidden rounded-full">
@@ -76,11 +113,14 @@ function Bar({ percent, accent }: { percent: number; accent: string }) {
 
 export function StatCards({
   macros,
+  weight,
   budget,
   currency,
   collapsed,
 }: {
   macros: { progress: MacroProgressSet }
+  /** Null with tracking off or nothing logged; the tile then says nothing about weight. */
+  weight: { readout: WeightReadout; unit: "lb" | "kg" } | null
   budget: MonthSummary
   currency: string
   /** The two tiles fold independently, so this is a pair rather than one flag. */
@@ -173,6 +213,8 @@ export function StatCards({
             })}
           </div>
         )}
+        {/* Under either branch: a weigh-in is its own fact, not part of what was eaten. */}
+        {weight && <WeightLine readout={weight.readout} unit={weight.unit} />}
       </StatShell>
 
       {/* Budget */}

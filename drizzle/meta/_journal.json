@@ -309,6 +309,13 @@
       "when": 1788997396382,
       "tag": "0043_due_kind_and_tracked",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1789014635264,
+      "tag": "0044_weight_tracking",
+      "breakpoints": true
     }
   ]
 }

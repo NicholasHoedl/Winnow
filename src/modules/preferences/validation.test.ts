@@ -38,6 +38,8 @@ const DEFAULTS = [
   "landingPage",
   "defaultMealType",
   "defaultListId",
+  "trackWeight",
+  "goalWeightLb",
 ] as const
 
 const keys = (schema: { shape: object }) => Object.keys(schema.shape).sort()

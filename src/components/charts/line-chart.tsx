@@ -21,6 +21,8 @@ export function LineChart({
   height = 130,
   className,
   baseline = "zero",
+  labelStep = 1,
+  reference,
 }: {
   labels: string[]
   series: ChartSeries[]
@@ -33,11 +35,26 @@ export function LineChart({
    * quantities read as changes rather than amounts. See {@link niceScale}.
    */
   baseline?: Baseline
+  /**
+   * Draw every Nth x-axis label, and always the last. For a dense axis — the weight
+   * chart has a slot per weigh-in — where every label would overprint its neighbour.
+   * Every point keeps its own label for its tooltip and its key; this thins the text only.
+   */
+  labelStep?: number
+  /**
+   * A dashed horizontal line at a value, named at its right end: a goal, a target. It
+   * widens the y-scale to include itself, so a goal below every reading is still on the
+   * chart rather than off the bottom of it.
+   */
+  reference?: { value: number; label: string }
 }) {
   const plotW = VIEW_W - AXIS_W
   const plotH = height - AXIS_H - PAD_T
 
-  const values = series.flatMap((s) => s.points.map((p) => p.value))
+  const values = [
+    ...series.flatMap((s) => s.points.map((p) => p.value)),
+    ...(reference ? [reference.value] : []),
+  ]
   const scale = niceScale(
     values.length ? Math.min(...values) : 0,
     values.length ? Math.max(...values) : 0,
@@ -77,6 +94,28 @@ export function LineChart({
         )
       })}
 
+      {reference && (
+        <g>
+          <line
+            x1={AXIS_W}
+            x2={VIEW_W}
+            y1={yOf(reference.value)}
+            y2={yOf(reference.value)}
+            strokeWidth={1}
+            strokeDasharray="4 3"
+            className="stroke-brand-accent"
+          />
+          <text
+            x={VIEW_W - 2}
+            y={yOf(reference.value) - 3}
+            textAnchor="end"
+            className="fill-brand-accent text-[8px]"
+          >
+            {reference.label}
+          </text>
+        </g>
+      )}
+
       {series.map((s) => {
         const points = s.points.map((point, index) => ({
           x: AXIS_W + slotCenter(index, labels.length, plotW),
@@ -107,17 +146,26 @@ export function LineChart({
         )
       })}
 
-      {labels.map((label, index) => (
-        <text
-          key={label}
-          x={AXIS_W + slotCenter(index, labels.length, plotW)}
-          y={height - 4}
-          textAnchor="middle"
-          className="fill-muted-foreground text-[8px]"
-        >
-          {label}
-        </text>
-      ))}
+      {labels.map((label, index) => {
+        const last = labels.length - 1
+        const step = Math.max(1, Math.floor(labelStep))
+        // Every Nth, and the last — unless a stepped label sits close enough to the last
+        // one to collide with it, in which case the last wins.
+        const shown =
+          index === last || (index % step === 0 && last - index >= step / 2)
+        if (!shown) return null
+        return (
+          <text
+            key={label}
+            x={AXIS_W + slotCenter(index, labels.length, plotW)}
+            y={height - 4}
+            textAnchor="middle"
+            className="fill-muted-foreground text-[8px]"
+          >
+            {label}
+          </text>
+        )
+      })}
     </svg>
   )
 }

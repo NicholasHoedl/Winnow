@@ -82,6 +82,14 @@ export const defaultPreferencesSchema = z.object({
   // A list id, or null for none. Whose list it is cannot be a schema's business — the
   // action checks that — and the column's `set null` covers a list deleted later.
   defaultListId: z.string().uuid().nullable(),
+  trackWeight: z.boolean(),
+  // Pounds, whatever the account displays — the form converts, as the weigh-in card does.
+  // The same bounds as a weigh-in: a goal outside them is a typo, not an ambition.
+  goalWeightLb: z
+    .number()
+    .min(20, "That looks too low")
+    .max(1500, "That looks too high")
+    .nullable(),
   // `dashboardCollapsed` is deliberately ABSENT from both schemas.
   //
   // It is part of `UserPreferences`, but no settings form is one of its writers — the

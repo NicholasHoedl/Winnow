@@ -88,6 +88,8 @@ export async function preferencesFor(userId: string): Promise<UserPreferences> {
       ? (row.theme as Theme)
       : "system",
     balanceMacroTargets: row.balanceMacroTargets,
+    trackWeight: row.trackWeight,
+    goalWeightLb: row.goalWeightLb,
     // Narrowed like `theme`: the column is plain text so the view set can grow without a
     // migration, which also means an imported row can hold a view this build has never
     // heard of. Falling back keeps `/calendar` renderable rather than 404-ing on a value

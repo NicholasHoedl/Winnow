@@ -291,7 +291,8 @@ a classic, easy-to-introduce bug.
 > the server must read — zone, week start, currency, time format, default task
 > priority, digest, the goal momentum window (T8), the account's saved `theme`, whether
 > macro targets balance (T14), which view the calendar opens on (T14), how far ahead Slate
-> reaches for tracked events (T16), and which dashboard cards are folded (T17 —
+> reaches for tracked events (T16), whether body weight is tracked and the weight
+> aimed at (T29), and which dashboard cards are folded (T17 —
 > `dashboard_collapsed`, the one column here holding a LIST rather than a single setting;
 > ADR-0016 explains why).
 > `theme` is **mirrored, not moved**: it is applied before first paint from
@@ -785,15 +786,19 @@ clean upsert, makes a typo an edit rather than a second data point, and keeps
 the trend chart's x-axis unambiguous.
 
 **Units live in the column names** (`amount_fl_oz`, `weight_lb`, `sodium_mg`),
-the same idiom as `amount_cents` and `protein_g`. The app is imperial by
-decision; there is no units preference and no conversion layer, so the unit is
-part of the schema rather than a convention someone has to remember.
+the same idiom as `amount_cents` and `protein_g`. The STORED unit never changes:
+`user_preferences.weight_unit` and `volume_unit` convert on the way out and back
+(`toDisplayWeight` / `fromDisplayWeight` in `lib/format.ts`), so a preference
+flip cannot make a history silently wrong. An earlier version of this note said
+there was no units preference; there has been one since the Region settings
+page, and T29's goal weight makes the same round trip.
 
 Daily totals are computed by summing `meal_entries` (scaled by `servings`) for a
-date and user — a query, not a stored aggregate. The weight trend buckets to one
-point per week (`weeklyWeightSeries`, pure and unit-tested) and **omits** weeks
-with no weigh-in rather than emitting 0, since a 0 would draw a cliff to the
-floor of the chart.
+date and user — a query, not a stored aggregate. The weight trend is
+`weightTrend` (pure and unit-tested): a time-aware exponentially smoothed line
+through the weigh-ins, one point per weigh-in, never zero-filled — a 0 would
+draw a cliff to the floor of the chart. `weightReadout` derives what every
+surface says about it, goal weight included. T29, ADR-0023.
 
 ---
 

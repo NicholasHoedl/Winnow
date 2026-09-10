@@ -12,7 +12,10 @@ import {
   setBodyWeight,
 } from "@/modules/meals/actions"
 import type { BodyWeight, WaterLog } from "@/modules/meals/queries"
+import { weightGoalPhrase, type WeightReadout } from "@/modules/meals/service"
 import {
+  formatWeight,
+  formatWeightRate,
   fromDisplayVolume,
   fromDisplayWeight,
   toDisplayVolume,
@@ -21,6 +24,7 @@ import {
   volumeUnitLabel,
   weightUnitLabel,
 } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -140,9 +144,12 @@ function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
 function WeightCard({
   date,
   weight,
+  readout,
 }: {
   date: string
   weight: BodyWeight | null
+  /** The trend as of the viewed day, so saving a weight visibly does something. */
+  readout: WeightReadout | null
 }) {
   const [pending, startTransition] = React.useTransition()
   const { weightUnit } = usePreferences()
@@ -223,6 +230,17 @@ function WeightCard({
           Save
         </Button>
       </div>
+
+      {/* The same three facts the chart heading and the dashboard tile quote, from the
+          same function, so the card cannot say one thing and the chart another. */}
+      {readout && (
+        <p className="text-muted-foreground mt-3 text-xs tabular-nums">
+          Trend {formatWeight(readout.trendLb, weightUnit)}
+          {readout.ratePerWeekLb !== null &&
+            ` · ${formatWeightRate(readout.ratePerWeekLb, weightUnit)}`}
+          {readout.goal && ` · ${weightGoalPhrase(readout.goal, weightUnit)}`}
+        </p>
+      )}
     </form>
   )
 }
@@ -237,16 +255,23 @@ function WeightCard({
 export function DayExtras({
   date,
   waterLogs,
+  trackWeight,
   weight,
+  readout,
 }: {
   date: string
   waterLogs: WaterLog[]
+  /** With tracking off the water card has the row to itself. */
+  trackWeight: boolean
   weight: BodyWeight | null
+  readout: WeightReadout | null
 }) {
   return (
-    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+    <div className={cn("mt-4 grid gap-3", trackWeight && "sm:grid-cols-2")}>
       <WaterCard date={date} logs={waterLogs} />
-      <WeightCard key={date} date={date} weight={weight} />
+      {trackWeight && (
+        <WeightCard key={date} date={date} weight={weight} readout={readout} />
+      )}
     </div>
   )
 }

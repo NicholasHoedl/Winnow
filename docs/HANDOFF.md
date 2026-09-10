@@ -1,8 +1,10 @@
 # Handoff
 
-Last updated: **2026-09-09**. T28 made a due date a day or a deadline and the Slate a
+Last updated: **2026-09-09**. T29 made body weight a trend to watch — a smoothed line, a
+rate, a goal weight as a readout, a switch — with migration `0044`, two additive
+preference columns (ADR-0023). T28 made a due date a day or a deadline and the Slate a
 tracked-events-only card (ADR-0022), with migration `0043` — a rename and one defaulted
-column, the **third** migration waiting on the port step with `0041` and `0042`. T27
+column. **Four migrations now wait on the port step: `0041` to `0044`.** T27
 before it gave each goal one editor and put the plan tool in a dialog beside New goal
 (ADR-0021); no migration. T26 finished lists — the by-list view, `#list` in quick-add and a
 default list — with migration `0042`, one nullable column that rides the port step T24
@@ -18,7 +20,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T28 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T29 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -528,6 +530,35 @@ events.** Migration `0043` (`due_kind_and_tracked`). **ADR-0022 is the authority
   drives quick capture and the dialog; `seedTask` takes `dueKind`. Unit: `agenda.test.ts`
   rewritten for the band rules, `slate.test.tsx`, `task-dialog.test.tsx`, `nl-date`,
   `validation`, `restore`, `import`.
+
+**T29 is shipped: weight is a trend to watch.** Migration `0044` (`weight_tracking`), two
+additive columns on `user_preferences`. **ADR-0023 is the authority.**
+
+- **The trend replaces T4's weekly buckets.** `weightTrend` in `meals/service.ts` runs a
+  time-aware exponentially smoothed line through the weigh-ins (ten-day time constant, so
+  daily readings smooth like the classic trend and weekly ones are not left lagging) and
+  reads a weekly rate off its last four weeks once two weeks separate the readings.
+  `weightReadout` adds the goal part — to go, direction, and an estimate only when the rate
+  points at the goal and is worth extrapolating — and `weightGoalPhrase` puts it in words.
+  `weeklyWeightSeries` is gone with its tests; three weigh-ins inside a week made it one
+  point and a stub, which was the reported "nothing is done with them".
+- **Three surfaces quote the one readout.** The weigh-in card, under its input; the chart's
+  heading — the chart now sits directly under the card rather than after the meal log, one
+  point per weigh-in with the trend through them and a dashed goal line (`LineChart` gained
+  `labelStep` and `reference`); and the dashboard's Macros tile, short form, no estimate.
+- **Settings → Defaults → Meals.** "Track body weight", on by default: off hides the card,
+  the chart and the tile's line and the pages stop reading the table — `body_weights` rows
+  stay. "Goal weight", typed in the display unit and stored in pounds, blank for none, hidden
+  while tracking is off; `GoalWeightInput` keeps its own text so a decimal point survives
+  being typed. `ON_OFF_OPTIONS` in `lib/preferences` is the boolean `Segmented`'s options.
+- **Capture stays on `/meals`**, no cadence, water untouched.
+- e2e: `meals-water-weight.spec` asserts the card's readout figures rather than the old
+  "over N weigh-ins" line; new `weight-trend.spec.ts` seeds weigh-ins through `_weights.ts`
+  and drives the tile, the goal and the switch, restoring both settings in `afterEach`.
+  Unit: `weightTrend`, `weightReadout`, `weightGoalPhrase`, `formatWeight`,
+  `formatWeightRate`; the preference-schema contract test lists both new fields.
+- `ARCHITECTURE.md` had said the app was imperial by decision with no units preference;
+  the kg/lb preference has existed since the Region page. Corrected.
 
 **T7a Notes/Journal was REMOVED in T13**, not retired-in-place like T7c. The module, the
 pages, the dashboard card and the `notes` table are all gone (migration `0035`, dropped

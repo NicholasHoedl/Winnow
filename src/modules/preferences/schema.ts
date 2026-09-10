@@ -3,6 +3,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uuid,
@@ -137,6 +138,27 @@ export const userPreferences = pgTable("user_preferences", {
    * so it cannot quietly take over a partial target.
    */
   balanceMacroTargets: boolean("balance_macro_targets").notNull().default(true),
+
+  /**
+   * Whether body weight is tracked at all (T29, ADR-0023).
+   *
+   * Off hides the weigh-in card and trend on `/meals` and the weight line on the
+   * dashboard's Macros card. It hides; it never deletes — `body_weights` rows stay, so
+   * turning it back on finds the history where it was. Defaults on, which is what every
+   * existing account had.
+   */
+  trackWeight: boolean("track_weight").notNull().default(true),
+
+  /**
+   * The weight being aimed at, in pounds like `body_weights.weight_lb`, or null for none.
+   *
+   * A preference and not a goal in the goals module, by decision: the user wanted a trend
+   * to watch with a number beside it, not a goal with milestones and momentum. It only
+   * ever produces a readout — "4.6 lb to go, about 12 weeks at this rate" — never a
+   * judgement. Stored in pounds and shown in `weight_unit`, the same round trip the
+   * weigh-in card makes.
+   */
+  goalWeightLb: real("goal_weight_lb"),
 
   /**
    * Which view `/calendar` opens on when the URL does not say.

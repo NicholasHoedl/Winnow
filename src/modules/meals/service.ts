@@ -1,6 +1,7 @@
 // Pure meal-macros logic. No DB — unit-testable directly.
 
 import { addDays, dayDiff } from "@/lib/date"
+import { formatWeight } from "@/lib/format"
 
 export type Macros = {
   calories: number
@@ -539,46 +540,184 @@ export function sumMicros(entries: MicroEntry[]): MicroTotals {
 // --- Body weight trend ---
 
 export type WeightPoint = { date: string; weightLb: number }
-export type WeeklyWeight = {
-  /** First day of the 7-day window (inclusive). */
-  weekStart: string
-  /** The measurement carried forward — the latest one taken in that window. */
-  weightLb: number
+
+/** A weigh-in with the smoothed trend as it stood on that day. */
+export type TrendPoint = WeightPoint & { trendLb: number }
+
+export type WeightTrend = {
+  /** Every weigh-in in the window, oldest first, each carrying the trend on its day. */
+  points: TrendPoint[]
+  /** The newest weigh-in, or null with nothing logged. */
+  latest: TrendPoint | null
+  /**
+   * How fast the TREND is moving, in pounds per week; negative is down. Null until there
+   * are two weeks of data to judge it by.
+   */
+  ratePerWeekLb: number | null
 }
 
 /**
- * Bucket weigh-ins into 7-day windows counting back from `endDate`, keeping the most
- * recent measurement in each. Windows rather than calendar weeks: the newest bucket
- * then always ends today, and no week-start preference has to be threaded through.
+ * The smoothing's time constant, in days.
  *
- * **Weeks with no measurement are OMITTED, not zero-filled.** A zero would draw the
- * line down to the axis and read as "weighed nothing" — the opposite of "didn't weigh".
- * Trends elsewhere in the app zero-fill deliberately (a month with no spending really
- * did have zero spending); this is the case where that would be a lie.
- *
- * Also why the chart buckets at all: BarChart/LineChart key their points by label text,
- * so a daily axis with repeated or blank labels mis-reconciles.
+ * Time-aware rather than the classic fixed ten percent per reading: `1 - e^(-gap/τ)` with
+ * τ = 10 gives a daily habit almost exactly the Hacker's Diet step (about 0.095), and a
+ * weekly weigh-in about half — so a weekly habit is not left lagging for months behind
+ * the number on the scale, which is what a per-reading constant would do to it.
  */
-export function weeklyWeightSeries(
+const TREND_TAU_DAYS = 10
+/** The rate is read off the last four weeks of the trend line… */
+const RATE_WINDOW_DAYS = 28
+/** …and only once the points it is read between are at least this far apart. */
+const RATE_MIN_SPAN_DAYS = 14
+
+/**
+ * The trend through a run of weigh-ins: an exponentially smoothed line, one value per
+ * weigh-in, plus how fast it is moving.
+ *
+ * Replaces the T4 weekly buckets. Those kept one reading per seven-day window and drew
+ * nothing until two windows held a reading, so three weigh-ins inside a week produced a
+ * single point and a stub — which is the "nothing is done with them" the user reported.
+ * Two weigh-ins on any two days produce a trend here.
+ *
+ * Day-to-day weight swings a pound or two on water and food; the trend is the part worth
+ * watching, and it is the number every readout in the app quotes. The raw readings are
+ * kept beside it so the chart can show both.
+ *
+ * `days` bounds the window back from `endDate`, inclusive. The rate compares the newest
+ * point with the oldest one inside {@link RATE_WINDOW_DAYS} of it, or with the first point
+ * of all when that pair is too close together to mean anything.
+ */
+export function weightTrend(
   rows: WeightPoint[],
   endDate: string,
-  weeks = 13,
-): WeeklyWeight[] {
-  const span = Math.max(1, Math.floor(weeks))
-  const earliest = addDays(endDate, -(span * 7 - 1))
+  days = 91,
+): WeightTrend {
+  const span = Math.max(1, Math.floor(days))
+  const earliest = addDays(endDate, -(span - 1))
 
-  const latestPerWeek = new Map<string, WeightPoint>()
+  // One reading per day is the table's rule; kept defensively here so a duplicate in a
+  // test fixture or an imported file cannot double-step the smoothing.
+  const byDate = new Map<string, WeightPoint>()
   for (const row of rows) {
     if (row.date < earliest || row.date > endDate) continue
-    const bucket = Math.floor(dayDiff(row.date, endDate) / 7)
-    const weekStart = addDays(endDate, -(bucket * 7 + 6))
-    const seen = latestPerWeek.get(weekStart)
-    if (!seen || row.date > seen.date) latestPerWeek.set(weekStart, row)
+    byDate.set(row.date, row)
+  }
+  const sorted = [...byDate.values()].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  )
+
+  const points: TrendPoint[] = []
+  let trend: number | null = null
+  let previous: string | null = null
+  for (const row of sorted) {
+    if (trend === null || previous === null) trend = row.weightLb
+    else {
+      const gap = dayDiff(previous, row.date)
+      const alpha = 1 - Math.exp(-gap / TREND_TAU_DAYS)
+      trend += alpha * (row.weightLb - trend)
+    }
+    previous = row.date
+    points.push({ ...row, trendLb: trend })
   }
 
-  return [...latestPerWeek.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([weekStart, point]) => ({ weekStart, weightLb: point.weightLb }))
+  const latest = points[points.length - 1] ?? null
+  let ratePerWeekLb: number | null = null
+  if (latest && points.length > 1) {
+    const windowStart = addDays(latest.date, -RATE_WINDOW_DAYS)
+    let reference =
+      points.find((point) => point.date >= windowStart) ?? points[0]
+    if (dayDiff(reference.date, latest.date) < RATE_MIN_SPAN_DAYS)
+      reference = points[0]
+    const spanDays = dayDiff(reference.date, latest.date)
+    if (spanDays >= RATE_MIN_SPAN_DAYS)
+      ratePerWeekLb = ((latest.trendLb - reference.trendLb) / spanDays) * 7
+  }
+
+  return { points, latest, ratePerWeekLb }
+}
+
+export type WeightReadout = {
+  latestLb: number
+  latestDate: string
+  trendLb: number
+  ratePerWeekLb: number | null
+  /** Present when a goal weight is set. */
+  goal: {
+    goalLb: number
+    /** Distance from the TREND to the goal, always positive. */
+    toGoLb: number
+    /** Which way the trend has to move — or "at", within half a pound of it. */
+    direction: "down" | "up" | "at"
+    /**
+     * Weeks to reach it at the current rate. Null unless the rate points TOWARD the goal
+     * and is worth extrapolating — omitted rather than invented, see the constants.
+     */
+    etaWeeks: number | null
+  } | null
+}
+
+/** Closer than this to the goal reads as being at it. */
+const AT_GOAL_LB = 0.5
+/** A rate under this is noise, and dividing by it would promise the goal by Tuesday. */
+const ETA_MIN_RATE_LB_PER_WEEK = 0.1
+/** Past this the estimate is a number with no information in it. */
+const ETA_MAX_WEEKS = 104
+
+/**
+ * What the app says about your weight, everywhere it says anything: on the weigh-in
+ * card, over the chart, and in the dashboard's Macros tile. One function so the three
+ * cannot disagree. Null with nothing logged; the goal part null with no goal set.
+ */
+export function weightReadout(
+  trend: WeightTrend,
+  goalWeightLb: number | null,
+): WeightReadout | null {
+  const latest = trend.latest
+  if (!latest) return null
+
+  let goal: WeightReadout["goal"] = null
+  if (goalWeightLb !== null) {
+    const gap = latest.trendLb - goalWeightLb
+    const toGoLb = Math.abs(gap)
+    const direction = toGoLb < AT_GOAL_LB ? "at" : gap > 0 ? "down" : "up"
+    const rate = trend.ratePerWeekLb
+    const toward =
+      rate !== null &&
+      Math.abs(rate) >= ETA_MIN_RATE_LB_PER_WEEK &&
+      ((direction === "down" && rate < 0) || (direction === "up" && rate > 0))
+    const eta = toward ? toGoLb / Math.abs(rate) : null
+    goal = {
+      goalLb: goalWeightLb,
+      toGoLb,
+      direction,
+      etaWeeks: eta !== null && eta <= ETA_MAX_WEEKS ? eta : null,
+    }
+  }
+
+  return {
+    latestLb: latest.weightLb,
+    latestDate: latest.date,
+    trendLb: latest.trendLb,
+    ratePerWeekLb: trend.ratePerWeekLb,
+    goal,
+  }
+}
+
+/**
+ * The goal part of a readout, in words: "4.6 lb to go, about 12 weeks at this rate",
+ * "4.6 lb to go", or "at your goal". `eta: false` drops the estimate — the dashboard tile
+ * has one line for the whole readout, and the meals page carries the long form.
+ */
+export function weightGoalPhrase(
+  goal: NonNullable<WeightReadout["goal"]>,
+  unit: "lb" | "kg",
+  { eta = true }: { eta?: boolean } = {},
+): string {
+  if (goal.direction === "at") return "at your goal"
+  const toGo = `${formatWeight(goal.toGoLb, unit)} to go`
+  if (!eta || goal.etaWeeks === null) return toGo
+  const weeks = Math.max(1, Math.round(goal.etaWeeks))
+  return `${toGo}, about ${weeks} ${weeks === 1 ? "week" : "weeks"} at this rate`
 }
 
 // --- Barcodes ---

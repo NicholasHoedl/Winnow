@@ -143,15 +143,21 @@ test("a weigh-in saves, corrects in place, and drives the trend chart", async ({
   await weightInput(page).fill("181.8")
   await page.getByRole("button", { name: "Save" }).click()
 
-  // --- The trend appears, and reports the change rather than just plotting it.
+  // --- The trend appears, and the card quotes it (T29): the smoothed line three weeks
+  // on from 184.2 towards 181.8, and how fast it is moving. The figures are
+  // `weightTrend`'s, whose unit tests own the arithmetic; what this pins is that the page
+  // shows them, in the account's unit, beside the input that fed them.
   const chart = page.getByRole("img", { name: /body weight over the last/i })
   await expect(chart).toBeVisible()
-  await expect(page.getByText(/−2\.4 lb over 2 weigh-ins/)).toBeVisible()
+  const card = page.locator("form").filter({ has: weightInput(page) })
+  await expect(card).toContainText("Trend 182.1 lb · −0.7 lb/wk")
 
-  // --- A second save on the same day is a correction, not a second point.
+  // --- A second save on the same day is a correction, not a second point: the trend
+  // moves with it, and the chart still counts two weigh-ins.
   await weightInput(page).fill("182.0")
   await page.getByRole("button", { name: "Save" }).click()
-  await expect(page.getByText(/−2\.2 lb over 2 weigh-ins/)).toBeVisible()
+  await expect(card).toContainText("Trend 182.3 lb · −0.6 lb/wk")
+  await expect(chart).toHaveAccessibleName(/over the last 2 weigh-ins/i)
   await page.reload()
   await expect(weightInput(page)).toHaveValue("182")
 

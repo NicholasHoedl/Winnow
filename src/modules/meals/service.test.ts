@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { addDays } from "@/lib/date"
 import {
   carbsForCalories,
   entryTotals,
@@ -14,7 +15,9 @@ import {
   sumMacros,
   sumMicros,
   targetsForDate,
-  weeklyWeightSeries,
+  weightGoalPhrase,
+  weightReadout,
+  weightTrend,
   type MealType,
 } from "./service"
 
@@ -510,57 +513,181 @@ describe("isLikelyBarcode", () => {
   })
 })
 
-describe("weeklyWeightSeries", () => {
+describe("weightTrend", () => {
   const END = "2026-07-26"
   const w = (date: string, weightLb: number) => ({ date, weightLb })
 
-  it("keeps the latest measurement in each 7-day window", () => {
-    const series = weeklyWeightSeries(
-      [w("2026-07-20", 183), w("2026-07-24", 181.5), w("2026-07-26", 181)],
-      END,
-      4,
-    )
-    // All three fall in the newest window (2026-07-20..26) — the last one wins.
-    expect(series).toEqual([{ weekStart: "2026-07-20", weightLb: 181 }])
+  it("is empty with nothing logged", () => {
+    expect(weightTrend([], END)).toEqual({
+      points: [],
+      latest: null,
+      ratePerWeekLb: null,
+    })
   })
 
-  it("orders oldest-first across windows", () => {
-    const series = weeklyWeightSeries(
-      [w("2026-07-26", 181), w("2026-07-12", 185), w("2026-07-19", 183)],
-      END,
-      4,
-    )
-    expect(series.map((p) => p.weekStart)).toEqual([
-      "2026-07-06",
-      "2026-07-13",
-      "2026-07-20",
+  it("starts the trend at the first reading, and orders oldest first", () => {
+    const trend = weightTrend([w("2026-07-26", 181), w("2026-07-12", 185)], END)
+    expect(trend.points.map((p) => p.date)).toEqual([
+      "2026-07-12",
+      "2026-07-26",
     ])
-    expect(series.map((p) => p.weightLb)).toEqual([185, 183, 181])
+    expect(trend.points[0].trendLb).toBe(185)
+    expect(trend.latest?.date).toBe("2026-07-26")
   })
 
-  // The failure this guards: a zero-filled gap draws the line to the axis, which reads
-  // as "weighed nothing" rather than "didn't weigh".
-  it("OMITS weeks with no measurement rather than zeroing them", () => {
-    const series = weeklyWeightSeries(
-      [w("2026-07-26", 181), w("2026-06-28", 190)],
+  it("smooths a daily reading by about a tenth, like the classic trend", () => {
+    // From 180 to a reading of 190 the next day: 1 - e^(-1/10) ≈ 0.095 of the gap.
+    const trend = weightTrend([w("2026-07-25", 180), w("2026-07-26", 190)], END)
+    expect(trend.latest?.trendLb).toBeCloseTo(180.95, 1)
+  })
+
+  it("takes a larger step across a longer gap, so a weekly habit is not left behind", () => {
+    // A week later: 1 - e^(-7/10) ≈ 0.50 of the gap. Per-reading smoothing would have
+    // moved the same 0.095 and called someone who lost ten pounds "down one".
+    const trend = weightTrend([w("2026-07-19", 180), w("2026-07-26", 190)], END)
+    expect(trend.latest?.trendLb).toBeCloseTo(185.03, 1)
+  })
+
+  // The T4 chart needed two separate WEEKS before it drew anything; three readings in
+  // one week produced a point and a stub. Two readings on any two days is a trend now.
+  it("gives two readings in one week a trend", () => {
+    const trend = weightTrend(
+      [w("2026-07-24", 182), w("2026-07-25", 181.5), w("2026-07-26", 181)],
       END,
-      6,
     )
-    expect(series).toHaveLength(2)
-    expect(series.every((p) => p.weightLb > 0)).toBe(true)
+    expect(trend.points).toHaveLength(3)
+    expect(trend.latest?.trendLb).toBeLessThan(182)
+    expect(trend.latest?.trendLb).toBeGreaterThan(181)
   })
 
-  it("ignores measurements outside the window", () => {
-    const series = weeklyWeightSeries(
-      [w("2020-01-01", 200), w("2026-07-26", 181), w("2026-12-25", 999)],
+  it("withholds the rate until two weeks separate the readings", () => {
+    const short = weightTrend([w("2026-07-20", 183), w("2026-07-26", 181)], END)
+    expect(short.ratePerWeekLb).toBeNull()
+
+    const enough = weightTrend(
+      [w("2026-07-12", 183), w("2026-07-26", 181)],
       END,
-      4,
     )
-    expect(series).toEqual([{ weekStart: "2026-07-20", weightLb: 181 }])
+    expect(enough.ratePerWeekLb).not.toBeNull()
   })
 
-  it("returns empty for no measurements", () => {
-    expect(weeklyWeightSeries([], END)).toEqual([])
+  it("reads the rate off the trend line per week, sign and all", () => {
+    // Two readings 14 days apart: the trend moves 1 - e^(-1.4) ≈ 0.753 of the 4 lb gap,
+    // so about 3.01 lb over two weeks — roughly 1.5 lb a week, downward.
+    const trend = weightTrend([w("2026-07-12", 185), w("2026-07-26", 181)], END)
+    expect(trend.ratePerWeekLb).toBeCloseTo(-1.507, 2)
+
+    const up = weightTrend([w("2026-07-12", 181), w("2026-07-26", 185)], END)
+    expect(up.ratePerWeekLb).toBeCloseTo(1.507, 2)
+  })
+
+  it("judges the rate on the last four weeks, not the whole history", () => {
+    // Twelve weeks of steady loss, then four flat weeks: the rate is the flat part.
+    const rows = []
+    for (let back = 84; back >= 28; back -= 7)
+      rows.push(w(addDays(END, -back), 200 - (84 - back) / 7))
+    for (let back = 21; back >= 0; back -= 7)
+      rows.push(w(addDays(END, -back), 192))
+    const trend = weightTrend(rows, END)
+    // Not quite zero: the smoothed line is still closing the lag it built up during the
+    // decline. Well under the pound a week the history would say, which is the point.
+    expect(Math.abs(trend.ratePerWeekLb ?? 99)).toBeLessThan(0.3)
+  })
+
+  it("falls back to the whole span when the recent readings are too close together", () => {
+    // Day 0, then two readings five days apart at the end: the recent pair cannot carry
+    // a rate, so it is read from the first point instead of being withheld.
+    const trend = weightTrend(
+      [w("2026-06-11", 190), w("2026-07-21", 186), w("2026-07-26", 185)],
+      END,
+    )
+    expect(trend.ratePerWeekLb).not.toBeNull()
+    expect(trend.ratePerWeekLb ?? 0).toBeLessThan(0)
+  })
+
+  it("ignores readings outside the window and collapses a duplicate day", () => {
+    const trend = weightTrend(
+      [
+        w("2020-01-01", 200),
+        w("2026-07-26", 181),
+        w("2026-07-26", 181.4),
+        w("2026-12-25", 999),
+      ],
+      END,
+    )
+    expect(trend.points.map((p) => p.weightLb)).toEqual([181.4])
+  })
+})
+
+describe("weightReadout", () => {
+  const END = "2026-07-26"
+  const w = (date: string, weightLb: number) => ({ date, weightLb })
+  const losing = () =>
+    weightTrend([w("2026-07-12", 185), w("2026-07-26", 181)], END)
+
+  it("is null with nothing logged", () => {
+    expect(weightReadout(weightTrend([], END), 170)).toBeNull()
+  })
+
+  it("quotes the latest reading and the trend, with no goal part unless a goal is set", () => {
+    const readout = weightReadout(losing(), null)
+    expect(readout?.latestLb).toBe(181)
+    expect(readout?.latestDate).toBe("2026-07-26")
+    expect(readout?.trendLb).toBeCloseTo(181.99, 1)
+    expect(readout?.goal).toBeNull()
+  })
+
+  it("measures 'to go' from the trend, and estimates weeks at the current rate", () => {
+    // Trend ≈ 181.99, goal 175 → about 7 lb to go at about 1.5 lb a week ≈ 4.6 weeks.
+    const goal = weightReadout(losing(), 175)?.goal
+    expect(goal?.direction).toBe("down")
+    expect(goal?.toGoLb).toBeCloseTo(6.99, 1)
+    expect(goal?.etaWeeks).toBeCloseTo(4.64, 1)
+  })
+
+  it("gives no estimate when the trend is moving AWAY from the goal", () => {
+    const goal = weightReadout(losing(), 190)?.goal
+    expect(goal?.direction).toBe("up")
+    expect(goal?.etaWeeks).toBeNull()
+  })
+
+  it("gives no estimate without a rate, and none for a negligible one", () => {
+    const noRate = weightTrend(
+      [w("2026-07-20", 183), w("2026-07-26", 181)],
+      END,
+    )
+    expect(weightReadout(noRate, 175)?.goal?.etaWeeks).toBeNull()
+
+    // 0.03 lb a week toward the goal is noise; dividing by it would say 200 weeks.
+    const crawl = weightTrend(
+      [w("2026-07-12", 181.06), w("2026-07-26", 181)],
+      END,
+    )
+    expect(Math.abs(crawl.ratePerWeekLb ?? 1)).toBeLessThan(0.1)
+    expect(weightReadout(crawl, 175)?.goal?.etaWeeks).toBeNull()
+  })
+
+  it("calls half a pound from the goal being at it", () => {
+    const goal = weightReadout(losing(), 182.2)?.goal
+    expect(goal?.direction).toBe("at")
+    expect(goal?.etaWeeks).toBeNull()
+  })
+
+  it("puts the goal into words, in the displayed unit, with or without the estimate", () => {
+    const goal = weightReadout(losing(), 175)!.goal!
+    expect(weightGoalPhrase(goal, "lb")).toBe(
+      "7 lb to go, about 5 weeks at this rate",
+    )
+    expect(weightGoalPhrase(goal, "lb", { eta: false })).toBe("7 lb to go")
+    expect(weightGoalPhrase(goal, "kg")).toBe(
+      "3.2 kg to go, about 5 weeks at this rate",
+    )
+    expect(weightGoalPhrase(weightReadout(losing(), 190)!.goal!, "lb")).toBe(
+      "8 lb to go",
+    )
+    expect(weightGoalPhrase(weightReadout(losing(), 182.2)!.goal!, "lb")).toBe(
+      "at your goal",
+    )
   })
 })
 

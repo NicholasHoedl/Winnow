@@ -86,6 +86,25 @@ export function weightUnitLabel(unit: "lb" | "kg"): string {
   return unit
 }
 
+/** "182 lb" or "82.6 kg" — one decimal at most, never a trailing zero. */
+export function formatWeight(lb: number, unit: "lb" | "kg"): string {
+  return `${Number(toDisplayWeight(lb, unit).toFixed(1))} ${weightUnitLabel(unit)}`
+}
+
+/**
+ * A weekly rate of change: "−0.4 lb/wk", "+0.3 kg/wk", or "steady" inside a twentieth
+ * of a unit either way. The sign is a real minus, not a hyphen — the chart's summary line
+ * set that precedent and the two sit next to each other.
+ */
+export function formatWeightRate(
+  ratePerWeekLb: number,
+  unit: "lb" | "kg",
+): string {
+  const rate = Number(toDisplayWeight(ratePerWeekLb, unit).toFixed(1))
+  if (Math.abs(rate) < 0.05) return "steady"
+  return `${rate > 0 ? "+" : "−"}${Math.abs(rate)} ${weightUnitLabel(unit)}/wk`
+}
+
 export function toDisplayVolume(flOz: number, unit: "floz" | "ml"): number {
   return unit === "ml" ? flOz * ML_PER_FL_OZ : flOz
 }

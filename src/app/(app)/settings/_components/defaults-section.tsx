@@ -1,9 +1,11 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Controller, useForm } from "react-hook-form"
+import { Controller, useForm, useWatch } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { toast } from "sonner"
+
+import * as React from "react"
 
 import {
   BALANCE_TARGET_OPTIONS,
@@ -11,10 +13,17 @@ import {
   CALENDAR_VIEW_OPTIONS,
   MEAL_TYPES,
   MOMENTUM_OPTIONS,
+  ON_OFF_OPTIONS,
   PRIORITY_OPTIONS,
   SLATE_HORIZON_OPTIONS,
   type UserPreferences,
+  type WeightUnit,
 } from "@/lib/preferences"
+import {
+  fromDisplayWeight,
+  toDisplayWeight,
+  weightUnitLabel,
+} from "@/lib/format"
 import { navItems } from "@/components/shared/nav-items"
 import type { List } from "@/modules/todos/queries"
 import { setDefaultPreferences } from "@/modules/preferences/actions"
@@ -23,7 +32,13 @@ import {
   type DefaultPreferencesInput,
 } from "@/modules/preferences/validation"
 import { Button } from "@/components/ui/button"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -46,6 +61,55 @@ const MEAL_TYPE_LABELS: Record<string, string> = {
   lunch: "Lunch",
   dinner: "Dinner",
   snack: "Snack",
+}
+
+/**
+ * The goal weight, typed in the DISPLAYED unit and stored in pounds.
+ *
+ * Its own text state rather than a controlled input over the converted number: converting
+ * on every keystroke turns "174." back into "174" and eats the decimal point as it is
+ * typed. The form only ever sees pounds or null, which is what the schema validates.
+ */
+function GoalWeightInput({
+  value,
+  onChange,
+  unit,
+}: {
+  value: number | null
+  onChange: (lb: number | null) => void
+  unit: WeightUnit
+}) {
+  const [text, setText] = React.useState(
+    value === null
+      ? ""
+      : String(Number(toDisplayWeight(value, unit).toFixed(1))),
+  )
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        id="goal-weight"
+        type="number"
+        step="0.1"
+        inputMode="decimal"
+        placeholder="—"
+        value={text}
+        onChange={(event) => {
+          const raw = event.target.value
+          setText(raw)
+          const entered = Number(raw.trim())
+          onChange(
+            raw.trim() === "" || Number.isNaN(entered)
+              ? null
+              : fromDisplayWeight(entered, unit),
+          )
+        }}
+        className="max-w-40 tabular-nums"
+      />
+      <span className="text-muted-foreground text-xs">
+        {weightUnitLabel(unit)}
+      </span>
+    </div>
+  )
 }
 
 /**
@@ -89,11 +153,14 @@ export function DefaultsSection({
   const {
     control,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<DefaultPreferencesInput>({
     resolver: standardSchemaResolver(defaultPreferencesSchema),
     defaultValues: preferences,
   })
+  // The goal only means something while weight is tracked. `useWatch`, not `watch()`:
+  // the compiler-compatibility lint flags the latter, and this file had none to flag.
+  const trackWeight = useWatch({ control, name: "trackWeight" })
 
   const onSubmit = handleSubmit(async (data) => {
     const result = await setDefaultPreferences(data)
@@ -360,6 +427,49 @@ export function DefaultsSection({
                 tracking it.
               </p>
             </Field>
+
+            <Field>
+              <FieldLabel>Track body weight</FieldLabel>
+              <Controller
+                control={control}
+                name="trackWeight"
+                render={({ field }) => (
+                  <Segmented
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={ON_OFF_OPTIONS}
+                    label="Track body weight"
+                  />
+                )}
+              />
+              <p className="text-muted-foreground text-xs">
+                Off hides the weigh-in card and the trend on Meals, and the
+                weight line on the dashboard. Nothing you have logged is
+                deleted.
+              </p>
+            </Field>
+
+            {trackWeight && (
+              <Field>
+                <FieldLabel htmlFor="goal-weight">Goal weight</FieldLabel>
+                <Controller
+                  control={control}
+                  name="goalWeightLb"
+                  render={({ field }) => (
+                    <GoalWeightInput
+                      value={field.value ?? null}
+                      onChange={field.onChange}
+                      unit={preferences.weightUnit}
+                    />
+                  )}
+                />
+                <FieldError errors={[errors.goalWeightLb]} />
+                <p className="text-muted-foreground text-xs">
+                  Shown beside the trend as how far there is to go, and about
+                  how long at the current rate. Leave it blank for none.
+                </p>
+              </Field>
+            )}
           </Group>
 
           <div>

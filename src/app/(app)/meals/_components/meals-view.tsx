@@ -33,6 +33,7 @@ import {
   type QuickPickFood,
   sumMacros,
   sumMicros,
+  type WeightReadout,
 } from "@/modules/meals/service"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
@@ -81,7 +82,9 @@ export function MealsView({
   targetHistory,
   quickPicks,
   waterLogs,
+  trackWeight,
   weight,
+  weightReadout,
   weightTrend,
   offEnabled,
 }: {
@@ -94,7 +97,10 @@ export function MealsView({
   targetHistory: MacroTargets[]
   quickPicks: QuickPickFood[]
   waterLogs: WaterLog[]
+  /** Off hides the weigh-in card and the trend; `weight` and `weightTrend` arrive empty. */
+  trackWeight: boolean
   weight: BodyWeight | null
+  weightReadout: WeightReadout | null
   /** Server-rendered on the page and passed in, so its chart isn't pulled client-side. */
   weightTrend: React.ReactNode
   /** Server-read: whether the Open Food Facts integration is on for this install. */
@@ -271,7 +277,18 @@ export function MealsView({
 
       <MacroSummary progress={progress} micros={micros} />
 
-      <DayExtras date={date} waterLogs={waterLogs} weight={weight} />
+      <DayExtras
+        date={date}
+        waterLogs={waterLogs}
+        trackWeight={trackWeight}
+        weight={weight}
+        readout={weightReadout}
+      />
+
+      {/* Directly under the card that feeds it, not after the meal log. It sat at the
+          foot of the page until T29, below every entry of the day, which is how several
+          weigh-ins could be logged without the trend ever being seen. */}
+      {weightTrend}
 
       <div className="mt-4 flex flex-col gap-3">
         <MealQuickAdd date={date} foods={foods} />
@@ -317,8 +334,6 @@ export function MealsView({
           ))
         )}
       </div>
-
-      {weightTrend}
 
       <LogFoodDialog
         date={date}

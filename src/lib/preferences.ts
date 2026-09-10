@@ -102,6 +102,10 @@ export type UserPreferences = {
   defaultMealType: MealType | null
   /** A list id, or null for none. See the column's note in `preferences/schema.ts`. */
   defaultListId: string | null
+  /** Whether body weight is tracked at all — see the column's note. Hides, never deletes. */
+  trackWeight: boolean
+  /** The weight aimed at, in pounds, or null for none. A readout, not a goal. */
+  goalWeightLb: number | null
 }
 
 // Mirrors the DB column defaults; used as the fallback when a user has no saved
@@ -130,6 +134,8 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   landingPage: "/",
   defaultMealType: null,
   defaultListId: null,
+  trackWeight: true,
+  goalWeightLb: null,
 }
 
 /**
@@ -226,6 +232,12 @@ export const MOMENTUM_OPTIONS: { value: MomentumDays; label: string }[] = [
   { value: 7, label: "1 week" },
   { value: 14, label: "2 weeks" },
   { value: 30, label: "1 month" },
+]
+
+/** On / Off, for a boolean `Segmented`. */
+export const ON_OFF_OPTIONS: readonly { value: boolean; label: string }[] = [
+  { value: true, label: "On" },
+  { value: false, label: "Off" },
 ]
 
 export const BALANCE_TARGET_OPTIONS: { value: boolean; label: string }[] = [

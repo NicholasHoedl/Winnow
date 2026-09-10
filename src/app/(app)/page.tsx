@@ -13,7 +13,8 @@ import { getHabitStrip } from "@/modules/habits/queries"
 import { getRoutineNames } from "@/modules/routines/queries"
 import { addDays, todayInZone } from "@/lib/date"
 import { getUserPreferences } from "@/modules/preferences/queries"
-import { getMacroSummary } from "@/modules/meals/queries"
+import { getMacroSummary, getWeightTrend } from "@/modules/meals/queries"
+import { weightReadout, weightTrend } from "@/modules/meals/service"
 import { getLists, getTasks } from "@/modules/todos/queries"
 import { formatLongDate, greeting } from "@/lib/format"
 import { dateLocale } from "@/lib/preferences"
@@ -49,6 +50,9 @@ export default async function DashboardPage({
     dashboardCollapsed,
     dashboardCalendarView,
     dateFormat,
+    weightUnit,
+    trackWeight,
+    goalWeightLb,
   } = await getUserPreferences()
   // `?calendar=week` swaps the dashboard's month grid for a week strip. In the URL rather
   // than in client state so the server renders the right one — no flash of the wrong view,
@@ -81,6 +85,7 @@ export default async function DashboardPage({
     calendars,
     habits,
     routineNames,
+    weightRows,
   ] = await Promise.all([
     auth(),
     getTasks(),
@@ -105,7 +110,13 @@ export default async function DashboardPage({
     // Ids to names, so Slate can head each routine's block. Not `getRoutines()`:
     // that would fetch every routine's full item list to read one string per row.
     getRoutineNames(),
+    // Thirteen weeks of weigh-ins for the Macros tile's weight line, and none at all
+    // with tracking off — the tile then says nothing about weight.
+    trackWeight ? getWeightTrend(today) : [],
   ])
+  const weight = trackWeight
+    ? weightReadout(weightTrend(weightRows, today), goalWeightLb)
+    : null
   // For quick-capture's `#list`. `cache()`d, and the app shell has already run it for
   // this request, so it is a lookup rather than a query — which is why it is not in the
   // `Promise.all` above.
@@ -315,6 +326,7 @@ export default async function DashboardPage({
           <Reveal delay={0.15}>
             <StatCards
               macros={macros}
+              weight={weight && { readout: weight, unit: weightUnit }}
               budget={budget}
               currency={currency}
               collapsed={{ macros: folded("macros"), budget: folded("budget") }}
