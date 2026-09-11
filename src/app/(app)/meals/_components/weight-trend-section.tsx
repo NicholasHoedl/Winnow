@@ -6,7 +6,14 @@
 // T4 drew one point per WEEK, the latest weigh-in in each, and needed two weeks before it
 // drew a line. Three weigh-ins inside a week produced a point and a stub — which is the
 // "nothing is done with them" T29 was asked to fix. See `weightTrend`.
+//
+// T32 put it in the dashboard's fold shell: the chart is the tallest thing on the page and
+// the readout above it already says what it shows, so it folds to its heading and stays
+// folded — through the same preference and the same chevron as a dashboard card
+// (ADR-0027). The shell is a client component holding this server-rendered chart, which
+// is exactly the arrangement ADR-0016 chose for the dashboard.
 
+import { DashboardCard } from "../../_components/dashboard-card"
 import { LineChart } from "@/components/charts/line-chart"
 import type { ChartSeries } from "@/components/charts/types"
 import {
@@ -44,12 +51,15 @@ export function WeightTrendSection({
   readout,
   locale,
   unit,
+  collapsed,
 }: {
   trend: WeightTrend
   readout: WeightReadout | null
   /** Props, not hooks — this renders on the server. See `TrendsSection`. */
   locale: string
   unit: "lb" | "kg"
+  /** Read from the folded-cards preference by the page, like a dashboard card's. */
+  collapsed: boolean
 }) {
   // Nothing logged: stay quiet. The weigh-in card sits directly above, so there's no
   // discovery problem to solve with an empty box here.
@@ -57,13 +67,17 @@ export function WeightTrendSection({
 
   if (trend.points.length === 1) {
     return (
-      <section className="mt-4">
-        <h2 className="mb-2 text-sm font-semibold">Weight</h2>
+      <DashboardCard
+        card="weight"
+        title="Weight trend"
+        collapsed={collapsed}
+        className="mt-4"
+      >
         <p className="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
           {formatWeight(readout.latestLb, unit)} so far. Log another weigh-in
           and the trend shows up here.
         </p>
-      </section>
+      </DashboardCard>
     )
   }
 
@@ -91,38 +105,40 @@ export function WeightTrendSection({
   const goal = readout.goal
 
   return (
-    <section className="mt-4">
-      <h2 className="mb-2 flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
-        Weight
-        <span className="text-muted-foreground text-xs font-normal tabular-nums">
-          trend {formatWeight(readout.trendLb, unit)}
-          {readout.ratePerWeekLb !== null &&
-            ` · ${formatWeightRate(readout.ratePerWeekLb, unit)}`}
-          {goal && ` · ${weightGoalPhrase(goal, unit)}`}
-        </span>
-      </h2>
-
-      <div className="rounded-xl border p-4">
-        <LineChart
-          labels={labels}
-          series={series}
-          formatValue={String}
-          // Fitted to the data, not anchored at zero: nobody's weight goes near 0, and
-          // a 0-based axis squeezes a real 4 lb swing into a flat line. See niceScale.
-          baseline="data"
-          labelStep={Math.ceil(trend.points.length / LABELS_SHOWN)}
-          reference={
-            goal
-              ? { value: plotted(goal.goalLb, unit), label: "Goal" }
-              : undefined
-          }
-          ariaLabel={`Body weight over the last ${trend.points.length} weigh-ins, in ${weightUnitLabel(unit)}`}
-        />
-        <p className="text-muted-foreground mt-2 text-xs">
-          One point per weigh-in. The line is the trend, which smooths the
-          day-to-day swings; the readouts quote it, not the scale.
-        </p>
-      </div>
-    </section>
+    <DashboardCard
+      card="weight"
+      title="Weight trend"
+      collapsed={collapsed}
+      className="mt-4"
+    >
+      {/* The readout, as a caption to the chart. It was in the heading until T32, and a
+          heading that folds away with its body is no heading; the weigh-in card above
+          quotes the same figures, so a folded card loses nothing from the page. */}
+      <p className="text-muted-foreground mb-3 text-xs tabular-nums">
+        trend {formatWeight(readout.trendLb, unit)}
+        {readout.ratePerWeekLb !== null &&
+          ` · ${formatWeightRate(readout.ratePerWeekLb, unit)}`}
+        {goal && ` · ${weightGoalPhrase(goal, unit)}`}
+      </p>
+      <LineChart
+        labels={labels}
+        series={series}
+        formatValue={String}
+        // Fitted to the data, not anchored at zero: nobody's weight goes near 0, and
+        // a 0-based axis squeezes a real 4 lb swing into a flat line. See niceScale.
+        baseline="data"
+        labelStep={Math.ceil(trend.points.length / LABELS_SHOWN)}
+        reference={
+          goal
+            ? { value: plotted(goal.goalLb, unit), label: "Goal" }
+            : undefined
+        }
+        ariaLabel={`Body weight over the last ${trend.points.length} weigh-ins, in ${weightUnitLabel(unit)}`}
+      />
+      <p className="text-muted-foreground mt-2 text-xs">
+        One point per weigh-in. The line is the trend, which smooths the
+        day-to-day swings; the readouts quote it, not the scale.
+      </p>
+    </DashboardCard>
   )
 }

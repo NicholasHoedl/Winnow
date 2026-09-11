@@ -18,6 +18,7 @@ import type { Page } from "./_test"
 const MENU_FOR: Record<string, string> = {
   "Copy a day": "Meals actions",
   "Food library": "Meals actions",
+  "Saved meals": "Meals actions",
   "Set targets": "Meals actions",
 }
 

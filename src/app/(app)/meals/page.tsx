@@ -5,11 +5,13 @@ import {
   getMacroTargets,
   getMealEntries,
   getRecentEntries,
+  getSavedMeals,
   getWaterLogs,
   getWeightTrend,
 } from "@/modules/meals/queries"
 import {
   recentFrequentFoods,
+  resolveSavedMealItems,
   weightReadout,
   weightTrend,
 } from "@/modules/meals/service"
@@ -30,13 +32,19 @@ export default async function MealsPage({
   searchParams: Promise<{ date?: string }>
 }) {
   const params = await searchParams
-  const { timeZone, dateFormat, weightUnit, trackWeight, goalWeightLb } =
-    await getUserPreferences()
+  const {
+    timeZone,
+    dateFormat,
+    weightUnit,
+    trackWeight,
+    goalWeightLb,
+    dashboardCollapsed,
+  } = await getUserPreferences()
   const today = todayInZone(new Date(), timeZone)
   const date =
     params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today
 
-  // One Promise.all, deliberately: these are eight independent reads against the same
+  // One Promise.all, deliberately: these are nine independent reads against the same
   // connection pool, and a stray serial await here turns a fast page slow.
   const [
     entries,
@@ -47,6 +55,7 @@ export default async function MealsPage({
     waterLogs,
     weight,
     weightRows,
+    savedMealRows,
   ] = await Promise.all([
     getMealEntries(date),
     getFoods(),
@@ -59,8 +68,17 @@ export default async function MealsPage({
     // would look at them. The rows stay in the table for the day it is turned back on.
     trackWeight ? getBodyWeight(date) : null,
     trackWeight ? getWeightTrend(date, TREND_DAYS) : [],
+    getSavedMeals(),
   ])
   const quickPicks = recentFrequentFoods(recent)
+  // An item follows its library food (ADR-0026): resolved here, once, against the library
+  // this page already read, so the strip, the list and the editor all show exactly what
+  // logging the meal would write.
+  const foodsById = new Map(foods.map((food) => [food.id, food] as const))
+  const savedMeals = savedMealRows.map((meal) => ({
+    ...meal,
+    items: resolveSavedMealItems(meal.items, foodsById),
+  }))
   const trend = weightTrend(weightRows, date, TREND_DAYS)
   const readout = weightReadout(trend, goalWeightLb)
 
@@ -73,6 +91,7 @@ export default async function MealsPage({
       targets={targets}
       targetHistory={targetHistory}
       quickPicks={quickPicks}
+      savedMeals={savedMeals}
       waterLogs={waterLogs}
       trackWeight={trackWeight}
       weight={weight}
@@ -85,6 +104,7 @@ export default async function MealsPage({
             readout={readout}
             locale={dateLocale(dateFormat)}
             unit={weightUnit}
+            collapsed={dashboardCollapsed.includes("weight")}
           />
         ) : null
       }

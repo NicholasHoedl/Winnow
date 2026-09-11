@@ -18,19 +18,28 @@ import { getUserPreferences } from "@/modules/preferences/queries"
 import { fetchProductByBarcode, searchProducts } from "./off-client"
 import type { ImportedFood } from "./off-mapping"
 import { describeOffFailure } from "./off-request"
-import type { Food, MacroTargets, MealEntry, WaterLog } from "./queries"
+import type {
+  Food,
+  MacroTargets,
+  MealEntry,
+  SavedMeal,
+  WaterLog,
+} from "./queries"
 import { findReferenceFoods, resolveReferenceFood } from "./reference-data"
 import {
   defaultPortion,
   scaleReferenceFood,
   type ReferenceFood,
 } from "./reference-foods"
-import { carbsForCalories } from "./service"
+import { carbsForCalories, resolveSavedMealItems } from "./service"
 import {
   copiedMealEntry,
+  entryFromSavedMealItem,
   restorableFood,
   restorableMacroTarget,
   restorableMealEntry,
+  restorableSavedMeal,
+  restorableSavedMealItem,
   restorableWaterLog,
 } from "./restore"
 import {
@@ -38,6 +47,8 @@ import {
   foods,
   macroTargets,
   mealEntries,
+  savedMealItems,
+  savedMeals,
   waterLogs,
 } from "./schema"
 import {
@@ -45,6 +56,7 @@ import {
   copyDaySchema,
   daySchema,
   foodInputSchema,
+  logSavedMealSchema,
   macroTargetsSchema,
   mealEntryInputSchema,
   offBarcodeSchema,
@@ -54,7 +66,9 @@ import {
   restoreFoodSchema,
   restoreMacroTargetSchema,
   restoreMealEntrySchema,
+  restoreSavedMealSchema,
   restoreWaterLogSchema,
+  savedMealInputSchema,
   waterLogSchema,
 } from "./validation"
 
@@ -78,14 +92,23 @@ function revalidateMeals() {
 
 // --- Foods (library) ---
 
-export async function createFood(input: unknown): Promise<ActionResult> {
+export type CreateFoodResult = { ok: true; food: Food } | ActionFailure
+
+/**
+ * Add a food to the library. Hands the row back: the saved-meal editor adds a reference
+ * or packaged pick to the library first and then to the meal, and needs the id to link.
+ */
+export async function createFood(input: unknown): Promise<CreateFoodResult> {
   const userId = await requireUserId()
   const parsed = foodInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db.insert(foods).values({ userId, ...parsed.data })
+  const [food] = await db
+    .insert(foods)
+    .values({ userId, ...parsed.data })
+    .returning()
   revalidatePath("/meals")
-  return { ok: true }
+  return { ok: true, food }
 }
 
 export async function updateFood(
@@ -412,6 +435,235 @@ export async function deleteMealEntries(ids: unknown): Promise<ActionResult> {
     )
   revalidateMeals()
   return { ok: true }
+}
+
+// --- Saved meals (T32, ADR-0026) ---
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
+
+export type SaveSavedMealResult = { ok: true; id: string } | ActionFailure
+export type DeleteSavedMealResult =
+  { ok: true; meal: SavedMeal | null } | ActionFailure
+export type LogSavedMealResult =
+  { ok: true; name: string; count: number; entryIds: string[] } | ActionFailure
+
+/**
+ * Which of these library foods still exist. An item may only link to one that does: the
+ * editor's page can be stale, and an undo can arrive after the food it names was deleted,
+ * and the FK would throw on either. An unlinkable item keeps its snapshot instead — the
+ * same standing it would have had if the food had gone first.
+ */
+async function existingFoodIds(
+  tx: Tx,
+  userId: string,
+  ids: (string | null)[],
+): Promise<Set<string>> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))]
+  if (wanted.length === 0) return new Set()
+  const rows = await tx
+    .select({ id: foods.id })
+    .from(foods)
+    .where(and(eq(foods.userId, userId), inArray(foods.id, wanted)))
+  return new Set(rows.map((row) => row.id))
+}
+
+/**
+ * Create a saved meal, or replace one — the name, the meal type and the whole item list,
+ * in one transaction. An edit replaces the items wholesale rather than diffing them: a
+ * meal is a handful of rows, and "what the editor shows is what is stored" is worth more
+ * than stable item ids that nothing references.
+ */
+export async function saveSavedMeal(
+  input: unknown,
+): Promise<SaveSavedMealResult> {
+  const userId = await requireUserId()
+  const parsed = savedMealInputSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const { id, name, mealType, items } = parsed.data
+
+  const result = await db.transaction(async (tx) => {
+    let mealId: string
+    if (id) {
+      const [updated] = await tx
+        .update(savedMeals)
+        .set({ name, mealType: mealType || null })
+        .where(and(eq(savedMeals.id, id), eq(savedMeals.userId, userId)))
+        .returning({ id: savedMeals.id })
+      if (!updated) {
+        return {
+          ok: false as const,
+          error: "That saved meal no longer exists.",
+        }
+      }
+      mealId = updated.id
+      await tx
+        .delete(savedMealItems)
+        .where(
+          and(
+            eq(savedMealItems.savedMealId, mealId),
+            eq(savedMealItems.userId, userId),
+          ),
+        )
+    } else {
+      const [created] = await tx
+        .insert(savedMeals)
+        .values({ userId, name, mealType: mealType || null })
+        .returning({ id: savedMeals.id })
+      mealId = created.id
+    }
+
+    const linkable = await existingFoodIds(
+      tx,
+      userId,
+      items.map((item) => item.foodId),
+    )
+    // Spreading the item means a nutrition column added to the schema reaches the row
+    // without a second edit here, as logMeal's snapshot does.
+    await tx.insert(savedMealItems).values(
+      items.map((item, position) => ({
+        ...item,
+        userId,
+        savedMealId: mealId,
+        position,
+        foodId: item.foodId && linkable.has(item.foodId) ? item.foodId : null,
+      })),
+    )
+    return { ok: true as const, id: mealId }
+  })
+
+  // Saved meals show only on /meals; the hubs render entries, and none was written.
+  if (result.ok) revalidatePath("/meals")
+  return result
+}
+
+/**
+ * Delete a saved meal and hand back everything needed to put it back. The items are read
+ * BEFORE the delete: the cascade takes them with the row, and `returning()` on the parent
+ * does not know they were there.
+ */
+export async function deleteSavedMeal(
+  id: unknown,
+): Promise<DeleteSavedMealResult> {
+  const userId = await requireUserId()
+  const parsed = idSchema.safeParse(id)
+  if (!parsed.success) return invalid(parsed.error)
+
+  const meal = await db.transaction(async (tx) => {
+    const items = await tx.query.savedMealItems.findMany({
+      where: and(
+        eq(savedMealItems.savedMealId, parsed.data),
+        eq(savedMealItems.userId, userId),
+      ),
+      orderBy: [asc(savedMealItems.position)],
+    })
+    const [deleted] = await tx
+      .delete(savedMeals)
+      .where(and(eq(savedMeals.id, parsed.data), eq(savedMeals.userId, userId)))
+      .returning()
+    return deleted ? { ...deleted, items } : null
+  })
+  revalidatePath("/meals")
+  return { ok: true, meal }
+}
+
+/**
+ * Undo for {@link deleteSavedMeal}: the row and its items, whole. The column lists and
+ * their coverage tests live in restore.ts.
+ */
+export async function restoreSavedMeal(meal: unknown): Promise<ActionResult> {
+  const userId = await requireUserId()
+  const parsed = restoreSavedMealSchema.safeParse(meal)
+  if (!parsed.success) return invalid(parsed.error)
+  const { items, ...row } = parsed.data
+
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(savedMeals)
+      .values(restorableSavedMeal(row, userId))
+      .onConflictDoNothing()
+    if (items.length === 0) return
+    const linkable = await existingFoodIds(
+      tx,
+      userId,
+      items.map((item) => item.foodId),
+    )
+    await tx
+      .insert(savedMealItems)
+      .values(
+        items.map((item) => ({
+          ...restorableSavedMealItem(item, userId),
+          foodId: item.foodId && linkable.has(item.foodId) ? item.foodId : null,
+        })),
+      )
+      .onConflictDoNothing()
+  })
+  revalidatePath("/meals")
+  return { ok: true }
+}
+
+/**
+ * Log a saved meal onto a day: one entry per item, in one insert, under the meal's own
+ * meal type or — when it has none — wherever quick-added meals go, the preference the
+ * quick-add bar applies. The items are resolved against the library first, so the entries
+ * carry each food's figures as they stand today (ADR-0026); an item whose food is gone
+ * logs from its snapshot.
+ *
+ * Returns the new entry ids so the toast's Undo can remove exactly those rows — the
+ * copy-a-day arrangement, and for the same reason: several rows went in, and "delete the
+ * last one" would be the wrong undo.
+ */
+export async function logSavedMeal(
+  input: unknown,
+): Promise<LogSavedMealResult> {
+  const userId = await requireUserId()
+  const parsed = logSavedMealSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const { id, date } = parsed.data
+
+  const meal = await db.query.savedMeals.findFirst({
+    where: and(eq(savedMeals.id, id), eq(savedMeals.userId, userId)),
+  })
+  if (!meal) return { ok: false, error: "That saved meal no longer exists." }
+  const items = await db.query.savedMealItems.findMany({
+    where: and(
+      eq(savedMealItems.savedMealId, id),
+      eq(savedMealItems.userId, userId),
+    ),
+    orderBy: [asc(savedMealItems.position)],
+  })
+  if (items.length === 0) {
+    return { ok: false, error: `“${meal.name}” has no foods in it.` }
+  }
+
+  const foodIds = items.flatMap((item) => (item.foodId ? [item.foodId] : []))
+  const library =
+    foodIds.length === 0
+      ? []
+      : await db.query.foods.findMany({
+          where: and(eq(foods.userId, userId), inArray(foods.id, foodIds)),
+        })
+  const resolved = resolveSavedMealItems(
+    items,
+    new Map(library.map((food) => [food.id, food] as const)),
+  )
+  const mealType =
+    meal.mealType ?? ((await getUserPreferences()).defaultMealType || null)
+
+  const inserted = await db
+    .insert(mealEntries)
+    .values(
+      resolved.map((item) =>
+        entryFromSavedMealItem(item, userId, date, mealType),
+      ),
+    )
+    .returning({ id: mealEntries.id })
+  revalidateMeals()
+  return {
+    ok: true,
+    name: meal.name,
+    count: inserted.length,
+    entryIds: inserted.map((row) => row.id),
+  }
 }
 
 // --- Food database (Open Food Facts) ---

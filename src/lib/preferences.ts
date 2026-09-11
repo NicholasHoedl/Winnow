@@ -55,6 +55,9 @@ export const DASHBOARD_CARDS = [
   "macros",
   "budget",
   "categories",
+  // Not on the dashboard: the weight trend card on /meals (T32, ADR-0027). Same list,
+  // same chevron, same write — the name says where the list started, not where it stops.
+  "weight",
 ] as const
 export type DashboardCard = (typeof DASHBOARD_CARDS)[number]
 

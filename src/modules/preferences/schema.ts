@@ -179,7 +179,8 @@ export const userPreferences = pgTable("user_preferences", {
   slateHorizonDays: integer("slate_horizon_days").notNull().default(7),
 
   /**
-   * Which dashboard cards are folded to their header.
+   * Which foldable cards are folded to their header — the dashboard's, and since T32 the
+   * weight trend card on /meals, which folds through the same list (ADR-0027).
    *
    * ONE column holding a list, not a boolean per card, and that is a deliberate break from
    * the shape of every other preference here. The dashboard's card set churns: T13 deleted

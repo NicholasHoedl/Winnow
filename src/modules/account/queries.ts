@@ -26,6 +26,8 @@ import {
   foods,
   macroTargets,
   mealEntries,
+  savedMealItems,
+  savedMeals,
   waterLogs,
 } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
@@ -56,6 +58,8 @@ export async function exportUserData() {
     macroTargetRows,
     waterLogRows,
     bodyWeightRows,
+    savedMealRows,
+    savedMealItemRows,
     categoryRows,
     transactionRows,
     budgetRows,
@@ -106,6 +110,14 @@ export async function exportUserData() {
     }),
     db.query.bodyWeights.findMany({
       where: eq(bodyWeights.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
+    db.query.savedMeals.findMany({
+      where: eq(savedMeals.userId, userId),
+      orderBy: (t, { asc }) => asc(t.id),
+    }),
+    db.query.savedMealItems.findMany({
+      where: eq(savedMealItems.userId, userId),
       orderBy: (t, { asc }) => asc(t.id),
     }),
     db.query.categories.findMany({
@@ -204,6 +216,8 @@ export async function exportUserData() {
     macroTargets: macroTargetRows,
     waterLogs: waterLogRows,
     bodyWeights: bodyWeightRows,
+    savedMeals: savedMealRows,
+    savedMealItems: savedMealItemRows,
     categories: categoryRows,
     transactions: transactionRows,
     budgets: budgetRows,

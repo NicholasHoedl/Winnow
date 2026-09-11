@@ -7,7 +7,14 @@
 // left NULL, which is valid. So the column list is exported and a test asserts it covers
 // every column in the table, which fails the moment someone adds one and forgets this.
 
-import type { foods, macroTargets, mealEntries, waterLogs } from "./schema"
+import type {
+  foods,
+  macroTargets,
+  mealEntries,
+  savedMealItems,
+  savedMeals,
+  waterLogs,
+} from "./schema"
 
 /**
  * Columns deliberately NOT restored, and why:
@@ -28,7 +35,16 @@ type MacroTargetRow = Omit<
   "userId" | "updatedAt"
 >
 type WaterLogRow = Omit<typeof waterLogs.$inferSelect, "userId">
-export type { FoodRow, MacroTargetRow, MealEntryRow, WaterLogRow }
+type SavedMealRow = Omit<typeof savedMeals.$inferSelect, "userId" | "updatedAt">
+type SavedMealItemRow = Omit<typeof savedMealItems.$inferSelect, "userId">
+export type {
+  FoodRow,
+  MacroTargetRow,
+  MealEntryRow,
+  SavedMealItemRow,
+  SavedMealRow,
+  WaterLogRow,
+}
 
 /** Every column of a deleted food, ready to re-insert under the session's user. */
 export function restorableFood(food: FoodRow, userId: string) {
@@ -118,5 +134,76 @@ export function restorableMealEntry(entry: MealEntryRow, userId: string) {
     satFatG: entry.satFatG,
     sodiumMg: entry.sodiumMg,
     createdAt: entry.createdAt,
+  }
+}
+
+// --- Saved meals (T32, ADR-0026) ---
+
+/** Every column of a deleted saved meal; its items go back beside it, one by one, below. */
+export function restorableSavedMeal(meal: SavedMealRow, userId: string) {
+  return {
+    id: meal.id,
+    userId,
+    name: meal.name,
+    mealType: meal.mealType,
+    createdAt: meal.createdAt,
+  }
+}
+
+/** Every column of one item of a deleted saved meal, snapshot included. */
+export function restorableSavedMealItem(
+  item: SavedMealItemRow,
+  userId: string,
+) {
+  return {
+    id: item.id,
+    userId,
+    savedMealId: item.savedMealId,
+    foodId: item.foodId,
+    position: item.position,
+    servings: item.servings,
+    name: item.name,
+    servingLabel: item.servingLabel,
+    calories: item.calories,
+    proteinG: item.proteinG,
+    carbsG: item.carbsG,
+    fatG: item.fatG,
+    fiberG: item.fiberG,
+    sugarG: item.sugarG,
+    satFatG: item.satFatG,
+    sodiumMg: item.sodiumMg,
+  }
+}
+
+/**
+ * A saved meal's item as a new entry on `date`: the item's servings and figures — resolved
+ * against the library by the action before it gets here — under the meal type the meal
+ * logs to. The entry gets its own id and createdAt from the insert.
+ *
+ * `foodId` rides along for the same reason {@link copiedMealEntry} keeps it: it is what
+ * makes "log again" and the quick-pick ranking see the entry as the food it is.
+ */
+export function entryFromSavedMealItem(
+  item: SavedMealItemRow,
+  userId: string,
+  date: string,
+  mealType: SavedMealRow["mealType"],
+) {
+  return {
+    userId,
+    foodId: item.foodId,
+    date,
+    mealType,
+    servings: item.servings,
+    name: item.name,
+    servingLabel: item.servingLabel,
+    calories: item.calories,
+    proteinG: item.proteinG,
+    carbsG: item.carbsG,
+    fatG: item.fatG,
+    fiberG: item.fiberG,
+    sugarG: item.sugarG,
+    satFatG: item.satFatG,
+    sodiumMg: item.sodiumMg,
   }
 }

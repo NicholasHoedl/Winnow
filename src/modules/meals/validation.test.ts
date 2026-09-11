@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest"
 
 import {
   bodyWeightSchema,
+  logSavedMealSchema,
   restoreMealEntrySchema,
+  restoreSavedMealSchema,
   restoreWaterLogSchema,
+  savedMealInputSchema,
   waterLogSchema,
 } from "./validation"
 
@@ -103,5 +106,155 @@ describe("bodyWeightSchema", () => {
       bodyWeightSchema.safeParse({ date: "2026-07-25", weightLb: 181.8 })
         .success,
     ).toBe(true)
+  })
+})
+
+// --- Saved meals (T32) ---
+
+const FOOD_ID = "0f2a6a4e-3d2e-4d0b-9c1a-6a1f5b3c2d10"
+const MEAL_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+const ITEM_ID = "16fd2706-8baf-433b-82eb-8c7fada847da"
+
+const item = {
+  foodId: FOOD_ID,
+  name: "Banana",
+  servingLabel: "1 medium",
+  calories: 105,
+  proteinG: 1.3,
+  carbsG: 27,
+  fatG: 0.4,
+  fiberG: 3.1,
+  sugarG: 14,
+  satFatG: null,
+  sodiumMg: 1,
+  servings: 1,
+}
+
+const input = {
+  name: "Banana breakfast",
+  mealType: "breakfast",
+  items: [item],
+}
+
+describe("savedMealInputSchema", () => {
+  it("accepts a named meal with at least one item, with or without an id", () => {
+    const created = savedMealInputSchema.safeParse(input)
+    expect(created.success).toBe(true)
+    if (created.success) expect(created.data.id).toBeUndefined()
+
+    const edited = savedMealInputSchema.safeParse({ ...input, id: MEAL_ID })
+    expect(edited.success).toBe(true)
+    expect(
+      savedMealInputSchema.safeParse({ ...input, id: "nope" }).success,
+    ).toBe(false)
+  })
+
+  it("refuses an empty meal, a blank name and a meal type it does not know", () => {
+    expect(
+      savedMealInputSchema.safeParse({ ...input, items: [] }).success,
+    ).toBe(false)
+    expect(
+      savedMealInputSchema.safeParse({ ...input, name: "   " }).success,
+    ).toBe(false)
+    expect(
+      savedMealInputSchema.safeParse({ ...input, mealType: "brunch" }).success,
+    ).toBe(false)
+    // "" is the meal that goes wherever quick-added meals go.
+    expect(
+      savedMealInputSchema.safeParse({ ...input, mealType: "" }).success,
+    ).toBe(true)
+  })
+
+  it("requires every micro on an item — null is an answer, missing is not", () => {
+    const { satFatG, ...missing } = item
+    void satFatG
+    expect(
+      savedMealInputSchema.safeParse({ ...input, items: [missing] }).success,
+    ).toBe(false)
+    expect(
+      savedMealInputSchema.safeParse({
+        ...input,
+        items: [{ ...item, foodId: null }],
+      }).success,
+    ).toBe(true)
+  })
+
+  it("bounds servings and the item count", () => {
+    expect(
+      savedMealInputSchema.safeParse({
+        ...input,
+        items: [{ ...item, servings: 0 }],
+      }).success,
+    ).toBe(false)
+    const tooMany = Array.from({ length: 41 }, () => item)
+    expect(
+      savedMealInputSchema.safeParse({ ...input, items: tooMany }).success,
+    ).toBe(false)
+  })
+})
+
+describe("logSavedMealSchema", () => {
+  it("needs a uuid and a real day", () => {
+    expect(
+      logSavedMealSchema.safeParse({ id: MEAL_ID, date: "2026-09-10" }).success,
+    ).toBe(true)
+    expect(
+      logSavedMealSchema.safeParse({ id: "meal", date: "2026-09-10" }).success,
+    ).toBe(false)
+    expect(
+      logSavedMealSchema.safeParse({ id: MEAL_ID, date: "2026-13-40" }).success,
+    ).toBe(false)
+  })
+})
+
+describe("restoreSavedMealSchema", () => {
+  const deleted = {
+    id: MEAL_ID,
+    name: "Banana breakfast",
+    mealType: null,
+    createdAt: "2026-09-01T08:00:00.000Z",
+    items: [
+      {
+        id: ITEM_ID,
+        savedMealId: MEAL_ID,
+        foodId: null,
+        position: 0,
+        servings: 1.5,
+        name: "Banana",
+        servingLabel: "1 medium",
+        calories: 105,
+        proteinG: 1.3,
+        carbsG: 27,
+        fatG: 0.4,
+        fiberG: 3.1,
+        sugarG: 14,
+        satFatG: null,
+        sodiumMg: 1,
+      },
+    ],
+  }
+
+  it("round-trips a deleted meal with its items, coercing createdAt", () => {
+    const parsed = restoreSavedMealSchema.safeParse(deleted)
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.createdAt).toBeInstanceOf(Date)
+    expect(parsed.data.items[0].position).toBe(0)
+    expect(parsed.data.items[0].satFatG).toBeNull()
+  })
+
+  it("refuses an item missing a column, and never takes a userId", () => {
+    const { sodiumMg, ...missing } = deleted.items[0]
+    void sodiumMg
+    expect(
+      restoreSavedMealSchema.safeParse({ ...deleted, items: [missing] })
+        .success,
+    ).toBe(false)
+    const parsed = restoreSavedMealSchema.safeParse({
+      ...deleted,
+      userId: "someone-else",
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data).not.toHaveProperty("userId")
   })
 })

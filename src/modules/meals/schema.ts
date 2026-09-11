@@ -1,6 +1,7 @@
 import {
   date,
   index,
+  integer,
   pgEnum,
   pgTable,
   real,
@@ -206,4 +207,80 @@ export const macroTargets = pgTable(
   // The unique provides the btree index the lookup needs — a separate index() on the
   // same columns would just be a duplicate.
   (t) => [unique("macro_targets_user_effective").on(t.userId, t.effectiveFrom)],
+)
+
+/**
+ * A saved meal: a named bundle of library foods logged together in one tap (T32,
+ * ADR-0026). "A banana and a glass of milk" is one row here and two in
+ * `saved_meal_items`.
+ *
+ * `meal_type` is where the meal usually goes. NULL means "wherever quick-added meals go",
+ * the same preference the quick-add bar applies when the text names no meal.
+ */
+export const savedMeals = pgTable(
+  "saved_meals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    mealType: mealTypeEnum("meal_type"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // The strip and the list read every meal on each /meals render, ordered by name.
+    index("saved_meals_user_name").on(t.userId, t.name),
+  ],
+)
+
+/**
+ * One food in a saved meal, and how many servings of it.
+ *
+ * `food_id` points at the library food and the item FOLLOWS it: the page and the log
+ * take the food's current figures while it exists, so a correction to the milk in the
+ * library reaches every meal that has it. The name, serving and figures are snapshotted
+ * here as well, but only as the fallback for a food deleted since — ON DELETE SET NULL
+ * keeps the item and the snapshot keeps it honest, so deleting a library food never
+ * silently shrinks a saved meal. Contrast `meal_entries`, whose snapshot IS the record
+ * and is never re-read.
+ *
+ * Carries `user_id` like every other table, child or not: the account export discovers
+ * user-owned tables by that column, and a child table without it would be exported
+ * nowhere while the coverage test looked the other way.
+ */
+export const savedMealItems = pgTable(
+  "saved_meal_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    savedMealId: uuid("saved_meal_id")
+      .notNull()
+      .references(() => savedMeals.id, { onDelete: "cascade" }),
+    foodId: uuid("food_id").references(() => foods.id, {
+      onDelete: "set null",
+    }),
+    position: integer("position").notNull().default(0),
+    servings: real("servings").notNull().default(1),
+    // snapshot — the fallback, see above
+    name: text("name").notNull(),
+    servingLabel: text("serving_label").notNull(),
+    calories: real("calories").notNull().default(0),
+    proteinG: real("protein_g").notNull().default(0),
+    carbsG: real("carbs_g").notNull().default(0),
+    fatG: real("fat_g").notNull().default(0),
+    ...microColumns(),
+  },
+  (t) => [
+    // A meal's items in order: read on every /meals render and when a meal is logged.
+    index("saved_meal_items_meal_position").on(t.savedMealId, t.position),
+  ],
 )

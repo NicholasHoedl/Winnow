@@ -13,9 +13,10 @@ describe("USER_TABLES", () => {
     // `habit_entries`), 26 once `notes` was dropped, 27 now. An exact count rather than a
     // floor on purpose — it should be a deliberate edit to add a table to everyone's
     // backup OR to remove one, and this is the line that makes someone notice they did.
-    // It fired on the notes removal, which is exactly the job.
-    expect(USER_TABLES.length).toBe(27)
-    expect(new Set(EXPORT_KEYS).size).toBe(27)
+    // It fired on the notes removal, which is exactly the job — and on T32, which added
+    // `saved_meals` and `saved_meal_items` to the backup (27 → 29).
+    expect(USER_TABLES.length).toBe(29)
+    expect(new Set(EXPORT_KEYS).size).toBe(29)
   })
 
   it("uses the export's key for the one table whose name differs", () => {

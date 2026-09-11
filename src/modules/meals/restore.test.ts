@@ -3,12 +3,22 @@ import { describe, expect, it } from "vitest"
 
 import {
   NOT_RESTORED,
+  entryFromSavedMealItem,
   restorableFood,
   restorableMacroTarget,
   restorableMealEntry,
+  restorableSavedMeal,
+  restorableSavedMealItem,
   restorableWaterLog,
 } from "./restore"
-import { foods, macroTargets, mealEntries, waterLogs } from "./schema"
+import {
+  foods,
+  macroTargets,
+  mealEntries,
+  savedMealItems,
+  savedMeals,
+  waterLogs,
+} from "./schema"
 
 // The point of these two tests: they compare the restore payload against the SCHEMA, so
 // adding a column without touching restore.ts fails here rather than silently losing
@@ -148,5 +158,114 @@ describe("restorableMacroTarget", () => {
     expect(payload.effectiveFrom).toBe("2026-03-01")
     expect(payload.calories).toBe(2200)
     expect(payload.userId).toBe("me")
+  })
+})
+
+// --- Saved meals (T32) ---
+
+const savedMeal = {
+  id: "m-1",
+  userId: "someone-else",
+  name: "Banana breakfast",
+  mealType: "breakfast" as const,
+  createdAt: new Date("2026-09-01T08:00:00Z"),
+  updatedAt: new Date("2026-09-02T08:00:00Z"),
+}
+
+const savedItem = {
+  id: "i-1",
+  userId: "someone-else",
+  savedMealId: "m-1",
+  foodId: "f-1",
+  position: 2,
+  servings: 1.5,
+  name: "Banana",
+  servingLabel: "1 medium",
+  calories: 105,
+  proteinG: 1.3,
+  carbsG: 27,
+  fatG: 0.4,
+  fiberG: 3.1,
+  sugarG: 14,
+  satFatG: null,
+  sodiumMg: 1,
+}
+
+describe("restorableSavedMeal", () => {
+  it("carries every column the table has", () => {
+    const payload = restorableSavedMeal(savedMeal, "me")
+    for (const column of Object.keys(getTableColumns(savedMeals))) {
+      if (NOT_RESTORED.has(column)) continue
+      expect(payload, `missing column: ${column}`).toHaveProperty(column)
+    }
+  })
+
+  it("keeps the meal type and takes userId from the session", () => {
+    const payload = restorableSavedMeal(savedMeal, "me")
+    expect(payload.mealType).toBe("breakfast")
+    expect(payload.createdAt).toEqual(savedMeal.createdAt)
+    expect(payload.userId).toBe("me")
+  })
+})
+
+describe("restorableSavedMealItem", () => {
+  it("carries every column the table has", () => {
+    const payload = restorableSavedMealItem(savedItem, "me")
+    for (const column of Object.keys(getTableColumns(savedMealItems))) {
+      if (NOT_RESTORED.has(column)) continue
+      expect(payload, `missing column: ${column}`).toHaveProperty(column)
+    }
+  })
+
+  it("keeps its place in the meal, its servings and a null food", () => {
+    const payload = restorableSavedMealItem(
+      { ...savedItem, foodId: null },
+      "me",
+    )
+    expect(payload.savedMealId).toBe("m-1")
+    expect(payload.position).toBe(2)
+    expect(payload.servings).toBe(1.5)
+    expect(payload.foodId).toBeNull()
+    expect(payload.satFatG).toBeNull()
+    expect(payload.userId).toBe("me")
+  })
+})
+
+describe("entryFromSavedMealItem", () => {
+  it("fills every entry column the insert does not generate", () => {
+    const payload = entryFromSavedMealItem(
+      savedItem,
+      "me",
+      "2026-09-10",
+      "lunch",
+    )
+    for (const column of Object.keys(getTableColumns(mealEntries))) {
+      // A new row gets its own id and createdAt from the insert.
+      if (NOT_RESTORED.has(column) || column === "id" || column === "createdAt")
+        continue
+      expect(payload, `missing column: ${column}`).toHaveProperty(column)
+    }
+    expect(payload).not.toHaveProperty("id")
+    expect(payload).not.toHaveProperty("createdAt")
+  })
+
+  it("logs the item's servings and figures on the day, under the meal type given", () => {
+    const payload = entryFromSavedMealItem(
+      savedItem,
+      "me",
+      "2026-09-10",
+      "lunch",
+    )
+    expect(payload.date).toBe("2026-09-10")
+    expect(payload.mealType).toBe("lunch")
+    expect(payload.servings).toBe(1.5)
+    expect(payload.calories).toBe(105)
+    // The link to the library food is kept, as copiedMealEntry keeps it.
+    expect(payload.foodId).toBe("f-1")
+    expect(payload.userId).toBe("me")
+    // No meal type is a meal type too: the entry lands in "Other".
+    expect(
+      entryFromSavedMealItem(savedItem, "me", "2026-09-10", null).mealType,
+    ).toBeNull()
   })
 })

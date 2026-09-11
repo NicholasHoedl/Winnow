@@ -8,12 +8,15 @@ import {
   type FoodOption,
   groupByMealType,
   isLikelyBarcode,
+  itemFromFood,
+  itemsFromEntries,
   macroProgress,
   parseMealQuickAdd,
   parseQuickAddFallback,
   rankLibraryFoods,
   type RecentEntry,
   recentFrequentFoods,
+  resolveSavedMealItems,
   sumMacros,
   sumMicros,
   targetsForDate,
@@ -774,5 +777,123 @@ describe("targetsForDate", () => {
     expect(week.map((d) => targetsForDate(periods, d)?.calories)).toEqual([
       2000, 2000, 2400, 2400,
     ])
+  })
+})
+
+// --- Saved meals (T32) ---
+
+const banana = {
+  foodId: "f-banana",
+  name: "Banana",
+  servingLabel: "1 medium",
+  calories: 105,
+  proteinG: 1.3,
+  carbsG: 27,
+  fatG: 0.4,
+  fiberG: 3.1,
+  sugarG: 14,
+  satFatG: null,
+  sodiumMg: 1,
+  servings: 1,
+}
+
+const milk = {
+  ...banana,
+  foodId: "f-milk",
+  name: "Milk",
+  servingLabel: "1 cup",
+  calories: 149,
+  proteinG: 8,
+  carbsG: 12,
+  fatG: 8,
+  fiberG: 0,
+  sugarG: 12,
+  satFatG: 4.6,
+  sodiumMg: 105,
+}
+
+describe("resolveSavedMealItems", () => {
+  it("takes the library food's current figures while the food exists", () => {
+    const library = new Map([
+      [
+        "f-banana",
+        { ...banana, name: "Banana, raw", servingLabel: "100 g", calories: 89 },
+      ],
+    ])
+    const rows = [{ ...banana, id: "i-1", position: 0 }]
+    const [item] = resolveSavedMealItems(rows, library)
+    expect(item.name).toBe("Banana, raw")
+    expect(item.servingLabel).toBe("100 g")
+    expect(item.calories).toBe(89)
+    // The row's own columns ride along, and the servings are the item's, not the food's.
+    expect(item.id).toBe("i-1")
+    expect(item.position).toBe(0)
+    expect(item.servings).toBe(1)
+  })
+
+  it("stands the snapshot in once the food is gone", () => {
+    // The FK has set the link to null…
+    const [orphan] = resolveSavedMealItems(
+      [{ ...banana, foodId: null }],
+      new Map(),
+    )
+    expect(orphan.name).toBe("Banana")
+    expect(orphan.calories).toBe(105)
+    // …or the id simply no longer resolves, which is the same case from the other side.
+    const [stale] = resolveSavedMealItems([banana], new Map())
+    expect(stale.calories).toBe(105)
+  })
+
+  it("resolves each item on its own", () => {
+    const library = new Map([["f-milk", { ...milk, calories: 120 }]])
+    const items = resolveSavedMealItems([banana, milk], library)
+    expect(items.map((item) => item.calories)).toEqual([105, 120])
+  })
+})
+
+describe("itemsFromEntries", () => {
+  it("keeps the order logged and only the item fields", () => {
+    const entries = [
+      { ...banana, id: "e-1", date: "2026-09-10", mealType: "breakfast" },
+      { ...milk, id: "e-2", date: "2026-09-10", mealType: "breakfast" },
+    ]
+    const items = itemsFromEntries(entries)
+    expect(items.map((item) => item.name)).toEqual(["Banana", "Milk"])
+    expect(items[0]).not.toHaveProperty("id")
+    expect(items[0]).not.toHaveProperty("date")
+    expect(items[0]).toEqual(banana)
+  })
+
+  it("merges the same food logged twice into one item, servings added up", () => {
+    const items = itemsFromEntries([banana, milk, { ...banana, servings: 2 }])
+    expect(items).toHaveLength(2)
+    expect(items[0].servings).toBe(3)
+    expect(items[1].name).toBe("Milk")
+  })
+
+  it("merges by name, case-insensitively, when there is no library food", () => {
+    const typed = { ...banana, foodId: null, name: "Quick entry" }
+    const items = itemsFromEntries([
+      typed,
+      { ...typed, name: "quick entry", servings: 0.5 },
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0].servings).toBe(1.5)
+  })
+
+  it("keeps two library foods apart even when they share a name", () => {
+    const items = itemsFromEntries([banana, { ...banana, foodId: "f-other" }])
+    expect(items).toHaveLength(2)
+  })
+})
+
+describe("itemFromFood", () => {
+  it("is one serving of the food, linked to it", () => {
+    const food = { id: "f-milk", ...milk, barcode: null }
+    expect(itemFromFood(food)).toEqual({
+      ...milk,
+      foodId: "f-milk",
+      servings: 1,
+    })
   })
 })

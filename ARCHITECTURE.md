@@ -99,6 +99,20 @@ no network. USDA asks to be named as the source; the dialog does. ADR-0025.
 The deployment consequence is in §4.2: the app container now needs outbound
 HTTPS, where before it needed none.
 
+### 1.1c Saved meals (added in T32)
+
+A saved meal is a named bundle of library foods with a servings count each,
+logged in one tap: `saved_meals` and `saved_meal_items`, migration `0045`. An
+item **references** its library food and **follows** it — the page resolves
+every item against the library it already read, and the log action resolves
+again before it writes — so a corrected food corrects every meal that has it.
+The item's own snapshot columns (the same ones an entry has) are only the
+fallback for a food deleted since: `food_id` is `set null`, and a meal never
+silently shrinks. That is the reverse of `meal_entries`, where the snapshot is
+the record and is never re-read. Logging a meal is one insert of one entry per
+item, undone by deleting exactly those ids, as "Copy a day" is. Both tables
+carry `user_id`, which is how the export discovers them (§3). ADR-0026.
+
 ### 1.2 What was deliberately not chosen
 
 - **A separate Python/FastAPI backend** — no ML or heavy compute exists in
@@ -252,7 +266,9 @@ Three things about it are load-bearing rather than cosmetic:
   toggle above. Each card sits in `DashboardCard`, a client shell holding
   server-rendered children, which is what lets the fold be instant while
   `CategoryBars` and the stat tiles stay server components. **ADR-0016** covers
-  why the obvious alternative does not work, and what it costs.
+  why the obvious alternative does not work, and what it costs. Since T32 the
+  weight trend card on `/meals` folds through the same list and the same shell
+  — one more key, nothing renamed (**ADR-0027**).
   Fits without scrolling from 1366×768 up; 1280×800 overflows by ~19px, and the
   digest banner adds ~180px on the one visit a day it appears.
 
@@ -309,9 +325,10 @@ a classic, easy-to-introduce bug.
 > priority, digest, the goal momentum window (T8), the account's saved `theme`, whether
 > macro targets balance (T14), which view the calendar opens on (T14), how far ahead Slate
 > reaches for tracked events (T16), whether body weight is tracked and the weight
-> aimed at (T29), and which dashboard cards are folded (T17 —
+> aimed at (T29), and which cards are folded (T17 —
 > `dashboard_collapsed`, the one column here holding a LIST rather than a single setting;
-> ADR-0016 explains why).
+> ADR-0016 explains why — and since T32 the list holds the meals page's weight chart
+> too, ADR-0027).
 > `theme` is **mirrored, not moved**: it is applied before first paint from
 > localStorage by a blocking script in the root layout, above any session lookup, so
 > the server cannot supply it in time. The column exists so a new device adopts it and

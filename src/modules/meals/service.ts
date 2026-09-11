@@ -57,7 +57,7 @@ export type MealGroup<T> = {
   totals: Macros
 }
 
-const MEAL_LABELS: Record<MealType | "other", string> = {
+export const MEAL_LABELS: Record<MealType | "other", string> = {
   breakfast: "Breakfast",
   lunch: "Lunch",
   dinner: "Dinner",
@@ -528,6 +528,109 @@ export function recentFrequentFoods(
       satFatG: snap.satFatG,
       sodiumMg: snap.sodiumMg,
     }))
+}
+
+// --- Saved meals (T32, ADR-0026) ---
+
+/**
+ * One food in a saved meal, as the editor holds it and the save action receives it: the
+ * library food it came from (or none), its figures for one serving, and how many.
+ */
+export type SavedMealItemInput = {
+  foodId: string | null
+  name: string
+  servingLabel: string
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatG: number
+  fiberG: number | null
+  sugarG: number | null
+  satFatG: number | null
+  sodiumMg: number | null
+  servings: number
+}
+
+/** The figures an item takes from its library food while the food exists. */
+export type FoodFigures = Omit<SavedMealItemInput, "foodId" | "servings">
+
+/** Exactly the item fields, off an entry row, a food row or anything else that has them. */
+function toSavedMealItem(source: SavedMealItemInput): SavedMealItemInput {
+  return {
+    foodId: source.foodId,
+    name: source.name,
+    servingLabel: source.servingLabel,
+    calories: source.calories,
+    proteinG: source.proteinG,
+    carbsG: source.carbsG,
+    fatG: source.fatG,
+    fiberG: source.fiberG,
+    sugarG: source.sugarG,
+    satFatG: source.satFatG,
+    sodiumMg: source.sodiumMg,
+    servings: source.servings,
+  }
+}
+
+/** A library food as a new item: one serving of it. */
+export function itemFromFood(
+  food: { id: string } & FoodFigures,
+): SavedMealItemInput {
+  return toSavedMealItem({ ...food, foodId: food.id, servings: 1 })
+}
+
+/**
+ * Items as they stand today. An item FOLLOWS its library food: while the food exists its
+ * current name, serving and figures are used, so a correction to the milk in the library
+ * reaches every saved meal that has it. Once the food is gone — the FK sets `foodId` to
+ * null — the item's own snapshot stands in, so a deleted food never silently shrinks a
+ * meal. Generic so a row's other columns (id, position) ride along for the editor.
+ */
+export function resolveSavedMealItems<
+  T extends { foodId: string | null } & FoodFigures,
+>(items: T[], foodsById: ReadonlyMap<string, FoodFigures>): T[] {
+  return items.map((item) => {
+    const food = item.foodId ? foodsById.get(item.foodId) : undefined
+    if (!food) return item
+    return {
+      ...item,
+      name: food.name,
+      servingLabel: food.servingLabel,
+      calories: food.calories,
+      proteinG: food.proteinG,
+      carbsG: food.carbsG,
+      fatG: food.fatG,
+      fiberG: food.fiberG,
+      sugarG: food.sugarG,
+      satFatG: food.satFatG,
+      sodiumMg: food.sodiumMg,
+    }
+  })
+}
+
+/**
+ * A section of the day's log as saved-meal items — "Save as meal" on a Breakfast heading.
+ *
+ * The same food logged twice in the section becomes one item with the servings added
+ * up, keyed the way the quick picks are: by the library food, else by the name. Two
+ * bananas at breakfast are one item of two servings, not two rows the editor then has to
+ * tidy. Order is the order logged, and the first occurrence's figures are kept — the item
+ * follows the library from then on anyway.
+ */
+export function itemsFromEntries(
+  entries: SavedMealItemInput[],
+): SavedMealItemInput[] {
+  const merged = new Map<string, SavedMealItemInput>()
+  for (const entry of entries) {
+    const key = entry.foodId ?? `name:${entry.name.trim().toLowerCase()}`
+    const seen = merged.get(key)
+    if (seen) {
+      merged.set(key, { ...seen, servings: seen.servings + entry.servings })
+    } else {
+      merged.set(key, toSavedMealItem(entry))
+    }
+  }
+  return [...merged.values()]
 }
 
 // --- Micronutrients ---

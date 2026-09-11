@@ -1,6 +1,10 @@
 # Handoff
 
-Last updated: **2026-09-10**. T31 merged the meals page's two food lookups into one search
+Last updated: **2026-09-10**. T32 added saved meals — a named bundle of library foods
+logged in one tap, built from a section of the day's log or from a list, whose items
+follow the library (ADR-0026) — with migration `0045`, two additive tables; and put the
+weight trend chart in the dashboard's fold shell under the same preference (ADR-0027).
+T31 merged the meals page's two food lookups into one search
 bar and bundled USDA's generic foods with the app (ADR-0025); no migration, a 1.2 MB
 generated file. T30 gave the Budget section the Activity treatment — a strip of four
 pages, Transactions · Budgets · Categories · Trends, the month riding on the pills
@@ -8,7 +12,7 @@ pages, Transactions · Budgets · Categories · Trends, the month riding on the 
 rate, a goal weight as a readout, a switch — with migration `0044`, two additive
 preference columns (ADR-0023). T28 made a due date a day or a deadline and the Slate a
 tracked-events-only card (ADR-0022), with migration `0043` — a rename and one defaulted
-column. **Four migrations now wait on the port step: `0041` to `0044`.** T27
+column. **Five migrations now wait on the port step: `0041` to `0045`.** T27
 before it gave each goal one editor and put the plan tool in a dialog beside New goal
 (ADR-0021); no migration. T26 finished lists — the by-list view, `#list` in quick-add and a
 default list — with migration `0042`, one nullable column that rides the port step T24
@@ -24,7 +28,7 @@ them. §1 still describes the deploy as of 2026-08-25 and nothing about the runn
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T31 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T32 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -586,6 +590,41 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T32 is shipped: saved meals, and a weight chart that folds.** Migration `0045`
+(`saved_meals`), two additive tables. **ADR-0026** (saved meals) and **ADR-0027** (the
+fold, amending ADR-0016) are the authorities.
+
+- **Saved meals**: `saved_meals` (a name, an optional `meal_type`) and `saved_meal_items`
+  (a `food_id` that is `set null`, `position`, `servings`, and the same snapshot columns
+  an entry has). An item FOLLOWS its library food: `page.tsx` resolves every item against
+  the library it already read (`resolveSavedMealItems`), and `logSavedMeal` resolves
+  again before it writes. The snapshot only stands in once the food is gone, so deleting
+  a library food never silently shrinks a meal. Both tables carry `user_id` because that
+  is how `tables.ts` discovers what to export; `tables.test.ts`'s exact count is 29.
+- **Building one**: "Save as meal" beside each section's kcal total opens the editor
+  pre-filled from that section (`itemsFromEntries` merges a food logged twice into one
+  item); the ⋮ menu's "Saved meals" lists them with Edit, Delete (undo restores the row
+  and its items) and New. The editor (`saved-meal-dialog.tsx`) is plain state, remounted
+  by `key` on every open so it seeds from its draft without an effect; the schema has the
+  last word at submit. A reference or packaged pick in it is saved to the library first
+  (`createFood` now returns the row) and then joins the meal. An edit replaces the item
+  list wholesale, in one transaction.
+- **Logging one**: `SavedMealStrip`, a row of chips above the recent foods, shown only
+  once a meal exists. A tap is one insert of one entry per item under the meal's own meal
+  type or `defaultMealType`, and the toast's Undo is `deleteMealEntries(ids)` — the
+  copy-a-day arrangement.
+- **The weight chart folds**: `WeightTrendSection` renders inside `DashboardCard` with
+  `card="weight"` and the title "Weight trend"; the readout moved from the heading into
+  the body as the chart's caption (the weigh-in card above quotes it anyway).
+  `DASHBOARD_CARDS` gained `"weight"`, `setDashboardCard` revalidates `/meals` as well as
+  `/`, and nothing was renamed — the names say where the list started.
+- e2e: `meals-saved.spec` (section → meal → chip → undo; the list's edit, delete and
+  undo), `weight-trend.spec` gained the fold's reload test and an `afterEach` that unfolds
+  BEFORE the weigh-ins go (no weigh-ins, no card to unfold); `_menu.ts` knows "Saved
+  meals". Unit: `service.test.ts` (resolve, `itemsFromEntries`, `itemFromFood`),
+  `validation.test.ts`, `restore.test.ts` (both tables' column coverage,
+  `entryFromSavedMealItem`).
 
 **T31 is shipped: one food search, with generic foods built in.** No migration. **ADR-0025
 is the authority**, amending ADR-0005's alternatives.

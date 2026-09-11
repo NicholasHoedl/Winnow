@@ -23,6 +23,8 @@ import {
   foods,
   macroTargets,
   mealEntries,
+  savedMealItems,
+  savedMeals,
   waterLogs,
 } from "@/modules/meals/schema"
 import { userPreferences } from "@/modules/preferences/schema"
@@ -66,6 +68,10 @@ export async function deleteAllUserRows(tx: Executor, userId: string) {
   await tx.delete(waterLogs).where(eq(waterLogs.userId, userId))
   await tx.delete(bodyWeights).where(eq(bodyWeights.userId, userId))
   await tx.delete(macroTargets).where(eq(macroTargets.userId, userId))
+  // Items before their meals, and both before `foods`: an item's food_id is `set null`,
+  // so the order is not forced — children first, stated rather than relied on.
+  await tx.delete(savedMealItems).where(eq(savedMealItems.userId, userId))
+  await tx.delete(savedMeals).where(eq(savedMeals.userId, userId))
   await tx.delete(foods).where(eq(foods.userId, userId))
   await tx.delete(transactions).where(eq(transactions.userId, userId))
   await tx

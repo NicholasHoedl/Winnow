@@ -208,7 +208,8 @@ export async function setAiApiKey(input: unknown): Promise<ActionResult> {
  * load-bearing one. A duplicate is only reachable by racing double-clicks and the next
  * expand clears every copy.
  *
- * `revalidatePath("/")` and not `"layout"`: this changes nothing outside the dashboard.
+ * Revalidates "/" and "/meals", not `"layout"`: those are the two pages with a foldable
+ * card (the weight trend joined the list in T32), and nothing else reads it.
  */
 export async function setDashboardCard(
   card: unknown,
@@ -236,5 +237,6 @@ export async function setDashboardCard(
     })
 
   revalidatePath("/")
+  revalidatePath("/meals")
   return { ok: true }
 }

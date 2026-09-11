@@ -203,3 +203,69 @@ export const macroTargetsSchema = z.object({
     .refine((value) => isValidDateString(value), "Enter a valid date"),
 })
 export type MacroTargetsInput = z.infer<typeof macroTargetsSchema>
+
+// --- Saved meals (T32, ADR-0026) ---
+
+/** A meal is a handful of foods, not a day's log — bounded the way copyDay is. */
+export const SAVED_MEAL_MAX_ITEMS = 40
+
+/**
+ * One item as the editor sends it: the library food it came from (or none), figures for
+ * one serving, and how many servings. The micros are `restoredMicro` — nullable, not
+ * optional — because the server writes the item's snapshot whole; a key that could go
+ * missing would land as a silent NULL, the failure restore.ts exists to prevent.
+ */
+const savedMealItemSchema = z.object({
+  foodId: z.string().uuid().nullable(),
+  name: z.string().trim().min(1, "Name is required").max(200),
+  servingLabel: z.string().trim().min(1, "Serving is required").max(100),
+  calories: macroNumber,
+  proteinG: macroNumber,
+  carbsG: macroNumber,
+  fatG: macroNumber,
+  ...restoredMicros,
+  servings: z.number().positive("Servings must be more than 0").max(10000),
+})
+
+export const savedMealInputSchema = z.object({
+  /** Present to edit an existing meal, absent to create one. */
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1, "Name is required").max(80),
+  /** "" = wherever quick-added meals go, resolved when the meal is logged. */
+  mealType: z.enum(MEAL_TYPES).or(z.literal("")),
+  items: z
+    .array(savedMealItemSchema)
+    .min(1, "Add at least one food")
+    .max(SAVED_MEAL_MAX_ITEMS, `At most ${SAVED_MEAL_MAX_ITEMS} foods`),
+})
+export type SavedMealInput = z.infer<typeof savedMealInputSchema>
+
+/** Logging one: which meal, onto which day. The meal type is the meal's own, or the preference. */
+export const logSavedMealSchema = z.object({
+  id: z.string().uuid(),
+  date: dayField,
+})
+
+const restoreSavedMealItemSchema = z.object({
+  id: z.string().uuid(),
+  savedMealId: z.string().uuid(),
+  foodId: z.string().uuid().nullable(),
+  position: z.number().int().min(0),
+  servings: z.number().positive().max(10000),
+  name: z.string().trim().min(1).max(200),
+  servingLabel: z.string().trim().min(1).max(100),
+  calories: macroNumber,
+  proteinG: macroNumber,
+  carbsG: macroNumber,
+  fatG: macroNumber,
+  ...restoredMicros,
+})
+
+/** The undo payload for a deleted saved meal: the row and every item, whole. */
+export const restoreSavedMealSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(80),
+  mealType: z.enum(MEAL_TYPES).nullable(),
+  createdAt: z.coerce.date(),
+  items: z.array(restoreSavedMealItemSchema).max(SAVED_MEAL_MAX_ITEMS),
+})

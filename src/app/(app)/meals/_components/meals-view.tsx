@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { LinkPending } from "@/components/shared/link-pending"
 import {
+  BookmarkPlus,
   ChevronLeft,
   ChevronRight,
   CopyPlus,
@@ -11,6 +12,7 @@ import {
   Plus,
   Target,
   MoreVertical,
+  Utensils,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -25,10 +27,12 @@ import type {
   Food,
   MacroTargets,
   MealEntry,
+  SavedMeal,
   WaterLog,
 } from "@/modules/meals/queries"
 import {
   groupByMealType,
+  itemsFromEntries,
   macroProgress,
   type QuickPickFood,
   sumMacros,
@@ -52,6 +56,13 @@ import { MacroSummary } from "./macro-summary"
 import { MealEntryItem } from "./meal-entry-item"
 import { MealQuickAdd } from "./meal-quick-add"
 import { QuickPickStrip } from "./quick-pick-strip"
+import {
+  EMPTY_DRAFT,
+  SavedMealDialog,
+  type SavedMealDraft,
+} from "./saved-meal-dialog"
+import { SavedMealStrip } from "./saved-meal-strip"
+import { SavedMealsDialog } from "./saved-meals-dialog"
 import { TargetsDialog } from "./targets-dialog"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 
@@ -81,6 +92,7 @@ export function MealsView({
   targets,
   targetHistory,
   quickPicks,
+  savedMeals,
   waterLogs,
   trackWeight,
   weight,
@@ -96,6 +108,8 @@ export function MealsView({
   targets: MacroTargets | null
   targetHistory: MacroTargets[]
   quickPicks: QuickPickFood[]
+  /** Items already resolved against the library — see page.tsx. */
+  savedMeals: SavedMeal[]
   waterLogs: WaterLog[]
   /** Off hides the weigh-in card and the trend; `weight` and `weightTrend` arrive empty. */
   trackWeight: boolean
@@ -112,6 +126,16 @@ export function MealsView({
   const [foodsOpen, setFoodsOpen] = React.useState(false)
   const [targetsOpen, setTargetsOpen] = React.useState(false)
   const [copyOpen, setCopyOpen] = React.useState(false)
+  const [savedOpen, setSavedOpen] = React.useState(false)
+  const [editorOpen, setEditorOpen] = React.useState(false)
+  const [editorDraft, setEditorDraft] =
+    React.useState<SavedMealDraft>(EMPTY_DRAFT)
+  /**
+   * Bumped on every open of the saved-meal editor and used as its `key`, so it mounts
+   * fresh from the draft each time — its fields are plain state seeded from props, and
+   * a remount is the honest way to reseed them (no effect, no reset call).
+   */
+  const [editorSession, setEditorSession] = React.useState(0)
   const [isPending, startTransition] = React.useTransition()
   /**
    * Which entry's "Log again" is in flight, or null.
@@ -190,6 +214,14 @@ export function MealsView({
     setLogOpen(true)
   }
 
+  /** One editor for every way in: a section's "Save as meal", the list's Edit, or New. */
+  function openSavedMealEditor(draft: SavedMealDraft) {
+    setEditorDraft(draft)
+    setEditorSession((session) => session + 1)
+    setSavedOpen(false)
+    setEditorOpen(true)
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl p-6">
       <header className="mb-4 flex items-start justify-between gap-3">
@@ -222,6 +254,10 @@ export function MealsView({
               <DropdownMenuItem onClick={() => setFoodsOpen(true)}>
                 <Library className="size-4" />
                 Food library
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSavedOpen(true)}>
+                <Utensils className="size-4" />
+                Saved meals
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setTargetsOpen(true)}>
                 <Target className="size-4" />
@@ -292,6 +328,8 @@ export function MealsView({
 
       <div className="mt-4 flex flex-col gap-3">
         <MealQuickAdd date={date} foods={foods} />
+        {/* Saved meals before recent foods: a meal is something you chose to keep. */}
+        <SavedMealStrip date={date} meals={savedMeals} />
         <QuickPickStrip date={date} picks={quickPicks} />
       </div>
 
@@ -312,11 +350,33 @@ export function MealsView({
         ) : (
           groups.map((group) => (
             <section key={group.mealType}>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <h2 className="text-sm font-semibold">{group.label}</h2>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {Math.round(group.totals.calories)} kcal
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {Math.round(group.totals.calories)} kcal
+                  </span>
+                  {/* Beside the section's total, not in the ⋮ menu: the thing being
+                      saved is THIS breakfast, and the control belongs next to it. */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground h-7 px-2 text-xs"
+                    onClick={() =>
+                      openSavedMealEditor({
+                        // "Other" is not a name anyone would give a meal.
+                        name: group.mealType === "other" ? "" : group.label,
+                        mealType:
+                          group.mealType === "other" ? "" : group.mealType,
+                        items: itemsFromEntries(group.entries),
+                      })
+                    }
+                  >
+                    <BookmarkPlus className="size-3.5" />
+                    Save as meal
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-col gap-2">
                 {group.entries.map((entry) => (
@@ -362,6 +422,29 @@ export function MealsView({
         date={date}
         open={targetsOpen}
         onOpenChange={setTargetsOpen}
+      />
+      <SavedMealsDialog
+        meals={savedMeals}
+        open={savedOpen}
+        onOpenChange={setSavedOpen}
+        onNew={() => openSavedMealEditor(EMPTY_DRAFT)}
+        onEdit={(meal) =>
+          openSavedMealEditor({
+            id: meal.id,
+            name: meal.name,
+            mealType: meal.mealType ?? "",
+            items: meal.items,
+          })
+        }
+      />
+      <SavedMealDialog
+        key={editorSession}
+        draft={editorDraft}
+        foods={foods}
+        quickPicks={quickPicks}
+        offEnabled={offEnabled}
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
       />
     </div>
   )

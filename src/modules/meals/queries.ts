@@ -10,6 +10,8 @@ import {
   foods,
   macroTargets,
   mealEntries,
+  savedMealItems,
+  savedMeals,
   waterLogs,
 } from "./schema"
 import { macroProgress, sumMacros } from "./service"
@@ -19,6 +21,11 @@ export type MealEntry = typeof mealEntries.$inferSelect
 export type MacroTargets = typeof macroTargets.$inferSelect
 export type WaterLog = typeof waterLogs.$inferSelect
 export type BodyWeight = typeof bodyWeights.$inferSelect
+export type SavedMealItem = typeof savedMealItems.$inferSelect
+/** A saved meal with its items in order (T32). */
+export type SavedMeal = typeof savedMeals.$inferSelect & {
+  items: SavedMealItem[]
+}
 
 export async function getFoods(): Promise<Food[]> {
   const userId = await requireUserId()
@@ -161,4 +168,28 @@ export async function getMealEntriesRange(start: string, end: string) {
       fatG: true,
     },
   })
+}
+
+/**
+ * Every saved meal, by name, each with its items in order — AS STORED. An item's figures
+ * follow its library food (ADR-0026), and the page resolves them with
+ * `resolveSavedMealItems` against the library it has already read, rather than this
+ * query reading the library a second time.
+ */
+export async function getSavedMeals(): Promise<SavedMeal[]> {
+  const userId = await requireUserId()
+  const [meals, items] = await Promise.all([
+    db.query.savedMeals.findMany({
+      where: eq(savedMeals.userId, userId),
+      orderBy: [asc(savedMeals.name)],
+    }),
+    db.query.savedMealItems.findMany({
+      where: eq(savedMealItems.userId, userId),
+      orderBy: [asc(savedMealItems.position)],
+    }),
+  ])
+  return meals.map((meal) => ({
+    ...meal,
+    items: items.filter((item) => item.savedMealId === meal.id),
+  }))
 }
