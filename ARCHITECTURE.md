@@ -136,7 +136,7 @@ carry `user_id`, which is how the export discovers them (§3). ADR-0026.
 - **Equal-priority responsive design.** Laptop and phone are both
   first-class; each screen is designed for both breakpoints from the
   start, not retrofitted. Concretely, the app shell is responsive: a
-  persistent **sidebar nav on desktop** and a **bottom tab bar on mobile**
+  persistent **sidebar nav on desktop** and a **bottom tab bar on mobile** (the four daily destinations and a More sheet, ADR-0029)
   (thumb-reachable, app-like in the installed PWA), sharing the same routes
   and components. This is a deliberate, user-chosen trade of some build
   speed for a genuinely good experience on both devices — design each

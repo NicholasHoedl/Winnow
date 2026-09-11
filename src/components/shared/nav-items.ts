@@ -3,40 +3,71 @@ import {
   ClipboardList,
   LayoutDashboard,
   ListTodo,
+  Settings,
   Target,
   Utensils,
   Wallet,
   type LucideIcon,
 } from "lucide-react"
 
+/** Where a destination lives on a phone: in the tab bar, or in the sheet behind More. */
+export type PhonePlacement = "tab" | "more"
+
 export type NavItem = {
   href: string
   label: string
   icon: LucideIcon
+  phone: PhonePlacement
 }
 
 // Shared by the desktop sidebar and the mobile bottom tab bar so both stay in
 // sync (the "truly equal" responsive decision — one nav, two presentations).
 //
-// Seven entries, and seven is the measured ceiling rather than a round number:
-// `bottom-nav.tsx` is a plain flex with `flex-1` and no overflow handling, and seven labels
-// fit a 375px phone with nothing to spare. An eighth needs a More sheet or a scroller
-// first. Two slots have changed hands without changing the count — Notes → Review, and
-// Companion → Goals — which is the only way anything gets in here now.
+// The sidebar shows all seven. A phone shows the four used every day in its tab bar and
+// puts the rest behind More (T35, ADR-0029). Seven used to be the whole bar because seven
+// was the most that physically fit a 375px phone (ADR-0013); Material's navigation bar is
+// for three to five destinations and Apple's tab bar hands the rest to a More tab. `phone`
+// is set by how often each place is used, from the UX review's flow tiers, not by what
+// fits — and `nav-items.test.ts` holds the bar to five slots with More.
 export const navItems: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/activity", label: "Activity", icon: ListTodo },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, phone: "tab" },
+  { href: "/activity", label: "Activity", icon: ListTodo, phone: "tab" },
   // Back after T10 merged it into Activity and T13 un-merged it. Directly after Activity
   // for the reason the Companion tab used to be: it is the thing next to the thing it
   // feeds, and `/activity?goal=` is the link between them.
-  { href: "/goals", label: "Goals", icon: Target },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/budget", label: "Budget", icon: Wallet },
-  { href: "/meals", label: "Meals", icon: Utensils },
-  // `/review` had no tab until now — the bar was at its ceiling, so the dashboard and
-  // the palette were the only ways to reach it. Notes leaving freed the slot, and a
-  // weekly read of your own figures earns it more than a second door to the dashboard.
-  { href: "/review", label: "Review", icon: ClipboardList },
+  { href: "/goals", label: "Goals", icon: Target, phone: "more" },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays, phone: "more" },
+  { href: "/budget", label: "Budget", icon: Wallet, phone: "tab" },
+  { href: "/meals", label: "Meals", icon: Utensils, phone: "tab" },
+  // A weekly read of your own figures. Under More on a phone, where the dashboard's own
+  // Review button stays one tap away.
+  { href: "/review", label: "Review", icon: ClipboardList, phone: "more" },
+]
+
+/**
+ * Settings, for the sheet behind More.
+ *
+ * Not in `navItems`: the sidebar reaches it from the gear beside your name, which is where
+ * web apps keep an account's settings. A phone used to reach it from an unlabelled gear in
+ * the header on every screen; under More it has a label, which is where both platforms keep
+ * it, and the header is left with the brand and Search.
+ */
+export const SETTINGS_ITEM: NavItem = {
+  href: "/settings",
+  label: "Settings",
+  icon: Settings,
+  phone: "more",
+}
+
+/** The phone's tab bar, in the sidebar's order. More is the fifth slot. */
+export const phoneTabs: NavItem[] = navItems.filter(
+  (item) => item.phone === "tab",
+)
+
+/** The sheet behind More: the weekly destinations in the sidebar's order, then Settings. */
+export const phoneMore: NavItem[] = [
+  ...navItems.filter((item) => item.phone === "more"),
+  SETTINGS_ITEM,
 ]
 
 /**
@@ -55,4 +86,9 @@ export const navItems: NavItem[] = [
 export function isNavActive(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/"
   return pathname === href || pathname.startsWith(`${href}/`)
+}
+
+/** Whether More is lit: the page on show is one of the places it holds. */
+export function isMoreActive(pathname: string): boolean {
+  return phoneMore.some((item) => isNavActive(pathname, item.href))
 }

@@ -1,6 +1,5 @@
-import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Search, Settings } from "lucide-react"
+import { Search } from "lucide-react"
 
 import { auth } from "@/lib/auth"
 import { todayInZone } from "@/lib/date"
@@ -11,8 +10,6 @@ import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
 import { BrandMark } from "@/components/shared/brand-mark"
 import { BottomNav } from "@/components/shared/bottom-nav"
-import { LinkPending } from "@/components/shared/link-pending"
-import { ModeToggle } from "@/components/shared/mode-toggle"
 import {
   CommandPalette,
   CommandPaletteTrigger,
@@ -66,7 +63,10 @@ export default async function AppLayout({
           <AppSidebar userName={userName} />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            {/* Mobile top bar (desktop puts the brand + toggle in the sidebar) */}
+            {/* Mobile top bar: the brand and Search. Settings moved into the tab bar's More
+                sheet, with a label, and the theme toggle lives on the Appearance page; both
+                were rare choices sitting on every screen (T35, ADR-0029). The desktop
+                sidebar keeps its gear and its toggle. */}
             <header className="flex h-14 items-center justify-between border-b px-4 md:hidden">
               <span className="flex items-center gap-2">
                 <BrandMark
@@ -85,19 +85,6 @@ export default async function AppLayout({
                 >
                   <Search className="size-5" />
                 </CommandPaletteTrigger>
-                <Link
-                  href="/settings"
-                  aria-label="Settings"
-                  className={buttonVariants({ variant: "ghost", size: "icon" })}
-                >
-                  {/* Works from this SERVER component because `LinkPending` takes
-                      children rather than an icon prop — a lucide component passed as a
-                      prop would be a function crossing the RSC boundary. */}
-                  <LinkPending className="size-5">
-                    <Settings className="size-5" />
-                  </LinkPending>
-                </Link>
-                <ModeToggle />
               </div>
             </header>
 

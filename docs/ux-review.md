@@ -28,7 +28,7 @@ the daily driver until then.
 | #   | Phase       | Lens                              | Principles                            | Size   | Status          |
 | --- | ----------- | --------------------------------- | ------------------------------------- | ------ | --------------- |
 | 0   | Setup       | Rank the flows                    | Pareto principle                      | Light  | Done 2026-09-11 |
-| 1   | Structure   | Navigation and menus              | Jakob's law + Hick's law              | Medium | Not started     |
+| 1   | Structure   | Navigation and menus              | Jakob's law + Hick's law              | Medium | Done 2026-09-11 |
 | 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Not started     |
 | 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Not started     |
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Not started     |
@@ -87,13 +87,29 @@ how food gets logged.
 What is known going in, plus anything an earlier pass logged. **Keep** marks something done well;
 **Look at** marks a candidate for that pass's findings.
 
-### Pass 1: navigation and menus
+### Pass 1: navigation and menus — done 2026-09-11 (T35, ADR-0029)
 
-- Look at: the phone tab bar holds seven destinations. iOS tab bars and Android's bottom
-  navigation stop at five, and each item gets a seventh of the width with very small labels.
-- Keep: Meals' secondary actions live in one named menu; Activity and Budget are strips of
-  pages, so each page carries one job.
-- Keep (Pass 0): every flow has an entry point on a phone; none is desktop-only.
+Walked every navigation surface at 393 px and 1366 px in both themes, against Material's
+navigation bar (three to five destinations) and Apple's tab bar guidance (three to five, the
+rest behind More).
+
+Fixed:
+
+- The phone tab bar held seven destinations. It now holds Dashboard, Activity, Budget and
+  Meals, and More opens a sheet with Goals, Calendar, Review and Settings; More is lit on
+  those pages. Labels grew from 0.65rem to `text-xs`. The desktop sidebar keeps all seven.
+- The phone header carried Settings and the theme toggle on every screen. It keeps the brand
+  and Search; Settings is in More and the theme is on the Appearance page.
+- Section strips wrapped onto two rows on a phone. `PageTabs` draws all three as one row that
+  scrolls, with the current page scrolled into view.
+- Review's week control was the one date control shaped differently. It now matches Meals and
+  Budget, and its title took the display face every other page title has.
+- The primary action sat in three places. Goals and Calendar now put it right of the title,
+  with the description and the view toggle beneath.
+- The palette's create list is ordered most-used first.
+
+Kept: the desktop sidebar; the Meals actions menu; the settings index of described cards; the
+keyboard shortcuts (Ctrl+K, `n`, `g` then a letter); every flow reachable on a phone.
 
 ### Pass 2: what each screen asks of the user
 
@@ -101,6 +117,8 @@ What is known going in, plus anything an earlier pass logged. **Keep** marks som
   rows; plain-language quick add; the food dialog's extra nutrients behind "More nutrition".
 - Look at: the meals page stacks the macro summary, water, weight, the trend chart, quick add,
   saved meals and recent foods above the day's log.
+- Look at (Pass 1): the dashboard offers two ways to start a task, one above the other — the
+  New task button and the quick-add bar.
 
 ### Pass 3: sections and their order
 
@@ -111,12 +129,18 @@ What is known going in, plus anything an earlier pass logged. **Keep** marks som
 ### Pass 4: visible grouping
 
 - Keep: dashboard cards group by container, each with a real heading.
+- Look at (Pass 1, measured): Budget's month control spills its row by 9 px at 393 px when
+  "This month" shows, which is whenever a month other than the current one is on screen. The
+  layout sweep only loads the current month, so it has never seen it. Review's new week
+  control wraps instead.
 
 ### Pass 5: one thing stands out
 
 - Look at: on `/budget`, "Read them" is an outline button and "Read the receipt" a filled one —
   two panels with the same role and different weight.
 - Keep: pages lead with one filled action, such as Log food on Meals.
+- Look at (Pass 1): the dashboard stacks two filled buttons that both create a task, New task
+  in the header and Add in the quick-add bar.
 
 ### Pass 6: reach
 

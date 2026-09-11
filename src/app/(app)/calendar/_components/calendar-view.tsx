@@ -269,52 +269,51 @@ export function CalendarView({
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <header className="mb-4">
+        {/* The title and its actions share a row, and the view toggle sits under them the
+            way the section strips do on Activity and Budget (T35). All four views and both
+            buttons used to share one row beside the title, which on a phone wrapped into
+            two with Add event on neither side of anything. */}
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Calendar
           </h1>
-        </div>
-        {/* `flex-wrap` here, not only on the header. The header already wrapped, but this
-            row was a single unbreakable flex child of it — four view links plus two
-            buttons, ~416px intrinsic — so at 393px it overflowed and took the whole
-            document sideways with it. Wrapping one level too high looks identical in the
-            markup and is not the same thing. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="bg-muted inline-flex rounded-lg p-0.5">
-            {CALENDAR_VIEWS.map((v) => (
-              <Link
-                key={v}
-                href={calendarHref(v, date)}
-                aria-current={view === v ? "page" : undefined}
-                className={cn(
-                  "rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors",
-                  view === v
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {v}
-              </Link>
-            ))}
+          <div className="flex items-center gap-2">
+            {/* A word rather than a menu: this page has exactly ONE secondary action, and a
+                dropdown wrapping a single item is more chrome than the icon it replaced.
+                The `aria-label` stays and still wins as the accessible name, so the visible
+                text can be the short form — and on a phone, no text at all. */}
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label="Manage calendars"
+              onClick={() => setManagerOpen(true)}
+            >
+              <Layers className="size-4" />
+              <span className="hidden sm:inline">Calendars</span>
+            </Button>
+            <Button onClick={() => openCreate()}>
+              <CalendarPlus className="size-4" />
+              Add event
+            </Button>
           </div>
-          {/* A word rather than a menu: this page has exactly ONE secondary action, and a
-              dropdown wrapping a single item is more chrome than the icon it replaced. The
-              `aria-label` stays and still wins as the accessible name, so the visible text
-              can be the short form. */}
-          <Button
-            variant="outline"
-            size="sm"
-            aria-label="Manage calendars"
-            onClick={() => setManagerOpen(true)}
-          >
-            <Layers className="size-4" />
-            Calendars
-          </Button>
-          <Button onClick={() => openCreate()}>
-            <CalendarPlus className="size-4" />
-            Add event
-          </Button>
+        </div>
+        <div className="bg-muted inline-flex rounded-lg p-0.5">
+          {CALENDAR_VIEWS.map((v) => (
+            <Link
+              key={v}
+              href={calendarHref(v, date)}
+              aria-current={view === v ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1 text-sm font-medium capitalize transition-colors",
+                view === v
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {v}
+            </Link>
+          ))}
         </div>
       </header>
 

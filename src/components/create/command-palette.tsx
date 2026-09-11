@@ -146,22 +146,25 @@ type CreateCommand = { label: string; icon: LucideIcon } & (
   { kind: CreateKind } | { href: string }
 )
 
+// In the order they are made, most often first (T35): the UX review's flow tiers put tasks,
+// meals and transactions in every day, events and goals in the week, and habits and routines
+// rarely. A palette read top-down before typing is a list where position is priority.
 const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New task", icon: ListTodo, kind: "task" },
-  { label: "New event", icon: CalendarDays, href: "/calendar" },
-  { label: "New transaction", icon: Wallet, href: "/budget" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
+  { label: "New transaction", icon: Wallet, href: "/budget" },
+  { label: "New event", icon: CalendarDays, href: "/calendar" },
   // `/goals`, not `/activity`. This pointed at the merged page from T10 and was left
   // behind when T13 gave goals their own page back — so the one command in this menu for
   // making a goal took you to the task list.
   { label: "New goal", icon: Target, href: "/goals" },
-  { label: "New routine", icon: ListChecks, href: "/activity/routines" },
   // `href`, not a `CreateKind`. A kind means a globally-mounted dialog in the app shell for
   // the whole app's lifetime, which is a lot to carry for a rare action — every other
   // command here except "New task" navigates, so this follows them. It does leave the same
   // half-command routines already have (you land on the page and click New habit again); if
   // that is ever fixed with a `?new=1` param it should be fixed for both at once.
   { label: "New habit", icon: Flame, href: "/activity/habits" },
+  { label: "New routine", icon: ListChecks, href: "/activity/routines" },
 ]
 
 function isTypingTarget(el: EventTarget | null): boolean {

@@ -153,36 +153,46 @@ export function GoalsView({
 
   return (
     <div className="mx-auto w-full max-w-5xl p-4 lg:p-6">
-      <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <header className="mb-5">
+        {/* The title and its actions share a row, as on Activity, Budget and Meals, with the
+            description under them (T35). The description used to sit in one block with the
+            title, which left the actions no room on a phone and dropped them to a row of
+            their own. */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="font-display text-3xl font-semibold tracking-tight">
             Goals
           </h1>
-          <p className="text-muted-foreground text-sm">
-            What you&apos;re working toward, and whether it&apos;s moving.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {/* The plan tool, beside the button it is the AI counterpart of. Gated on the
+          <div className="flex flex-wrap gap-2">
+            {/* The plan tool, beside the button it is the AI counterpart of. Gated on the
               same `aiReady` reading as everything else about the companion, so it simply
               is not here when the feature is off — and not before there is a goal to plan.
               It used to be a panel above the list; ADR-0021 says why it is a dialog. */}
-          {companionEnabled && goals.length > 0 && (
-            <Button variant="outline" onClick={() => setPlanOpen(true)}>
-              <Sparkles className="text-brand-accent size-4" />
-              Plan a goal
+            {companionEnabled && goals.length > 0 && (
+              <Button
+                variant="outline"
+                // The name stays whole for a screen reader and for the specs; the visible
+                // word shortens on a phone so the two actions fit beside the title.
+                aria-label="Plan a goal"
+                onClick={() => setPlanOpen(true)}
+              >
+                <Sparkles className="text-brand-accent size-4" />
+                Plan<span className="hidden sm:inline"> a goal</span>
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                setEditorGoalId(null)
+                setGoalDialogOpen(true)
+              }}
+            >
+              <Plus className="size-4" />
+              New goal
             </Button>
-          )}
-          <Button
-            onClick={() => {
-              setEditorGoalId(null)
-              setGoalDialogOpen(true)
-            }}
-          >
-            <Plus className="size-4" />
-            New goal
-          </Button>
+          </div>
         </div>
+        <p className="text-muted-foreground mt-1 text-sm">
+          What you&apos;re working toward, and whether it&apos;s moving.
+        </p>
       </header>
 
       {/* The way back to a proposal that was closed without a decision. */}

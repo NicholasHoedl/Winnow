@@ -2,11 +2,8 @@
 // stepping is a link (`?week=`), not client state, which is also what makes a given week
 // shareable and reloadable.
 
-import Link from "next/link"
-import { LinkPending } from "@/components/shared/link-pending"
-import { ArrowLeft, ArrowRight, Flag, ListTodo } from "lucide-react"
+import { Flag, ListTodo } from "lucide-react"
 
-import { addDays } from "@/lib/date"
 import { formatCents } from "@/modules/budget/service"
 import type { Category } from "@/modules/budget/queries"
 import type { ProposalRow } from "@/modules/companion/queries"
@@ -15,6 +12,7 @@ import { reviewHeadline } from "@/modules/review/service"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { WEEK_FIGURES_ID } from "@/components/companion/summary-proposal"
 
+import { WeekNav } from "./week-nav"
 import { WeekSummary } from "./week-summary"
 
 /** UTC in, UTC out — these are wall-dates with no instant behind them. */
@@ -80,46 +78,22 @@ export function ReviewView({
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Weekly review
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            {range} · {reviewHeadline(review)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Link
-            href={`/review?week=${addDays(weekStart, -7)}`}
-            aria-label="Previous week"
-            className="hover:bg-accent rounded-md border p-2"
-          >
-            {/* Same-route param change: the segment is not remounted, so `loading.tsx`
-              never fires and nothing else in the app indicates this. */}
-            <LinkPending className="size-4">
-              <ArrowLeft className="size-4" />
-            </LinkPending>
-          </Link>
-          {!isCurrentWeek && (
-            <Link
-              href="/review"
-              className="hover:bg-accent rounded-md border px-3 py-2 text-sm"
-            >
-              This week
-            </Link>
-          )}
-          <Link
-            href={`/review?week=${addDays(weekStart, 7)}`}
-            aria-label="Next week"
-            className="hover:bg-accent rounded-md border p-2"
-          >
-            <LinkPending className="size-4">
-              <ArrowRight className="size-4" />
-            </LinkPending>
-          </Link>
-        </div>
-      </div>
+      {/* The display face, as every other page title has; this one had the body face. */}
+      <header className="mb-4">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
+          Weekly review
+        </h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {reviewHeadline(review)}
+        </p>
+      </header>
+      {/* The week, stepped the way Meals steps a day and Budget a month (T35). The range
+          moved from the subtitle into the control, where the other two show theirs. */}
+      <WeekNav
+        weekStart={weekStart}
+        range={range}
+        isCurrentWeek={isCurrentWeek}
+      />
 
       {review.isEmpty ? (
         <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">

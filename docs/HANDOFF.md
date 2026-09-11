@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-11**. T34 replaced the favicon and the app icons with a new
+Last updated: **2026-09-11**. T35 is the UX review's first pass: the phone tab bar holds the
+four daily destinations and More, the section strips scroll instead of wrapping, and Review,
+Goals, Calendar and the palette follow the app's own patterns (ADR-0029); no migration.
+T34 replaced the favicon and the app icons with a new
 mark — a grain of wheat inside the round of a sieve — drawn once in
 `src/lib/brand-mark.ts` for the sidebar, the mobile header, the login page and
 `pnpm icons`; no migration. T33 added an AI receipt scanner — a photo of a receipt
@@ -38,7 +41,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T34 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T35 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -600,6 +603,27 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T35 is shipped: the review's Pass 1, navigation.** No migration. **ADR-0029 is the
+authority**, amending ADR-0013 (the seven-tab bar) and ADR-0020 and ADR-0024 (wrapping
+strips). `docs/ux-review.md` has the findings.
+
+- **The phone bar** is Dashboard, Activity, Budget, Meals and More (`bottom-nav.tsx`). More
+  is the shadcn Sheet (`components/ui/sheet.tsx`, added from the registry's base-nova style)
+  listing Goals, Calendar, Review and Settings, lit while you are on one of them
+  (`data-active`). Each `navItems` entry carries `phone: "tab" | "more"`; `phoneTabs`,
+  `phoneMore` and `isMoreActive` are derived from it, and `nav-items.test.ts` holds every
+  destination to one place and the bar to five slots. The sidebar is unchanged.
+- **The phone header** is the brand and Search; its Settings gear and theme toggle left it.
+- **`PageTabs`** (`components/shared/page-tabs.tsx`) draws the Activity, Budget and Settings
+  strips as one row that scrolls, the lit pill scrolled into view. The three `*-tabs.tsx`
+  files are thin wrappers that decide which pill is lit.
+- **Review** steps weeks with `week-nav.tsx`, the Meals and Budget shape with a date jump, and
+  its title has the display face. **Goals** and **Calendar** put their primary action right of
+  the title; "Plan a goal" shows as "Plan" and "Calendars" as its icon on a phone, both keeping
+  their full accessible names. The palette's create list is most-used first.
+- e2e: `navigation.spec.ts` measures five slots with More, the sheet, and the strips at 393 px
+  (one row, the current pill in view).
 
 **T34 is shipped: a new mark.** No migration, no ADR — a design choice, made from two
 rounds of rendered candidates. The favicon and the app icons are a grain of wheat inside

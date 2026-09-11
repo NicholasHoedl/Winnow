@@ -51,8 +51,9 @@ export const ROUTES = [
   "/goals",
   "/meals",
   "/review",
-  // The overview and every settings page. The tab strip wraps at phone width rather than
-  // scrolling, which is exactly the kind of row this sweep exists to measure.
+  // The overview and every settings page. The tab strip is one row that scrolls at phone
+  // width since T35 (ADR-0029); this sweep excuses a named scroller from its spill check,
+  // so `navigation.spec.ts` measures that strip instead.
   "/settings",
   "/settings/account",
   "/settings/security",

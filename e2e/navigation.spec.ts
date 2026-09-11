@@ -124,29 +124,35 @@ test("goals has a nav tab, directly after Activity", async ({ page }) => {
   await expect(nav.getByRole("link", { name: "Companion" })).toHaveCount(0)
 })
 
-test("seven tabs still fit a 375px phone without overflowing", async ({
+test("the phone tab bar holds the four daily destinations and More", async ({
   page,
 }) => {
-  // The bar is a plain flex with `flex-1` and no overflow handling, so "it fits" is a
-  // measurement, not a style. Every change since the bar filled has been a SWAP: T10 freed
-  // a slot and Companion spent it, T13 removed Notes and Review took that one, then gave
-  // Companion's slot to Goals when its page was deleted. The count has never moved, which
-  // is why this measurement still has to pass. Anything wanting a tab has to take one.
+  // ADR-0029 (T35). Seven was the most that physically fit a 375px phone (ADR-0013), not
+  // what reads well: Material's navigation bar is for three to five destinations, and
+  // Apple's tab bar hands the rest to a More tab. The bar now carries the four destinations
+  // used daily, and More holds the weekly ones and Settings.
   await page.setViewportSize({ width: 375, height: 812 })
   await page.goto("/")
   const bar = page.locator("nav").filter({ hasText: "Dashboard" }).last()
-  await expect(bar.getByRole("link")).toHaveCount(7)
+  expect(await bar.getByRole("link").allInnerTexts()).toEqual([
+    "Dashboard",
+    "Activity",
+    "Budget",
+    "Meals",
+  ])
+  await expect(bar.getByRole("button", { name: "More" })).toBeVisible()
 
   const overflows = await bar.evaluate(
     (el) => el.scrollWidth > el.clientWidth + 1,
   )
   expect(overflows).toBe(false)
 
-  // And no label has been squeezed into wrapping onto a second line, which is how this
-  // fails before it starts clipping.
+  // Five equal slots: no label squeezed onto a second line, and More the same box as the
+  // links beside it.
   const heights = await bar
-    .getByRole("link")
+    .locator(":scope > *")
     .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height))
+  expect(heights).toHaveLength(5)
   expect(new Set(heights.map(Math.round)).size).toBe(1)
 
   const pageOverflows = await page.evaluate(
@@ -155,4 +161,79 @@ test("seven tabs still fit a 375px phone without overflowing", async ({
       document.documentElement.clientWidth,
   )
   expect(pageOverflows).toBe(false)
+})
+
+test("More holds the weekly destinations and Settings, and shows where you are", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/")
+  const bar = page.locator("nav").filter({ hasText: "Dashboard" }).last()
+  const more = bar.getByRole("button", { name: "More" })
+  await expect(more).toHaveAttribute("data-active", "false")
+
+  await more.click()
+  const sheet = page.getByRole("dialog", { name: "More" })
+  await expect(sheet).toBeVisible()
+  expect(await sheet.getByRole("link").allInnerTexts()).toEqual([
+    "Goals",
+    "Calendar",
+    "Review",
+    "Settings",
+  ])
+
+  // A pick navigates and closes the sheet.
+  await sheet.getByRole("link", { name: "Goals" }).click()
+  await expect(page).toHaveURL(/\/goals$/)
+  await expect(sheet).toHaveCount(0)
+
+  // More is lit while you are on a page it holds, and the sheet says which one.
+  await expect(more).toHaveAttribute("data-active", "true")
+  await more.click()
+  await expect(sheet.getByRole("link", { name: "Goals" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  )
+  await page.keyboard.press("Escape")
+  await expect(sheet).toHaveCount(0)
+})
+
+test("each section strip is one row on a phone, with the current page in view", async ({
+  page,
+}) => {
+  // ADR-0029. The strips wrapped onto a second row on a phone (ADR-0020, ADR-0024); they
+  // are one row that scrolls sideways now. The layout sweep cannot see a scroller hiding
+  // the page you are on, which was the reason they wrapped, so that is measured here.
+  await page.setViewportSize({ width: 393, height: 852 })
+  for (const [route, name, current] of [
+    ["/activity/repeating", "Activity sections", "Repeating tasks"],
+    ["/budget/trends", "Budget sections", "Trends"],
+    ["/settings/data", "Settings sections", "Data"],
+  ] as const) {
+    await page.goto(route)
+    const strip = page.getByRole("navigation", { name })
+    const tops = await strip
+      .getByRole("link")
+      .evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().top)),
+      )
+    expect(new Set(tops).size, `${route}: one row`).toBe(1)
+
+    await expect
+      .poll(
+        () =>
+          strip.evaluate((nav, label) => {
+            const scroller = nav.firstElementChild as HTMLElement
+            const active = nav.querySelector(
+              '[aria-current="page"]',
+            ) as HTMLElement | null
+            if (!active || active.textContent?.trim() !== label) return false
+            const box = scroller.getBoundingClientRect()
+            const pill = active.getBoundingClientRect()
+            return pill.left >= box.left - 1 && pill.right <= box.right + 1
+          }, current),
+        { message: `${route}: ${current} in view` },
+      )
+      .toBe(true)
+  }
 })
