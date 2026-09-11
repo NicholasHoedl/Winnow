@@ -9,6 +9,7 @@ import { getGoalOptions } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getLists } from "@/modules/todos/queries"
 import { AppSidebar } from "@/components/shared/app-sidebar"
+import { BrandMark } from "@/components/shared/brand-mark"
 import { BottomNav } from "@/components/shared/bottom-nav"
 import { LinkPending } from "@/components/shared/link-pending"
 import { ModeToggle } from "@/components/shared/mode-toggle"
@@ -67,8 +68,15 @@ export default async function AppLayout({
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Mobile top bar (desktop puts the brand + toggle in the sidebar) */}
             <header className="flex h-14 items-center justify-between border-b px-4 md:hidden">
-              <span className="font-display text-xl font-semibold tracking-tight">
-                Winnow
+              <span className="flex items-center gap-2">
+                <BrandMark
+                  className="size-6 shrink-0"
+                  tile="var(--primary)"
+                  ink="var(--primary-foreground)"
+                />
+                <span className="font-display text-xl font-semibold tracking-tight">
+                  Winnow
+                </span>
               </span>
               <div className="flex items-center gap-1">
                 <CommandPaletteTrigger

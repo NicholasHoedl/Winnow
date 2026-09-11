@@ -2,6 +2,7 @@
 
 import { useActionState } from "react"
 
+import { BrandMark } from "@/components/shared/brand-mark"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +35,12 @@ export default function LoginPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 text-center">
+          {/* The mark above the name: the one screen where the app introduces itself. */}
+          <BrandMark
+            className="mx-auto mb-4 size-14"
+            tile="var(--primary)"
+            ink="var(--primary-foreground)"
+          />
           <p className="text-brand-accent font-mono text-xs tracking-widest uppercase">
             Your day, in one place
           </p>

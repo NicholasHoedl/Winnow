@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-11**. T33 added an AI receipt scanner — a photo of a receipt
+Last updated: **2026-09-11**. T34 replaced the favicon and the app icons with a new
+mark — a grain of wheat inside the round of a sieve — drawn once in
+`src/lib/brand-mark.ts` for the sidebar, the mobile header, the login page and
+`pnpm icons`; no migration. T33 added an AI receipt scanner — a photo of a receipt
 becomes one proposed transaction per category of item, tax spread across them, reviewed
 and edited before Apply (ADR-0028) — with migration `0046`, a nullable `description` on
 categories that the prompt reads. T32 added saved meals — a named bundle of library foods
@@ -593,6 +596,22 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T34 is shipped: a new mark.** No migration, no ADR — a design choice, made from two
+rounds of rendered candidates. The favicon and the app icons are a grain of wheat inside
+the round of a sieve, cream on the green tile; the funnel of bars is gone, and so is the
+"W" in a box the sidebar used, which matched nothing.
+
+- **One geometry, two renderers.** `src/lib/brand-mark.ts` holds the figures; the React
+  `BrandMark` (`components/shared/brand-mark.tsx`) draws them in the sidebar (the
+  sidebar's own palette), the mobile header and the login page (the page's `--primary`),
+  and `scripts/generate-icons.ts` — now TypeScript, `pnpm icons` — draws them into
+  `src/app/icon.svg`, `src/app/apple-icon.png` and `public/icons/*.png`. The old
+  generator carried its own copy of the mark and drifted; the shared module is what
+  stops that recurring. The grain's crease is a hole in the path, so the mark needs two
+  colours, not three.
+- **Still by hand:** the generator's `BRAND` constant must track `--primary`
+  (`#456652`); nothing enforces it beyond the comment beside it.
 
 **T33 is shipped: an AI receipt scanner.** Migration `0046` (`categories.description`, one
 nullable column). **ADR-0028 is the authority**, amending ADR-0011's privacy grading.

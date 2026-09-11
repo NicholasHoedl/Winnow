@@ -1,9 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#456652"/>
-  <g fill="#ffffff">
-    <rect x="140" y="132" width="232" height="44" rx="22"/>
-    <rect x="172" y="210" width="168" height="44" rx="22"/>
-    <rect x="204" y="288" width="104" height="44" rx="22"/>
-    <circle cx="256" cy="378" r="28"/>
-  </g>
+  <circle cx="256" cy="256" r="176" fill="none" stroke="#fdfaf9" stroke-width="34"/><path d="M256 104 C330 150 356 300 256 408 C156 300 182 150 256 104 Z M256 152 C272 220 272 300 256 372 C240 300 240 220 256 152 Z" fill="#fdfaf9" fill-rule="evenodd" transform="translate(256 256) rotate(-22) scale(0.64) translate(-256 -256)"/>
 </svg>

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { LogOut, Search, Settings } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { BrandMark } from "@/components/shared/brand-mark"
 import { LinkPending } from "@/components/shared/link-pending"
 import { Button } from "@/components/ui/button"
 import { CommandPaletteTrigger } from "@/components/create/command-palette"
@@ -22,9 +23,13 @@ export function AppSidebar({ userName }: { userName: string }) {
   return (
     <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 flex-col border-r md:flex">
       <div className="flex h-16 items-center gap-2 px-6">
-        <span className="bg-sidebar-primary text-sidebar-primary-foreground flex size-6 items-center justify-center rounded-md text-xs font-bold">
-          W
-        </span>
+        {/* The app icon itself, in the sidebar's own palette — the same drawing as the
+            tab (T34). It was a "W" in a box until then, which matched nothing. */}
+        <BrandMark
+          className="size-6 shrink-0"
+          tile="var(--sidebar-primary)"
+          ink="var(--sidebar-primary-foreground)"
+        />
         <span className="font-display text-2xl font-semibold tracking-tight">
           Winnow
         </span>
