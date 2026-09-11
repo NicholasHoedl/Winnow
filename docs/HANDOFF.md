@@ -33,8 +33,12 @@ practice grouped by cadence on the dashboard — shipped without entries here; `
 them. §1 still describes the deploy as of 2026-08-25 and nothing about the running stack
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
+**A UX review is under way.** `docs/ux-review.md` holds the order of its eleven passes, the
+flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read it before
+UI work, so a change lands in the pass that owns it.
+
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T32 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T34 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
