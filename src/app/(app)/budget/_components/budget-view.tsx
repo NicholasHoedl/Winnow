@@ -82,7 +82,7 @@ export function BudgetView({
   transactions,
   summary,
   filters,
-  importTool,
+  aiTools,
 }: {
   month: string
   today: string
@@ -91,13 +91,13 @@ export function BudgetView({
   summary: MonthSummary
   filters: Filters
   /**
-   * "Read transactions", or null when the companion is off.
+   * "Read transactions" and "Scan a receipt", or null when the companion is off.
    *
    * A client element that holds its own state, passed in rather than imported because the
    * page is what knows whether the feature is configured and this view should not have
    * to ask.
    */
-  importTool?: React.ReactNode
+  aiTools?: React.ReactNode
 }) {
   const [txOpen, setTxOpen] = React.useState(false)
   const [editingTx, setEditingTx] =
@@ -266,7 +266,7 @@ export function BudgetView({
 
       {/* Under the ledger: it proposes rows for the list you just scrolled past, so it
           reads in that order. */}
-      {importTool && <div className="mt-6">{importTool}</div>}
+      {aiTools && <div className="mt-6">{aiTools}</div>}
 
       <TransactionDialog
         defaultDate={defaultDate}

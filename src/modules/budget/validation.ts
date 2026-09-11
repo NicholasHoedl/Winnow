@@ -14,6 +14,12 @@ const dollars = z.number().min(0, "Must be 0 or more").max(20_000_000)
 export const categoryInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   kind: z.enum(INCOME_EXPENSE),
+  /**
+   * A note for the AI on what belongs here (T33). Optional, so the older callers and the
+   * e2e helpers that send only a name and a kind keep working; an empty string is turned
+   * to NULL by the actions, since "no note" and "" are the same fact.
+   */
+  description: z.string().trim().max(200).nullable().optional(),
 })
 export type CategoryInput = z.infer<typeof categoryInputSchema>
 

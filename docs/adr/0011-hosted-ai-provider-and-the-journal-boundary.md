@@ -43,7 +43,7 @@ cannot supply.
 shaped exactly like the `OFF_*` keys — **moved into the Settings page in T11**, see the
 final amendment).
 
-The seam is kept precisely *because* the provider is now remote: it leaves a local endpoint
+The seam is kept precisely _because_ the provider is now remote: it leaves a local endpoint
 one env var away, which is what the next decision depends on.
 
 > **Amended 2026-08-06.** The seam now carries **two** protocols — `openai` by default, or
@@ -110,7 +110,6 @@ the feature. Occasional planning plus a weekly review is a rounding error.
 **Reversible.** Everything above is a config change plus a local endpoint. That is the
 whole point of keeping the seam.
 
-
 ---
 
 ## Amended 2026-08-07 (T11): configured in the app, not the environment
@@ -158,7 +157,7 @@ content on this machine for a payload to leak.
 
 **§2 is not thereby satisfied — it is vacated.** A rule whose subject no longer exists has
 not been honoured, it has stopped being testable, and the difference matters because the
-*enforcement* half of it was never really about the journal. Restated so it survives its
+_enforcement_ half of it was never really about the journal. Restated so it survives its
 subject:
 
 > **Prompt payloads are constructed explicitly from named fields, never spread from raw
@@ -168,7 +167,7 @@ subject:
 That is the durable rule, and it is the one the Consequences section already gave first.
 It generalises without loss: `tasks.notes`, `goals.notes`, `events.notes` and a routine
 item's notes are all free-text columns the user may treat exactly as they treated the
-journal, and every one of them is reachable from a module the companion *does* read. The
+journal, and every one of them is reachable from a module the companion _does_ read. The
 boundary moved from "one module is off-limits" to "every builder names its fields", which
 is the stronger of the two and always was — the module-level ban was only ever a coarse
 belt over that brace.
@@ -188,7 +187,7 @@ a record. Read the title as historical and this amendment as the current rule.
 feature that justifies standing up a local model later". With the module removed there is
 no corpus to retrospect over, so the local-model argument loses its strongest single
 motivation. Anyone reviving journaling should read this ADR from the top: the reasoning
-about *graded feature privacy* is what would apply to it, and it would arrive into an app
+about _graded feature privacy_ is what would apply to it, and it would arrive into an app
 whose prompt builders are field-named rather than module-fenced.
 
 **The five code comments that named the boundary** — two in `companion/queries.ts`, two in
@@ -197,3 +196,14 @@ field-naming rule instead of pointing at a module that is no longer there. The t
 `service.test.ts` asserting the goal prompt as an exact string is now the **only mechanical
 enforcement this ADR has**, which is worth knowing before anyone loosens it for being
 brittle. Brittle is the feature.
+
+## Amended 2026-09-11 (T33): a photograph joins the top of the grade
+
+The receipt scanner (ADR-0028) sends a photograph of a receipt to the provider — the
+first image the app has ever sent anywhere, and a document that can carry a card's last
+four digits, a loyalty number and a shop's address. It sits where pasted bank text already
+sat: the top of the privacy grade, sent because that is the feature, said so in the panel
+above the button, and **never stored** — the proposal keeps only what was read, and a
+refinement resends the photo from the panel that still holds it. The categories' new
+`description` column reaches the prompt too, by name, through `toCategoryHints`; the
+field-naming rule above is unchanged and that function is where it is applied.

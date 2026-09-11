@@ -17,14 +17,19 @@ import { aiProposals } from "@/modules/companion/schema"
 import {
   buildGoalPlanMessages,
   buildImportMessages,
+  buildReceiptMessages,
   buildRoutineMessages,
   buildSummaryMessages,
+  rowsFromReceipts,
   summaryReadiness,
+  toCategoryHints,
 } from "@/modules/companion/service"
 import {
   generateSchema,
   goalPlanPayloadSchema,
   importPayloadSchema,
+  importProposalPayloadSchema,
+  receiptReadingSchema,
   routinePayloadSchema,
   summaryPayloadSchema,
 } from "@/modules/companion/validation"
@@ -150,8 +155,9 @@ export async function POST(request: Request): Promise<Response> {
       buildRoutineMessages(input.brief, input.instruction, previous),
     )
   } else if (input.kind === "import") {
-    // Names only — the model picks from them and `resolveCategory` turns its answer back
-    // into an id at apply time. Sending ids would invite it to invent one.
+    // Names and the user's notes on them — the model picks a name and `resolveCategory`
+    // turns its answer back into an id at apply time. Sending ids would invite it to
+    // invent one.
     const categories = await getCategories()
     const previous = await loadPrevious(
       userId,
@@ -163,11 +169,48 @@ export async function POST(request: Request): Promise<Response> {
       importPayloadSchema,
       buildImportMessages(
         input.text,
-        categories.map((c) => c.name),
+        toCategoryHints(categories),
         input.instruction,
         previous,
       ),
     )
+  } else if (input.kind === "receipt") {
+    // A scan is an `import` proposal with a different input (T33, ADR-0028): the model
+    // reads the receipts, the app derives one row per category per receipt and stores the
+    // reading beside the rows, and everything downstream — the review, Apply, Discard —
+    // is the import path unchanged.
+    const [{ timeZone }, categories] = await Promise.all([
+      getUserPreferences(),
+      getCategories(),
+    ])
+    const today = todayInZone(new Date(), timeZone)
+    const hints = toCategoryHints(categories)
+    const previous = await loadPrevious(
+      userId,
+      input.proposalId,
+      input.instruction,
+      importProposalPayloadSchema,
+    )
+    const reading = await generatePayload(
+      receiptReadingSchema,
+      buildReceiptMessages(
+        input.image,
+        hints,
+        today,
+        input.instruction,
+        previous?.receipts ? { receipts: previous.receipts } : undefined,
+      ),
+    )
+    result = reading.ok
+      ? {
+          ok: true,
+          data: {
+            source: "receipt",
+            receipts: reading.data.receipts,
+            rows: rowsFromReceipts(reading.data.receipts, hints, today),
+          },
+        }
+      : reading
   } else {
     const { review, currency, monthMoney } = await getWeeklyReview(input.weekOf)
 
@@ -236,7 +279,14 @@ export async function POST(request: Request): Promise<Response> {
     )
   }
 
-  if (!result.ok) return bad(describeAiFailure(result.failure), 502)
+  if (!result.ok)
+    return bad(
+      describeAiFailure(result.failure, { image: input.kind === "receipt" }),
+      502,
+    )
+
+  // A scan is stored as an import: same review, same apply, same queue on /budget.
+  const kind = input.kind === "receipt" ? "import" : input.kind
 
   // A refinement replaces the pending proposal in place rather than starting a chain.
   // Nothing asks to see what a revision came from, and a `parentId` nobody reads is the
@@ -260,7 +310,7 @@ export async function POST(request: Request): Promise<Response> {
     .insert(aiProposals)
     .values({
       userId,
-      kind: input.kind,
+      kind,
       targetId,
       payload: result.data,
       model: await currentModel(),

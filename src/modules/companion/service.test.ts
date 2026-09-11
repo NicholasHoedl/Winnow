@@ -1,24 +1,34 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  allocateCents,
   buildGoalPlanMessages,
   buildImportMessages,
+  buildReceiptMessages,
   buildRoutineMessages,
   buildSummaryMessages,
+  describeCategories,
   finalizePlan,
   offsetLabel,
   planCounts,
   planWarnings,
   proposedQuota,
+  receiptWarnings,
   resolveCategory,
   routineSpan,
+  rowsFromReceipts,
   summaryReadiness,
+  toCategoryHints,
   uncategorisedCount,
   weeklyCommitments,
+  type ContentPart,
   type GoalPromptContext,
   summaryObservations,
 } from "./service"
-import type { GoalPlanPayload } from "./validation"
+import type { GoalPlanPayload, Receipt } from "./validation"
+
+/** A category as the prompt builders take it, with no note. */
+const hint = (name: string) => ({ name, description: null })
 
 const TODAY = "2026-08-04"
 
@@ -660,7 +670,10 @@ describe("uncategorisedCount", () => {
 
 describe("buildImportMessages", () => {
   it("offers only the user's own categories", () => {
-    const [, user] = buildImportMessages("some csv", ["Groceries", "Rent"])
+    const [, user] = buildImportMessages("some csv", [
+      hint("Groceries"),
+      hint("Rent"),
+    ])
     expect(user.content).toContain("Groceries; Rent")
     expect(user.content).toContain("some csv")
   })
@@ -674,7 +687,7 @@ describe("buildImportMessages", () => {
     const previous = { rows: [{ payee: "Tesco" }] }
     const [, user] = buildImportMessages(
       "csv",
-      ["Groceries"],
+      [hint("Groceries")],
       "drop the refunds",
       previous,
     )
@@ -1190,5 +1203,256 @@ describe("planWarnings — undated rows", () => {
       TODAY,
     )
     expect(warnings.map((w) => w.kind)).not.toContain("out-of-order")
+  })
+})
+
+// --- Receipt scanning (T33) ---
+
+const GROCERIES = { name: "Groceries", description: "food and drink" }
+const GAMES = { name: "Games", description: "video games and cards" }
+const IMAGE = { mediaType: "image/jpeg" as const, data: "AAAA" }
+
+const walmart: Receipt = {
+  merchant: "Walmart",
+  date: "2026-09-11",
+  total: 60,
+  kind: "purchase",
+  items: [
+    // Lower-case on purpose: the model's spelling of a name the user has.
+    { name: "Eggs", amount: 4, categoryName: "groceries" },
+    { name: "Milk", amount: 3, categoryName: "Groceries" },
+    { name: "Chips", amount: 3, categoryName: "Groceries" },
+    { name: "Video game", amount: 40, categoryName: "Games" },
+    { name: "Pokemon cards", amount: 5, categoryName: "Games" },
+  ],
+}
+
+describe("describeCategories", () => {
+  it("lists each name with the user's note on it, and says when there are none", () => {
+    expect(describeCategories([])).toContain("no categories yet")
+    const line = describeCategories([
+      GROCERIES,
+      { name: "Games", description: null },
+    ])
+    expect(line).toContain("Groceries (food and drink); Games")
+  })
+})
+
+describe("toCategoryHints", () => {
+  it("names only the two fields, and treats a blank note as none", () => {
+    const rows = [
+      { id: "c1", name: "Rent", description: "  ", kind: "expense" },
+      { id: "c2", name: "Games", description: "video games", kind: "expense" },
+    ]
+    expect(toCategoryHints(rows)).toEqual([
+      { name: "Rent", description: null },
+      { name: "Games", description: "video games" },
+    ])
+  })
+})
+
+describe("buildReceiptMessages", () => {
+  it("puts the photo first in the user turn, then the categories, today and the marker", () => {
+    const [system, user] = buildReceiptMessages(
+      IMAGE,
+      [GROCERIES],
+      "2026-09-11",
+    )
+    expect(system.role).toBe("system")
+    expect(system.content).toContain("read receipts")
+    const parts = user.content as ContentPart[]
+    expect(Array.isArray(parts)).toBe(true)
+    expect(parts[0]).toEqual({
+      type: "image",
+      mediaType: "image/jpeg",
+      data: "AAAA",
+    })
+    expect(parts[1].type).toBe("text")
+    const text = (parts[1] as { text: string }).text
+    expect(text).toContain("Groceries (food and drink)")
+    expect(text).toContain("Today is 2026-09-11")
+    expect(text).toContain("Receipt image:")
+    expect(text).not.toContain("Revise")
+  })
+
+  it("sends the previous reading when refining", () => {
+    const [, user] = buildReceiptMessages(
+      IMAGE,
+      [],
+      "2026-09-11",
+      "the game is Games",
+      { receipts: [walmart] },
+    )
+    const text = ((user.content as ContentPart[])[1] as { text: string }).text
+    expect(text).toContain("Revise this existing reading")
+    expect(text).toContain("Walmart")
+    expect(text).toContain("the game is Games")
+  })
+})
+
+describe("allocateCents", () => {
+  it("adds up to the total exactly, tax and discount alike", () => {
+    expect(allocateCents([1000, 500], 1650)).toEqual([1100, 550])
+    expect(allocateCents([1000, 500], 1200)).toEqual([800, 400])
+    // One cent among three equal shares: the earliest gets it.
+    expect(allocateCents([100, 100, 100], 301)).toEqual([101, 100, 100])
+    const parts = allocateCents([333, 333, 334], 1077)
+    expect(parts.reduce((acc, part) => acc + part, 0)).toBe(1077)
+  })
+
+  it("gives everything to the first part when nothing weighs, and nothing for no parts", () => {
+    expect(allocateCents([0, 0], 500)).toEqual([500, 0])
+    expect(allocateCents([], 500)).toEqual([])
+  })
+})
+
+describe("rowsFromReceipts", () => {
+  it("makes one row per category, matched to the user's names, with tax spread in proportion", () => {
+    const rows = rowsFromReceipts([walmart], [GROCERIES, GAMES], "2026-09-11")
+    expect(rows).toEqual([
+      {
+        date: "2026-09-11",
+        payee: "Walmart",
+        description: "Eggs, Milk, Chips",
+        amount: 10.91,
+        type: "expense",
+        categoryName: "Groceries",
+      },
+      {
+        date: "2026-09-11",
+        payee: "Walmart",
+        description: "Video game, Pokemon cards",
+        amount: 49.09,
+        type: "expense",
+        categoryName: "Games",
+      },
+    ])
+    expect(rows[0].amount + rows[1].amount).toBeCloseTo(60, 2)
+  })
+
+  it("keeps a category the user does not have as written, and groups uncategorised lines together", () => {
+    const rows = rowsFromReceipts(
+      [
+        {
+          ...walmart,
+          total: null,
+          items: [
+            { name: "Batteries", amount: 6, categoryName: "Hardware" },
+            { name: "Gum", amount: 1, categoryName: null },
+            { name: "Tape", amount: 2, categoryName: null },
+          ],
+        },
+      ],
+      [GROCERIES],
+      "2026-09-11",
+    )
+    expect(
+      rows.map((row) => [row.categoryName, row.amount, row.description]),
+    ).toEqual([
+      ["Hardware", 6, "Batteries"],
+      [null, 3, "Gum, Tape"],
+    ])
+  })
+
+  it("uses today when no date was read, and a refund becomes income", () => {
+    const rows = rowsFromReceipts(
+      [
+        {
+          ...walmart,
+          date: null,
+          kind: "refund",
+          total: 40,
+          items: [{ name: "Video game", amount: 40, categoryName: "Games" }],
+        },
+      ],
+      [GAMES],
+      "2026-09-12",
+    )
+    expect(rows).toEqual([
+      {
+        date: "2026-09-12",
+        payee: "Walmart",
+        description: "Video game",
+        amount: 40,
+        type: "income",
+        categoryName: "Games",
+      },
+    ])
+  })
+
+  it("makes one uncategorised row for a total with no lines, and nothing for a receipt with neither", () => {
+    expect(
+      rowsFromReceipts(
+        [{ ...walmart, items: [], total: 12.5 }],
+        [],
+        "2026-09-11",
+      ),
+    ).toEqual([
+      {
+        date: "2026-09-11",
+        payee: "Walmart",
+        description: "",
+        amount: 12.5,
+        type: "expense",
+        categoryName: null,
+      },
+    ])
+    expect(
+      rowsFromReceipts(
+        [{ ...walmart, items: [], total: null }],
+        [],
+        "2026-09-11",
+      ),
+    ).toEqual([])
+  })
+
+  it("absorbs a discount the same way, and rounds the model's figures to cents", () => {
+    const rows = rowsFromReceipts(
+      [
+        {
+          ...walmart,
+          total: 50,
+          items: [
+            { name: "A", amount: 33.333, categoryName: "Games" },
+            { name: "B", amount: 26.667, categoryName: "Groceries" },
+          ],
+        },
+      ],
+      [GROCERIES, GAMES],
+      "2026-09-11",
+    )
+    expect(rows.map((row) => row.amount)).toEqual([27.78, 22.22])
+    expect(rows[0].amount + rows[1].amount).toBeCloseTo(50, 2)
+  })
+
+  it("cuts a long description to the column's length", () => {
+    const items = Array.from({ length: 40 }, (_, i) => ({
+      name: `Item number ${i}`,
+      amount: 1,
+      categoryName: null,
+    }))
+    const [row] = rowsFromReceipts(
+      [{ ...walmart, total: null, items }],
+      [],
+      "2026-09-11",
+    )
+    expect(row.description.length).toBeLessThanOrEqual(300)
+    expect(row.description.endsWith("…")).toBe(true)
+  })
+})
+
+describe("receiptWarnings", () => {
+  it("says nothing about a receipt that reads cleanly", () => {
+    expect(receiptWarnings(walmart)).toEqual([])
+  })
+
+  it("flags a missing date, a missing total, and lines that disagree with the total", () => {
+    expect(receiptWarnings({ ...walmart, date: null, total: null })).toEqual([
+      { kind: "no-date" },
+      { kind: "no-total" },
+    ])
+    expect(receiptWarnings({ ...walmart, total: 100 })).toEqual([
+      { kind: "gap", itemsTotal: 55, total: 100 },
+    ])
   })
 })

@@ -16,7 +16,7 @@ import {
 import { todayInZone } from "@/lib/date"
 
 import { BudgetView } from "./_components/budget-view"
-import { ImportTool } from "./_components/import-tool"
+import { BudgetAiTools } from "./_components/budget-ai-tools"
 import { monthParam } from "./_lib/month"
 
 const UUID_RE =
@@ -94,9 +94,9 @@ export default async function BudgetPage({
       // Passed as an element: the page composes, the view places. Null when the
       // companion is off, so `BudgetView` renders nothing rather than reasoning about
       // it — a budget is not an AI feature.
-      importTool={
+      aiTools={
         aiReady(aiSettings) ? (
-          <ImportTool
+          <BudgetAiTools
             pending={pending}
             categories={categories.map((c) => ({ id: c.id, name: c.name }))}
             currency={currency}

@@ -7,7 +7,7 @@
 // box fails routinely, and failure has to be a value the UI can render, never an
 // exception that takes a page down.
 
-import type { ChatMessage } from "./service"
+import type { ChatMessage, ContentPart } from "./service"
 
 /** Why a generation didn't produce a proposal. Never an exception — see ADR-0011. */
 export type AiFailure =
@@ -163,6 +163,40 @@ export function classifyFetchError(error: unknown): AiFailure {
  * `temperature` is low but not zero. Planning benefits from a little variation — a
  * regenerate that returns byte-identical output is a wasted call.
  */
+/**
+ * A user turn's content in the OpenAI shape. A plain string passes through — every
+ * builder but the receipt's sends one — and parts become the content array, with an image
+ * as a data URL, which is how that protocol carries an inline picture.
+ */
+function toOpenAiContent(content: string | ContentPart[]): unknown {
+  if (typeof content === "string") return content
+  return content.map((part) =>
+    part.type === "text"
+      ? { type: "text", text: part.text }
+      : {
+          type: "image_url",
+          image_url: { url: `data:${part.mediaType};base64,${part.data}` },
+        },
+  )
+}
+
+/** The same content in Anthropic's shape: an `image` block with a base64 source. */
+function toAnthropicContent(content: string | ContentPart[]): unknown {
+  if (typeof content === "string") return content
+  return content.map((part) =>
+    part.type === "text"
+      ? { type: "text", text: part.text }
+      : {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: part.mediaType,
+            data: part.data,
+          },
+        },
+  )
+}
+
 export function buildChatBody(
   model: string,
   messages: ChatMessage[],
@@ -170,7 +204,10 @@ export function buildChatBody(
 ): Record<string, unknown> {
   return {
     model,
-    messages,
+    messages: messages.map((m) => ({
+      role: m.role,
+      content: toOpenAiContent(m.content),
+    })),
     temperature: 0.4,
     response_format: {
       type: "json_schema",
@@ -215,7 +252,7 @@ export function buildAnthropicBody(
     .join("\n\n")
   const rest = messages
     .filter((m) => m.role !== "system")
-    .map((m) => ({ role: m.role, content: m.content }))
+    .map((m) => ({ role: m.role, content: toAnthropicContent(m.content) }))
 
   const schema =
     typeof jsonSchema === "object" && jsonSchema !== null
@@ -319,8 +356,20 @@ export function extractPayload(
   }
 }
 
-/** User-facing copy. Each one leaves the manual path open, per ADR-0005's precedent. */
-export function describeAiFailure(failure: AiFailure): string {
+/**
+ * User-facing copy. Each one leaves the manual path open, per ADR-0005's precedent.
+ *
+ * `image` marks a request that carried a photo (T33). A model that cannot see answers a
+ * bare 400 to one, and "the provider answered 400" sends the user to look for a bug that
+ * is a settings choice.
+ */
+export function describeAiFailure(
+  failure: AiFailure,
+  context?: { image: boolean },
+): string {
+  if (context?.image && failure.kind === "http" && failure.status === 400) {
+    return "The provider rejected the photo. The configured model may not read images — choose one that does in Settings. Nothing was created."
+  }
   switch (failure.kind) {
     case "disabled":
       return "The companion is turned off on this install."

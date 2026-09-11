@@ -189,6 +189,51 @@ function importFor(isRefinement) {
 }
 
 /**
+ * A receipt reading (T33). Five lines, two categories the model names — one the user has
+ * ("Food", which `ensureFoodCategory` guarantees) and one nobody has — against a total
+ * that is five over the lines, so the row derivation has tax to spread: Food 10 of 55
+ * becomes 10.91, the rest 49.09, and the two add up to the 60 paid.
+ *
+ * A refinement answers ONE line with no category, the same tell the other kinds use.
+ */
+function receiptFor(isRefinement) {
+  if (isRefinement) {
+    return {
+      receipts: [
+        {
+          merchant: "STUB WALMART",
+          date: inDays(0),
+          total: 10,
+          kind: "purchase",
+          items: [{ name: "Refined line", amount: 10, categoryName: null }],
+        },
+      ],
+    }
+  }
+  return {
+    receipts: [
+      {
+        merchant: "STUB WALMART",
+        date: inDays(0),
+        total: 60,
+        kind: "purchase",
+        items: [
+          { name: "Eggs", amount: 4, categoryName: "Food" },
+          { name: "Milk", amount: 3, categoryName: "Food" },
+          { name: "Chips", amount: 3, categoryName: "Food" },
+          { name: "Video game", amount: 40, categoryName: "No Such Category" },
+          {
+            name: "Pokemon cards",
+            amount: 5,
+            categoryName: "No Such Category",
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/**
  * What this stub claims to serve, for the Settings model dropdown (T12h).
  *
  * `stub` first because `ai.setup.ts` configures the suite to use it; the second exists so
@@ -223,18 +268,23 @@ const server = createServer((request, response) => {
     const isRoutine = body.includes("Design a routine for")
     const isSummary = body.includes("Tasks completed:")
     const isImport = body.includes("Text to read:")
+    // The photo rides in the same body as a data URL; the marker is in the text part.
+    const isReceipt = body.includes("Receipt image:")
     const isRefinement =
       body.includes("Revise this existing plan") ||
       body.includes("Revise this existing routine") ||
       body.includes("Revise this existing summary") ||
-      body.includes("Revise this existing extraction")
-    const payload = isImport
-      ? importFor(isRefinement)
-      : isSummary
-        ? summaryFor(isRefinement)
-        : isRoutine
-          ? routineFor(isRefinement)
-          : planFor(isRefinement)
+      body.includes("Revise this existing extraction") ||
+      body.includes("Revise this existing reading")
+    const payload = isReceipt
+      ? receiptFor(isRefinement)
+      : isImport
+        ? importFor(isRefinement)
+        : isSummary
+          ? summaryFor(isRefinement)
+          : isRoutine
+            ? routineFor(isRefinement)
+            : planFor(isRefinement)
 
     response.writeHead(200, { "Content-Type": "application/json" })
     response.end(

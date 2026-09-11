@@ -309,3 +309,77 @@ describe("extractModels", () => {
     expect(models).toEqual([{ id: "good", label: "good" }])
   })
 })
+
+// --- Image content parts (T33) ---
+
+describe("image content parts", () => {
+  const messages: ChatMessage[] = [
+    { role: "system", content: "read receipts" },
+    {
+      role: "user",
+      content: [
+        { type: "image", mediaType: "image/jpeg", data: "AAAA" },
+        { type: "text", text: "Receipt image: read it" },
+      ],
+    },
+  ]
+
+  it("become a data URL on the openai protocol, text kept beside it", () => {
+    const body = buildChatBody("m", messages, {}) as {
+      messages: { role: string; content: unknown }[]
+    }
+    expect(body.messages[0]).toEqual({
+      role: "system",
+      content: "read receipts",
+    })
+    expect(body.messages[1].content).toEqual([
+      { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } },
+      { type: "text", text: "Receipt image: read it" },
+    ])
+  })
+
+  it("become a base64 image block on anthropic, with the system prompt still hoisted", () => {
+    const body = buildAnthropicBody("m", messages, {}) as {
+      system: string
+      messages: { role: string; content: unknown }[]
+    }
+    expect(body.system).toBe("read receipts")
+    expect(body.messages).toHaveLength(1)
+    expect(body.messages[0].content).toEqual([
+      {
+        type: "image",
+        source: { type: "base64", media_type: "image/jpeg", data: "AAAA" },
+      },
+      { type: "text", text: "Receipt image: read it" },
+    ])
+  })
+
+  it("leave a plain string turn exactly as it was, on both protocols", () => {
+    const plain: ChatMessage[] = [{ role: "user", content: "hello" }]
+    expect(
+      (buildChatBody("m", plain, {}) as { messages: unknown[] }).messages,
+    ).toEqual([{ role: "user", content: "hello" }])
+    expect(
+      (buildAnthropicBody("m", plain, {}) as { messages: unknown[] }).messages,
+    ).toEqual([{ role: "user", content: "hello" }])
+  })
+})
+
+describe("describeAiFailure, for a photo", () => {
+  it("reads a 400 as a model that cannot see, and says where to fix it", () => {
+    const text = describeAiFailure(
+      { kind: "http", status: 400 },
+      { image: true },
+    )
+    expect(text).toContain("may not read images")
+    expect(text).toContain("Settings")
+    expect(text).toContain("Nothing was created")
+  })
+
+  it("changes nothing else about a photo request's failures", () => {
+    expect(
+      describeAiFailure({ kind: "http", status: 500 }, { image: true }),
+    ).toBe(describeAiFailure({ kind: "http", status: 500 }))
+    expect(describeAiFailure({ kind: "http", status: 400 })).toContain("400")
+  })
+})

@@ -669,13 +669,14 @@ is in the schema rather than in the split, but the split is where it surfaces.
 
 **categories**
 
-| field      | type                  | notes |
-| ---------- | --------------------- | ----- |
-| id         | uuid (pk)             |       |
-| user_id    | uuid (fk → users)     |       |
-| name       | text                  |       |
-| kind       | enum(income, expense) |       |
-| created_at | timestamptz           |       |
+| field       | type                  | notes                                                                                                |
+| ----------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| id          | uuid (pk)             |                                                                                                      |
+| user_id     | uuid (fk → users)     |                                                                                                      |
+| name        | text                  |                                                                                                      |
+| kind        | enum(income, expense) |                                                                                                      |
+| description | text, nullable        | the user's note on what belongs here, read by the AI when it sorts a receipt's lines (T33, ADR-0028) |
+| created_at  | timestamptz           |                                                                                                      |
 
 **transactions**
 

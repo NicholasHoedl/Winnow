@@ -5,6 +5,10 @@ import { dayDiff, dowOf } from "@/lib/date"
 
 import type {
   GoalPlanPayload,
+  ImportRow,
+  Receipt,
+  ReceiptImage,
+  ReceiptReading,
   RoutinePayload,
   SummaryPayload,
 } from "./validation"
@@ -63,7 +67,20 @@ export type GoalPromptContext = {
   today: string
 }
 
-export type ChatMessage = { role: "system" | "user"; content: string }
+/**
+ * One part of a user message. Text was the only kind until T33; a receipt scan sends a
+ * photo beside its instructions. The wire shape differs per protocol — Anthropic's
+ * `image` block, OpenAI's `image_url` data URL — so this is the app's own neutral shape
+ * and `ai-request.ts` translates it, the way it already translates the system prompt.
+ */
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image"; mediaType: ReceiptImage["mediaType"]; data: string }
+
+/** A system prompt is always plain text; a user turn may carry parts. */
+export type ChatMessage =
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | ContentPart[] }
 
 /**
  * Rewritten in T12c, and the change is the whole point of the tranche.
@@ -835,19 +852,47 @@ const IMPORT_SYSTEM_PROMPT = [
   "Never invent a transaction that is not in the text.",
 ].join(" ")
 
+/**
+ * A category as the model is told about it: the name it must echo exactly, and the
+ * user's own note on what goes in it (T33). The note is what lets "Games" take a video
+ * game off a supermarket receipt while "Groceries" takes the eggs — the names alone
+ * cannot say that, and the user renames, merges and adds categories freely.
+ */
+export type CategoryHint = { name: string; description: string | null }
+
+/** The hints, off category rows — by name, never a spread (ADR-0011's boundary). */
+export function toCategoryHints(
+  categories: readonly { name: string; description?: string | null }[],
+): CategoryHint[] {
+  return categories.map((category) => ({
+    name: category.name,
+    description: category.description?.trim() || null,
+  }))
+}
+
+/** The prompt line listing the categories, or the line saying there are none. */
+export function describeCategories(
+  categories: readonly CategoryHint[],
+): string {
+  if (categories.length === 0)
+    return "The user has no categories yet; use null for every categoryName."
+  const listed = categories
+    .map((category) =>
+      category.description
+        ? `${category.name} (${category.description})`
+        : category.name,
+    )
+    .join("; ")
+  return `Categories you may choose from, each with what the user keeps in it: ${listed}`
+}
+
 export function buildImportMessages(
   text: string,
-  categories: string[],
+  categories: readonly CategoryHint[],
   instruction?: string,
   previous?: { rows: unknown[] },
 ): ChatMessage[] {
-  const lines = [
-    categories.length > 0
-      ? `Categories you may choose from: ${categories.join("; ")}`
-      : "The user has no categories yet; use null for every categoryName.",
-    "Text to read:",
-    text,
-  ]
+  const lines = [describeCategories(categories), "Text to read:", text]
 
   if (previous && instruction) {
     lines.push(
@@ -891,4 +936,211 @@ export function uncategorisedCount(
   return rows.filter(
     (row) => resolveCategory(row.categoryName, categories) === null,
   ).length
+}
+
+// --- Receipt scanning (T33, ADR-0028) ---
+
+const RECEIPT_SYSTEM_PROMPT = [
+  "You read receipts from a photo. Return every receipt you can see on it.",
+  "For each receipt give the merchant's name as printed; the purchase date in YYYY-MM-DD form, or null if none is printed; the total actually paid after tax, discounts and tips, or null if it cannot be read; whether it is a purchase or a refund; and every purchased line.",
+  "For each line give a short name, the line's own total after any line discount as a positive major-unit figure, never cents, and the category it belongs in.",
+  "Choose categoryName only from the list you are given, matching the name exactly, and use each category's description to decide what belongs in it. Use null when no category fits.",
+  "Do not list tax, tips, change, subtotals, card numbers or loyalty numbers as lines. Never invent a line that is not printed.",
+].join(" ")
+
+/**
+ * The receipt prompt. The photo goes FIRST in the user turn, then the instructions —
+ * the order the vision guidance recommends, and the one the request builders keep.
+ *
+ * `today` is given because a thermal receipt often prints "09/11" and no year; the model
+ * is told the date rather than asked to guess it, the division every prompt here keeps.
+ */
+export function buildReceiptMessages(
+  image: ReceiptImage,
+  categories: readonly CategoryHint[],
+  today: string,
+  instruction?: string,
+  previous?: ReceiptReading,
+): ChatMessage[] {
+  const lines = [
+    describeCategories(categories),
+    `Today is ${today}, for a receipt that prints no year.`,
+    "Receipt image: read every receipt on it.",
+  ]
+
+  if (previous && instruction) {
+    lines.push(
+      `Revise this existing reading rather than starting over: ${JSON.stringify(previous)}`,
+      `The change requested: ${instruction}`,
+    )
+  }
+
+  return [
+    { role: "system", content: RECEIPT_SYSTEM_PROMPT },
+    {
+      role: "user",
+      content: [
+        { type: "image", mediaType: image.mediaType, data: image.data },
+        { type: "text", text: lines.join("\n") },
+      ],
+    },
+  ]
+}
+
+/**
+ * Split `total` cents across `shares` in proportion, so the parts add up to the total
+ * EXACTLY. Largest-remainder rounding: each part takes its floor, then the leftover cents
+ * go one each to the parts that lost the most in flooring. Works for a total below the
+ * shares (a discount) as well as above (tax); a zero share stays zero.
+ */
+export function allocateCents(
+  shares: readonly number[],
+  total: number,
+): number[] {
+  const sum = shares.reduce((acc, share) => acc + share, 0)
+  if (shares.length === 0) return []
+  if (sum <= 0) {
+    // Nothing to weight by: the whole total lands on the first part.
+    return shares.map((_, index) => (index === 0 ? total : 0))
+  }
+  const exact = shares.map((share) => (share * total) / sum)
+  const floored = exact.map((value) => Math.floor(value))
+  let remainder = total - floored.reduce((acc, value) => acc + value, 0)
+  const order = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
+  for (const { index } of order) {
+    if (remainder <= 0) break
+    floored[index] += 1
+    remainder -= 1
+  }
+  return floored
+}
+
+/** Cents from a major-unit figure the model wrote, rounded rather than truncated. */
+function toCents(amount: number): number {
+  return Math.round(amount * 100)
+}
+
+/** The row's description: the lines it covers, cut to the column's length. */
+function describeLines(names: readonly string[]): string {
+  const joined = names.join(", ")
+  return joined.length <= 300 ? joined : `${joined.slice(0, 299)}…`
+}
+
+/**
+ * The transactions a reading becomes: ONE PER CATEGORY PER RECEIPT.
+ *
+ * A supermarket receipt with eggs, milk, a video game and a pack of cards is two rows —
+ * the groceries and the rest — because that is how the budget is kept. Lines are grouped
+ * by the category the model gave them, matched to the user's names case-insensitively so
+ * "food" and "Food" are one group; a name the user does not have is kept as written and
+ * shows as uncategorised, `resolveCategory`'s rule. Lines with no category form their own
+ * uncategorised group.
+ *
+ * Tax, discounts and tips are the difference between the total and the lines, and that
+ * difference is spread across the groups in proportion (`allocateCents`), so the rows add
+ * up to what actually left the account and reconcile against a statement. No total read
+ * means the rows are the lines; no lines but a total means one uncategorised row for it.
+ * A receipt with neither produces nothing — "nothing to read" is a correct answer.
+ */
+export function rowsFromReceipts(
+  receipts: readonly Receipt[],
+  categories: readonly CategoryHint[],
+  today: string,
+): ImportRow[] {
+  const rows: ImportRow[] = []
+  for (const receipt of receipts) {
+    const date = receipt.date ?? today
+    const type = receipt.kind === "refund" ? "income" : "expense"
+    const totalCents = receipt.total === null ? null : toCents(receipt.total)
+
+    const groups = new Map<
+      string,
+      { categoryName: string | null; names: string[]; cents: number }
+    >()
+    for (const item of receipt.items) {
+      const wanted = item.categoryName?.trim() ?? ""
+      const known = categories.find(
+        (category) =>
+          category.name.trim().toLowerCase() === wanted.toLowerCase(),
+      )
+      const categoryName = wanted === "" ? null : (known?.name ?? wanted)
+      const key = categoryName === null ? "" : categoryName.toLowerCase()
+      const group = groups.get(key) ?? { categoryName, names: [], cents: 0 }
+      group.names.push(item.name)
+      group.cents += toCents(item.amount)
+      groups.set(key, group)
+    }
+
+    const ordered = [...groups.values()]
+    if (ordered.length === 0) {
+      if (totalCents !== null && totalCents > 0) {
+        rows.push({
+          date,
+          payee: receipt.merchant,
+          description: "",
+          amount: totalCents / 100,
+          type,
+          categoryName: null,
+        })
+      }
+      continue
+    }
+
+    const amounts =
+      totalCents === null
+        ? ordered.map((group) => group.cents)
+        : allocateCents(
+            ordered.map((group) => group.cents),
+            totalCents,
+          )
+    ordered.forEach((group, index) => {
+      rows.push({
+        date,
+        payee: receipt.merchant,
+        description: describeLines(group.names),
+        amount: amounts[index] / 100,
+        type,
+        categoryName: group.categoryName,
+      })
+    })
+  }
+  return rows
+}
+
+/** What the review should say about a receipt beyond its rows. Formatting is the UI's. */
+export type ReceiptWarning =
+  | { kind: "no-total" }
+  | { kind: "no-date" }
+  /** The lines and the printed total disagree by more than tax could explain. */
+  | { kind: "gap"; itemsTotal: number; total: number }
+
+/** Above this share of the total, the gap between lines and total is worth a look. */
+const GAP_SHARE = 0.15
+
+export function receiptWarnings(receipt: Receipt): ReceiptWarning[] {
+  const warnings: ReceiptWarning[] = []
+  if (receipt.date === null) warnings.push({ kind: "no-date" })
+  if (receipt.total === null) {
+    warnings.push({ kind: "no-total" })
+    return warnings
+  }
+  const itemsCents = receipt.items.reduce(
+    (acc, item) => acc + toCents(item.amount),
+    0,
+  )
+  const totalCents = toCents(receipt.total)
+  if (
+    receipt.items.length > 0 &&
+    totalCents > 0 &&
+    Math.abs(totalCents - itemsCents) > totalCents * GAP_SHARE
+  ) {
+    warnings.push({
+      kind: "gap",
+      itemsTotal: itemsCents / 100,
+      total: totalCents / 100,
+    })
+  }
+  return warnings
 }

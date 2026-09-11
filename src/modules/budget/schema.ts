@@ -37,6 +37,14 @@ export const categories = pgTable("categories", {
     .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   kind: categoryKindEnum("kind").notNull(),
+  /**
+   * What the user keeps in this category, in their own words — "groceries and household
+   * staples", "video games and trading cards". Read by the AI when it sorts a receipt's
+   * lines (T33, ADR-0028): the names alone cannot say where a pack of cards goes, and the
+   * categories are the user's to add, rename and merge, so the note has to live beside
+   * the name. Nullable: most categories explain themselves.
+   */
+  description: text("description"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -8,11 +8,11 @@ import { applyProposal, discardProposal } from "./actions"
 import type { ProposalRow } from "./queries"
 import {
   goalPlanPayloadSchema,
-  importPayloadSchema,
+  importProposalPayloadSchema,
   routinePayloadSchema,
   summaryPayloadSchema,
   type GoalPlanPayload,
-  type ImportPayload,
+  type ImportProposalPayload,
   type RoutinePayload,
   type SummaryPayload,
 } from "./validation"
@@ -28,7 +28,8 @@ export type ActivePayload =
   | { kind: "goal_plan"; payload: GoalPlanPayload }
   | { kind: "routine"; payload: RoutinePayload }
   | { kind: "summary"; payload: SummaryPayload }
-  | { kind: "import"; payload: ImportPayload }
+  /** The stored shape: the rows, plus what a scan read (T33). Apply sends only rows. */
+  | { kind: "import"; payload: ImportProposalPayload }
 
 /** Everything a proposal can turn into rows — i.e. all of them but a summary. */
 export type AppliablePayload = Exclude<ActivePayload, { kind: "summary" }>
@@ -44,7 +45,7 @@ export function readPayload(proposal: ProposalRow): ActivePayload | null {
     return parsed.success ? { kind: "routine", payload: parsed.data } : null
   }
   if (proposal.kind === "import") {
-    const parsed = importPayloadSchema.safeParse(proposal.payload)
+    const parsed = importProposalPayloadSchema.safeParse(proposal.payload)
     return parsed.success ? { kind: "import", payload: parsed.data } : null
   }
   const parsed = summaryPayloadSchema.safeParse(proposal.payload)

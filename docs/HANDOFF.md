@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-10**. T32 added saved meals — a named bundle of library foods
+Last updated: **2026-09-11**. T33 added an AI receipt scanner — a photo of a receipt
+becomes one proposed transaction per category of item, tax spread across them, reviewed
+and edited before Apply (ADR-0028) — with migration `0046`, a nullable `description` on
+categories that the prompt reads. T32 added saved meals — a named bundle of library foods
 logged in one tap, built from a section of the day's log or from a list, whose items
 follow the library (ADR-0026) — with migration `0045`, two additive tables; and put the
 weight trend chart in the dashboard's fold shell under the same preference (ADR-0027).
@@ -12,7 +15,7 @@ pages, Transactions · Budgets · Categories · Trends, the month riding on the 
 rate, a goal weight as a readout, a switch — with migration `0044`, two additive
 preference columns (ADR-0023). T28 made a due date a day or a deadline and the Slate a
 tracked-events-only card (ADR-0022), with migration `0043` — a rename and one defaulted
-column. **Five migrations now wait on the port step: `0041` to `0045`.** T27
+column. **Six migrations now wait on the port step: `0041` to `0046`.** T27
 before it gave each goal one editor and put the plan tool in a dialog beside New goal
 (ADR-0021); no migration. T26 finished lists — the by-list view, `#list` in quick-add and a
 default list — with migration `0042`, one nullable column that rides the port step T24
@@ -590,6 +593,39 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T33 is shipped: an AI receipt scanner.** Migration `0046` (`categories.description`, one
+nullable column). **ADR-0028 is the authority**, amending ADR-0011's privacy grading.
+
+- **"Scan a receipt"** on `/budget`, beside "Read transactions". `budget-ai-tools.tsx`
+  replaced `import-tool.tsx`: the two jobs share ONE `useProposal`, because both make
+  `import` proposals and two hooks over one pending list would render the same proposal
+  twice. A plain file input — camera or library on a phone, the picker on a desktop;
+  `src/lib/resize-image.ts` shrinks the photo to 1600 px on its long edge and re-encodes
+  it as JPEG in the browser; the request is the generate route's new `receipt` kind. The
+  photo is never stored; a refinement resends it from the panel, as the paste box does.
+- **One row per category per receipt.** The model returns receipts and their lines
+  (`receiptReadingSchema`); `rowsFromReceipts` groups the lines by category, matched to
+  the user's names case-insensitively, keeps an unknown name as written (it lands
+  uncategorised), and `allocateCents` spreads the gap between the lines and the total —
+  tax, discounts, tips — in proportion with largest-remainder rounding, so the rows sum to
+  what was paid. `receiptWarnings` flags no date, no total, and a gap over 15%.
+- **Categories carry a description.** The categories page's form and list have it;
+  `toCategoryHints` + `describeCategories` put `Name (description)` in both the paste and
+  the scan prompts. Optional, "" stored as NULL.
+- **The review edits rows** (`import-proposal.tsx`): date, payee, amount, type, category,
+  description, behind a pencil per row, with "What it read" above the rows. The pasted
+  import gains the editor too, since there is one component. Apply still sends rows only;
+  the stored shape is `importProposalPayloadSchema` (rows + `source` + `receipts`), kept
+  separate from the model-facing `importPayloadSchema` so that one stays free of optional
+  properties — a test pins it.
+- **Wire**: a `ChatMessage` user turn may carry `ContentPart[]`; `ai-request.ts` maps an
+  image to OpenAI's `image_url` data URL and to Anthropic's base64 `image` block. A 400 on
+  a photo request reads as "the configured model may not read images".
+- e2e: `companion-receipt.spec.ts` uploads `e2e/fixtures/receipt.png` (a striped 64×96
+  PNG), edits a row, applies, revises, discards; the stub's `receiptFor` answers the
+  "Receipt image:" marker and "Revise this existing reading". Unit: validation, service
+  and ai-request tests, `resize-image.test.ts` (`fitWithin`), `import-proposal.test.tsx`.
 
 **T32 is shipped: saved meals, and a weight chart that folds.** Migration `0045`
 (`saved_meals`), two additive tables. **ADR-0026** (saved meals) and **ADR-0027** (the

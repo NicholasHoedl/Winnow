@@ -245,6 +245,8 @@ export const importRowSchema = z.object({
   categoryName: z.string().trim().max(100).nullable(),
 })
 
+export type ImportRow = z.infer<typeof importRowSchema>
+
 export const importPayloadSchema = z.object({
   /**
    * No minimum, for the reason `milestones` has none: "there are no transactions in this
@@ -273,6 +275,94 @@ const refinement = {
   instruction: z.string().trim().max(500).optional(),
 }
 
+// --- Receipt scanning (T33, ADR-0028) ---
+
+/**
+ * One printed line, as the model reads it. `amount` is the LINE's total after any
+ * line-level discount — major units and positive, for the reason `importRowSchema` gives:
+ * the app does the cents, never the model. `categoryName` is chosen from the user's list,
+ * matched by `resolveCategory` later; the app groups lines by it into one transaction per
+ * category (`rowsFromReceipts`).
+ */
+export const receiptItemSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  amount: z.number().min(0).max(20_000_000).meta({
+    description:
+      "This line's total after any line discount, positive, major units",
+  }),
+  categoryName: z
+    .string()
+    .trim()
+    .max(100)
+    .nullable()
+    .meta({ description: "One of the category names given, exactly, or null" }),
+})
+
+/**
+ * One receipt on the photo. `date` and `total` are nullable because a photo can cut them
+ * off or a thermal print can fade: null is "could not read it", which the app answers
+ * with today's date and the sum of the lines — and says so in the review.
+ */
+export const receiptSchema = z.object({
+  merchant: z.string().trim().min(1).max(120),
+  date: planDate.nullable().meta({
+    description: "The purchase date, YYYY-MM-DD, or null if not printed",
+  }),
+  total: z.number().min(0).max(20_000_000).nullable().meta({
+    description:
+      "The amount actually paid after tax, discounts and tips, or null if it cannot be read",
+  }),
+  kind: z.enum(["purchase", "refund"]),
+  items: z.array(receiptItemSchema).max(80),
+})
+export type Receipt = z.infer<typeof receiptSchema>
+
+/** What the model returns for one photo: every receipt it can see on it. */
+export const receiptReadingSchema = z.object({
+  receipts: z.array(receiptSchema).max(10),
+})
+export type ReceiptReading = z.infer<typeof receiptReadingSchema>
+
+/**
+ * An `import` proposal as STORED, which is more than the model-facing `importPayloadSchema`.
+ *
+ * A scan keeps the receipts it read beside the rows it derived from them, so the review
+ * can show what was read and a refinement can start from it. Both fields are optional
+ * because every proposal stored before T33 was pasted text and has neither, and because
+ * the model-facing schema must stay free of optional properties — a strict provider
+ * rejects a schema whose `required` does not list every property. Apply still takes only
+ * the rows, so the extra fields never reach `applyProposal`.
+ */
+export const importProposalPayloadSchema = importPayloadSchema.extend({
+  source: z.enum(["text", "receipt"]).optional(),
+  receipts: z.array(receiptSchema).max(10).optional(),
+})
+export type ImportProposalPayload = z.infer<typeof importProposalPayloadSchema>
+
+export const RECEIPT_MEDIA_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const
+export type ReceiptMediaType = (typeof RECEIPT_MEDIA_TYPES)[number]
+
+/**
+ * About 3 MB decoded. The browser resizes a photo to at most 1600 px on its long edge
+ * before upload, so a real scan arrives at a fraction of this; the cap bounds what a bad
+ * client could post, and keeps the request under what the provider accepts for one image.
+ */
+export const RECEIPT_IMAGE_MAX_BASE64 = 4_000_000
+
+const receiptImageSchema = z.object({
+  mediaType: z.enum(RECEIPT_MEDIA_TYPES),
+  data: z
+    .string()
+    .min(64, "That image is empty")
+    .max(RECEIPT_IMAGE_MAX_BASE64, "That image is too large")
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/, "Not a base64 image"),
+})
+export type ReceiptImage = z.infer<typeof receiptImageSchema>
+
 export const generateSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("goal_plan"),
@@ -296,6 +386,16 @@ export const generateSchema = z.discriminatedUnion("kind", [
      * loud rather than leaving it to be discovered.
      */
     text: z.string().trim().min(1).max(20_000),
+    ...refinement,
+  }),
+  z.object({
+    kind: z.literal("receipt"),
+    /**
+     * The photo, base64. Like `import`'s text this is the user's own financial detail sent
+     * to the provider, and like the text it is never stored — the proposal keeps only what
+     * was read. A refinement resends it from the panel that still holds it.
+     */
+    image: receiptImageSchema,
     ...refinement,
   }),
   z.object({

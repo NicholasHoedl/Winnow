@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
 import {
+  generateSchema,
   goalPlanHabitSchema,
   goalPlanPayloadSchema,
   importPayloadSchema,
+  importProposalPayloadSchema,
+  RECEIPT_IMAGE_MAX_BASE64,
+  receiptReadingSchema,
   summaryPayloadSchema,
 } from "./validation"
 
@@ -219,5 +223,144 @@ describe("the plan schema survives JSON Schema conversion", () => {
     expect(habit.required).toContain("targetAmount")
     expect(habit.required).toContain("unit")
     expect(habit.additionalProperties).toBe(false)
+  })
+})
+
+// --- Receipt scanning (T33) ---
+
+const ITEM = { name: "Eggs", amount: 3.49, categoryName: "Groceries" }
+const RECEIPT = {
+  merchant: "Walmart",
+  date: "2026-09-11",
+  total: 27.18,
+  kind: "purchase",
+  items: [ITEM],
+}
+const BASE64 = `${"A".repeat(64)}==`
+
+describe("receiptReadingSchema", () => {
+  it("accepts a reading, with null for a date or total it could not see", () => {
+    expect(
+      receiptReadingSchema.safeParse({ receipts: [RECEIPT] }).success,
+    ).toBe(true)
+    expect(
+      receiptReadingSchema.safeParse({
+        receipts: [{ ...RECEIPT, date: null, total: null }],
+      }).success,
+    ).toBe(true)
+    // A photo with nothing on it is an answer, not an error.
+    expect(receiptReadingSchema.safeParse({ receipts: [] }).success).toBe(true)
+  })
+
+  it("refuses a negative line, a kind it does not know and a date that is not one", () => {
+    expect(
+      receiptReadingSchema.safeParse({
+        receipts: [{ ...RECEIPT, items: [{ ...ITEM, amount: -1 }] }],
+      }).success,
+    ).toBe(false)
+    expect(
+      receiptReadingSchema.safeParse({
+        receipts: [{ ...RECEIPT, kind: "return" }],
+      }).success,
+    ).toBe(false)
+    expect(
+      receiptReadingSchema.safeParse({
+        receipts: [{ ...RECEIPT, date: "11/09/2026" }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it("hands the provider a schema with every property required and nothing extra allowed", () => {
+    const json = z.toJSONSchema(receiptReadingSchema) as unknown as {
+      properties: {
+        receipts: {
+          items: {
+            required: string[]
+            additionalProperties: boolean
+            properties: { items: { items: { required: string[] } } }
+          }
+        }
+      }
+    }
+    const receipt = json.properties.receipts.items
+    expect(receipt.required).toEqual(
+      expect.arrayContaining(["merchant", "date", "total", "kind", "items"]),
+    )
+    expect(receipt.additionalProperties).toBe(false)
+    expect(receipt.properties.items.items.required).toEqual(
+      expect.arrayContaining(["name", "amount", "categoryName"]),
+    )
+  })
+})
+
+describe("importProposalPayloadSchema", () => {
+  it("reads a proposal stored before scans existed", () => {
+    const parsed = importProposalPayloadSchema.safeParse({ rows: [] })
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.source).toBeUndefined()
+    expect(parsed.data.receipts).toBeUndefined()
+  })
+
+  it("keeps the receipts a scan read beside its rows", () => {
+    const parsed = importProposalPayloadSchema.safeParse({
+      rows: [],
+      source: "receipt",
+      receipts: [RECEIPT],
+    })
+    expect(parsed.success).toBe(true)
+    if (parsed.success)
+      expect(parsed.data.receipts?.[0].merchant).toBe("Walmart")
+  })
+
+  it("adds no optional property to what the model is asked for", () => {
+    // A strict provider rejects a schema whose `required` does not list every property,
+    // so the stored shape and the model-facing shape have to stay two schemas.
+    const json = z.toJSONSchema(importPayloadSchema) as unknown as {
+      properties: Record<string, unknown>
+    }
+    expect(Object.keys(json.properties)).toEqual(["rows"])
+  })
+})
+
+describe("generateSchema, receipt", () => {
+  const image = { mediaType: "image/jpeg", data: BASE64 }
+
+  it("takes a base64 image of a known type, with the refinement fields", () => {
+    expect(generateSchema.safeParse({ kind: "receipt", image }).success).toBe(
+      true,
+    )
+    expect(
+      generateSchema.safeParse({
+        kind: "receipt",
+        image,
+        proposalId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        instruction: "the game is Entertainment",
+      }).success,
+    ).toBe(true)
+  })
+
+  it("refuses a type it does not know, junk that is not base64, and an oversized image", () => {
+    expect(
+      generateSchema.safeParse({
+        kind: "receipt",
+        image: { ...image, mediaType: "image/gif" },
+      }).success,
+    ).toBe(false)
+    expect(
+      generateSchema.safeParse({
+        kind: "receipt",
+        image: {
+          ...image,
+          data: "not base64!! definitely not, with spaces and punctuation.....",
+        },
+      }).success,
+    ).toBe(false)
+    expect(
+      generateSchema.safeParse({
+        kind: "receipt",
+        image: { ...image, data: "A".repeat(RECEIPT_IMAGE_MAX_BASE64 + 4) },
+      }).success,
+    ).toBe(false)
   })
 })

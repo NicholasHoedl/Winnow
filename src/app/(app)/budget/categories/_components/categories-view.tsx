@@ -35,9 +35,11 @@ import { BudgetHeader } from "../../_components/budget-header"
 type CategoryFormValues = {
   name: string
   kind: "income" | "expense"
+  /** What belongs here, for the AI (T33). "" in the form, NULL in the row. */
+  description?: string | null
 }
 
-const EMPTY: CategoryFormValues = { name: "", kind: "expense" }
+const EMPTY: CategoryFormValues = { name: "", kind: "expense", description: "" }
 
 /**
  * The Categories page: the form above the list, doubling as the edit form —
@@ -97,7 +99,11 @@ export function CategoriesView({
    */
   function startEdit(category: Category) {
     setEditingId(category.id)
-    reset({ name: category.name, kind: category.kind })
+    reset({
+      name: category.name,
+      kind: category.kind,
+      description: category.description ?? "",
+    })
   }
 
   function cancelEdit() {
@@ -122,7 +128,7 @@ export function CategoriesView({
     <div className="mx-auto w-full max-w-3xl p-6">
       <BudgetHeader
         month={month}
-        description="Group your income and spending. A category can be renamed; deleting one keeps its past transactions — they become uncategorized."
+        description="Group your income and spending. A category can be renamed; deleting one keeps its past transactions — they become uncategorized. A description tells the receipt scanner what belongs in it."
       />
 
       <form onSubmit={onSubmit} className="max-w-xl">
@@ -165,6 +171,18 @@ export function CategoriesView({
               />
             </Field>
           </div>
+          <Field>
+            <FieldLabel htmlFor="c-desc">Description</FieldLabel>
+            {/* Read by the AI when it sorts a receipt's lines (T33): the names alone cannot
+                say where a pack of trading cards goes, and the categories are the user's
+                to add and rename, so the note lives beside the name. Optional. */}
+            <Input
+              id="c-desc"
+              placeholder="e.g. groceries and household staples — helps the receipt scanner"
+              {...register("description")}
+            />
+            <FieldError errors={[errors.description]} />
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" disabled={isSubmitting} className="flex-1">
               {editingId ? "Save category" : "Add category"}
@@ -194,8 +212,15 @@ export function CategoriesView({
                       key={category.id}
                       className="flex items-center justify-between gap-2 rounded-md border p-2 text-sm"
                     >
-                      <span className="truncate font-medium">
-                        {category.name}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {category.name}
+                        </span>
+                        {category.description && (
+                          <span className="text-muted-foreground block truncate text-xs">
+                            {category.description}
+                          </span>
+                        )}
                       </span>
                       <span className="flex shrink-0 items-center">
                         <Button

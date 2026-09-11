@@ -80,7 +80,12 @@ export async function createCategory(input: unknown): Promise<ActionResult> {
   const parsed = categoryInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
 
-  await db.insert(categories).values({ userId, ...parsed.data })
+  await db.insert(categories).values({
+    userId,
+    ...parsed.data,
+    // "" and "no note" are the same fact, and the AI prompt reads null as "no note".
+    description: nullify(parsed.data.description),
+  })
   revalidateBudget()
   return { ok: true }
 }
@@ -97,7 +102,7 @@ export async function updateCategory(
 
   await db
     .update(categories)
-    .set(parsed.data)
+    .set({ ...parsed.data, description: nullify(parsed.data.description) })
     .where(and(eq(categories.id, parsedId.data), eq(categories.userId, userId)))
   revalidateBudget()
   return { ok: true }
