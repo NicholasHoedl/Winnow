@@ -434,3 +434,39 @@ test("the dashboard card shows a measured habit in its own units", async ({
     announces(12.5, 30, "today", "pages"),
   )
 })
+
+// T36: `/activity/habits?new=habit` is what the palette's "New habit" links to, so the
+// command makes a habit rather than showing you where habits are made. The flag is taken
+// back out of the URL, and nothing is saved here — the dialog is opened and cancelled.
+//
+// The second half is the case a one-shot latch gets wrong: the palette is global, so the
+// commonest way to use "New habit" is FROM this page, where the flag arrives at a mounted
+// component. A latch that never released would leave the flag stranded in the URL with no
+// dialog — and then a reload of that URL would open one, which is the thing the tidying
+// exists to prevent.
+test("a flagged link opens the new-habit dialog and tidies the URL", async ({
+  page,
+}) => {
+  await page.goto("/activity/habits?new=habit")
+
+  const dialog = page.getByRole("dialog", { name: "New habit" })
+  await expect(dialog).toBeVisible()
+  await expect(page).toHaveURL(/\/activity\/habits$/)
+
+  await page.keyboard.press("Escape")
+  await dialog.waitFor({ state: "hidden" })
+
+  // Again, from the palette, WITHOUT a reload in between — the page is still the same
+  // mount, which is the whole point.
+  await page.getByRole("button", { name: "Search" }).first().click()
+  await page.getByPlaceholder(/search tasks, events, foods/i).fill("New habit")
+  await page.getByRole("option", { name: "New habit" }).click()
+
+  await expect(dialog).toBeVisible()
+  await expect(page).toHaveURL(/\/activity\/habits$/)
+
+  await page.keyboard.press("Escape")
+  await dialog.waitFor({ state: "hidden" })
+  await page.reload()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+})

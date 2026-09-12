@@ -361,3 +361,38 @@ export function parseTransactionQuickAdd(
 
   return { amount, type, categoryId, description }
 }
+
+// --- Payee memory ---
+// What the same payee was filed under last time, so the ledger stops asking a question it
+// has already been answered (Tesler). Pure: the rows come from `getPayeeMemory()`.
+
+/** One remembered payee: the category it last carried, and the kind that category is. */
+export type PayeeMemory = {
+  /** What the row is remembered by — its payee, or its description for a row that has no
+   *  payee, which is every row the quick-add bar writes. */
+  payee: string
+  categoryId: string
+  type: "income" | "expense"
+}
+
+/** The key a payee is remembered under: trimmed, lower-cased, inner runs of whitespace
+ *  collapsed. "  TESCO " and "tesco" are the same shop. */
+export function payeeKey(payee: string): string {
+  return payee.trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+/**
+ * The entry for this payee, or null when it has never been categorised.
+ *
+ * `memory` is newest first, so the first match is the most recent filing — the answer
+ * "remembered" has to mean. The TYPE comes back with it because a category belongs to one
+ * kind, and filing an expense against an income category is what the server rejects.
+ */
+export function rememberedCategory(
+  memory: PayeeMemory[],
+  payee: string,
+): PayeeMemory | null {
+  const key = payeeKey(payee)
+  if (!key) return null
+  return memory.find((entry) => payeeKey(entry.payee) === key) ?? null
+}

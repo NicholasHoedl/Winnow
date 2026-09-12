@@ -16,6 +16,8 @@ import {
   currencyFractionDigits,
   currencySymbol,
   minorToAmount,
+  rememberedCategory,
+  type PayeeMemory,
 } from "@/modules/budget/service"
 import {
   MAX_INITIAL_POSTS,
@@ -24,7 +26,7 @@ import {
 } from "@/modules/budget/validation"
 import type { ActionResult } from "@/lib/action-result"
 import { addDays, daysInMonth, fmt, isValidDateString } from "@/lib/date"
-import { numberField } from "@/lib/forms"
+import { requiredNumberField } from "@/lib/forms"
 import { cyclesInRange } from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
@@ -60,7 +62,9 @@ const NO_CATEGORY = "__none__"
 // schedule that would turn it into a recurring rule. `flexible` is deliberately
 // absent — an auto-posted bill has no "sometime this week" mode.
 type TransactionFormValues = {
-  amount: number
+  /** `""` until a figure is typed — see `requiredNumberField`. The resolver turns it
+   *  into a number, which is why `TransactionInput` still has one. */
+  amount: number | ""
   type: "income" | "expense"
   date: string
   categoryId?: string
@@ -81,7 +85,7 @@ function emptyValues(
   today: string,
 ): TransactionFormValues {
   return {
-    amount: 0,
+    amount: "",
     type: "expense",
     date: defaultDate,
     categoryId: "",
@@ -101,9 +105,12 @@ function emptyValues(
 function toRecurrenceInput(
   v: TransactionFormValues,
   freq: "daily" | "weekly" | "monthly",
+  /** The resolver's parsed amount. `v.amount` is still `number | ""` at this point, and
+   *  this path only runs once validation has proved it is a figure. */
+  amount: number,
 ) {
   return {
-    amount: v.amount,
+    amount,
     type: v.type,
     categoryId: v.categoryId,
     payee: v.payee,
@@ -122,6 +129,7 @@ export function TransactionDialog({
   month,
   today,
   categories,
+  payeeMemory,
   transaction,
   open,
   onOpenChange,
@@ -131,6 +139,8 @@ export function TransactionDialog({
   /** The user's local today — the horizon the catch-up preview counts up to. */
   today: string
   categories: Category[]
+  /** What each payee was last filed under, newest first. */
+  payeeMemory: PayeeMemory[]
   transaction: TransactionWithSeries | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -197,13 +207,51 @@ export function TransactionDialog({
     }
   }, [txType, categories, getValues, setValue])
 
+  /** Whether Income/Expense was picked by hand since the dialog opened. Memory does not
+   *  argue with an answer already given; see `fillFromMemory`. */
+  const typeChosen = React.useRef(false)
+
+  /**
+   * File a new transaction the way this payee was filed last time (T36, Tesler).
+   *
+   * Create only: an edit is a record of what happened, and re-filing it from what OTHER
+   * rows say would rewrite it. It fills a blank rather than correcting a choice, so a
+   * category already picked wins.
+   *
+   * A type picked by hand wins too — the same rule the quick-add bar applies to a sign,
+   * where "-45" is money going out whatever the last row for that payee said. So a chosen
+   * type that disagrees with the memory leaves BOTH fields alone: the remembered category
+   * belongs to the other kind, and filing an expense against an income category is what
+   * the server rejects.
+   *
+   * Where the type is still the default, it goes FIRST and the category second. A category
+   * belongs to one kind, and the effect above clears a category the type cannot hold — it
+   * reads both through `getValues()` after the commit, so the pair has to land together
+   * with the type the remembered category actually belongs to.
+   */
+  function fillFromMemory(payee: string) {
+    if (isEdit || getValues("categoryId")) return
+    const remembered = rememberedCategory(payeeMemory, payee)
+    if (!remembered) return
+    if (typeChosen.current) {
+      if (remembered.type !== getValues("type")) return
+    } else {
+      setValue("type", remembered.type)
+    }
+    setValue("categoryId", remembered.categoryId)
+  }
+
   // Reset the scope when the dialog (re)opens — during render, so the effect below sees
   // the right scope on its first commit. `TaskDialog` does this identically.
   const openKeyRef = React.useRef<string | null>(null)
   const openKey = open ? (transaction?.id ?? "new") : null
   if (openKey !== openKeyRef.current) {
     openKeyRef.current = openKey
-    if (openKey !== null) setScope("this")
+    if (openKey !== null) {
+      setScope("this")
+      // A fresh dialog has been given no answer about the type yet.
+      typeChosen.current = false
+    }
   }
 
   React.useEffect(() => {
@@ -259,14 +307,16 @@ export function TransactionDialog({
       }
       result = await updateTransactionRecurrence(
         series.id,
-        toRecurrenceInput(v, v.repeat),
+        toRecurrenceInput(v, v.repeat, data.amount),
       )
     } else if (isEdit) {
       result = await updateTransaction(transaction.id, data)
     } else if (v.repeat === "none") {
       result = await createTransaction(data)
     } else {
-      result = await createTransactionRecurrence(toRecurrenceInput(v, v.repeat))
+      result = await createTransactionRecurrence(
+        toRecurrenceInput(v, v.repeat, data.amount),
+      )
     }
 
     if (!result.ok) {
@@ -400,21 +450,29 @@ export function TransactionDialog({
                   type="number"
                   step={step}
                   min="0"
-                  {...register("amount", numberField)}
+                  // The shape of the figure, in the box that is now empty rather than
+                  // holding a 0 to overtype. `step` already knows whether this currency
+                  // has minor units.
+                  placeholder={step === "1" ? "0" : "0.00"}
+                  {...register("amount", requiredNumberField)}
                 />
                 <FieldError errors={[errors.amount]} />
               </Field>
               <Field>
-                <FieldLabel>Type</FieldLabel>
+                <FieldLabel htmlFor="t-type">Type</FieldLabel>
                 <Controller
                   control={control}
                   name="type"
                   render={({ field }) => (
                     <Select
                       value={field.value}
-                      onValueChange={(value) => value && field.onChange(value)}
+                      onValueChange={(value) => {
+                        if (!value) return
+                        typeChosen.current = true
+                        field.onChange(value)
+                      }}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger id="t-type" className="w-full">
                         <SelectValue>
                           {(value) =>
                             value === "income" ? "Income" : "Expense"
@@ -453,7 +511,7 @@ export function TransactionDialog({
                 </Field>
               )}
               <Field>
-                <FieldLabel>Category</FieldLabel>
+                <FieldLabel htmlFor="t-category">Category</FieldLabel>
                 <Controller
                   control={control}
                   name="categoryId"
@@ -466,7 +524,7 @@ export function TransactionDialog({
                         )
                       }
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger id="t-category" className="w-full">
                         <SelectValue>
                           {(value) =>
                             value && value !== NO_CATEGORY
@@ -495,7 +553,12 @@ export function TransactionDialog({
               <Input
                 id="t-payee"
                 placeholder="Who it went to"
-                {...register("payee")}
+                // On blur rather than on every keystroke: half a payee is a different
+                // payee, and a category that changed as you typed would be noise.
+                {...register("payee", {
+                  onBlur: (event: React.FocusEvent<HTMLInputElement>) =>
+                    fillFromMemory(event.target.value),
+                })}
               />
               <FieldError errors={[errors.payee]} />
             </Field>

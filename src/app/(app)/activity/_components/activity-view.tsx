@@ -645,6 +645,10 @@ export function ActivityView({
         task={editingTask}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        // While the page is scoped to a goal, a new task belongs to it — the page already
+        // said so. Ignored when editing; `activeGoal` rather than `selectedGoalId` so a
+        // filter pointing at a goal that no longer resolves links nothing.
+        initialGoalId={activeGoal?.id}
       />
       <ConfirmDialog
         open={confirmSeries !== null}

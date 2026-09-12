@@ -7,7 +7,11 @@ import { toast } from "sonner"
 import { createTransaction } from "@/modules/budget/actions"
 import { restoreIfEmpty } from "@/lib/forms"
 import type { Category } from "@/modules/budget/queries"
-import { parseTransactionQuickAdd } from "@/modules/budget/service"
+import {
+  parseTransactionQuickAdd,
+  rememberedCategory,
+  type PayeeMemory,
+} from "@/modules/budget/service"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -20,9 +24,13 @@ import { Input } from "@/components/ui/input"
 export function BudgetQuickAdd({
   date,
   categories,
+  payeeMemory,
 }: {
   date: string
   categories: Category[]
+  /** What each payee was last filed under, newest first — used when the line names no
+   *  `#tag` of its own. */
+  payeeMemory: PayeeMemory[]
 }) {
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
@@ -41,11 +49,26 @@ export function BudgetQuickAdd({
       return
     }
 
+    // No `#tag`: file it the way this payee was filed last time (T36). What is left of
+    // the line after the amount comes out IS the payee here — the bar has no separate
+    // field for one — so that is what the memory is asked about.
+    //
+    // A remembered category of the OTHER kind is dropped rather than applied: the sign is
+    // an explicit answer ("-45" is money going out, whatever last time said), and filing
+    // an expense against an income category is what the server rejects anyway.
+    const remembered = parsed.categoryId
+      ? null
+      : rememberedCategory(payeeMemory, parsed.description)
+    const categoryId =
+      remembered && remembered.type === parsed.type
+        ? remembered.categoryId
+        : parsed.categoryId
+
     // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
     setText("")
 
     startTransition(async () => {
-      const result = await createTransaction({ ...parsed, date })
+      const result = await createTransaction({ ...parsed, categoryId, date })
       if (!result.ok) {
         toast.error(result.error)
         setText(restoreIfEmpty(trimmed))

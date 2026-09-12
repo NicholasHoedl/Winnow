@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-11**. T35 is the UX review's first pass: the phone tab bar holds the
+Last updated: **2026-09-11**. T36 is the review's second pass, what each screen asks of
+the user: the forms fill in what the app already knows (the default meal, the due date as
+a repeat's start, the routine defaults, the category a payee had last time), the transaction
+amount opens empty, Add event dates the event where you are looking, the create links open
+their dialogs, and the task dialog's link pickers fold; no migration, no ADR.
+T35 is the UX review's first pass: the phone tab bar holds the
 four daily destinations and More, the section strips scroll instead of wrapping, and Review,
 Goals, Calendar and the palette follow the app's own patterns (ADR-0029); no migration.
 T34 replaced the favicon and the app icons with a new
@@ -41,7 +46,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T35 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T36 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -603,6 +608,35 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T36 is shipped: the review's Pass 2, what each screen asks of the user.** No migration, no
+ADR: every change is a prefill or a fold, recorded in `docs/ux-review.md`.
+
+- **Meals**: `log-food-dialog.tsx` seeds Meal from `defaultMealType` on create
+  (`emptyValues`), `quick-pick-strip.tsx` logs to it, and a hand-entered food starts at
+  "1 serving" in the dialog and in `food-manager.tsx`.
+- **Tasks**: `task-dialog.tsx` keeps the Goal and Event pickers in a native `<details>`,
+  "Link to a goal or event", open when the task has a link or an `initialGoalId` is supplied
+  (`activity-view.tsx` passes the goal filter's goal); choosing a repeat copies the due date
+  into the start date once. `routine-item-dialog.tsx` takes `defaultTaskPriority` and
+  `defaultListId`. Both Priority selects have the function-child `SelectValue`.
+- **Budget**: `transaction-dialog.tsx` opens Amount empty (`requiredNumberField` in
+  `lib/forms.ts`; `enteredDollars` in `budget/validation.ts` says "Enter an amount").
+  **Payee memory**: `getPayeeMemory()` in `budget/queries.ts` is the newest categorised row
+  per normalised payee, or per description when the payee is empty, 200 entries; it rides
+  `budget/page.tsx` → `BudgetView` → the dialog, which fills on payee blur (create only, never
+  over a chosen category or type) and `budget-quick-add.tsx`, which applies it when there is
+  no `#tag` and the sign agrees. `rememberedCategory` and `payeeKey` live in `service.ts`.
+- **Calendar and the create links**: `newEventDate` in `calendar/_components/views.ts` dates
+  Add event today when today is drawn, else on the anchor. `components/shared/use-create-flag.ts`
+  opens a page's create dialog from `?new=event`, `?new=habit` or `?new=routine` once and
+  replaces the URL without the flag; the calendar, habits and routines views use it, and the
+  dashboard's Add event and the palette's three commands link with the flag.
+- Tests: component tests for the log food dialog, the quick-pick strip, the routine item
+  dialog and the quick-add bar are new; `vitest.setup.ts` polyfills `ResizeObserver` for cmdk;
+  e2e grew in activity, task-links, transaction-filters, budget-date-nav, calendar, habits
+  and routines. `budgets-page.spec.ts` now waits for the form's seed before clearing a figure,
+  a hydration race that also broke `transaction-filters` by leaving a total behind.
 
 **T35 is shipped: the review's Pass 1, navigation.** No migration. **ADR-0029 is the
 authority**, amending ADR-0013 (the seven-tab bar) and ADR-0020 and ADR-0024 (wrapping
@@ -1199,6 +1233,16 @@ rather than pretending otherwise.
 ## 4. Traps that have already been paid for
 
 Each of these cost hours. Do not re-discover them.
+
+**`grep` cannot see a carriage return from an agent's shell.** `grep -c $'\r' <file>` prints 0
+on a CRLF file there, so every file looks LF. Count with node:
+`node -e "const s=require('fs').readFileSync(process.argv[1],'latin1');console.log((s.match(/\r\n/g)||[]).length)" <file>`.
+An agent's Edit tool keeps a file's endings; its Write tool writes LF.
+
+**A build with `NEXT_DIST_DIR` set rewrites `tsconfig.json`.** Next adds `include` entries
+for whatever dist directory it built into and writes the file back as LF, where the repo
+keeps it CRLF. After any build with a non-default dist directory, check `git status` and
+restore the file.
 
 **`serverWrite`/`serverWrites` match "a Server Action", not "yours", unless you say so.**
 `DigestBanner` fires `getDigest()` from an effect on the first `(app)` page a test opens, so

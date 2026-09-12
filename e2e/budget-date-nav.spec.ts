@@ -56,3 +56,53 @@ test("budget month-picker jumps to a chosen month", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/budget\?month=\d{4}-\d{2}$/)
 })
+
+/**
+ * T36 (Tesler): the bar remembers how a line was filed.
+ *
+ * The quick-add bar writes its text as a DESCRIPTION and no payee, so until the memory
+ * read fell back to that column the one surface built for repetition could teach it
+ * nothing — "coffee 4 #food" every single day. Against a category it creates itself, and
+ * both rows are deleted afterwards: the suite shares a database and these inflate the
+ * month's totals.
+ */
+test("a tagged quick-add line files the same line next time", async ({
+  page,
+}) => {
+  const stamp = Date.now()
+  // One word, no spaces: a `#tag` stops at the first space.
+  const category = `e2emem${stamp}`
+  const text = `e2ememtx${stamp}`
+  const row = (amount: string) =>
+    visibleCard(page, text).filter({ hasText: amount })
+
+  await page.goto("/budget/categories")
+  await page.getByLabel("Name").fill(category)
+  await page.getByRole("button", { name: "Add category" }).click()
+  await expect(page.getByText("Category added")).toBeVisible()
+
+  try {
+    await page.goto("/budget")
+    const bar = page.getByLabel("Quick add transaction")
+    await bar.fill(`${text} 4 #${category}`)
+    await bar.press("Enter")
+    await expect(row("4.00")).toContainText(category)
+
+    // The same line without the tag: the category comes back on its own.
+    await bar.fill(`${text} 5`)
+    await bar.press("Enter")
+    await expect(row("5.00")).toContainText(category)
+  } finally {
+    for (const amount of ["4.00", "5.00"]) {
+      const target = row(amount)
+      if ((await target.count()) === 0) continue
+      await target.getByRole("button", { name: "Transaction actions" }).click()
+      await page.getByRole("menuitem", { name: "Delete" }).click()
+      await expect(target).toHaveCount(0)
+    }
+    await page.goto("/budget/categories")
+    await page.getByRole("button", { name: `Delete ${category}` }).click()
+    await page.getByRole("button", { name: "Delete category" }).click()
+    await expect(page.getByText(category, { exact: true })).toHaveCount(0)
+  }
+})

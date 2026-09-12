@@ -7,6 +7,8 @@ import {
   updateTask,
   updateTaskRecurrence,
 } from "@/modules/todos/actions"
+import type { EventOption } from "@/modules/calendar/queries"
+import type { GoalOption } from "@/modules/goals/queries"
 import type { TaskWithSeries } from "@/modules/todos/queries"
 import { DEFAULT_PREFERENCES } from "@/lib/preferences"
 import { PreferencesProvider } from "@/components/preferences/preferences-provider"
@@ -45,6 +47,16 @@ const SERIES = {
   endDate: null,
 }
 
+const GOALS: GoalOption[] = [{ id: "goal-1", title: "Run a half" }]
+const EVENTS: EventOption[] = [
+  {
+    id: "event-1",
+    title: "Race day",
+    startAt: new Date("2026-10-04T13:00:00Z"),
+    allDay: false,
+  },
+]
+
 /** Only the columns the dialog reads — see the note in `transaction-dialog.test.tsx`. */
 function task(over: Record<string, unknown> = {}): TaskWithSeries {
   return {
@@ -65,6 +77,18 @@ function task(over: Record<string, unknown> = {}): TaskWithSeries {
     subtasks: [],
     ...over,
   } as unknown as TaskWithSeries
+}
+
+/**
+ * Choose an item in a base-ui `Select`. The popup opens on a plain click — `PointerEvent`
+ * is polyfilled in `vitest.setup.ts` — but an item commits on its key handler, not on a
+ * synthetic click, so Enter on the option is what actually picks it.
+ */
+function pickOption(label: string, option: string) {
+  fireEvent.click(screen.getByLabelText(label))
+  fireEvent.keyDown(screen.getByRole("option", { name: option }), {
+    key: "Enter",
+  })
 }
 
 function show(props: Partial<React.ComponentProps<typeof TaskDialog>> = {}) {
@@ -94,8 +118,10 @@ function show(props: Partial<React.ComponentProps<typeof TaskDialog>> = {}) {
  * thought applied to one day, which is both the worst outcome here and an entirely
  * plausible refactor.
  *
- * Nothing below touches the List, Goal, Event or Repeat controls: all four are base-ui
- * `Select`s driven by pointer events jsdom does not implement. They stay in `e2e/`.
+ * The List picker stays out of this file: what it does with its answer is a browser
+ * journey. The Goal, Event and Repeat controls are here only for what the dialog ASSUMES
+ * before anyone touches them — see `pickOption` for how far a base-ui `Select` can be
+ * driven under jsdom.
  */
 describe("TaskDialog", () => {
   beforeEach(() => {
@@ -180,6 +206,111 @@ describe("TaskDialog", () => {
     await waitFor(() => expect(updateTaskRecurrence).toHaveBeenCalledTimes(1))
     expect(vi.mocked(updateTaskRecurrence).mock.calls[0][0]).toBe("rule-1")
     expect(updateTask).not.toHaveBeenCalled()
+  })
+
+  // Pass 0 measured linking as rare, and both pickers were full-width rows on every new
+  // task the moment the account held one goal or one event.
+  it("keeps the goal and event pickers behind a disclosure", () => {
+    show({ goals: GOALS, events: EVENTS })
+
+    expect(screen.getByText("Link to a goal or event")).toBeInTheDocument()
+    expect(screen.getByLabelText("Goal")).not.toBeVisible()
+    expect(screen.getByLabelText("Event")).not.toBeVisible()
+  })
+
+  // The block renders for goals OR events, so the summary has to name what is actually
+  // behind it — an account with no calendar events was told it could link to one.
+  it("names only the links it actually offers", () => {
+    show({ goals: GOALS })
+
+    expect(screen.getByText("Link to a goal")).toBeInTheDocument()
+  })
+
+  // A server error on a hidden field is an error nobody can see: the disclosure opens for
+  // one, the way it opens for a link the task already carries.
+  it("opens the disclosure when the server rejects a link", async () => {
+    vi.mocked(createTask).mockResolvedValue({
+      ok: false,
+      error: "Could not save that.",
+      fieldErrors: { goalId: "That goal is archived." },
+    })
+    show({ goals: GOALS, events: EVENTS })
+
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Long run" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Create" }))
+
+    await waitFor(() =>
+      expect(screen.getByText("That goal is archived.")).toBeInTheDocument(),
+    )
+    expect(screen.getByLabelText("Goal")).toBeVisible()
+  })
+
+  // A link a task already carries is not a rare control — it is part of what this task is,
+  // and hiding it would make an edit silently drop it from view.
+  it("opens the disclosure for a task that is already linked", () => {
+    show({ goals: GOALS, events: EVENTS, task: task({ goalId: "goal-1" }) })
+
+    expect(screen.getByLabelText("Goal")).toBeVisible()
+  })
+
+  // Tesler: `/activity?goal=…` has already said which goal this work belongs to, so the
+  // dialog fills that in rather than asking again.
+  it("opens it pre-linked when the page is filtered by a goal", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    show({ goals: GOALS, events: EVENTS, initialGoalId: "goal-1" })
+
+    expect(screen.getByLabelText("Goal")).toBeVisible()
+    expect(screen.getByLabelText("Goal")).toHaveTextContent("Run a half")
+
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Long run" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Create" }))
+
+    await waitFor(() => expect(createTask).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(createTask).mock.calls[0][0]).toMatchObject({
+      goalId: "goal-1",
+    })
+  })
+
+  // Turning a dated task into a repeating one used to mean typing the date twice: the
+  // recurrence start was seeded with today no matter what the due date said.
+  it("starts a new repeat on the due date already typed", () => {
+    show()
+
+    fireEvent.change(screen.getByLabelText("Due date"), {
+      target: { value: "2026-12-01" },
+    })
+    pickOption("Repeat", "Weekly")
+
+    expect(screen.getByLabelText("Starts")).toHaveValue("2026-12-01")
+  })
+
+  // Only the first choice fills it in — the field is still the user's after that, and
+  // changing weekly to monthly must not undo an edit they made deliberately.
+  it("leaves a start date the user has already changed alone", () => {
+    show()
+
+    fireEvent.change(screen.getByLabelText("Due date"), {
+      target: { value: "2026-12-01" },
+    })
+    pickOption("Repeat", "Weekly")
+    fireEvent.change(screen.getByLabelText("Starts"), {
+      target: { value: "2026-12-08" },
+    })
+    pickOption("Repeat", "Monthly")
+
+    expect(screen.getByLabelText("Starts")).toHaveValue("2026-12-08")
+  })
+
+  // base-ui's SelectValue needs a function child; a bare one renders the raw stored value,
+  // so this trigger read "medium" while every other select in the app read a label.
+  it("names the priority rather than showing its stored value", () => {
+    show()
+
+    expect(screen.getByLabelText("Priority")).toHaveTextContent("Medium")
   })
 
   it("puts a server field error on the field that caused it", async () => {

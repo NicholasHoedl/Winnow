@@ -11,6 +11,8 @@ import {
   monthlyBudgetInEffect,
   monthRange,
   parseTransactionQuickAdd,
+  type PayeeMemory,
+  rememberedCategory,
   savingsRate,
   summarizeMonth,
   summarizeMonths,
@@ -430,5 +432,40 @@ describe("summarizeMonths", () => {
     expect(rows[0].summary.monthlyBudgetCents).toBe(0)
     expect(rows[1].summary.totalBudgetedCents).toBe(400000)
     expect(rows[2].summary.totalBudgetedCents).toBe(400000)
+  })
+})
+
+describe("rememberedCategory", () => {
+  const memory: PayeeMemory[] = [
+    { payee: "Tesco", categoryId: "cat-food", type: "expense" },
+    { payee: "Acme Ltd", categoryId: "cat-pay", type: "income" },
+  ]
+
+  it("finds the payee however it was capitalised or spaced", () => {
+    expect(rememberedCategory(memory, "  TESCO ")?.categoryId).toBe("cat-food")
+    expect(rememberedCategory(memory, "acme   ltd")?.categoryId).toBe("cat-pay")
+  })
+
+  it("carries the type, since a category belongs to one kind", () => {
+    expect(rememberedCategory(memory, "Acme Ltd")?.type).toBe("income")
+  })
+
+  it("is null for a payee never filed before, and for an empty one", () => {
+    expect(rememberedCategory(memory, "Sainsbury's")).toBeNull()
+    expect(rememberedCategory(memory, "   ")).toBeNull()
+  })
+
+  // Newest first is the query's contract: the same payee filed twice answers with the
+  // category it was filed under LAST, which is what "remembered" has to mean.
+  it("answers with the most recent entry when a payee appears twice", () => {
+    expect(
+      rememberedCategory(
+        [
+          { payee: "Tesco", categoryId: "cat-new", type: "expense" },
+          { payee: "tesco", categoryId: "cat-old", type: "expense" },
+        ],
+        "Tesco",
+      )?.categoryId,
+    ).toBe("cat-new")
   })
 })

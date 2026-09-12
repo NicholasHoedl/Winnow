@@ -2,6 +2,7 @@ import {
   getBudgetSummary,
   getCategories,
   getMonthTransactions,
+  getPayeeMemory,
 } from "@/modules/budget/queries"
 import {
   UNCATEGORIZED,
@@ -72,11 +73,14 @@ export default async function BudgetPage({
   // The summary comes from its own unfiltered read rather than being derived from the
   // rendered `transactions` array — otherwise filtering the list would silently
   // report the header stats for only the filtered subset.
-  const [categories, transactions, summary, aiSettings, pending] =
+  const [categories, transactions, summary, payeeMemory, aiSettings, pending] =
     await Promise.all([
       getCategories(),
       getMonthTransactions(month, filters),
       getBudgetSummary(month),
+      // What each payee was last filed under, so the dialog and the quick-add bar can stop
+      // asking for a category the ledger already knows (T36).
+      getPayeeMemory(),
       getAiSettings(),
       // `import` only. Without the filter this page would auto-open whatever proposal was
       // newest — a plan, a narrated week — because the view opens `pending[0]`.
@@ -88,6 +92,7 @@ export default async function BudgetPage({
       month={month}
       today={today}
       categories={categories}
+      payeeMemory={payeeMemory}
       transactions={transactions}
       summary={summary}
       filters={filters}

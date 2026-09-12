@@ -8,6 +8,7 @@ import {
   updateTransactionRecurrence,
 } from "@/modules/budget/actions"
 import type { Category, TransactionWithSeries } from "@/modules/budget/queries"
+import type { PayeeMemory } from "@/modules/budget/service"
 import { DEFAULT_PREFERENCES } from "@/lib/preferences"
 import { PreferencesProvider } from "@/components/preferences/preferences-provider"
 
@@ -67,6 +68,23 @@ function row(over: Record<string, unknown> = {}): TransactionWithSeries {
   } as unknown as TransactionWithSeries
 }
 
+const MEMORY: PayeeMemory[] = [
+  { payee: "Landlord", categoryId: "cat-rent", type: "expense" },
+  { payee: "Acme Ltd", categoryId: "cat-pay", type: "income" },
+]
+
+/**
+ * Choose an item in a base-ui `Select` — the helper `task-dialog.test.tsx` carries. The
+ * popup opens on a plain click (`PointerEvent` is polyfilled in `vitest.setup.ts`), but an
+ * item commits on its key handler, so Enter on the option is what picks it.
+ */
+function pickOption(label: string, option: string) {
+  fireEvent.click(screen.getByLabelText(label))
+  fireEvent.keyDown(screen.getByRole("option", { name: option }), {
+    key: "Enter",
+  })
+}
+
 function show(
   props: Partial<React.ComponentProps<typeof TransactionDialog>> = {},
 ) {
@@ -77,6 +95,7 @@ function show(
         month="2026-09"
         today="2026-09-10"
         categories={CATEGORIES}
+        payeeMemory={[]}
         transaction={null}
         open
         onOpenChange={vi.fn()}
@@ -95,10 +114,10 @@ function show(
  * the two error paths need the SERVER to reject, which a browser test cannot arrange
  * without breaking the app underneath it.
  *
- * What is deliberately NOT here: anything that needs the Type, Category or Repeat control.
- * All three are base-ui `Select`s, which drive a popover through pointer events that jsdom
- * does not implement, so a test that appeared to exercise them would really be exercising
- * whatever polyfill it shipped with. Those stay in `e2e/`, where the browser is real.
+ * The Type and Category controls are here only for what the dialog FILLS IN by itself —
+ * see `pickOption` for how far a base-ui `Select` can be driven under jsdom. What each
+ * control does with a chosen value on the way to the server is still a browser journey and
+ * stays in `e2e/`; so does Repeat, whose answer changes which of the four actions runs.
  */
 describe("TransactionDialog", () => {
   beforeEach(() => {
@@ -117,6 +136,24 @@ describe("TransactionDialog", () => {
   it("shows a stored amount in major units, not in cents", () => {
     show({ transaction: row({ amountCents: 123456 }) })
     expect(screen.getByLabelText(/Amount/)).toHaveValue(1234.56)
+  })
+
+  // A new transaction used to open on "0", which is not an amount anyone means — it is a
+  // placeholder you have to select and overtype before typing the figure you came to type.
+  it("opens a new transaction with an empty amount", () => {
+    show()
+    expect(screen.getByLabelText(/Amount/)).toHaveValue(null)
+  })
+
+  it("says what to do when the amount is left empty", async () => {
+    show()
+
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+
+    await waitFor(() =>
+      expect(screen.getByText("Enter an amount")).toBeInTheDocument(),
+    )
+    expect(createTransaction).not.toHaveBeenCalled()
   })
 
   it("sends a new one-off to createTransaction", async () => {
@@ -160,6 +197,75 @@ describe("TransactionDialog", () => {
       "rule-1",
     )
     expect(updateTransaction).not.toHaveBeenCalled()
+  })
+
+  // Tesler: "Tesco" has been filed under Groceries a dozen times, so the thirteenth is the
+  // app's to answer. The TYPE comes with it — a category belongs to one kind, and setting
+  // the category alone would be dropped by the effect that clears a category the type
+  // cannot hold.
+  it("files a payee under the category it carried last time", () => {
+    show({ payeeMemory: MEMORY })
+
+    fireEvent.change(screen.getByLabelText("Payee"), {
+      target: { value: "  acme   ltd " },
+    })
+    fireEvent.blur(screen.getByLabelText("Payee"))
+
+    expect(screen.getByLabelText("Type")).toHaveTextContent("Income")
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Salary")
+  })
+
+  // A type picked by hand is an explicit statement, the way the quick-add bar's sign is:
+  // "Acme Ltd 45" is money going out whatever the last Acme row said. Memory does not
+  // argue with it, and the category it remembers belongs to the other kind anyway.
+  it("keeps a type the user picked, and files nothing when the two disagree", () => {
+    show({ payeeMemory: MEMORY })
+
+    pickOption("Type", "Income")
+    fireEvent.change(screen.getByLabelText("Payee"), {
+      target: { value: "Landlord" },
+    })
+    fireEvent.blur(screen.getByLabelText("Payee"))
+
+    expect(screen.getByLabelText("Type")).toHaveTextContent("Income")
+    expect(screen.getByLabelText("Category")).toHaveTextContent("No category")
+  })
+
+  it("still files the category when the type they picked agrees", () => {
+    show({ payeeMemory: MEMORY })
+
+    pickOption("Type", "Income")
+    fireEvent.change(screen.getByLabelText("Payee"), {
+      target: { value: "Acme Ltd" },
+    })
+    fireEvent.blur(screen.getByLabelText("Payee"))
+
+    expect(screen.getByLabelText("Type")).toHaveTextContent("Income")
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Salary")
+  })
+
+  // Memory fills a blank, it does not correct you.
+  it("leaves a category the user has already chosen alone", () => {
+    show({ payeeMemory: MEMORY })
+
+    pickOption("Category", "Rent")
+    fireEvent.change(screen.getByLabelText("Payee"), {
+      target: { value: "Acme Ltd" },
+    })
+    fireEvent.blur(screen.getByLabelText("Payee"))
+
+    expect(screen.getByLabelText("Category")).toHaveTextContent("Rent")
+    expect(screen.getByLabelText("Type")).toHaveTextContent("Expense")
+  })
+
+  // An edit is about one row that already happened. Re-filing it from what OTHER rows say
+  // would rewrite a record the ledger is supposed to keep.
+  it("fills nothing in when editing an existing transaction", () => {
+    show({ payeeMemory: MEMORY, transaction: row({ payee: "Acme Ltd" }) })
+
+    fireEvent.blur(screen.getByLabelText("Payee"))
+
+    expect(screen.getByLabelText("Category")).toHaveTextContent("No category")
   })
 
   // The path a browser cannot arrange: the server rejecting a field. Without this the

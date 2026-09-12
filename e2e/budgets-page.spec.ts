@@ -85,11 +85,17 @@ test("a total for the month stands until it is changed", async ({ page }) => {
 
   // Clearing is a 0 from that month on, and the stat goes with it — in each month, since
   // clearing A does not reach past B's own row.
-  for (const [month, figure] of [
-    [MONTH_A, "$1,500.00"],
-    [MONTH_B, "$2,000.00"],
+  for (const [month, value, figure] of [
+    [MONTH_A, "1500", "$1,500.00"],
+    [MONTH_B, "2000", "$2,000.00"],
   ]) {
     await page.goto(`/budget/budgets?month=${month}`)
+    // Read the figure back before clearing it. The form seeds itself from the server in an
+    // effect, so until that has run the field is the empty one the HTML shipped — and a
+    // `fill("")` against it clears nothing, leaving the effect to put the old figure back
+    // and Save to write it again. (The same race the other way makes a `fill` land as
+    // "15001500": the value arrives between selecting the text and replacing it.)
+    await expect(total(page)).toHaveValue(value)
     await total(page).fill("")
     await save(page)
     await page.goto(`/budget?month=${month}`)
@@ -113,6 +119,13 @@ test("the dashboard measures the month against the total", async ({ page }) => {
     await expect(page.getByText("of $4,321.00")).toBeVisible()
   } finally {
     await page.goto("/budget/budgets")
+    // Wait for the figure this test wrote before putting the old one back — same race as
+    // the clearing loop above, and here it is the RESTORE that loses: the field is still
+    // the empty one the HTML shipped, `fill("")` clears nothing, and the form's own effect
+    // then seeds 4321 back for Save to write. A standing total for THIS month left behind
+    // is not a quiet failure either — it puts a fourth stat on the ledger, which is what
+    // `transaction-filters.spec.ts` locates the stats grid by.
+    await expect(total(page)).toHaveValue("4321")
     await total(page).fill(before)
     await save(page)
   }

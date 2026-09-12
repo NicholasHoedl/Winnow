@@ -9,6 +9,7 @@ import { optionalNumberField } from "@/lib/forms"
 import { addRoutineItem, updateRoutineItem } from "@/modules/routines/actions"
 import type { RoutineItemRow } from "@/modules/routines/queries"
 import { routineItemInputSchema } from "@/modules/routines/validation"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -39,13 +40,22 @@ const NO_LIST = "none"
 
 export type ListOption = { id: string; name: string }
 
+type ItemPriority = "low" | "medium" | "high"
+
+const PRIORITY_LABELS: Record<ItemPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+}
+const PRIORITIES = Object.keys(PRIORITY_LABELS) as ItemPriority[]
+
 type ItemFormValues = {
   title: string
   notes?: string
   // Nullable, not `?: number` — a cleared input has to mean "no due date", and
   // `optionalNumberField` maps empty to null rather than 0, which would mean "same day".
   dueOffsetDays?: number | null
-  priority?: "low" | "medium" | "high"
+  priority?: ItemPriority
   listId?: string | null
 }
 
@@ -63,6 +73,10 @@ export function RoutineItemDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!item
+  // A routine item becomes a task when the routine runs, so it starts where a new task
+  // starts: the Defaults settings the task dialog has read since T6. These were hard-coded
+  // "medium" and no list.
+  const { defaultTaskPriority, defaultListId } = usePreferences()
   const {
     register,
     control,
@@ -76,8 +90,8 @@ export function RoutineItemDialog({
       title: "",
       notes: "",
       dueOffsetDays: 0,
-      priority: "medium",
-      listId: null,
+      priority: defaultTaskPriority,
+      listId: defaultListId,
     },
   })
 
@@ -89,10 +103,12 @@ export function RoutineItemDialog({
       // New items default to the day of the run; that is the common case, and a lead
       // time is the deliberate edit.
       dueOffsetDays: item ? item.dueOffsetDays : 0,
-      priority: item?.priority ?? "medium",
-      listId: item?.listId ?? null,
+      // `item ? … : default` rather than `??`: an existing item's "no list" is an answer,
+      // and the default belongs only to an item that does not exist yet.
+      priority: item ? item.priority : defaultTaskPriority,
+      listId: item ? item.listId : defaultListId,
     })
-  }, [open, item, reset])
+  }, [open, item, defaultTaskPriority, defaultListId, reset])
 
   const onSubmit = handleSubmit(async (data) => {
     const result = isEdit
@@ -162,12 +178,20 @@ export function RoutineItemDialog({
                       onValueChange={field.onChange}
                     >
                       <SelectTrigger id="ri-priority" className="w-full">
-                        <SelectValue />
+                        {/* Needs a function child — a bare SelectValue renders the
+                            raw stored value, so this trigger read "medium". */}
+                        <SelectValue>
+                          {(value) =>
+                            PRIORITY_LABELS[value as ItemPriority] ?? "Medium"
+                          }
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
+                        {PRIORITIES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {PRIORITY_LABELS[value]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}

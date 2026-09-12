@@ -29,7 +29,7 @@ the daily driver until then.
 | --- | ----------- | --------------------------------- | ------------------------------------- | ------ | --------------- |
 | 0   | Setup       | Rank the flows                    | Pareto principle                      | Light  | Done 2026-09-11 |
 | 1   | Structure   | Navigation and menus              | Jakob's law + Hick's law              | Medium | Done 2026-09-11 |
-| 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Not started     |
+| 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Done 2026-09-11 |
 | 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Not started     |
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Not started     |
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Not started     |
@@ -111,20 +111,60 @@ Fixed:
 Kept: the desktop sidebar; the Meals actions menu; the settings index of described cards; the
 keyboard shortcuts (Ctrl+K, `n`, `g` then a letter); every flow reachable on a phone.
 
-### Pass 2: what each screen asks of the user
+### Pass 2: what each screen asks of the user — done 2026-09-11 (T36)
 
-- Keep: carbs derived from the other macros when balancing is on; tax spread across receipt
-  rows; plain-language quick add; the food dialog's extra nutrients behind "More nutrition".
-- Look at: the meals page stacks the macro summary, water, weight, the trend chart, quick add,
-  saved meals and recent foods above the day's log.
-- Look at (Pass 1): the dashboard offers two ways to start a task, one above the other — the
-  New task button and the quick-add bar.
+Walked every screen and dialog at 393 px and 1366 px in both themes, field by field on the
+daily tier, against Tesler's law (the app derives what it can and fills it in) and progressive
+disclosure (a rare control sits one tap away, not on every screen). A map of every form's
+fields, defaults and derivations went into the judgment alongside 183 screenshots.
+
+Fixed:
+
+- Log food started every entry at "No meal", though the quick-add bar and saved meals already
+  filed entries under the "Quick-added meals go to" preference. The dialog and the quick-pick
+  chips follow it now; "No meal" stays pickable. A hand-entered food starts at "1 serving",
+  the serving the quick-add parser already assumes, in the dialog and the food library.
+- A task that repeated asked for its date twice: choosing a frequency now starts the schedule
+  on the due date already typed. The Goal and Event pickers, two full-width selects on every
+  new task once the account held one goal or one event, sit behind "Link to a goal or event",
+  open when the task already has a link; on a goal-filtered Activity page a new task is
+  pre-linked to that goal.
+- Routine items hard-coded a medium priority and no list; they take the default priority and
+  list that tasks take.
+- The Priority select in the task and routine item dialogs showed its raw value, "medium".
+- A new transaction opened with an Amount of 0 to select and overtype; it opens empty, and an
+  empty submit says "Enter an amount". The category was chosen by hand every time: leaving
+  the Payee field now fills the type and category from the last transaction with the same
+  payee, never over a category or type already chosen, and the quick-add bar does the same
+  when no `#tag` is typed and the sign agrees. Quick-add rows teach the memory through their
+  text, so `coffee 4 #food` once makes `coffee 4` categorised after.
+- Add event dated every event today, whatever month was on screen; it dates it today when
+  today is visible and on the anchor day otherwise, the rule the transaction date already
+  follows. The dashboard's Add event and the palette's New event, New habit and New routine
+  delivered a page with the same words still to press; each opens its dialog on arrival.
+
+Measured after: at 393 × 852 the New task dialog's Create button sits 85 px above the fold
+with the pickers folded and the dialog no longer scrolls; opened, it scrolls 46 px, about
+where it was before with one picker showing.
+
+Kept, with reasons: the two AI panels on `/budget` sit below the ledger, so they cost the daily
+flow nothing; the log food dialog's hand-entry fields stay visible because a search pick fills
+them; an event may have no end, and 09:00 is a fair start; `/activity` lists done tasks under
+the open ones by design; the two task entry points on the dashboard and the meals stack are
+order and emphasis questions, filed for Passes 3 and 5; carbs derived from the other macros,
+tax spread across receipt rows, plain-language quick add and "More nutrition" were already
+right.
 
 ### Pass 3: sections and their order
 
 - Keep: the sidebar and tab bar open with Dashboard and close with Review; settings is split
   into seven pages by subject.
 - Look at: the meals page puts its main content, the day's log, below seven other blocks.
+- Look at (Pass 2): the budget page's two AI panels each carry a paragraph of description,
+  about 490 px together on a phone, below the ledger.
+- Look at (Pass 2): the Activity page puts the quick-add bar, the search box and the status
+  row above the first task; the dashboard offers two ways to start a task, the New task
+  button and the quick-add bar.
 
 ### Pass 4: visible grouping
 
@@ -133,6 +173,8 @@ keyboard shortcuts (Ctrl+K, `n`, `g` then a letter); every flow reachable on a p
   "This month" shows, which is whenever a month other than the current one is on screen. The
   layout sweep only loads the current month, so it has never seen it. Review's new week
   control wraps instead.
+- Look at (Pass 2): the event dialog's footer is a small left-aligned Cancel and Add, while
+  the task, transaction and routine item dialogs stack a full-width primary over Cancel.
 
 ### Pass 5: one thing stands out
 
@@ -157,12 +199,19 @@ keyboard shortcuts (Ctrl+K, `n`, `g` then a letter); every flow reachable on a p
   text when it cannot parse it; a new transaction's date starts at today, or at the first of
   the month being viewed.
 - Look at: amounts are number inputs, which cannot take a pasted "$1,234.50".
+- Look at (Pass 2): the budget quick-add bar writes no payee; its text becomes the
+  description, which the payee memory reads but the ledger's payee column does not show.
+- Look at (Pass 2): some `FieldLabel`s had no `htmlFor`, so their select triggers had no
+  accessible name; Meal, Priority, Type and Category were fixed in passing. Sweep the rest.
 
 ### Pass 8: mistakes
 
 - Keep: undo toasts after deletes across the app; confirmation before deletes that take other
   data with them, such as a category and its budgets.
 - Look at: applying an AI proposal creates its rows with no undo.
+- Look at (Pass 2): the budgets form seeds itself from server props in an effect whose
+  dependencies are new arrays on every render, so it re-seeds on any re-render and can put
+  a figure back over one being typed. `budgets-page.spec.ts` waits around it.
 
 ### Pass 9: speed and feedback
 

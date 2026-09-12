@@ -60,6 +60,13 @@ const DUE_KIND_OPTIONS = [
 // Sentinel for the optional goal/event links (a Select item can't carry an empty value).
 const NO_LINK = "none"
 
+const PRIORITY_LABELS: Record<Priority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+}
+const PRIORITIES = Object.keys(PRIORITY_LABELS) as Priority[]
+
 // Same-titled series are told apart by when they start — recurring classes often share a
 // title AND an anchor date, so the time is what actually distinguishes them.
 function eventLabel(
@@ -173,6 +180,7 @@ export function TaskDialog({
   onOpenChange,
   initialTitle,
   initialDueDate,
+  initialGoalId,
 }: {
   lists: List[]
   // Optional cross-module link targets (T2).
@@ -185,6 +193,12 @@ export function TaskDialog({
   // when editing an existing task.
   initialTitle?: string
   initialDueDate?: string
+  /**
+   * The goal a new task already belongs to — `/activity?goal=…` knows it, so the dialog
+   * fills it in instead of asking. The goal editor pre-links the tasks it creates the
+   * same way; this is the same idea one layer up.
+   */
+  initialGoalId?: string
 }) {
   const locale = useDateLocale()
   const isEdit = !!task
@@ -204,6 +218,7 @@ export function TaskDialog({
     control,
     reset,
     getValues,
+    setValue,
     setError,
     watch,
     formState: { errors, isSubmitting },
@@ -228,6 +243,7 @@ export function TaskDialog({
         ...base,
         title: initialTitle ?? base.title,
         dueDate: initialDueDate ?? base.dueDate,
+        goalId: initialGoalId ?? base.goalId,
       })
       return
     }
@@ -282,6 +298,7 @@ export function TaskDialog({
     reset,
     initialTitle,
     initialDueDate,
+    initialGoalId,
   ])
 
   const onSubmit = handleSubmit(async () => {
@@ -318,10 +335,33 @@ export function TaskDialog({
   // Show the recurrence controls when creating, or when editing the series.
   const showRecurrence = !isEdit || (isRecurring && scope === "series")
   const repeat = watch("repeat")
+
+  /**
+   * Choosing a repeat starts the schedule on the due date already in the form.
+   *
+   * The start date was seeded with today, so turning a dated task into a repeating one
+   * meant typing the same date twice — and the second one is the one that counts. Only on
+   * the FIRST choice, so a start date the user then edits survives a change of frequency,
+   * and only when there is a date: a task with no due date still starts today.
+   */
+  const previousRepeat = React.useRef<TaskFormValues["repeat"]>("none")
+  React.useEffect(() => {
+    const wasOff = previousRepeat.current === "none"
+    previousRepeat.current = repeat
+    if (!wasOff || repeat === "none") return
+    const dueDate = getValues("dueDate")
+    if (dueDate) setValue("startDate", dueDate)
+  }, [repeat, getValues, setValue])
+
   // A concrete due date only applies to a one-off instance, not a repeating schedule.
   const showDue = !showRecurrence || repeat === "none"
   // The kind only means something once there is a date to bind.
   const hasDue = !!watch("dueDate")
+  // The link disclosure starts open only when there is a link to see: one the task already
+  // carries — an edit must not hide part of what this task IS — or one the page handed
+  // down. Read from the props, not from the form, so picking a goal inside it can't make
+  // React reassert the attribute over a user who closed it again.
+  const linksOpen = task ? !!(task.goalId || task.eventId) : !!initialGoalId
 
   const title = !task
     ? "New task"
@@ -431,7 +471,7 @@ export function TaskDialog({
               )}
 
               <Field>
-                <FieldLabel>Priority</FieldLabel>
+                <FieldLabel htmlFor="task-priority">Priority</FieldLabel>
                 <Controller
                   control={control}
                   name="priority"
@@ -440,13 +480,21 @@ export function TaskDialog({
                       value={field.value ?? "medium"}
                       onValueChange={field.onChange}
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
+                      <SelectTrigger id="task-priority" className="w-full">
+                        {/* Needs a function child — a bare SelectValue renders the
+                            raw stored value, so this trigger read "medium". */}
+                        <SelectValue>
+                          {(value) =>
+                            PRIORITY_LABELS[value as Priority] ?? "Medium"
+                          }
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
+                        {PRIORITIES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {PRIORITY_LABELS[value]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   )}
@@ -492,93 +540,115 @@ export function TaskDialog({
             {/* Cross-module links (T2). Only for a concrete task — a repeating rule
                 has no single row to hang a link on, so these follow `showDue`. */}
             {showDue && (goals.length > 0 || events.length > 0) && (
-              // Full-width rows, not a 2-up grid: a narrow trigger clips its own
-              // options (the popup inherits the trigger's width).
-              <>
-                {goals.length > 0 && (
-                  <Field>
-                    <FieldLabel htmlFor="task-goal">Goal</FieldLabel>
-                    <Controller
-                      control={control}
-                      name="goalId"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ? field.value : NO_LINK}
-                          onValueChange={(value) =>
-                            field.onChange(value === NO_LINK ? "" : value)
-                          }
-                        >
-                          <SelectTrigger id="task-goal" className="w-full">
-                            <SelectValue>
-                              {(value) =>
-                                goals.find((g) => g.id === value)?.title ??
-                                "No goal"
-                              }
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_LINK}>No goal</SelectItem>
-                            {goals.map((goal) => (
-                              <SelectItem key={goal.id} value={goal.id}>
-                                {goal.title}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    <FieldError errors={[errors.goalId]} />
-                  </Field>
-                )}
+              // Behind a disclosure since Pass 2: linking is rare, and both pickers were
+              // full-width rows on every new task the moment the account held one goal or
+              // one event. A native <details> for the reason NutritionExtraFields gives —
+              // keyboard-operable and announced correctly with no JS and no new primitive.
+              <details
+                // Also open for a link the SERVER rejected: an error rendered inside a
+                // closed disclosure is an error nobody can see.
+                open={linksOpen || !!errors.goalId || !!errors.eventId}
+                className="group rounded-lg border px-3 py-2"
+              >
+                <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-sm font-medium select-none">
+                  {/* Named for what is behind it: the block renders for goals OR events,
+                      and an account with no calendar events was being offered one. */}
+                  {goals.length > 0 && events.length > 0
+                    ? "Link to a goal or event"
+                    : goals.length > 0
+                      ? "Link to a goal"
+                      : "Link to an event"}
+                </summary>
+                {/* Full-width rows, not a 2-up grid: a narrow trigger clips its own
+                    options (the popup inherits the trigger's width). */}
+                <div className="mt-3 flex flex-col gap-5">
+                  {goals.length > 0 && (
+                    <Field>
+                      <FieldLabel htmlFor="task-goal">Goal</FieldLabel>
+                      <Controller
+                        control={control}
+                        name="goalId"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value ? field.value : NO_LINK}
+                            onValueChange={(value) =>
+                              field.onChange(value === NO_LINK ? "" : value)
+                            }
+                          >
+                            <SelectTrigger id="task-goal" className="w-full">
+                              <SelectValue>
+                                {(value) =>
+                                  goals.find((g) => g.id === value)?.title ??
+                                  "No goal"
+                                }
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_LINK}>No goal</SelectItem>
+                              {goals.map((goal) => (
+                                <SelectItem key={goal.id} value={goal.id}>
+                                  {goal.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <FieldError errors={[errors.goalId]} />
+                    </Field>
+                  )}
 
-                {events.length > 0 && (
-                  <Field>
-                    <FieldLabel htmlFor="task-event">Event</FieldLabel>
-                    <Controller
-                      control={control}
-                      name="eventId"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ? field.value : NO_LINK}
-                          onValueChange={(value) =>
-                            field.onChange(value === NO_LINK ? "" : value)
-                          }
-                        >
-                          <SelectTrigger id="task-event" className="w-full">
-                            <SelectValue>
-                              {(value) => {
-                                const match = events.find((e) => e.id === value)
-                                return match
-                                  ? eventLabel(
-                                      match,
-                                      timeZone,
-                                      use24HourTime,
-                                      locale,
-                                    )
-                                  : "No event"
-                              }}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_LINK}>No event</SelectItem>
-                            {events.map((event) => (
-                              <SelectItem key={event.id} value={event.id}>
-                                {eventLabel(
-                                  event,
-                                  timeZone,
-                                  use24HourTime,
-                                  locale,
-                                )}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    <FieldError errors={[errors.eventId]} />
-                  </Field>
-                )}
-              </>
+                  {events.length > 0 && (
+                    <Field>
+                      <FieldLabel htmlFor="task-event">Event</FieldLabel>
+                      <Controller
+                        control={control}
+                        name="eventId"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value ? field.value : NO_LINK}
+                            onValueChange={(value) =>
+                              field.onChange(value === NO_LINK ? "" : value)
+                            }
+                          >
+                            <SelectTrigger id="task-event" className="w-full">
+                              <SelectValue>
+                                {(value) => {
+                                  const match = events.find(
+                                    (e) => e.id === value,
+                                  )
+                                  return match
+                                    ? eventLabel(
+                                        match,
+                                        timeZone,
+                                        use24HourTime,
+                                        locale,
+                                      )
+                                    : "No event"
+                                }}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NO_LINK}>No event</SelectItem>
+                              {events.map((event) => (
+                                <SelectItem key={event.id} value={event.id}>
+                                  {eventLabel(
+                                    event,
+                                    timeZone,
+                                    use24HourTime,
+                                    locale,
+                                  )}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                      <FieldError errors={[errors.eventId]} />
+                    </Field>
+                  )}
+                </div>
+              </details>
             )}
 
             {showRecurrence && (

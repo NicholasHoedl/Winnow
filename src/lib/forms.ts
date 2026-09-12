@@ -29,6 +29,26 @@ export const optionalNumberField = {
 }
 
 /**
+ * The same again, for a field where empty means **nothing typed yet** — so it stays the
+ * empty string and the schema is the one that says "Enter an amount".
+ *
+ * `numberField` above reads an empty box as 0, which is right where 0 is a real answer (a
+ * cleared budget is no budget). It is wrong for a transaction's amount: a form that opens
+ * on 0 is asking you to select and overtype a figure nobody meant, and one submitted blank
+ * would post a zero row rather than say what is missing.
+ *
+ * Typed `unknown` for the reason `optionalNumberField` gives: RHF calls setValueAs with the
+ * CURRENT form value during registration, not only with what the input holds.
+ */
+export const requiredNumberField = {
+  setValueAs: (value: unknown): number | "" => {
+    if (value == null) return ""
+    const text = String(value).trim()
+    return text === "" ? "" : Number(text)
+  },
+}
+
+/**
  * Put a submitted value back only if the field is still empty.
  *
  * Quick-capture clears itself SYNCHRONOUSLY on submit, before the server action is

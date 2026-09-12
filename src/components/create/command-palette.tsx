@@ -153,18 +153,24 @@ const CREATE_COMMANDS: CreateCommand[] = [
   { label: "New task", icon: ListTodo, kind: "task" },
   { label: "Log a meal", icon: Utensils, href: "/meals" },
   { label: "New transaction", icon: Wallet, href: "/budget" },
-  { label: "New event", icon: CalendarDays, href: "/calendar" },
+  // The flag opens the event dialog on arrival, so this command makes an event rather
+  // than showing you where events are made (T36).
+  { label: "New event", icon: CalendarDays, href: "/calendar?new=event" },
   // `/goals`, not `/activity`. This pointed at the merged page from T10 and was left
   // behind when T13 gave goals their own page back — so the one command in this menu for
   // making a goal took you to the task list.
   { label: "New goal", icon: Target, href: "/goals" },
   // `href`, not a `CreateKind`. A kind means a globally-mounted dialog in the app shell for
   // the whole app's lifetime, which is a lot to carry for a rare action — every other
-  // command here except "New task" navigates, so this follows them. It does leave the same
-  // half-command routines already have (you land on the page and click New habit again); if
-  // that is ever fixed with a `?new=1` param it should be fixed for both at once.
-  { label: "New habit", icon: Flame, href: "/activity/habits" },
-  { label: "New routine", icon: ListChecks, href: "/activity/routines" },
+  // command here except "New task" navigates, so this follows them. The `?new=` flag is
+  // what keeps them whole commands rather than half: the page opens its own dialog on
+  // arrival (T36), so none of these three leaves you looking at the words you just clicked.
+  { label: "New habit", icon: Flame, href: "/activity/habits?new=habit" },
+  {
+    label: "New routine",
+    icon: ListChecks,
+    href: "/activity/routines?new=routine",
+  },
 ]
 
 function isTypingTarget(el: EventTarget | null): boolean {

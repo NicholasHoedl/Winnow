@@ -5,10 +5,11 @@ import { toast } from "sonner"
 
 import { logMeal } from "@/modules/meals/actions"
 import type { QuickPickFood } from "@/modules/meals/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 
 /**
- * One-tap chips of the user's most recent/frequent foods. Each logs a single serving
- * (no meal type) to the viewed `date` — a fast "I ate this."
+ * One-tap chips of the user's most recent/frequent foods. Each logs a single serving to
+ * the viewed `date` — a fast "I ate this."
  */
 export function QuickPickStrip({
   date,
@@ -18,6 +19,9 @@ export function QuickPickStrip({
   picks: QuickPickFood[]
 }) {
   const [pending, startTransition] = React.useTransition()
+  // The same preference the quick-add bar beside these chips reads: a chip is the fastest
+  // way into the log, and it was the only one that filed everything under "No meal".
+  const { defaultMealType } = usePreferences()
 
   if (picks.length === 0) return null
 
@@ -35,7 +39,7 @@ export function QuickPickStrip({
         satFatG: pick.satFatG,
         sodiumMg: pick.sodiumMg,
         servings: 1,
-        mealType: "",
+        mealType: defaultMealType ?? "",
         date,
         foodId: pick.foodId ?? "",
         saveToLibrary: false,

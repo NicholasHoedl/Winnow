@@ -43,6 +43,12 @@ test("link a task to a goal, then detach it by deleting the goal", async ({
   await page.getByRole("button", { name: "New task" }).click()
   const taskDialog = page.getByRole("dialog")
   await taskDialog.getByLabel("Title").fill(taskTitle)
+  // The link pickers sit behind a disclosure, closed on an unfiltered /activity. Matched
+  // by pattern: the summary names what is behind it, so an account with goals and no
+  // events reads "Link to a goal".
+  await taskDialog
+    .getByText(/^Link to (a goal|an event|a goal or event)$/)
+    .click()
   await taskDialog.getByLabel("Goal").click()
   await page.getByRole("option", { name: goalTitle }).click()
   await taskDialog.getByRole("button", { name: "Create" }).click()
@@ -101,12 +107,16 @@ test("the link pickers are hidden for a repeating task", async ({ page }) => {
   await page.goto("/activity")
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
+  await dialog.getByText(/^Link to (a goal|an event|a goal or event)$/).click()
   await expect(dialog.getByLabel("Goal")).toBeVisible()
   await expect(dialog.getByLabel("Event")).toBeVisible()
 
   // Turning on a repeat makes this a rule — links belong to concrete task rows only.
   await dialog.getByRole("combobox").filter({ hasText: "Off" }).click()
   await page.getByRole("option", { name: "Daily" }).click()
+  await expect(
+    dialog.getByText(/^Link to (a goal|an event|a goal or event)$/),
+  ).toHaveCount(0)
   await expect(dialog.getByLabel("Goal")).toHaveCount(0)
   await expect(dialog.getByLabel("Event")).toHaveCount(0)
 

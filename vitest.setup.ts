@@ -26,3 +26,23 @@ if (
     configurable: true,
   })
 }
+
+// jsdom has no ResizeObserver either, and cmdk constructs one on mount — so any test that
+// renders a component containing the command palette or the food search threw from inside
+// React's passive effects before its first assertion (found by `log-food-dialog.test.tsx`).
+// A no-op is enough: nothing under test asserts on a measured size.
+if (
+  typeof window !== "undefined" &&
+  typeof window.ResizeObserver === "undefined"
+) {
+  class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(window, "ResizeObserver", {
+    value: ResizeObserver,
+    writable: true,
+    configurable: true,
+  })
+}

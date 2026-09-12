@@ -47,6 +47,7 @@ import {
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { HabitDialog } from "@/components/habits/habit-dialog"
+import { useCreateFlag } from "@/components/shared/use-create-flag"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 import { ActivityHeader } from "../../_components/activity-header"
@@ -269,6 +270,10 @@ export function HabitsView({
     setEditing(habit)
     setDialogOpen(true)
   }
+
+  // `?new=habit` — what the palette’s "New habit" links to, so the command makes a habit
+  // rather than showing you where habits are made.
+  useCreateFlag("habit", () => openDialog(null))
 
   function handleArchive(habit: HabitRow) {
     setArchivingId(habit.id)

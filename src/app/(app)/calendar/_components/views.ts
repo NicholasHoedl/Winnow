@@ -129,6 +129,30 @@ export function viewTitle(
   return formatDay(date, { month: "long", year: "numeric" }, locale)
 }
 
+/**
+ * The date a new event should start from: today when the view has it on screen, and
+ * otherwise the day the view is anchored on.
+ *
+ * "Add event" used to be dated today whatever you were looking at, so an event added while
+ * reading next month opened on the wrong month and the date you meant had to be typed back
+ * in. The budget's transaction dialog has answered this since T3 — "today, or the first of
+ * the month being viewed" — and this is the same rule for a view that can be a month, a
+ * week or a day. Clicking a day still wins over both; it names a date out loud.
+ */
+export function newEventDate(
+  view: CalendarViewKind,
+  date: string,
+  today: string,
+  /** The days the view has drawn: the month grid flattened, or the time grid's columns.
+   *  The agenda draws no days and is judged by the month it lists instead. */
+  visible: readonly string[] = [],
+): string {
+  if (view === "agenda") {
+    return today.slice(0, 7) === date.slice(0, 7) ? today : date
+  }
+  return visible.includes(today) ? today : date
+}
+
 /** Whether `date` is the period the view would show for `today` — used to decide if a
  *  "back to today" link is worth offering. */
 export function isCurrentPeriod(

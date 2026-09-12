@@ -28,6 +28,7 @@ import { addDays } from "@/lib/date"
 import { occurrenceKey } from "@/modules/calendar/service"
 import { movedSpan } from "@/components/calendar/grid-geometry"
 import { TimeGrid, type Reschedule } from "@/components/calendar/time-grid"
+import { useCreateFlag } from "@/components/shared/use-create-flag"
 import { useWriteGuard } from "@/components/shared/use-write-guard"
 import {
   useDateLocale,
@@ -42,6 +43,7 @@ import {
   CALENDAR_VIEWS,
   calendarHref,
   isCurrentPeriod,
+  newEventDate,
   shiftForView,
   viewTitle,
   type CalendarViewKind,
@@ -113,7 +115,16 @@ export function CalendarView({
     })
   }
 
-  function openCreate(date: string = today) {
+  /** What "Add event" means from up here: the day on screen, not the day it happens to
+   *  be. Clicking a cell passes its own date and still wins. */
+  const headerDate = newEventDate(
+    view,
+    date,
+    today,
+    view === "month" ? grid.flat() : dates,
+  )
+
+  function openCreate(date: string = headerDate) {
     setEditingOccurrence(null)
     setDefaultDate(date)
     setDialogOpen(true)
@@ -123,6 +134,10 @@ export function CalendarView({
     setEditingOccurrence(occ)
     setDialogOpen(true)
   }
+
+  // `/calendar?new=event` — what the dashboard's "Add event" and the palette's "New event"
+  // link to. Dated like the header's own button, since that is the day you are looking at.
+  useCreateFlag("event", () => openCreate())
 
   // Delete the whole series (agenda dropdown, or the dialog's "All events" scope).
   function handleDeleteSeries(event: EventRow) {

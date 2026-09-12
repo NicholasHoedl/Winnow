@@ -18,6 +18,7 @@ import type {
 import {
   formatCents,
   type MonthSummary,
+  type PayeeMemory,
   type TransactionFilters as Filters,
 } from "@/modules/budget/service"
 import { usePreferences } from "@/components/preferences/preferences-provider"
@@ -79,6 +80,7 @@ export function BudgetView({
   month,
   today,
   categories,
+  payeeMemory,
   transactions,
   summary,
   filters,
@@ -87,6 +89,9 @@ export function BudgetView({
   month: string
   today: string
   categories: Category[]
+  /** What each payee was last filed under, newest first — the ledger’s memory, read by
+   *  the quick-add bar and the dialog so a known payee files itself (T36). */
+  payeeMemory: PayeeMemory[]
   transactions: TransactionWithSeries[]
   summary: MonthSummary
   filters: Filters
@@ -229,7 +234,11 @@ export function BudgetView({
       </div>
 
       <div className="mt-4">
-        <BudgetQuickAdd date={defaultDate} categories={categories} />
+        <BudgetQuickAdd
+          date={defaultDate}
+          categories={categories}
+          payeeMemory={payeeMemory}
+        />
       </div>
 
       <section className="mt-6">
@@ -273,6 +282,7 @@ export function BudgetView({
         month={month}
         today={today}
         categories={categories}
+        payeeMemory={payeeMemory}
         transaction={editingTx}
         open={txOpen}
         onOpenChange={setTxOpen}

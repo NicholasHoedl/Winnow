@@ -59,7 +59,9 @@ type FoodFormValues = {
 // null, because "not filled in" and "measured as zero" are different facts.
 const EMPTY: FoodFormValues = {
   name: "",
-  servingLabel: "",
+  // The serving the quick-add parser already assumes for a hand-entered food. Required,
+  // so a blank one was only ever a validation error between you and the same words.
+  servingLabel: "1 serving",
   calories: 0,
   proteinG: 0,
   carbsG: 0,

@@ -18,6 +18,7 @@ import type {
 } from "@/modules/routines/queries"
 import { offsetLabel } from "@/modules/routines/service"
 import { SortableList } from "@/components/shared/sortable-list"
+import { useCreateFlag } from "@/components/shared/use-create-flag"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -266,6 +267,10 @@ export function RoutinesView({
     setEditing(routine)
     setOpen(true)
   }
+
+  // `?new=routine`, the same shape as habits and the calendar: a command named for making
+  // one makes one.
+  useCreateFlag("routine", () => openRoutine(null))
 
   return (
     <div className="mx-auto w-full max-w-5xl p-6">

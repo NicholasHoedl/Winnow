@@ -230,8 +230,11 @@ export default async function DashboardPage({
               <ClipboardList className="size-4" />
               Review
             </Link>
+            {/* The flag opens the event dialog on arrival (T36). Without it this button
+                said "Add event" and delivered a calendar with the same words still to
+                press. */}
             <Link
-              href="/calendar"
+              href="/calendar?new=event"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               <CalendarPlus className="size-4" />

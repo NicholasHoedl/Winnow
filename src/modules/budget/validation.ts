@@ -7,9 +7,14 @@ import { monthKey } from "./service"
 export const INCOME_EXPENSE = ["income", "expense"] as const
 
 // Amounts are entered in dollars and converted to integer cents in the action.
-// Max keeps cents within a Postgres `integer` (int4 ≈ $21.47M): 20M dollars =
-// 2,000,000,000 cents < 2,147,483,647.
-const dollars = z.number().min(0, "Must be 0 or more").max(20_000_000)
+// The ceiling keeps cents within a Postgres `integer` (int4 ≈ $21.47M): 20M dollars =
+// 2,000,000,000 cents < 2,147,483,647. One constant, because `enteredDollars` below is
+// the same money with a different error for the empty case.
+const MAX_DOLLARS = 20_000_000
+const inDollarRange = (schema: z.ZodNumber) =>
+  schema.min(0, "Must be 0 or more").max(MAX_DOLLARS)
+
+const dollars = inDollarRange(z.number())
 
 export const categoryInputSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -23,8 +28,21 @@ export const categoryInputSchema = z.object({
 })
 export type CategoryInput = z.infer<typeof categoryInputSchema>
 
+// The one amount a person types into an empty field. The dialog seeds it EMPTY rather
+// than at 0 — a zero you have to select and overtype is the form asking a question it
+// already knows the answer to — so an unfilled field arrives here as "" and zod's own
+// wording for that ("expected number, received string") is a sentence about the program.
+// Returning undefined for every other issue falls through to the message that fits it,
+// so the bound below and the ceiling keep theirs.
+const enteredDollars = inDollarRange(
+  z.number({
+    error: (issue) =>
+      issue.code === "invalid_type" ? "Enter an amount" : undefined,
+  }),
+)
+
 export const transactionInputSchema = z.object({
-  amount: dollars,
+  amount: enteredDollars,
   type: z.enum(INCOME_EXPENSE),
   date: z
     .string()

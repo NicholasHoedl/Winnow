@@ -8,9 +8,11 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lt,
   lte,
+  ne,
   or,
 } from "drizzle-orm"
 
@@ -30,10 +32,12 @@ import {
 } from "./schema"
 import {
   monthRange,
+  payeeKey,
   summarizeMonth,
   summarizeMonths,
   UNCATEGORIZED,
   type MonthlySummary,
+  type PayeeMemory,
   type TransactionFilters,
 } from "./service"
 
@@ -252,6 +256,67 @@ export async function getMonthTransactions(
     ...row,
     series: (row.seriesId ? byId.get(row.seriesId) : null) ?? null,
   }))
+}
+
+/** How far back the memory looks, and how many payees it carries to the client. A
+ *  personal ledger runs a few hundred rows a year, so this is months of history — and the
+ *  payees worth remembering are the ones used again, which are the recent ones. */
+const PAYEE_MEMORY_SCAN = 400
+const PAYEE_MEMORY_SIZE = 200
+
+/**
+ * What each payee was last filed under — the ledger's memory (T36).
+ *
+ * One bounded read of the newest categorised rows, folded to the first entry per payee.
+ * `DISTINCT ON` would do the fold in SQL, and would make this the only query in the module
+ * written as raw SQL to save four lines over a read that is already capped.
+ *
+ * Newest first, which is `rememberedCategory`'s contract: a payee filed twice answers with
+ * the category it carried last.
+ *
+ * A row with no payee is remembered under its DESCRIPTION. That is the quick-add bar's
+ * shape — it has no payee field, so "coffee 4 #food" writes the text as a description —
+ * and without the fallback the one surface built for repetition could never teach the
+ * memory it reads. Rows made in the dialog are unaffected: they carry a payee, and it wins.
+ */
+export async function getPayeeMemory(): Promise<PayeeMemory[]> {
+  const userId = await requireUserId()
+  const conditions = [
+    eq(transactions.userId, userId),
+    isNotNull(transactions.categoryId),
+  ]
+  // Something to remember it BY — either column will do, and a row with neither is a bare
+  // amount that no later line could match anyway.
+  const named = or(
+    and(isNotNull(transactions.payee), ne(transactions.payee, "")),
+    and(isNotNull(transactions.description), ne(transactions.description, "")),
+  )
+  if (named) conditions.push(named)
+
+  const rows = await db.query.transactions.findMany({
+    where: and(...conditions),
+    columns: {
+      payee: true,
+      description: true,
+      categoryId: true,
+      type: true,
+    },
+    orderBy: [desc(transactions.date), desc(transactions.createdAt)],
+    limit: PAYEE_MEMORY_SCAN,
+  })
+
+  const seen = new Set<string>()
+  const memory: PayeeMemory[] = []
+  for (const row of rows) {
+    const label = (row.payee ?? "").trim() || (row.description ?? "").trim()
+    if (!label || !row.categoryId) continue
+    const key = payeeKey(label)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    memory.push({ payee: label, categoryId: row.categoryId, type: row.type })
+    if (memory.length >= PAYEE_MEMORY_SIZE) break
+  }
+  return memory
 }
 
 /** Rollups for the `monthCount` months ending at (and including) `endMonth`, oldest

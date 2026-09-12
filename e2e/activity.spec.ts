@@ -27,6 +27,11 @@ async function createLinkedTask(page: Page, title: string, goalTitle: string) {
   await page.getByRole("button", { name: "New task" }).click()
   const dialog = page.getByRole("dialog")
   await dialog.getByLabel("Title", { exact: true }).fill(title)
+  // The link pickers sit behind a disclosure, closed unless the task already carries a
+  // link or the page is filtered by a goal — and every caller here is on plain /activity.
+  // Matched by pattern: the summary names what is behind it, so an account with goals and
+  // no events reads "Link to a goal".
+  await dialog.getByText(/^Link to (a goal|an event|a goal or event)$/).click()
   await dialog.getByLabel("Goal").click()
   await page.getByRole("option", { name: goalTitle }).click()
   await dialog.getByRole("button", { name: "Create" }).click()

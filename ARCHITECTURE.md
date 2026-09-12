@@ -709,6 +709,12 @@ is in the schema rather than in the split, but the split is where it surfaces.
 fast; materializing it would be solving a performance problem that
 doesn't exist yet (YAGNI — revisit only if it's ever actually slow).
 
+**The payee memory is a computed query too** (T36): `getPayeeMemory()` folds the
+newest categorised transactions to one entry per normalised payee — or per
+description, for quick-add rows, which carry no payee — and the transaction
+dialog and the quick-add bar read it to fill in the category a payee had last
+time. Nothing is stored for it; the ledger is the memory.
+
 ### 3.5 Meal Macros
 
 Macros are `real` (float), not `numeric`. Nutrition doesn't need the

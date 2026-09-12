@@ -28,6 +28,7 @@ import {
 } from "@/modules/meals/service"
 import { mealEntryInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -96,7 +97,10 @@ type LogFormValues = {
 const EMPTY: LogFormValues = {
   foodId: "",
   name: "",
-  servingLabel: "",
+  // What the quick-add parser already writes for a food it has no measure for
+  // (`parseQuickAddFallback`). The field is required, so an empty one only ever bought
+  // a validation error on the way to typing this.
+  servingLabel: "1 serving",
   calories: 0,
   proteinG: 0,
   carbsG: 0,
@@ -109,6 +113,17 @@ const EMPTY: LogFormValues = {
   servings: 1,
   mealType: "",
   saveToLibrary: true,
+}
+
+/**
+ * A new entry, on the meal "Quick-added meals go to" names. The quick-add bar and the
+ * saved meals have honoured that preference since T29 and T32; this dialog was the one
+ * way in that did not, so everything logged through it landed under "No meal".
+ *
+ * A null preference still means "No meal", and "No meal" stays pickable either way.
+ */
+function emptyValues(defaultMealType: MealType | null): LogFormValues {
+  return { ...EMPTY, mealType: defaultMealType ?? "" }
 }
 
 const MEAL_LABELS: Record<MealType, string> = {
@@ -138,6 +153,7 @@ export function LogFoodDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const isEdit = !!entry
+  const { defaultMealType } = usePreferences()
   const {
     register,
     handleSubmit,
@@ -149,7 +165,7 @@ export function LogFoodDialog({
     formState: { errors, isSubmitting },
   } = useForm<LogFormValues>({
     resolver: standardSchemaResolver(formSchema),
-    defaultValues: EMPTY,
+    defaultValues: emptyValues(defaultMealType),
   })
 
   // Set when a food-database result supplied per-100g figures rather than per-serving,
@@ -193,9 +209,9 @@ export function LogFoodDialog({
         saveToLibrary: false,
       })
     } else {
-      reset(EMPTY)
+      reset(emptyValues(defaultMealType))
     }
-  }, [open, entry, reset])
+  }, [open, entry, defaultMealType, reset])
 
   function onPickFood(food: Food) {
     setReferenceFood(null)
@@ -504,7 +520,7 @@ export function LogFoodDialog({
             />
 
             <Field>
-              <FieldLabel>Meal</FieldLabel>
+              <FieldLabel htmlFor="l-meal">Meal</FieldLabel>
               <Controller
                 control={control}
                 name="mealType"
@@ -517,7 +533,7 @@ export function LogFoodDialog({
                       )
                     }
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="l-meal" className="w-full">
                       <SelectValue>
                         {(value) => MEAL_LABELS[value as MealType] ?? "No meal"}
                       </SelectValue>

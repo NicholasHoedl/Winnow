@@ -80,6 +80,31 @@ describe("amount bound (fits the integer-cents column)", () => {
   })
 })
 
+describe("an amount that hasn't been typed yet", () => {
+  // The dialog's Amount field opens EMPTY rather than at 0, so an unfilled one arrives
+  // here as "" — and the only thing the person reading the error needs is what to do.
+  it("asks for an amount instead of naming a type", () => {
+    const result = transactionInputSchema.safeParse({
+      amount: "",
+      type: "expense",
+      date: "2026-07-22",
+    })
+    expect(result.success).toBe(false)
+    expect(result.error?.issues[0].message).toBe("Enter an amount")
+  })
+
+  // The custom wording is for the missing value only; every other thing that can be wrong
+  // with an amount still says what IS wrong with it.
+  it("keeps the range message for a number that is out of bounds", () => {
+    const result = transactionInputSchema.safeParse({
+      amount: -5,
+      type: "expense",
+      date: "2026-07-22",
+    })
+    expect(result.error?.issues[0].message).toBe("Must be 0 or more")
+  })
+})
+
 describe("restoreTransactionSchema (the undo payload)", () => {
   // Shaped exactly like the row deleteTransaction().returning() hands back.
   const row = {

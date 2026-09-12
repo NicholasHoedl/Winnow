@@ -247,3 +247,20 @@ test("a drop routine deletes only its own unfinished tasks", async ({
   await page.getByRole("menuitem", { name: "Delete" }).click()
   await expect(visibleCard(page, handwritten)).toHaveCount(0)
 })
+
+// T36, the same as `/activity/habits?new=habit`: the palette's "New routine" opens the
+// dialog on arrival instead of landing on the page with the same words still to press.
+test("a flagged link opens the new-routine dialog and tidies the URL", async ({
+  page,
+}) => {
+  await page.goto("/activity/routines?new=routine")
+
+  const dialog = page.getByRole("dialog", { name: "New routine" })
+  await expect(dialog).toBeVisible()
+  await expect(page).toHaveURL(/\/activity\/routines$/)
+
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await dialog.waitFor({ state: "hidden" })
+  await page.reload()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+})
