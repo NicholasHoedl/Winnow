@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   bodyWeightSchema,
   logSavedMealSchema,
+  mealEntryInputSchema,
   restoreMealEntrySchema,
   restoreSavedMealSchema,
   restoreWaterLogSchema,
@@ -256,5 +257,52 @@ describe("restoreSavedMealSchema", () => {
     })
     expect(parsed.success).toBe(true)
     if (parsed.success) expect(parsed.data).not.toHaveProperty("userId")
+  })
+})
+
+/**
+ * Pass 8: the messages a person actually reads when a bound is hit.
+ *
+ * Every macro box in the app — the log dialog, the food library, the saved meal editor —
+ * shares `macroNumber`, and its ceiling carried no message, so a slipped keystroke
+ * answered with "Too big: expected number to be <=100000". Same for servings, and for a
+ * food id gone stale in another tab.
+ */
+describe("mealEntryInputSchema messages", () => {
+  const base = {
+    name: "Greek Yogurt",
+    servingLabel: "170 g",
+    calories: 100,
+    proteinG: 17,
+    carbsG: 6,
+    fatG: 0.7,
+    servings: 1,
+    date: "2026-09-10",
+  }
+
+  function messageFor(over: Record<string, unknown>): string | null {
+    const parsed = mealEntryInputSchema.safeParse({ ...base, ...over })
+    return parsed.success ? null : parsed.error.issues[0].message
+  }
+
+  it("says a macro figure is too high in words", () => {
+    expect(messageFor({ calories: 100_001 })).toBe(
+      "That's higher than any food goes",
+    )
+  })
+
+  it("says the same about a micronutrient", () => {
+    expect(messageFor({ fiberG: 100_001 })).toBe(
+      "That's higher than any food goes",
+    )
+  })
+
+  it("says a serving count is too large in words", () => {
+    expect(messageFor({ servings: 10_001 })).toBe("That's too many servings")
+  })
+
+  // The stale-id case: a food deleted in another tab, still picked in this one.
+  it("names the food rather than the shape of its id", () => {
+    expect(messageFor({ foodId: "not-a-uuid" })).toBe("Unknown food")
   })
 })

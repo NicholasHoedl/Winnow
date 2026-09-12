@@ -45,7 +45,7 @@ function type(text: string) {
 describe("BudgetQuickAdd", () => {
   beforeEach(() => {
     vi.mocked(createTransaction).mockReset()
-    vi.mocked(createTransaction).mockResolvedValue({ ok: true })
+    vi.mocked(createTransaction).mockResolvedValue({ ok: true, id: "x1" })
     toast.error.mockReset()
     toast.success.mockReset()
   })

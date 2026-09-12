@@ -200,7 +200,12 @@ export function HabitDialog({
             do it. For something due on set dates, make a repeating task.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit}>
+        {/* `noValidate`: every constraint this form carries in HTML — the quota's 1 to
+            100, its whole numbers, the amount's floor — `habitInputSchema` also carries,
+            with a sentence written for a person ("At least one", "Whole sessions only").
+            Left on, the browser answers first and in its own words, and the app's own
+            messages are unreachable (T42). */}
+        <form onSubmit={onSubmit} noValidate>
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="habit-title">Title</FieldLabel>

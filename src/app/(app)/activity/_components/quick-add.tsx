@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { createTask } from "@/modules/todos/actions"
 import { parseTaskCapture, type ListOption } from "@/modules/todos/service"
 import { todayInZone } from "@/lib/date"
-import { restoreIfEmpty } from "@/lib/forms"
+import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -44,11 +44,19 @@ export function QuickAdd({ lists }: { lists: ListOption[] }) {
       // deliberate scheduling. Until T5a both paths defaulted to today, which made "no
       // due date" a state you had to go out of your way to produce, and left the Someday
       // bucket permanently empty.
-      const result = await createTask({
-        title: taskTitle,
-        ...(dueDate ? { dueDate, dueKind } : {}),
-        listId: listId ?? defaultListId ?? "",
-      })
+      const result = await tryWrite(() =>
+        createTask({
+          title: taskTitle,
+          ...(dueDate ? { dueDate, dueKind } : {}),
+          listId: listId ?? defaultListId ?? "",
+        }),
+      )
+      // Nothing came back: the server is unreachable and `tryWrite` has said so. The
+      // line goes back in the box rather than into the void.
+      if (!result) {
+        setTitle(restoreIfEmpty(trimmed))
+        return
+      }
       if (!result.ok) {
         toast.error(result.error)
         setTitle(restoreIfEmpty(trimmed))

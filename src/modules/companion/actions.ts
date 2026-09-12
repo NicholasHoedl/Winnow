@@ -11,21 +11,29 @@ import {
 } from "@/lib/action-result"
 import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
-import { createTransaction } from "@/modules/budget/actions"
+import { createTransaction, deleteTransaction } from "@/modules/budget/actions"
 import { getCategories } from "@/modules/budget/queries"
-import { addMilestone } from "@/modules/goals/actions"
-import { createHabit } from "@/modules/habits/actions"
+import { addMilestone, deleteMilestone } from "@/modules/goals/actions"
+import { createHabit, deleteHabit } from "@/modules/habits/actions"
 import { resolveCategory } from "./service"
 import { goals } from "@/modules/goals/schema"
-import { addRoutineItem, createRoutine } from "@/modules/routines/actions"
-import { createTask } from "@/modules/todos/actions"
+import {
+  addRoutineItem,
+  createRoutine,
+  deleteRoutine,
+} from "@/modules/routines/actions"
+import { createTask, deleteTask } from "@/modules/todos/actions"
 
 import { fetchModels } from "./ai-client"
 import { describeAiFailure } from "./ai-request"
 import { AI_PROVIDERS } from "./ai-settings"
 import type { ProposalKind } from "./queries"
 import { aiProposals } from "./schema"
-import { applyProposalSchema } from "./validation"
+import {
+  appliedRowsSchema,
+  applyProposalSchema,
+  type AppliedRows,
+} from "./validation"
 import { z } from "zod"
 
 const idSchema = z.string().uuid("Invalid id")
@@ -66,6 +74,19 @@ function revalidateProposal(kind: ProposalKind): void {
 }
 
 /**
+ * What an apply hands back: the rows it created, so the client can say what happened and
+ * offer to take exactly those back.
+ *
+ * The FAILURE branch carries them too, and that is the point of the wider type. The
+ * proposal is claimed before any write (see `applyProposal`), so a failure part way
+ * through leaves real rows behind and no second Apply — without this, the only route back
+ * was deleting each one by hand across four pages (T42).
+ */
+export type ApplyProposalResult =
+  | { ok: true; created: AppliedRows }
+  | (ActionFailure & { created?: AppliedRows })
+
+/**
  * Turn an approved proposal into real rows.
  *
  * The payload comes back from the client rather than being read from the stored row,
@@ -79,7 +100,9 @@ function revalidateProposal(kind: ProposalKind): void {
  * as it does when you create these by hand. There is one code path for "a milestone was
  * created", not two.
  */
-export async function applyProposal(input: unknown): Promise<ActionResult> {
+export async function applyProposal(
+  input: unknown,
+): Promise<ApplyProposalResult> {
   const userId = await requireUserId()
   const parsed = applyProposalSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
@@ -131,9 +154,18 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "That proposal has already been dealt with." }
   }
 
-  const failed = (title: string): ActionResult => {
+  // Filled in as the writes land, and handed back either way — see `ApplyProposalResult`.
+  const created: AppliedRows = {
+    milestoneIds: [],
+    habitIds: [],
+    taskIds: [],
+    routineIds: [],
+    transactionIds: [],
+  }
+
+  const failed = (title: string): ApplyProposalResult => {
     revalidateProposal(parsed.data.kind)
-    return { ok: false, error: `Couldn't add “${title}”.` }
+    return { ok: false, error: `Couldn't add “${title}”.`, created }
   }
 
   if (parsed.data.kind === "goal_plan") {
@@ -146,6 +178,7 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
         dueDate: milestone.dueDate,
       })
       if (!result.ok) return failed(milestone.title)
+      created.milestoneIds.push(result.id)
     }
 
     // The practice. Routed through `createHabit` for the same reason milestones go through
@@ -168,6 +201,7 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
         goalId,
       })
       if (!result.ok) return failed(habit.title)
+      created.habitIds.push(result.id)
     }
 
     // Setup tasks attach to the GOAL as well: `tasks` has `goalId` and no `milestoneId`, so
@@ -182,18 +216,22 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
         goalId,
       })
       if (!result.ok) return failed(task.title)
+      created.taskIds.push(result.id)
     }
   } else if (parsed.data.kind === "routine") {
     // The routine has to exist before its items can point at it, which is why
     // `createRoutine` now returns the new id rather than just `ok`.
-    const created = await createRoutine({
+    const routine = await createRoutine({
       name: parsed.data.payload.name,
       description: parsed.data.payload.description,
     })
-    if (!created.ok) return failed(parsed.data.payload.name)
+    if (!routine.ok) return failed(parsed.data.payload.name)
+    // The routine only. Its items cascade with it, so an undo that deletes the routine
+    // takes them without listing them.
+    created.routineIds.push(routine.id)
 
     for (const item of parsed.data.payload.items) {
-      const result = await addRoutineItem(created.id, {
+      const result = await addRoutineItem(routine.id, {
         title: item.title,
         dueOffsetDays: item.dueOffsetDays,
         priority: item.priority,
@@ -222,10 +260,50 @@ export async function applyProposal(input: unknown): Promise<ActionResult> {
         categoryId: categoryId ?? "",
       })
       if (!result.ok) return failed(row.payee)
+      created.transactionIds.push(result.id)
     }
   }
 
   revalidateProposal(parsed.data.kind)
+  return { ok: true, created }
+}
+
+/**
+ * Take back exactly what one apply created.
+ *
+ * Through the ordinary delete paths, for the same reason applying goes through the
+ * ordinary create ones: every ownership check runs exactly as it does when you delete
+ * these by hand, and there is one code path for "a milestone was deleted".
+ *
+ * It takes the ids rather than the proposal, and that is deliberate — the proposal does
+ * not know which rows it turned into, and a second apply that failed part way would leave
+ * it pointing at rows that no longer exist. The list is what the apply returned.
+ *
+ * The proposal itself stays APPLIED. Resetting it to pending would mean re-opening a panel
+ * the user has already answered, and the plan is one request away; the toast says so.
+ */
+export async function undoApply(input: unknown): Promise<ActionResult> {
+  await requireUserId()
+  const parsed = appliedRowsSchema.safeParse(input)
+  if (!parsed.success) return invalid(parsed.error)
+  const rows = parsed.data
+
+  // Sequential rather than parallel, matching the writes: each of these revalidates, and
+  // a burst of concurrent deletes across four modules buys nothing on a handful of rows.
+  let failures = 0
+  const track = (result: { ok: boolean }) => {
+    if (!result.ok) failures += 1
+  }
+  for (const id of rows.milestoneIds) track(await deleteMilestone(id))
+  for (const id of rows.habitIds) track(await deleteHabit(id))
+  for (const id of rows.taskIds) track(await deleteTask(id))
+  for (const id of rows.routineIds) track(await deleteRoutine(id))
+  for (const id of rows.transactionIds) track(await deleteTransaction(id))
+
+  revalidateHubs()
+  if (failures > 0) {
+    return { ok: false, error: "Some of those rows could not be removed." }
+  }
   return { ok: true }
 }
 

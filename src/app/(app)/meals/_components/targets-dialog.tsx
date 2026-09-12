@@ -16,6 +16,7 @@ import type { MacroTargets } from "@/modules/meals/queries"
 import { carbsForCalories } from "@/modules/meals/service"
 import { macroTargetsSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
+import { undoToast } from "@/lib/toast"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -112,16 +113,12 @@ export function TargetsDialog({
         return
       }
       const restorable = result.period ?? period
-      toast("Target period removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreMacroTargetPeriod(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Target period removed", () =>
+        startTransition(async () => {
+          const restored = await restoreMacroTargetPeriod(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

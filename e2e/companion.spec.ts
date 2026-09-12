@@ -223,6 +223,47 @@ test("a generated plan can be pruned, edited, and applied", async ({
   await deleteTasksMatching("STUB setup task")
 })
 
+/**
+ * T42 (Pass 8): applying used to end in silence and with no way back.
+ *
+ * Apply fanned out a dozen creates across four modules — milestones, habits, tasks — and
+ * said nothing about any of them. The proposal is claimed before the writes (deliberately,
+ * against a double apply), so there was no second chance either: the panel closed, the
+ * rows appeared, and the only route back was deleting each one by hand.
+ */
+test("an applied plan says what it created, and Undo takes it back", async ({
+  page,
+}) => {
+  const goalTitle = `E2E undo apply ${Date.now()}`
+  await createGoal(page, goalTitle)
+  await planGoal(page, goalTitle)
+
+  await page.getByRole("button", { name: "Apply" }).click()
+
+  // The stub's plan, counted the way the panel counted it a moment ago.
+  await expect(
+    page.getByText("Added 2 milestones, 2 habits and a task"),
+  ).toBeVisible()
+
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
+  await expect(page.getByText("Undone")).toBeVisible()
+
+  // Every row it made is gone — the milestones from the goal…
+  await openGoalDetail(page, goalTitle)
+  const detail = page.getByRole("dialog")
+  await expect(detail.getByText("STUB first milestone")).toHaveCount(0)
+  await expect(detail.getByText("STUB setup task")).toHaveCount(0)
+  await page.keyboard.press("Escape")
+
+  // …and the practice, which outlives its goal and so would have been left behind.
+  await page.goto("/activity/habits")
+  await expect(visibleCard(page, "STUB practice")).toHaveCount(0)
+
+  await removeGoal(page, goalTitle)
+  await deleteTasksMatching("STUB setup task")
+  await deleteHabitsMatching("STUB")
+})
+
 test("a refinement replaces the proposal rather than stacking another", async ({
   page,
 }) => {

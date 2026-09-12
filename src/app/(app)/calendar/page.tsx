@@ -1,4 +1,5 @@
 import {
+  getCalendarEventCounts,
   getCalendars,
   getMonthEvents,
   getRangeEvents,
@@ -34,6 +35,8 @@ export default async function CalendarPage({
         : today
 
   const calendars = await getCalendars()
+  // For the manager's delete confirmation only; see `getCalendarEventCounts`.
+  const eventCounts = await getCalendarEventCounts()
 
   if (view === "week" || view === "day") {
     const dates = view === "week" ? weekDates(date, weekStartsOn) : [date]
@@ -53,6 +56,7 @@ export default async function CalendarPage({
         byDay={bucketByDay(occurrences)}
         occurrences={occurrences}
         calendars={calendars}
+        eventCounts={eventCounts}
       />
     )
   }
@@ -74,6 +78,7 @@ export default async function CalendarPage({
       byDay={byDay}
       occurrences={occurrences}
       calendars={calendars}
+      eventCounts={eventCounts}
     />
   )
 }

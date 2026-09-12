@@ -170,3 +170,41 @@ describe("restoreTransactionSchema (the undo payload)", () => {
     ).toBe(false)
   })
 })
+
+/**
+ * Pass 8: the messages a person actually reads when a bound is hit.
+ *
+ * Where a rule carried no message of its own, zod's default reached the field — "Too big:
+ * expected number to be <=20000000", "…expected string to have <=120 characters",
+ * "Invalid UUID". Each is a sentence about the program, printed under a box someone was
+ * typing in. `enteredDollars` already had "Enter an amount"; these are the rest catching up.
+ */
+describe("transactionInputSchema messages", () => {
+  const base = { amount: 5, type: "expense" as const, date: "2026-09-10" }
+
+  function messageFor(over: Record<string, unknown>): string | null {
+    const parsed = transactionInputSchema.safeParse({ ...base, ...over })
+    return parsed.success ? null : parsed.error.issues[0].message
+  }
+
+  it("says an amount is too large in words", () => {
+    expect(messageFor({ amount: 20_000_001 })).toBe("That amount is too large")
+  })
+
+  it("says how long a payee may be", () => {
+    expect(messageFor({ payee: "x".repeat(121) })).toBe(
+      "Keep the payee under 120 characters",
+    )
+  })
+
+  it("says how long a description may be", () => {
+    expect(messageFor({ description: "x".repeat(301) })).toBe(
+      "Keep the description under 300 characters",
+    )
+  })
+
+  // The stale-id case: a category deleted in another tab, chosen in this one.
+  it("names the category rather than the shape of its id", () => {
+    expect(messageFor({ categoryId: "not-a-uuid" })).toBe("Unknown category")
+  })
+})

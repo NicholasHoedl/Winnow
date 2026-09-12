@@ -177,7 +177,7 @@ describe("TransactionDialog", () => {
   })
 
   it("sends a new one-off to createTransaction", async () => {
-    vi.mocked(createTransaction).mockResolvedValue({ ok: true })
+    vi.mocked(createTransaction).mockResolvedValue({ ok: true, id: "x1" })
     show()
 
     fireEvent.change(screen.getByLabelText(/Amount/), {
@@ -309,5 +309,74 @@ describe("TransactionDialog", () => {
       ).toBeInTheDocument(),
     )
     expect(toast.error).toHaveBeenCalledWith("Could not save that.")
+  })
+
+  /**
+   * Pass 8: whose words answer a bad value.
+   *
+   * `min="0"` on the amount and `min`/`max` on the date made the BROWSER answer first —
+   * "Value must be greater than or equal to 0.", and for a date outside the month
+   * "Value must be 09/30/2026 or earlier.", in a format this account never chose. The
+   * app's own "Must be 0 or more" could not be reached, and the month fence had no
+   * message at all because it lived only in the input.
+   */
+  it("leaves validation to the schema, not to the browser", () => {
+    show()
+    // The dialog portals out of the render container, so the form is looked up on the
+    // document.
+    expect(document.querySelector("form")).toHaveAttribute("novalidate")
+  })
+
+  it("says a negative amount is below the floor, in its own words", async () => {
+    show()
+
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: "-12" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+
+    await waitFor(() =>
+      expect(screen.getByText("Must be 0 or more")).toBeInTheDocument(),
+    )
+    expect(createTransaction).not.toHaveBeenCalled()
+  })
+
+  // The rule that used to live only in the input's `min`/`max`. It names the month the
+  // way the rest of the app names one, rather than in a date format nobody here picked.
+  it("names the month a date has to fall in", async () => {
+    show()
+
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: "12" },
+    })
+    fireEvent.change(screen.getByLabelText("Date"), {
+      target: { value: "2026-10-02" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Pick a date in September 2026"),
+      ).toBeInTheDocument(),
+    )
+    expect(createTransaction).not.toHaveBeenCalled()
+  })
+
+  // The step the browser was checking, now the schema's: 12.345 would otherwise be
+  // rounded into the ledger without a word.
+  it("says how far an amount may divide", async () => {
+    show()
+
+    fireEvent.change(screen.getByLabelText(/Amount/), {
+      target: { value: "12.345" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Add" }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Two decimal places at most"),
+      ).toBeInTheDocument(),
+    )
+    expect(createTransaction).not.toHaveBeenCalled()
   })
 })

@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import {
   deleteMealEntry,
@@ -161,16 +162,12 @@ export function MealsView({
         return
       }
       const restorable = result.entry ?? entry
-      toast("Entry removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreMealEntry(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Entry removed", () =>
+        startTransition(async () => {
+          const restored = await restoreMealEntry(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

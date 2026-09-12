@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import {
   allocateCents,
   buildGoalPlanMessages,
+  countCreated,
+  describeCreated,
   buildImportMessages,
   buildReceiptMessages,
   buildRoutineMessages,
@@ -25,7 +27,7 @@ import {
   type GoalPromptContext,
   summaryObservations,
 } from "./service"
-import type { GoalPlanPayload, Receipt } from "./validation"
+import type { AppliedRows, GoalPlanPayload, Receipt } from "./validation"
 
 /** A category as the prompt builders take it, with no note. */
 const hint = (name: string) => ({ name, description: null })
@@ -1454,5 +1456,61 @@ describe("receiptWarnings", () => {
     expect(receiptWarnings({ ...walmart, total: 100 })).toEqual([
       { kind: "gap", itemsTotal: 55, total: 100 },
     ])
+  })
+})
+
+/**
+ * T42 (Pass 8): what an apply says it did.
+ *
+ * Applying used to end in silence. This is the "Creates N…" line beside Apply, read back
+ * as what happened — so the two have to agree, and the singular has to read like English
+ * rather than like a counter.
+ */
+function made(over: Partial<AppliedRows> = {}): AppliedRows {
+  return {
+    milestoneIds: [],
+    habitIds: [],
+    taskIds: [],
+    routineIds: [],
+    transactionIds: [],
+    ...over,
+  }
+}
+
+const ids = (n: number) => Array.from({ length: n }, (_, i) => `id-${i}`)
+
+describe("describeCreated", () => {
+  it("joins the kinds it made, and only those", () => {
+    expect(
+      describeCreated(
+        made({ milestoneIds: ids(2), habitIds: ids(2), taskIds: ids(1) }),
+      ),
+    ).toBe("Added 2 milestones, 2 habits and a task")
+  })
+
+  it("says 'a' rather than '1' for a single row", () => {
+    expect(describeCreated(made({ routineIds: ids(1) }))).toBe(
+      "Added a routine",
+    )
+  })
+
+  it("counts a statement's rows", () => {
+    expect(describeCreated(made({ transactionIds: ids(7) }))).toBe(
+      "Added 7 transactions",
+    )
+  })
+
+  // The empty case is reachable: every row of a plan can be switched off before Apply.
+  it("has something to say when an apply made nothing", () => {
+    expect(describeCreated(made())).toBe("Nothing was added")
+  })
+})
+
+describe("countCreated", () => {
+  it("totals every kind, which is how the toast decides there is an undo", () => {
+    expect(countCreated(made())).toBe(0)
+    expect(countCreated(made({ milestoneIds: ids(2), taskIds: ids(3) }))).toBe(
+      5,
+    )
   })
 })

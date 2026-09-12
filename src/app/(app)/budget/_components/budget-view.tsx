@@ -4,6 +4,7 @@ import * as React from "react"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import {
   deleteTransaction,
@@ -140,16 +141,12 @@ export function BudgetView({
         return
       }
       const restorable = result.transaction ?? tx
-      toast("Transaction removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreTransaction(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Transaction removed", () =>
+        startTransition(async () => {
+          const restored = await restoreTransaction(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

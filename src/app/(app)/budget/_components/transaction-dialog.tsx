@@ -26,10 +26,13 @@ import {
 } from "@/modules/budget/validation"
 import type { ActionResult } from "@/lib/action-result"
 import { addDays, daysInMonth, fmt, isValidDateString } from "@/lib/date"
-import { requiredNumberField } from "@/lib/forms"
+import { requiredNumberField, tryWrite } from "@/lib/forms"
 import { cyclesInRange } from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
-import { usePreferences } from "@/components/preferences/preferences-provider"
+import {
+  useDateLocale,
+  usePreferences,
+} from "@/components/preferences/preferences-provider"
 import { RecurrenceFields } from "@/components/shared/recurrence-fields"
 import { Button } from "@/components/ui/button"
 import {
@@ -98,6 +101,34 @@ function emptyValues(
     startDate: today,
     endDate: "",
   }
+}
+
+/**
+ * "2026-09" → "September 2026", the way the month strip above the page writes it.
+ *
+ * Local rather than shared, following `month-nav.tsx` and the three other copies of this
+ * four-liner: what matters here is that the message names the month in the account's own
+ * date format rather than in the browser's.
+ */
+function monthLabel(month: string, locale: string): string {
+  const [year, m] = month.split("-").map(Number)
+  return new Date(Date.UTC(year, m - 1, 1)).toLocaleDateString(locale, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
+/**
+ * Whether an amount divides no finer than the currency does.
+ *
+ * The check the input's `step` used to make. Scaled and rounded rather than compared as
+ * text, because 12.345 arrives as a number: 12.345 × 100 is 1234.4999999999998, half a
+ * unit from whole, while 12.34 × 100 lands 2e-13 away from it.
+ */
+function hasAtMostDigits(amount: number, digits: number): boolean {
+  const scaled = amount * 10 ** digits
+  return Math.abs(scaled - Math.round(scaled)) < 1e-9
 }
 
 /** The rule payload (createTransactionRecurrence validates it server-side). `freq` is
@@ -169,6 +200,36 @@ export function TransactionDialog({
   const [my, mm] = month.split("-").map(Number)
   const monthStart = `${month}-01`
   const monthEnd = fmt(my, mm, daysInMonth(my, mm))
+  const locale = useDateLocale()
+  const monthName = monthLabel(month, locale)
+
+  /**
+   * The shared schema plus the two rules only this screen knows.
+   *
+   * Both used to live in the inputs alone — `step` on the amount, `min`/`max` on the date
+   * — which meant the BROWSER answered them, in its own words and its own date format
+   * ("Value must be 09/30/2026 or earlier."), before the app could say anything. The form
+   * carries `noValidate` now, so anything the schema does not check is not checked at all:
+   * these two are what the audit turned up.
+   *
+   * A refine only runs once the object itself parsed, so an empty amount still gets
+   * "Enter an amount" rather than a complaint about its decimals.
+   */
+  const digits = currencyFractionDigits(currency)
+  const dialogSchema = React.useMemo(
+    () =>
+      transactionInputSchema
+        .refine((v) => hasAtMostDigits(v.amount, digits), {
+          message:
+            digits === 0 ? "Whole numbers only" : "Two decimal places at most",
+          path: ["amount"],
+        })
+        .refine((v) => v.date >= monthStart && v.date <= monthEnd, {
+          message: `Pick a date in ${monthName}`,
+          path: ["date"],
+        }),
+    [digits, monthStart, monthEnd, monthName],
+  )
 
   const {
     register,
@@ -187,9 +248,11 @@ export function TransactionDialog({
     // handleSubmit receives is a TransactionInput, not the whole form. The rule path
     // reads getValues() for exactly that reason. Schedule fields are validated
     // server-side by transactionRecurrenceSchema and come back as fieldErrors.
-    resolver: standardSchemaResolver(
-      transactionInputSchema,
-    ) as unknown as Resolver<TransactionFormValues, unknown, TransactionInput>,
+    resolver: standardSchemaResolver(dialogSchema) as unknown as Resolver<
+      TransactionFormValues,
+      unknown,
+      TransactionInput
+    >,
     defaultValues: emptyValues(defaultDate, today),
   })
 
@@ -294,7 +357,7 @@ export function TransactionDialog({
     // The resolver strips the schedule fields from `data`, so the rule path reads the
     // raw form values instead.
     const v = getValues()
-    let result: ActionResult
+    let result: ActionResult | null
     if (series && scope === "series") {
       if (v.repeat === "none") {
         // "Off" on a rule reads as "stop repeating", and turning an edit into a deletion
@@ -305,19 +368,28 @@ export function TransactionDialog({
         })
         return
       }
-      result = await updateTransactionRecurrence(
-        series.id,
-        toRecurrenceInput(v, v.repeat, data.amount),
+      const repeat = v.repeat
+      result = await tryWrite(() =>
+        updateTransactionRecurrence(
+          series.id,
+          toRecurrenceInput(v, repeat, data.amount),
+        ),
       )
     } else if (isEdit) {
-      result = await updateTransaction(transaction.id, data)
+      result = await tryWrite(() => updateTransaction(transaction.id, data))
     } else if (v.repeat === "none") {
-      result = await createTransaction(data)
+      result = await tryWrite(() => createTransaction(data))
     } else {
-      result = await createTransactionRecurrence(
-        toRecurrenceInput(v, v.repeat, data.amount),
+      const repeat = v.repeat
+      result = await tryWrite(() =>
+        createTransactionRecurrence(toRecurrenceInput(v, repeat, data.amount)),
       )
     }
+
+    // Nothing came back: the server is unreachable and `tryWrite` has said so. The dialog
+    // stays open holding every value that was typed into it, so the answer to the network
+    // coming back is Save again rather than type it all again.
+    if (!result) return
 
     if (!result.ok) {
       if (result.fieldErrors) {
@@ -411,7 +483,10 @@ export function TransactionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={onSubmit}>
+        {/* `noValidate`: `dialogSchema` above covers every constraint these inputs carry
+            — the amount's floor, its decimals, the date's month — and says each in the
+            app's own words. Left on, the browser answers first (T42). */}
+        <form onSubmit={onSubmit} noValidate>
           <FieldGroup>
             {isRecurring && (
               <Field>

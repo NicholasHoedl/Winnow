@@ -3,6 +3,8 @@
 import * as React from "react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
+
 import { deleteEntry, logEntry } from "./actions"
 
 /** Enough to log a habit and to name what was logged. Every card shape satisfies it. */
@@ -66,17 +68,15 @@ export function useLogHabit(): {
       }
       // The title alone stays the toast's headline — four e2e specs read it, and the
       // amount is the thing you just typed, so it is confirmation rather than news.
-      toast(`Logged ${habit.title}`, {
-        description: amount === undefined ? undefined : `+${amount}`,
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undone = await deleteEntry(result.entryId)
-              if (!undone.ok) toast.error(undone.error)
-            }),
-        },
-      })
+      undoToast(
+        `Logged ${habit.title}`,
+        () =>
+          startTransition(async () => {
+            const undone = await deleteEntry(result.entryId)
+            if (!undone.ok) toast.error(undone.error)
+          }),
+        { description: amount === undefined ? undefined : `+${amount}` },
+      )
     })
   }, [])
 

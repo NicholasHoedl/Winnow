@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
 import { parseTaskCapture, type ListOption } from "@/modules/todos/service"
-import { restoreIfEmpty } from "@/lib/forms"
+import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import { todayInZone } from "@/lib/date"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { useCreateIntent } from "@/components/create/create-intent"
@@ -57,12 +57,20 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
     setText("")
 
     startTransition(async () => {
-      const result = await createTask({
-        title,
-        dueDate,
-        dueKind: parsed.dueKind,
-        listId,
-      })
+      const result = await tryWrite(() =>
+        createTask({
+          title,
+          dueDate,
+          dueKind: parsed.dueKind,
+          listId,
+        }),
+      )
+      // Nothing came back: the server is unreachable and `tryWrite` has said so. The
+      // line goes back in the box rather than into the void.
+      if (!result) {
+        setText(restoreIfEmpty(trimmed))
+        return
+      }
       if (result.ok) {
         toast.success(`Added “${title}”`, {
           description: `${parsed.dueKind === "by" ? "Due by" : "Due"} ${formatDue(

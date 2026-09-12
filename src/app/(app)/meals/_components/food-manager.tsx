@@ -21,6 +21,7 @@ import {
 } from "@/modules/meals/reference-foods"
 import { foodInputSchema } from "@/modules/meals/validation"
 import { numberField } from "@/lib/forms"
+import { undoToast } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -179,16 +180,12 @@ export function FoodManager({
         return
       }
       const restorable = result.food ?? food
-      toast("Food deleted", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreFood(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Food deleted", () =>
+        startTransition(async () => {
+          const restored = await restoreFood(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

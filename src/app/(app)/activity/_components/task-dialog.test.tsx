@@ -134,7 +134,7 @@ describe("TaskDialog", () => {
   })
 
   it("sends a new one-off to createTask", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
     show()
 
     fireEvent.change(screen.getByLabelText("Title"), {
@@ -147,7 +147,7 @@ describe("TaskDialog", () => {
   })
 
   it("sends the due kind the toggle says", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
     show()
 
     fireEvent.change(screen.getByLabelText("Title"), {
@@ -258,7 +258,7 @@ describe("TaskDialog", () => {
   // Tesler: `/activity?goal=…` has already said which goal this work belongs to, so the
   // dialog fills that in rather than asking again.
   it("opens it pre-linked when the page is filtered by a goal", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
     show({ goals: GOALS, events: EVENTS, initialGoalId: "goal-1" })
 
     expect(screen.getByLabelText("Goal")).toBeVisible()

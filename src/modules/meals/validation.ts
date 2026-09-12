@@ -5,7 +5,15 @@ import { isValidDateString } from "@/lib/date"
 import { MEAL_TYPES } from "./service"
 
 // Form number inputs use `valueAsNumber`, so values arrive as numbers already.
-const macroNumber = z.number().min(0, "Must be 0 or more").max(100000)
+//
+// Both bounds carry a message because both are reachable by a slipped keystroke in the
+// log dialog, the food library and the saved meal editor — and without one the ceiling
+// answered "Too big: expected number to be <=100000", which is a sentence about the
+// program rather than about the food.
+const macroNumber = z
+  .number()
+  .min(0, "Must be 0 or more")
+  .max(100000, "That's higher than any food goes")
 
 /**
  * A micronutrient: a number, or null for "unknown" — see the schema comment for why
@@ -17,13 +25,22 @@ const macroNumber = z.number().min(0, "Must be 0 or more").max(100000)
 const microNumber = z
   .number()
   .min(0, "Must be 0 or more")
-  .max(100000)
+  .max(100000, "That's higher than any food goes")
   .nullable()
   .optional()
 
 // Optional so the library form, which has no barcode field, doesn't clear an imported
 // food's barcode on edit (drizzle's .set() skips undefined).
 const barcodeField = z.string().trim().max(32).nullable().optional()
+
+/** How many of it. Bounded so a typed "1000" can't swamp a day's totals. */
+const servingsField = z
+  .number()
+  .positive("Servings must be more than 0")
+  .max(10000, "That's too many servings")
+
+/** A library food the picker offered and something else deleted since. */
+const foodIdField = z.string().uuid("Unknown food")
 
 const microFields = {
   fiberG: microNumber,
@@ -56,12 +73,12 @@ export const mealEntryInputSchema = z.object({
   // Carried through to the food row when saveToLibrary is set, so an imported product
   // keeps its barcode.
   barcode: barcodeField,
-  servings: z.number().positive("Servings must be more than 0").max(10000),
+  servings: servingsField,
   mealType: z.enum(MEAL_TYPES).or(z.literal("")).optional(),
   date: z
     .string()
     .refine((value) => isValidDateString(value), "Enter a valid date"),
-  foodId: z.string().uuid().or(z.literal("")).optional(),
+  foodId: foodIdField.or(z.literal("")).optional(),
   saveToLibrary: z.boolean().optional(),
 })
 export type MealEntryInput = z.infer<typeof mealEntryInputSchema>
@@ -216,7 +233,7 @@ export const SAVED_MEAL_MAX_ITEMS = 40
  * missing would land as a silent NULL, the failure restore.ts exists to prevent.
  */
 const savedMealItemSchema = z.object({
-  foodId: z.string().uuid().nullable(),
+  foodId: foodIdField.nullable(),
   name: z.string().trim().min(1, "Name is required").max(200),
   servingLabel: z.string().trim().min(1, "Serving is required").max(100),
   calories: macroNumber,
@@ -224,7 +241,7 @@ const savedMealItemSchema = z.object({
   carbsG: macroNumber,
   fatG: macroNumber,
   ...restoredMicros,
-  servings: z.number().positive("Servings must be more than 0").max(10000),
+  servings: servingsField,
 })
 
 export const savedMealInputSchema = z.object({

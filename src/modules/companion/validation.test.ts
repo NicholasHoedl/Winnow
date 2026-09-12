@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest"
 import { z } from "zod"
 
 import {
+  appliedRowsSchema,
   generateSchema,
   goalPlanHabitSchema,
   goalPlanPayloadSchema,
   importPayloadSchema,
   importProposalPayloadSchema,
+  PLAN_CAPS,
   RECEIPT_IMAGE_MAX_BASE64,
   receiptReadingSchema,
   summaryPayloadSchema,
@@ -362,5 +364,58 @@ describe("generateSchema, receipt", () => {
         image: { ...image, data: "A".repeat(RECEIPT_IMAGE_MAX_BASE64 + 4) },
       }).success,
     ).toBe(false)
+  })
+})
+
+/**
+ * T42 (Pass 8): the undo receipt is posted back by the browser, so it is validated like
+ * any other input. Its caps are what an apply of each kind could possibly have created —
+ * a receipt claiming twenty-one milestones did not come from this app.
+ */
+describe("appliedRowsSchema", () => {
+  const UUID = "00000000-0000-4000-8000-000000000000"
+  const empty = {
+    milestoneIds: [],
+    habitIds: [],
+    taskIds: [],
+    routineIds: [],
+    transactionIds: [],
+  }
+
+  it("accepts what one apply can make", () => {
+    const parsed = appliedRowsSchema.safeParse({
+      ...empty,
+      milestoneIds: [UUID],
+      routineIds: [UUID],
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it("refuses more rows than an apply could have created", () => {
+    expect(
+      appliedRowsSchema.safeParse({
+        ...empty,
+        milestoneIds: Array(PLAN_CAPS.milestones + 1).fill(UUID),
+      }).success,
+    ).toBe(false)
+    // One apply makes at most one routine.
+    expect(
+      appliedRowsSchema.safeParse({ ...empty, routineIds: [UUID, UUID] })
+        .success,
+    ).toBe(false)
+  })
+
+  it("refuses an id that is not one", () => {
+    expect(
+      appliedRowsSchema.safeParse({ ...empty, taskIds: ["nope"] }).success,
+    ).toBe(false)
+  })
+
+  // A goal is never CREATED by an apply — a plan attaches to one that exists — so there is
+  // no goal id to hand back, and an undo can never reach the goal itself.
+  it("takes no goal id, whatever is posted", () => {
+    const parsed = appliedRowsSchema.safeParse({ ...empty, goalId: UUID })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) expect(parsed.data).not.toHaveProperty("goalId")
   })
 })

@@ -5,7 +5,12 @@ import { and, desc, eq, inArray, lte, sql } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
-import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import {
+  type ActionFailure,
+  type ActionResult,
+  invalid,
+  nullify,
+} from "@/lib/action-result"
 import { addDays, todayInZone } from "@/lib/date"
 import { cyclesInRange, periodEnd } from "@/lib/recurrence"
 import { revalidateHubs } from "@/lib/revalidate"
@@ -124,7 +129,16 @@ export async function deleteCategory(id: unknown): Promise<ActionResult> {
 
 // --- Transactions ---
 
-export async function createTransaction(input: unknown): Promise<ActionResult> {
+/**
+ * Carries the new transaction's id, the way `createRoutine` and `createHabit` do:
+ * applying an extracted statement creates a row per line and then has to be able to take
+ * exactly those rows back (T42).
+ */
+export type CreateTransactionResult = { ok: true; id: string } | ActionFailure
+
+export async function createTransaction(
+  input: unknown,
+): Promise<CreateTransactionResult> {
   const userId = await requireUserId()
   const parsed = transactionInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
@@ -135,17 +149,20 @@ export async function createTransaction(input: unknown): Promise<ActionResult> {
   if (categoryError) return { ok: false, error: categoryError }
 
   const { currency } = await getUserPreferences()
-  await db.insert(transactions).values({
-    userId,
-    amountCents: amountToMinor(amount, currency),
-    type,
-    date,
-    categoryId: category,
-    payee: nullify(payee),
-    description: nullify(description),
-  })
+  const [created] = await db
+    .insert(transactions)
+    .values({
+      userId,
+      amountCents: amountToMinor(amount, currency),
+      type,
+      date,
+      categoryId: category,
+      payee: nullify(payee),
+      description: nullify(description),
+    })
+    .returning({ id: transactions.id })
   revalidateBudget()
-  return { ok: true }
+  return { ok: true, id: created.id }
 }
 
 export async function updateTransaction(

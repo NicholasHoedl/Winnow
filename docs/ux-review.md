@@ -35,7 +35,7 @@ the daily driver until then.
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Done 2026-09-12 |
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Done 2026-09-12 |
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Done 2026-09-12 |
-| 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Not started     |
+| 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Done 2026-09-12 |
 | 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Not started     |
 | 10  | Feel        | Progress and endings              | Goal-gradient effect + peak-end rule  | Light  | Not started     |
 
@@ -344,24 +344,58 @@ Still filed: the budget quick-add bar writes no payee (its text is the descripti
 budgets page's total label is wider than its text; the appearance page auto-saves where six
 pages have Save; the plan review dialog edits through small inline inputs.
 
-### Pass 8: mistakes
+### Pass 8: mistakes — done 2026-09-12 (T42)
 
-- Keep: undo toasts after deletes across the app; confirmation before deletes that take other
-  data with them, such as a category and its budgets.
-- Look at: applying an AI proposal creates its rows with no undo.
-- Look at (Pass 2): the budgets form seeds itself from server props in an effect whose
-  dependencies are new arrays on every render, so it re-seeds on any re-render and can put
-  a figure back over one being typed. `budgets-page.spec.ts` waits around it.
-- Look at (Pass 6): a calendar event chip is 18 px tall inside a day cell that is itself a
-  target, the one target-spacing failure in the app, so a tap meant for the event can open
-  the day's create dialog instead.
-- Look at (Pass 7): the browser answers before the app does. `0` or `1.5` in a habit's "How
-  often", `-12` in an amount and a transaction date outside the viewed month all get the
-  browser's bubble in the browser's words, and the app's own messages ("At least one",
-  "Whole sessions only", "Must be 0 or more") never show. `noValidate` would make zod the one
-  voice, but the transaction date's month fence lives only in the input's `min` and `max`.
-- Look at (Pass 7): a weight of `72,5` saves as 725 lb; the 20 to 1500 lb bound is wide
-  enough to swallow a typo. A meals line that half-parses is logged rather than questioned.
+Catalogued every destructive action and what protects it, every failure path and its
+wording, every place typed input can be lost, and every bound and who enforces it; then
+probed each in the browser, deletes with a stopwatch on the Undo, the network off, dialogs
+dismissed mid-entry, forms double-submitted; against error prevention (the wrong action is
+hard, and a delete that takes other data is confirmed) and error recovery (an undo where
+the neighbours have one, plain messages, nothing typed thrown away).
+
+Fixed:
+
+- Deleting a calendar cascade-deleted its events with nothing in the way, and deleting a
+  list unfiled its tasks in silence, where the categories page confirms and names what goes.
+  Both confirm, naming the count. A weigh-in delete had no Undo while the water card beside
+  it did; it has one.
+- Applying an AI proposal created its rows with no undo, no confirm and no word, and a
+  failure part-way left the rows that landed with the panel still showing the plan and Apply
+  answering "already been dealt with". Apply returns what it created, says so, and offers an
+  Undo that removes exactly those rows, on success and on a partial failure alike.
+- A failed write with the network off replaced the whole route with its loading error and
+  threw the typed line away, on the Activity and Meals pages alike, and did not recover when
+  the network returned. Every capture bar and daily dialog runs its write through one helper
+  that catches the failure, says "Couldn't reach the app's own server. Nothing was saved."
+  and keeps what was typed.
+- The browser's validation bubble answered before the app on the daily fields, in its own
+  words and an American date format on an app with Region settings, while the app's own
+  messages went unshown. The habit and transaction dialogs, the two whose fields carried
+  browser-only rules, validate through their schemas alone; the transaction date's month
+  fence and the amount's two-decimal step, which lived only in the inputs, are rules with
+  plain messages ("Pick a date in September 2026").
+- Zod's default text reached the user where a rule had no message ("Too big: expected number
+  to be <=100000", "Invalid UUID"); the macro, servings, payee, description, amount ceiling
+  and id rules speak plainly, as "Enter an amount" already did. The categories page's name
+  and description caps still carry zod's words, a rare page left for another day.
+- Undo toasts ran on sonner's default 4 seconds, measured 4.4, the shortest window in the
+  app and a default nobody chose; toasts carrying an Undo stay 8. The routines page's drag
+  reorder was the one optimistic write without `useWriteGuard`; it has it.
+
+Kept, with reasons: every event-delete path and its two undo shapes; the goal-delete
+dialog's practice choice; the typed-word confirmations on clear-all and restore, and the
+import that validates before it deletes; the feed-token confirm; copy last month being
+non-destructive by construction; the capture bars keeping their text and clearing at once so
+a burst cannot double-post (measured: one row); every form keeping its values on a failed
+submit; the double-submit guard on all 35 submit buttons; the subtask delete's documented
+no-undo. The weight bound (20 to 1500 lb) stays: 725 is a typo the app cannot tell from a
+reading, and a narrower bound would refuse real ones. The budgets form re-seed filed by Pass
+2 did not reproduce: its props come through a `useMemo`, and the page only revalidates on
+Save and Copy, which want the re-seed.
+
+Asked, and open: whether Escape and a backdrop tap should discard a half-typed dialog
+without a word (24 dialogs; the narrower version keeps Escape and makes only the backdrop
+non-dismissive on the long forms).
 
 ### Pass 9: speed and feedback
 
@@ -370,6 +404,10 @@ pages have Save; the plan review dialog edits through small inline inputs.
 - Look at: an AI request can run for up to 90 seconds with only "Reading…" on its button.
 - Look at (Pass 7): the Activity page's quick-add bar is the one capture bar with no success
   feedback; the row appears and nothing else says so.
+- Look at (Pass 8): the route error boundary's "Try again" neither resubmits nor notices the
+  network returning; before T42 a failed write cost a full route re-render.
+- Keep (Pass 8): the transaction dialog's Add stays disabled above the initial-posts cap with
+  a line saying why, the bound the other forms could copy.
 - Measure on a production build, never the dev server. Targets: Interaction to Next Paint of
   200 ms or less; Doherty's original threshold was 400 ms.
 
@@ -385,6 +423,9 @@ pages have Save; the plan review dialog edits through small inline inputs.
   sentence saying what a saved meal is for.
 - Look at (Pass 7): `+500 #bonus` in the budget bar toasts "Added transaction" because the
   line is all amount and tag, where a line with words toasts them.
+- Look at (Pass 8): applying a plan used to end with the previous toast ("Goal added") still on
+  screen, so the ending read as the wrong action's; T42's apply toast now follows it. Check
+  the order reads right.
 
 ## Screens and dialogs
 

@@ -27,7 +27,7 @@ import {
   type QuickPickFood,
 } from "@/modules/meals/service"
 import { mealEntryInputSchema } from "@/modules/meals/validation"
-import { numberField } from "@/lib/forms"
+import { numberField, tryWrite } from "@/lib/forms"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -331,9 +331,14 @@ export function LogFoodDialog({
 
   const onSubmit = handleSubmit(async (data) => {
     const payload = { ...data, date: isEdit ? entry.date : date }
-    const result = isEdit
-      ? await updateMealEntry(entry.id, payload)
-      : await logMeal(payload)
+    const result = await tryWrite(() =>
+      isEdit ? updateMealEntry(entry.id, payload) : logMeal(payload),
+    )
+
+    // Nothing came back: the server is unreachable and `tryWrite` has said so. The dialog
+    // stays open holding every value that was typed into it, so the answer to the network
+    // coming back is Save again rather than type it all again.
+    if (!result) return
 
     if (!result.ok) {
       if (result.fieldErrors) {

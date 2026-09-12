@@ -1,6 +1,15 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { numberField, optionalNumberField, restoreIfEmpty } from "./forms"
+const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
+vi.mock("sonner", () => ({ toast }))
+
+import {
+  numberField,
+  optionalNumberField,
+  restoreIfEmpty,
+  tryWrite,
+  UNREACHABLE_MESSAGE,
+} from "./forms"
 
 describe("restoreIfEmpty", () => {
   it("puts a failed entry back when the field is untouched", () => {
@@ -37,5 +46,40 @@ describe("optionalNumberField", () => {
   it("keeps a real zero distinct from absent", () => {
     expect(optionalNumberField.setValueAs("0")).toBe(0)
     expect(optionalNumberField.setValueAs("2.5")).toBe(2.5)
+  })
+})
+
+describe("tryWrite", () => {
+  beforeEach(() => {
+    toast.error.mockReset()
+  })
+
+  it("hands back whatever the action returned, and says nothing", async () => {
+    const result = await tryWrite(async () => ({ ok: true as const, id: "t1" }))
+
+    expect(result).toEqual({ ok: true, id: "t1" })
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  // A failure the ACTION returns is the action's to explain — it may belong on a field.
+  it("leaves a typed failure alone", async () => {
+    const failure = { ok: false as const, error: "Pick a category." }
+    const result = await tryWrite(async () => failure)
+
+    expect(result).toBe(failure)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  // The case it exists for: the fetch behind a Server Action rejects with the network
+  // off. Unhandled, that rejection replaces the whole route with its error boundary and
+  // takes the typed text with it.
+  it("turns a dropped connection into a message, not a thrown page", async () => {
+    const result = await tryWrite(async () => {
+      throw new TypeError("Failed to fetch")
+    })
+
+    expect(result).toBeNull()
+    expect(toast.error).toHaveBeenCalledWith(UNREACHABLE_MESSAGE)
+    expect(UNREACHABLE_MESSAGE).toMatch(/nothing was saved/i)
   })
 })

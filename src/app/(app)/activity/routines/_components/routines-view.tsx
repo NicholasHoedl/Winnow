@@ -4,6 +4,7 @@ import * as React from "react"
 import { MoreVertical, Pencil, Play, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
 import type { ProposalRow } from "@/modules/companion/queries"
 import {
   deleteRoutine,
@@ -19,6 +20,7 @@ import type {
 import { offsetLabel } from "@/modules/routines/service"
 import { SortableList } from "@/components/shared/sortable-list"
 import { useCreateFlag } from "@/components/shared/use-create-flag"
+import { useWriteGuard } from "@/components/shared/use-write-guard"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -96,7 +98,11 @@ function RoutineCard({
   const [editingItem, setEditingItem] = React.useState<RoutineItemRow | null>(
     null,
   )
-  const [, startTransition] = React.useTransition()
+  // `isPending` is wanted: it is true exactly while an optimistic write is open, which is
+  // the window a hard navigation would throw away. The reorder below is the same shape
+  // the other three drag surfaces guard, and this one was the odd surface out (T42).
+  const [writing, startTransition] = React.useTransition()
+  useWriteGuard(writing)
   // Reverts to the server's order automatically when the transition settles, so a
   // rejected reorder can't leave the list showing something that wasn't saved.
   const [items, setItems] = React.useOptimistic(routine.items)
@@ -123,16 +129,12 @@ function RoutineCard({
         return
       }
       const restorable = result.item ?? item
-      toast("Task removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreRoutineItem(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Task removed", () =>
+        startTransition(async () => {
+          const restored = await restoreRoutineItem(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

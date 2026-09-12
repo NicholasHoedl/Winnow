@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import { copyDay, deleteMealEntries } from "@/modules/meals/actions"
 import { addDays } from "@/lib/date"
+import { undoToast } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -58,20 +59,15 @@ export function CopyDayDialog({
       }
       const ids = result.entryIds
       onOpenChange(false)
-      toast(
+      undoToast(
         `Copied ${result.copied} ${result.copied === 1 ? "entry" : "entries"}`,
-        {
-          action: {
-            label: "Undo",
-            onClick: () =>
-              startTransition(async () => {
-                // Deletes exactly what this copy created, so an undo can't take out
-                // entries that were already on the day.
-                const undone = await deleteMealEntries(ids)
-                if (!undone.ok) toast.error(undone.error)
-              }),
-          },
-        },
+        () =>
+          startTransition(async () => {
+            // Deletes exactly what this copy created, so an undo can't take out
+            // entries that were already on the day.
+            const undone = await deleteMealEntries(ids)
+            if (!undone.ok) toast.error(undone.error)
+          }),
       )
     })
   }

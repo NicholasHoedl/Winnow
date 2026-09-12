@@ -4,6 +4,7 @@
 import { dayDiff, dowOf } from "@/lib/date"
 
 import type {
+  AppliedRows,
   GoalPlanPayload,
   ImportRow,
   Receipt,
@@ -1143,4 +1144,50 @@ export function receiptWarnings(receipt: Receipt): ReceiptWarning[] {
     })
   }
   return warnings
+}
+
+/**
+ * "a task" rather than "1 task": the count matters when there are several and only gets
+ * in the way when there is one.
+ */
+function countPhrase(count: number, noun: string): string {
+  if (count === 1) return `${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun}`
+  return `${count} ${noun}s`
+}
+
+/**
+ * What an apply created, as one sentence — "Added 2 milestones, 2 habits and a task".
+ *
+ * The counterpart of the "Creates N…" line the panel shows beside Apply, and deliberately
+ * the same arithmetic read back: the promise was made in that line, and this is the app
+ * keeping it out loud. Until T42 applying said nothing at all, which left the user to go
+ * and check whether a dozen rows had appeared.
+ */
+export function describeCreated(created: AppliedRows): string {
+  const parts = [
+    [created.milestoneIds.length, "milestone"],
+    [created.habitIds.length, "habit"],
+    [created.taskIds.length, "task"],
+    [created.routineIds.length, "routine"],
+    [created.transactionIds.length, "transaction"],
+  ] as const
+  const phrases = parts
+    .filter(([count]) => count > 0)
+    .map(([count, noun]) => countPhrase(count, noun))
+  if (phrases.length === 0) return "Nothing was added"
+  // "a, b and c" — an Oxford comma would be the only one in the app's copy.
+  const last = phrases[phrases.length - 1]
+  const rest = phrases.slice(0, -1)
+  return `Added ${rest.length === 0 ? last : `${rest.join(", ")} and ${last}`}`
+}
+
+/** How many rows an apply made, for deciding whether there is anything to undo. */
+export function countCreated(created: AppliedRows): number {
+  return (
+    created.milestoneIds.length +
+    created.habitIds.length +
+    created.taskIds.length +
+    created.routineIds.length +
+    created.transactionIds.length
+  )
 }

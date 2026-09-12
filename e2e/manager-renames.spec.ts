@@ -42,7 +42,13 @@ test("a list can be renamed, and keeps its tasks", async ({ page }) => {
   // holding the name that was just saved.
   await expect(page.getByLabel("New list name")).toHaveValue("")
 
+  // Deleting a list confirms first since T42: its tasks are unfiled rather than deleted,
+  // and the sentence says how many. `alertdialog`, which `getByRole("dialog")` misses.
   await page.getByRole("button", { name: `Delete ${after}` }).click()
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete list" })
+    .click()
   await expect(page.getByText(after, { exact: true })).toHaveCount(0)
 })
 

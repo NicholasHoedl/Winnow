@@ -4,6 +4,7 @@ import * as React from "react"
 import { toast } from "sonner"
 
 import { isValidDateString } from "@/lib/date"
+import { undoToast } from "@/lib/toast"
 import { runRoutine, undoRoutineRun } from "@/modules/routines/actions"
 import type { RoutineWithItems } from "@/modules/routines/queries"
 import { previewRun } from "@/modules/routines/service"
@@ -77,16 +78,15 @@ export function RunRoutineDialog({
       }
       const { taskIds, count } = result
       onOpenChange(false)
-      toast.success(`Added ${count} ${count === 1 ? "task" : "tasks"}`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undone = await undoRoutineRun(taskIds)
-              if (!undone.ok) toast.error(undone.error)
-            }),
-        },
-      })
+      undoToast(
+        `Added ${count} ${count === 1 ? "task" : "tasks"}`,
+        () =>
+          startTransition(async () => {
+            const undone = await undoRoutineRun(taskIds)
+            if (!undone.ok) toast.error(undone.error)
+          }),
+        { variant: "success" },
+      )
     })
   }
 

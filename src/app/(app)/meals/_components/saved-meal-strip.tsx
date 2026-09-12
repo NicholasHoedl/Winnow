@@ -4,6 +4,7 @@ import * as React from "react"
 import { Utensils } from "lucide-react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
 import { deleteMealEntries, logSavedMeal } from "@/modules/meals/actions"
 import type { SavedMeal } from "@/modules/meals/queries"
 import { sumMacros } from "@/modules/meals/service"
@@ -38,17 +39,17 @@ export function SavedMealStrip({
         return
       }
       const ids = result.entryIds
-      toast(`Logged ${result.name}`, {
-        description: `${result.count} ${result.count === 1 ? "item" : "items"}`,
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undone = await deleteMealEntries(ids)
-              if (!undone.ok) toast.error(undone.error)
-            }),
+      undoToast(
+        `Logged ${result.name}`,
+        () =>
+          startTransition(async () => {
+            const undone = await deleteMealEntries(ids)
+            if (!undone.ok) toast.error(undone.error)
+          }),
+        {
+          description: `${result.count} ${result.count === 1 ? "item" : "items"}`,
         },
-      })
+      )
     })
   }
 

@@ -4,6 +4,7 @@ import * as React from "react"
 import { Pencil, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { undoToast } from "@/lib/toast"
 import { deleteSavedMeal, restoreSavedMeal } from "@/modules/meals/actions"
 import type { SavedMeal } from "@/modules/meals/queries"
 import { MEAL_LABELS, sumMacros } from "@/modules/meals/service"
@@ -47,16 +48,12 @@ export function SavedMealsDialog({
         return
       }
       const restorable = result.meal ?? meal
-      toast(`Deleted “${meal.name}”`, {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreSavedMeal(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast(`Deleted “${meal.name}”`, () =>
+        startTransition(async () => {
+          const restored = await restoreSavedMeal(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 

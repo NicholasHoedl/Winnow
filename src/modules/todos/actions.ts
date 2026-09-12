@@ -7,7 +7,12 @@ import { z } from "zod"
 import { db } from "@/db"
 import { events } from "@/modules/calendar/schema"
 import { goals } from "@/modules/goals/schema"
-import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import {
+  type ActionFailure,
+  type ActionResult,
+  invalid,
+  nullify,
+} from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
 import { currentCycle } from "@/lib/recurrence"
 import { revalidateHubs } from "@/lib/revalidate"
@@ -101,7 +106,13 @@ async function checkTaskLinks(
 
 // --- Tasks ---
 
-export async function createTask(input: unknown): Promise<ActionResult> {
+/**
+ * Carries the new task's id, the way `createRoutine` and `createHabit` do: applying an AI
+ * plan creates setup tasks and then has to be able to take exactly those back (T42).
+ */
+export type CreateTaskResult = { ok: true; id: string } | ActionFailure
+
+export async function createTask(input: unknown): Promise<CreateTaskResult> {
   const userId = await requireUserId()
   const parsed = taskInputSchema.safeParse(input)
   if (!parsed.success) return invalid(parsed.error)
@@ -116,18 +127,21 @@ export async function createTask(input: unknown): Promise<ActionResult> {
   const linkError = await checkTaskLinks(userId, links)
   if (linkError) return { ok: false, error: linkError }
 
-  await db.insert(tasks).values({
-    userId,
-    title,
-    notes: nullify(notes),
-    dueDate: nullify(dueDate),
-    dueKind,
-    priority,
-    ...links,
-  })
+  const [created] = await db
+    .insert(tasks)
+    .values({
+      userId,
+      title,
+      notes: nullify(notes),
+      dueDate: nullify(dueDate),
+      dueKind,
+      priority,
+      ...links,
+    })
+    .returning({ id: tasks.id })
 
   revalidateTaskViews()
-  return { ok: true }
+  return { ok: true, id: created.id }
 }
 
 export async function updateTask(

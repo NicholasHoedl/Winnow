@@ -4,13 +4,17 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-import { applyProposal, discardProposal } from "./actions"
+import { undoToast } from "@/lib/toast"
+
+import { applyProposal, discardProposal, undoApply } from "./actions"
 import type { ProposalRow } from "./queries"
+import { countCreated, describeCreated } from "./service"
 import {
   goalPlanPayloadSchema,
   importProposalPayloadSchema,
   routinePayloadSchema,
   summaryPayloadSchema,
+  type AppliedRows,
   type GoalPlanPayload,
   type ImportProposalPayload,
   type RoutinePayload,
@@ -216,6 +220,31 @@ export function useProposal({
     toast.success("Marked as read")
   }, [discard])
 
+  /**
+   * Take back exactly the rows one apply created.
+   *
+   * The proposal stays applied — see `undoApply` — so the toast says that rather than
+   * leaving the user to discover it by looking for a panel that is not coming back.
+   */
+  const undoApplied = React.useCallback(
+    (created: AppliedRows) => {
+      setBusy(true)
+      void undoApply(created)
+        .then((result) => {
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          toast.success("Undone", {
+            description: "Ask again if you want the proposal back.",
+          })
+          router.refresh()
+        })
+        .finally(() => setBusy(false))
+    },
+    [router],
+  )
+
   const apply = React.useCallback(
     (finalized: AppliablePayload) => {
       if (!active) return
@@ -223,11 +252,37 @@ export function useProposal({
       void applyProposal({ id: active.id, ...finalized })
         .then((result) => {
           if (!result.ok) {
+            // A failure PART WAY still created rows. The proposal is claimed before any
+            // write (deliberately, against a double apply), so Apply now answers "already
+            // been dealt with" and the panel is a dead end — it is cleared, what did land
+            // is named, and the same way back is offered for it.
+            const partial = result.created
+            if (partial && countCreated(partial) > 0) {
+              setActive(null)
+              setPayload(null)
+              undoToast(result.error, () => undoApplied(partial), {
+                variant: "error",
+                description: `${describeCreated(partial)} before it stopped.`,
+              })
+              router.refresh()
+              return
+            }
             toast.error(result.error)
             return
           }
           setActive(null)
           setPayload(null)
+          // Applying used to end in silence: the panel closed and a dozen rows appeared
+          // across four pages with not a word (T42). The sentence is the "Creates N…"
+          // line the panel showed beside Apply, read back as what happened.
+          if (countCreated(result.created) === 0) {
+            toast.success("Nothing was added")
+          } else {
+            const made = result.created
+            undoToast(describeCreated(made), () => undoApplied(made), {
+              variant: "success",
+            })
+          }
           if (onApplied) {
             onApplied(finalized)
           } else {
@@ -239,7 +294,7 @@ export function useProposal({
         })
         .finally(() => setBusy(false))
     },
-    [active, onApplied, router],
+    [active, onApplied, router, undoApplied],
   )
 
   return {

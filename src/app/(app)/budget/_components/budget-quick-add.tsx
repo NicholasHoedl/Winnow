@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTransaction } from "@/modules/budget/actions"
-import { restoreIfEmpty } from "@/lib/forms"
+import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import type { Category } from "@/modules/budget/queries"
 import {
   parseTransactionQuickAdd,
@@ -68,7 +68,15 @@ export function BudgetQuickAdd({
     setText("")
 
     startTransition(async () => {
-      const result = await createTransaction({ ...parsed, categoryId, date })
+      const result = await tryWrite(() =>
+        createTransaction({ ...parsed, categoryId, date }),
+      )
+      // Nothing came back: the server is unreachable and `tryWrite` has said so. The
+      // line goes back in the box rather than into the void.
+      if (!result) {
+        setText(restoreIfEmpty(trimmed))
+        return
+      }
       if (!result.ok) {
         toast.error(result.error)
         setText(restoreIfEmpty(trimmed))

@@ -1,3 +1,5 @@
+import { toast } from "sonner"
+
 /**
  * React Hook Form `register` options for a numeric input where an empty value
  * means 0 (rather than NaN, which `valueAsNumber` produces and which then trips
@@ -67,4 +69,38 @@ export const requiredNumberField = {
  */
 export function restoreIfEmpty(submitted: string) {
   return (current: string) => (current === "" ? submitted : current)
+}
+
+/**
+ * What the app says when its own server cannot be reached.
+ *
+ * The same sentence `use-proposal.ts` already says when a generation cannot reach it,
+ * with "created" swapped for "saved" — these are writes. Two facts, because a person
+ * with a dropped connection needs both: why nothing happened, and that nothing happened.
+ */
+export const UNREACHABLE_MESSAGE =
+  "Couldn’t reach the app’s own server. Nothing was saved."
+
+/**
+ * Run a server write so a dropped connection cannot take the page down with it.
+ *
+ * `startTransition(async () => { await action() })` has no catch. A Server Action is a
+ * `fetch` underneath, and with the network off that fetch REJECTS rather than returning
+ * a typed failure — so the rejection escapes the transition, React hands the whole route
+ * to its error boundary, and the capture bar or dialog it was typed into is replaced by
+ * "Couldn't load your activity…". What was typed goes with it, and the page does not come
+ * back when the network does.
+ *
+ * So the throw is caught here, the app says the one sentence it has for this, and the
+ * caller gets `null` — "nothing came back, and the user has already been told". A failure
+ * the ACTION returns is passed straight through untouched: that one may belong on a
+ * field, and only the caller knows.
+ */
+export async function tryWrite<T>(run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run()
+  } catch {
+    toast.error(UNREACHABLE_MESSAGE)
+    return null
+  }
 }

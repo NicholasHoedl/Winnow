@@ -439,3 +439,23 @@ export const applyProposalSchema = z.discriminatedUnion("kind", [
   // queue. Leaving the arm out means a client asking to "apply" a summary fails
   // validation rather than reaching a branch that would have to do nothing.
 ])
+
+/**
+ * What one apply actually created, by kind — the receipt Undo needs (T42).
+ *
+ * A Server Action is a public RPC endpoint, so `undoApply`'s parameter type guards nothing
+ * at runtime and this is what does. Every array is bounded by what an apply of that kind
+ * could possibly have created: `PLAN_CAPS` for a plan's three lists, the import cap for a
+ * statement's rows, and one routine — its items cascade with it and are not listed.
+ *
+ * No goal id: a plan is applied TO a goal that already exists, and nothing an apply does
+ * creates one. Undoing must not be able to delete the goal itself.
+ */
+export const appliedRowsSchema = z.object({
+  milestoneIds: z.array(z.string().uuid()).max(PLAN_CAPS.milestones),
+  habitIds: z.array(z.string().uuid()).max(PLAN_CAPS.habits),
+  taskIds: z.array(z.string().uuid()).max(PLAN_CAPS.setupTasks),
+  routineIds: z.array(z.string().uuid()).max(1),
+  transactionIds: z.array(z.string().uuid()).max(100),
+})
+export type AppliedRows = z.infer<typeof appliedRowsSchema>

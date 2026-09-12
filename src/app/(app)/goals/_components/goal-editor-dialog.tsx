@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner"
 
 import { dueStatus } from "@/lib/date"
+import { undoToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import type { EventOption } from "@/modules/calendar/queries"
 import {
@@ -359,16 +360,12 @@ export function GoalEditorDialog({
         return
       }
       const restorable = result.milestone ?? milestone
-      toast("Milestone deleted", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreMilestone(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Milestone deleted", () =>
+        startTransition(async () => {
+          const restored = await restoreMilestone(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 
@@ -380,18 +377,18 @@ export function GoalEditorDialog({
         return
       }
       const restorable = result.task
-      toast("Task deleted", {
-        action: restorable
-          ? {
-              label: "Undo",
-              onClick: () =>
-                startTransition(async () => {
-                  const back = await restoreTask(restorable)
-                  if (!back.ok) toast.error(back.error)
-                }),
-            }
-          : undefined,
-      })
+      // No row came back — nothing to put back, so the toast carries no button it
+      // cannot honour.
+      if (!restorable) {
+        toast("Task deleted")
+        return
+      }
+      undoToast("Task deleted", () =>
+        startTransition(async () => {
+          const back = await restoreTask(restorable)
+          if (!back.ok) toast.error(back.error)
+        }),
+      )
     })
   }
 

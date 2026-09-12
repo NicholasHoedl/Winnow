@@ -16,6 +16,7 @@ import type { List, TaskWithSeries } from "@/modules/todos/queries"
 import { type DueKind, type Priority } from "@/modules/todos/validation"
 import { type ActionResult } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
+import { tryWrite } from "@/lib/forms"
 import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
@@ -303,20 +304,24 @@ export function TaskDialog({
 
   const onSubmit = handleSubmit(async () => {
     const v = getValues()
-    let result: ActionResult
+    let result: ActionResult | null
     if (isRecurring && scope === "series") {
-      result = await updateTaskRecurrence(
-        task!.series!.id,
-        toRecurrenceInput(v),
+      result = await tryWrite(() =>
+        updateTaskRecurrence(task!.series!.id, toRecurrenceInput(v)),
       )
     } else if (isEdit) {
       // A one-off task, or "This task" on a recurring instance — both edit the row.
-      result = await updateTask(task!.id, toTaskInput(v))
+      result = await tryWrite(() => updateTask(task!.id, toTaskInput(v)))
     } else if (v.repeat === "none") {
-      result = await createTask(toTaskInput(v))
+      result = await tryWrite(() => createTask(toTaskInput(v)))
     } else {
-      result = await createTaskRecurrence(toRecurrenceInput(v))
+      result = await tryWrite(() => createTaskRecurrence(toRecurrenceInput(v)))
     }
+
+    // Nothing came back: the server is unreachable and `tryWrite` has said so. The dialog
+    // stays open holding every value that was typed into it, so the answer to the network
+    // coming back is Save again rather than type it all again.
+    if (!result) return
 
     if (!result.ok) {
       if (result.fieldErrors) {

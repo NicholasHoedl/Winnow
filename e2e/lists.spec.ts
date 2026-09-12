@@ -2,7 +2,8 @@ import { test, expect, type Page } from "./_test"
 
 import { visibleCard } from "./_card"
 import { deleteListsMatching, seedList } from "./_lists"
-import { deleteTasksMatching } from "./_tasks"
+import { deleteTasksMatching, seedTask } from "./_tasks"
+import { noToast } from "./_toast"
 
 /**
  * Browser coverage for T26: lists are a VIEW, not only a picker.
@@ -69,6 +70,53 @@ test("#list files a captured task, and the Lists page counts and links to it", a
   await entry.getByRole("link", { name: LIST }).click()
   await expect(page).toHaveURL(new RegExp(`/activity\\?list=${listId}$`))
   await expect(visibleCard(page, title)).toHaveCount(1)
+})
+
+/**
+ * T42 (Pass 8): deleting a list was the quietest destructive button in the app — no
+ * confirm, no toast, no undo, and every task filed under it silently unfiled.
+ */
+test("deleting a list confirms first, and says its tasks stay", async ({
+  page,
+}) => {
+  const name = `E2E lists doomed ${STAMP}`
+  const listId = await seedList({ name })
+  // Two titles neither of which CONTAINS the other: `visibleCard` matches by substring,
+  // so "kept" and "kept two" would resolve to two cards for one assertion.
+  const kept = `${PREFIX} kept ${STAMP}`
+  const also = `${PREFIX} also ${STAMP}`
+  await seedTask({ title: kept, listId })
+  await seedTask({ title: also, listId })
+
+  await page.goto("/activity/lists")
+  const row = page.locator("li").filter({ hasText: name })
+  await expect(row).toContainText("2 open")
+
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+  const confirm = page.getByRole("alertdialog")
+  await expect(confirm).toContainText(
+    `“${name}” will be deleted. Its 2 open tasks stay, unfiled.`,
+  )
+
+  // Cancel keeps the list, and says nothing.
+  await confirm.getByRole("button", { name: "Cancel" }).click()
+  await expect(row).toContainText("2 open")
+  await noToast(page)
+
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete list" })
+    .click()
+  await expect(row).toHaveCount(0)
+
+  // The promise the sentence made: the tasks are still there, unfiled.
+  await expect(page.locator("li").filter({ hasText: "Unfiled" })).toContainText(
+    "open",
+  )
+  await page.goto("/activity")
+  await expect(visibleCard(page, kept)).toHaveCount(1)
+  await expect(visibleCard(page, also)).toHaveCount(1)
 })
 
 test("the dashboard's capture takes a #list beside the date", async ({

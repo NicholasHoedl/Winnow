@@ -69,7 +69,7 @@ describe("QuickAdd", () => {
   })
 
   it("looks busy while the write is in flight, and stays submittable", async () => {
-    const gate = deferred<{ ok: true }>()
+    const gate = deferred<{ ok: true; id: string }>()
     vi.mocked(createTask).mockReturnValue(gate.promise)
 
     renderBar()
@@ -87,13 +87,13 @@ describe("QuickAdd", () => {
     // The half that must never regress. See the note above this describe block.
     expect(button).not.toBeDisabled()
 
-    gate.resolve({ ok: true })
+    gate.resolve({ ok: true, id: "t1" })
     await waitFor(() => expect(button).not.toHaveAttribute("aria-busy", "true"))
     expect(button.querySelector("[data-pending]")).toBeNull()
   })
 
   it("clears the field synchronously, before the write resolves", async () => {
-    const gate = deferred<{ ok: true }>()
+    const gate = deferred<{ ok: true; id: string }>()
     vi.mocked(createTask).mockReturnValue(gate.promise)
 
     renderBar()
@@ -104,7 +104,7 @@ describe("QuickAdd", () => {
     // Empty already, with the action still unresolved — this is what lets a second Enter
     // inside the window submit nothing rather than resubmitting the first entry.
     expect(input.value).toBe("")
-    gate.resolve({ ok: true })
+    gate.resolve({ ok: true, id: "t1" })
     // No list: no tag was typed and no default is set, so the action is told so.
     await waitFor(() =>
       expect(createTask).toHaveBeenCalledWith({
@@ -129,7 +129,7 @@ describe("QuickAdd", () => {
   // T26: the bar files as it captures. The tag comes out of the title, and the id it
   // named goes to the action — the parsing itself is `parseListTag`'s unit test.
   it("files by a #list, with the tag taken out of the title", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
 
     renderBar({ lists: LISTS })
     const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
@@ -148,7 +148,7 @@ describe("QuickAdd", () => {
   // dashboard's turned "pay rent by friday" into a dated task; this one kept the date in
   // the title, where it read as part of the name and set nothing.
   it("takes a date out of the title and sends it as the due date", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
     const today = todayInZone(new Date(), DEFAULT_PREFERENCES.timeZone)
 
     renderBar()
@@ -170,7 +170,7 @@ describe("QuickAdd", () => {
   // today's: a line with no date in it still lands in Someday. See the comment in
   // `submit` — the dashboard bar assumes today, this one deliberately does not.
   it("still sends no due date when the line carries no date", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
 
     renderBar()
     const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
@@ -186,7 +186,7 @@ describe("QuickAdd", () => {
   })
 
   it("falls back to the default list when no tag was typed, and a tag wins over it", async () => {
-    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
     const other = { id: "22222222-2222-4222-8222-222222222222", name: "Work" }
 
     renderBar({ lists: [...LISTS, other], defaultListId: other.id })

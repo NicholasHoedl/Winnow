@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
 import { accentForSlot } from "@/lib/colors"
+import { undoToast } from "@/lib/toast"
 import {
   clearEventException,
   deleteEvent,
@@ -68,6 +69,7 @@ export function CalendarView({
   byDay,
   occurrences,
   calendars,
+  eventCounts,
 }: {
   view: CalendarViewKind
   /** The anchor date the view is showing — a day, a day within the week, or a day
@@ -82,6 +84,8 @@ export function CalendarView({
   byDay: Record<string, EventOccurrence[]>
   occurrences: EventOccurrence[]
   calendars: Calendar[]
+  /** Events per calendar id, for the manager's delete confirmation. */
+  eventCounts: Record<string, number>
 }) {
   const { weekStartsOn } = usePreferences()
   const locale = useDateLocale()
@@ -148,16 +152,12 @@ export function CalendarView({
         return
       }
       const restorable = result.event ?? event
-      toast("Event removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreEvent(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Event removed", () =>
+        startTransition(async () => {
+          const restored = await restoreEvent(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 
@@ -172,19 +172,15 @@ export function CalendarView({
         toast.error(result.error)
         return
       }
-      toast("Event skipped", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await clearEventException(
-                occ.seriesEvent.id,
-                occ.originalDate,
-              )
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Event skipped", () =>
+        startTransition(async () => {
+          const restored = await clearEventException(
+            occ.seriesEvent.id,
+            occ.originalDate,
+          )
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 
@@ -209,16 +205,12 @@ export function CalendarView({
         result.kind === "deleted"
           ? () => restoreEvent(result.event)
           : () => setSeriesEnd(occ.seriesEvent.id, result.previousEndDate)
-      toast("Removed from here on", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await undo()
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Removed from here on", () =>
+        startTransition(async () => {
+          const restored = await undo()
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 
@@ -441,6 +433,7 @@ export function CalendarView({
       />
       <CalendarManager
         calendars={calendars}
+        eventCounts={eventCounts}
         open={managerOpen}
         onOpenChange={setManagerOpen}
       />

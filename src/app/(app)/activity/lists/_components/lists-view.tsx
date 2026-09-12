@@ -8,10 +8,27 @@ import { toast } from "sonner"
 import { createList, deleteList, renameList } from "@/modules/todos/actions"
 import type { List, ListTaskCounts } from "@/modules/todos/queries"
 import { UNFILED } from "@/modules/todos/service"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 import { ActivityHeader } from "../../_components/activity-header"
+
+/**
+ * What deleting one does to the tasks filed under it, said before it happens.
+ *
+ * `tasks.list_id` is `ON DELETE SET NULL`, so nothing is destroyed — which is exactly why
+ * the sentence matters: the tasks MOVE, to Unfiled, and until T42 that happened on one
+ * click with no confirm, no toast and no undo. "open", because the open count is what the
+ * page loads and what the row beside this button is showing.
+ */
+function unfilingSentence(name: string, open: number): string {
+  if (open === 0) {
+    return `“${name}” will be deleted. No open task is filed under it.`
+  }
+  const tasks = open === 1 ? "1 open task stays" : `${open} open tasks stay`
+  return `“${name}” will be deleted. Its ${tasks}, unfiled.`
+}
 
 /**
  * Lists — create, rename, delete — as a page of the Activity section, and since T26 the
@@ -32,6 +49,7 @@ export function ListsView({
 }) {
   const [name, setName] = React.useState("")
   const [pending, startTransition] = React.useTransition()
+  const [confirmTarget, setConfirmTarget] = React.useState<List | null>(null)
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
@@ -68,10 +86,17 @@ export function ListsView({
   function remove(id: string) {
     startTransition(async () => {
       const result = await deleteList(id)
-      if (!result.ok) toast.error(result.error)
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
       // Deleting the list being edited would otherwise leave the form pointed at a row
       // that no longer exists, and submitting it would write to nothing in silence.
-      else if (editingId === id) cancelEdit()
+      if (editingId === id) cancelEdit()
+      // No Undo: restoring the list would not re-file the tasks it had, and a button
+      // that puts back half of what it promises is worse than none. The confirmation
+      // above is what this delete gets instead.
+      toast("List deleted")
     })
   }
 
@@ -171,7 +196,7 @@ export function ListsView({
                     size="icon-sm"
                     aria-label={`Delete ${list.name}`}
                     disabled={pending}
-                    onClick={() => remove(list.id)}
+                    onClick={() => setConfirmTarget(list)}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -181,6 +206,24 @@ export function ListsView({
           )}
         </ul>
       </div>
+
+      <ConfirmDialog
+        open={confirmTarget !== null}
+        onOpenChange={(next) => !next && setConfirmTarget(null)}
+        title="Delete this list?"
+        description={
+          confirmTarget
+            ? unfilingSentence(
+                confirmTarget.name,
+                counts.byList[confirmTarget.id] ?? 0,
+              )
+            : undefined
+        }
+        confirmLabel="Delete list"
+        onConfirm={() => {
+          if (confirmTarget) remove(confirmTarget.id)
+        }}
+      />
     </div>
   )
 }

@@ -24,6 +24,7 @@ import {
   UNFILED,
 } from "@/modules/todos/service"
 import { tagKey } from "@/lib/tags"
+import { undoToast } from "@/lib/toast"
 
 import { SortableList } from "@/components/shared/sortable-list"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
@@ -200,16 +201,12 @@ export function ActivityView({
         return
       }
       const restorable = result.task ?? task
-      toast("Task deleted", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const restored = await restoreTask(restorable)
-              if (!restored.ok) toast.error(restored.error)
-            }),
-        },
-      })
+      undoToast("Task deleted", () =>
+        startTransition(async () => {
+          const restored = await restoreTask(restorable)
+          if (!restored.ok) toast.error(restored.error)
+        }),
+      )
     })
   }
 
@@ -230,19 +227,15 @@ export function ActivityView({
         toast.error(result.error)
         return
       }
-      toast("Skipped this one", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undone = await clearTaskRecurrenceException(
-                seriesId,
-                occurrenceDate,
-              )
-              if (!undone.ok) toast.error(undone.error)
-            }),
-        },
-      })
+      undoToast("Skipped this one", () =>
+        startTransition(async () => {
+          const undone = await clearTaskRecurrenceException(
+            seriesId,
+            occurrenceDate,
+          )
+          if (!undone.ok) toast.error(undone.error)
+        }),
+      )
     })
   }
 

@@ -24,6 +24,7 @@ import {
   volumeUnitLabel,
   weightUnitLabel,
 } from "@/lib/format"
+import { undoToast } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
@@ -71,16 +72,12 @@ function WaterCard({ date, logs }: { date: string; logs: WaterLog[] }) {
       // The row the server actually deleted, so undo restores its original id and
       // createdAt rather than a fresh log that merely has the same amount.
       const restorable = result.log ?? log
-      toast("Water removed", {
-        action: {
-          label: "Undo",
-          onClick: () =>
-            startTransition(async () => {
-              const undo = await restoreWaterLog(restorable)
-              if (!undo.ok) toast.error(undo.error)
-            }),
-        },
-      })
+      undoToast("Water removed", () =>
+        startTransition(async () => {
+          const undo = await restoreWaterLog(restorable)
+          if (!undo.ok) toast.error(undo.error)
+        }),
+      )
     })
   }
 
@@ -183,6 +180,9 @@ function WeightCard({
   }
 
   function remove() {
+    // The row as it stands, captured before the delete: the undo re-saves this figure,
+    // not whatever half-typed correction may be sitting in the box.
+    const removed = weight
     startTransition(async () => {
       const result = await deleteBodyWeight(date)
       if (!result.ok) {
@@ -190,7 +190,26 @@ function WeightCard({
         return
       }
       setValue("")
-      toast("Weight removed")
+      // The same Undo the water card beside it has always offered. `body_weights` is one
+      // row per day, so putting it back is the ordinary save — no restore action needed.
+      if (!removed) {
+        toast("Weight removed")
+        return
+      }
+      const restored = num(toDisplayWeight(removed.weightLb, weightUnit))
+      undoToast("Weight removed", () =>
+        startTransition(async () => {
+          const undo = await setBodyWeight({
+            date,
+            weightLb: removed.weightLb,
+          })
+          if (!undo.ok) {
+            toast.error(undo.fieldErrors?.weightLb ?? undo.error)
+            return
+          }
+          setValue(restored)
+        }),
+      )
     })
   }
 

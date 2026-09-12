@@ -15,6 +15,7 @@ import {
 } from "@/modules/calendar/actions"
 import type { Calendar } from "@/modules/calendar/queries"
 import { calendarInputSchema } from "@/modules/calendar/validation"
+import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -34,16 +35,35 @@ import { Input } from "@/components/ui/input"
 type CalendarFormValues = { name: string; color: number }
 const EMPTY: CalendarFormValues = { name: "", color: 1 }
 
+/**
+ * What deleting one takes with it, said before it happens rather than discovered after.
+ *
+ * `events.calendar_id` is `ON DELETE CASCADE`, and nothing in a row showing a name and a
+ * colour hints at that — so until T42 the trash button took a year of appointments on one
+ * click with not a word (Pass 8: a delete that takes other data with it gets a confirm).
+ */
+function cascadeSentence(name: string, events: number): string {
+  if (events === 0) return `“${name}” will be deleted. Nothing is on it.`
+  if (events === 1) return `“${name}” and the event on it will be deleted.`
+  return `“${name}” and the ${events} events on it will be deleted.`
+}
+
 export function CalendarManager({
   calendars,
+  eventCounts,
   open,
   onOpenChange,
 }: {
   calendars: Calendar[]
+  /** Events per calendar id — what the confirmation counts. */
+  eventCounts: Record<string, number>
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
   const [pending, startTransition] = React.useTransition()
+  const [confirmTarget, setConfirmTarget] = React.useState<Calendar | null>(
+    null,
+  )
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const {
     register,
@@ -193,7 +213,7 @@ export function CalendarManager({
                       size="icon-sm"
                       aria-label={`Delete ${cal.name}`}
                       disabled={pending}
-                      onClick={() => remove(cal.id)}
+                      onClick={() => setConfirmTarget(cal)}
                     >
                       <Trash2 className="size-4" />
                     </Button>
@@ -203,6 +223,24 @@ export function CalendarManager({
             </ul>
           )}
         </div>
+
+        <ConfirmDialog
+          open={confirmTarget !== null}
+          onOpenChange={(next) => !next && setConfirmTarget(null)}
+          title="Delete this calendar?"
+          description={
+            confirmTarget
+              ? cascadeSentence(
+                  confirmTarget.name,
+                  eventCounts[confirmTarget.id] ?? 0,
+                )
+              : undefined
+          }
+          confirmLabel="Delete calendar"
+          onConfirm={() => {
+            if (confirmTarget) remove(confirmTarget.id)
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

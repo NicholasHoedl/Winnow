@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-12**. T41 is the review's seventh pass, input: the meals bar reads a
+Last updated: **2026-09-12**. T42 is the review's eighth pass, mistakes: calendar and list
+deletes confirm and name what goes, a weigh-in delete and an applied AI proposal can be
+undone, a write that fails offline keeps what was typed instead of replacing the page, the
+dialog forms validate through their schemas alone with plain messages, and Undo toasts stay
+8 seconds; no migration, no ADR.
+T41 is the review's seventh pass, input: the meals bar reads a
 leading quantity and a plural, macro words may carry a unit, the Activity quick-add reads
 dates in words like the dashboard's, the daily amount and macro fields raise the decimal
 keypad, and every select, button group and search field has the name it shows; no migration,
@@ -66,7 +71,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T41 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T42 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -628,6 +633,36 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T42 is shipped: the review's Pass 8, mistakes.** No migration, no ADR; the destructive-action
+and failure-path tables are in `docs/ux-review.md`.
+
+- **Confirms**: `calendar-manager.tsx` and `lists-view.tsx` use `ConfirmDialog`, naming the
+  calendar's event count (`getCalendarEventCounts()` in `modules/calendar/queries.ts`, loaded
+  by the calendar page) and the list's open-task count; a deleted list has no Undo on
+  purpose, since a restored list would not re-file its tasks.
+- **Undo**: `day-extras.tsx`'s weigh-in delete re-saves the held value. `applyProposal`
+  (`modules/companion/actions.ts`) returns `created` ids by kind (`appliedRowsSchema`), a new
+  `undoApply` action deletes exactly those through the existing delete paths, and
+  `use-proposal.ts` toasts what was added (`describeCreated`) with the Undo, on success and
+  after a partial failure; the proposal stays applied after an Undo and the toast says so.
+  `addMilestone`, `createTask` and `createTransaction` return the id they made. Every Undo
+  toast goes through `undoToast()` in `lib/toast.ts`, 8 seconds (sonner's default was 4).
+- **Offline writes**: `tryWrite()` in `lib/forms.ts` wraps the four capture bars' and the
+  task, log food and transaction dialogs' writes; a thrown fetch toasts "Couldn't reach the
+  app's own server. Nothing was saved." and returns null so the caller keeps its input,
+  while a failure the action returns passes through untouched. Before, the rejected
+  transition reached the route's `error.tsx` and unmounted the form.
+- **One voice for validation**: `habit-dialog.tsx` and `transaction-dialog.tsx` carry
+  `noValidate`; the transaction date's month fence is a dialog-level refine naming the month
+  in the app's date format, and the amount's two-decimal step is a rule too; `macroNumber`,
+  `microNumber`, `servings`, `payee`, `description`, the dollar ceiling, `categoryId` and
+  `foodId` have plain messages (the categories page's caps do not yet). `copy-day-dialog`'s
+  date fence is still browser-only, which works because that form has no `noValidate`.
+  `routines-view.tsx` guards its drag reorder with `useWriteGuard` like the other three.
+- e2e: `_toast.ts` gains `noToast(page)` for proving a toast is absent (sonner renders no DOM
+  when its queue is empty, so reading the toaster burns the whole timeout);
+  `offline-write.spec.ts` turns the network off and back on.
 
 **T41 is shipped: the review's Pass 7, input.** No migration, no ADR; the input catalogue and
 the probe table are in `docs/ux-review.md`.

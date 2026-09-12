@@ -175,6 +175,30 @@ test("a weigh-in saves, corrects in place, and drives the trend chart", async ({
   await clearWeight(page, EARLIER)
 })
 
+/**
+ * T42 (Pass 8): the weigh-in's Remove toasted "Weight removed" and stopped there, while
+ * the water card beside it — the same card, the same row of buttons — has offered Undo
+ * since it was written.
+ */
+test("a removed weigh-in can be put back", async ({ page }) => {
+  await clearWeight(page, DAY)
+
+  await page.goto(`/meals?date=${DAY}`)
+  await weightInput(page).fill("179.4")
+  await page.getByRole("button", { name: "Save" }).click()
+  await expect(removeWeight(page)).toBeVisible()
+
+  await removeWeight(page).click()
+  await expect(weightInput(page)).toHaveValue("")
+
+  await page.getByRole("button", { name: "Undo", exact: true }).click()
+  await expect(weightInput(page)).toHaveValue("179.4")
+
+  // Not just the box: the row is back, which is what the chart and the trend read.
+  await page.reload()
+  await expect(weightInput(page)).toHaveValue("179.4")
+})
+
 test("the day's log comes before the trend, and starts on the first screen", async ({
   page,
 }) => {

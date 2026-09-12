@@ -5,7 +5,7 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { logMeal, logReferenceFood } from "@/modules/meals/actions"
-import { restoreIfEmpty } from "@/lib/forms"
+import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import type { Food } from "@/modules/meals/queries"
 import {
   parseMealQuickAdd,
@@ -46,11 +46,19 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
       }
       setText("")
       startTransition(async () => {
-        const result = await logReferenceFood({
-          ...fallback,
-          mealType: fallback.mealType || (defaultMealType ?? ""),
-          date,
-        })
+        const result = await tryWrite(() =>
+          logReferenceFood({
+            ...fallback,
+            mealType: fallback.mealType || (defaultMealType ?? ""),
+            date,
+          }),
+        )
+        // Nothing came back: the server is unreachable and `tryWrite` has said so. The
+        // line goes back in the box rather than into the void.
+        if (!result) {
+          setText(restoreIfEmpty(trimmed))
+          return
+        }
         if (!result.ok) {
           toast.error(result.error)
           setText(restoreIfEmpty(trimmed))
@@ -69,15 +77,23 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
     setText("")
 
     startTransition(async () => {
-      const result = await logMeal({
-        ...parsed,
-        // A meal type typed into the text ALWAYS wins — `parseMealQuickAdd` returns `""`
-        // when it found none, and only then does the preference apply. Otherwise setting a
-        // default would quietly override "lunch 600cal", which is the one case where the
-        // user said which meal it was.
-        mealType: parsed.mealType || (defaultMealType ?? ""),
-        date,
-      })
+      const result = await tryWrite(() =>
+        logMeal({
+          ...parsed,
+          // A meal type typed into the text ALWAYS wins — `parseMealQuickAdd` returns `""`
+          // when it found none, and only then does the preference apply. Otherwise setting
+          // a default would quietly override "lunch 600cal", which is the one case where
+          // the user said which meal it was.
+          mealType: parsed.mealType || (defaultMealType ?? ""),
+          date,
+        }),
+      )
+      // Nothing came back: the server is unreachable and `tryWrite` has said so. The
+      // line goes back in the box rather than into the void.
+      if (!result) {
+        setText(restoreIfEmpty(trimmed))
+        return
+      }
       if (!result.ok) {
         toast.error(result.error)
         setText(restoreIfEmpty(trimmed))

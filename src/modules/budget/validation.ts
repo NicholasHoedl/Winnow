@@ -12,7 +12,37 @@ export const INCOME_EXPENSE = ["income", "expense"] as const
 // the same money with a different error for the empty case.
 const MAX_DOLLARS = 20_000_000
 const inDollarRange = (schema: z.ZodNumber) =>
-  schema.min(0, "Must be 0 or more").max(MAX_DOLLARS)
+  schema
+    .min(0, "Must be 0 or more")
+    .max(MAX_DOLLARS, "That amount is too large")
+
+/**
+ * The three fields the transaction dialog and the recurrence rule both carry, written
+ * once so the two forms cannot answer the same mistake differently.
+ *
+ * Each carries its own message because the alternative is zod's — "Too big: expected
+ * string to have <=120 characters", "Invalid UUID" — printed under a box someone is
+ * typing in. `.or(z.literal(""))` is how an emptied input is spelt; a too-long string
+ * fails both halves and the first half's message is the one that surfaces.
+ */
+const payeeField = z
+  .string()
+  .trim()
+  .max(120, "Keep the payee under 120 characters")
+  .or(z.literal(""))
+  .optional()
+const descriptionField = z
+  .string()
+  .trim()
+  .max(300, "Keep the description under 300 characters")
+  .or(z.literal(""))
+  .optional()
+/** A category the picker offered and something else deleted since. */
+const categoryIdField = z
+  .string()
+  .uuid("Unknown category")
+  .or(z.literal(""))
+  .optional()
 
 const dollars = inDollarRange(z.number())
 
@@ -47,9 +77,9 @@ export const transactionInputSchema = z.object({
   date: z
     .string()
     .refine((value) => isValidDateString(value), "Enter a valid date"),
-  categoryId: z.string().uuid().or(z.literal("")).optional(),
-  payee: z.string().trim().max(120).or(z.literal("")).optional(),
-  description: z.string().trim().max(300).or(z.literal("")).optional(),
+  categoryId: categoryIdField,
+  payee: payeeField,
+  description: descriptionField,
 })
 export type TransactionInput = z.infer<typeof transactionInputSchema>
 
@@ -92,7 +122,12 @@ export const setBudgetsSchema = z.object({
   month: monthField,
   monthlyTotal: dollars.optional(),
   entries: z
-    .array(z.object({ categoryId: z.string().uuid(), amount: dollars }))
+    .array(
+      z.object({
+        categoryId: z.string().uuid("Unknown category"),
+        amount: dollars,
+      }),
+    )
     .max(200, "Too many categories"),
 })
 export type SetBudgetsInput = z.infer<typeof setBudgetsSchema>
@@ -121,9 +156,9 @@ export const transactionRecurrenceSchema = z
   .object({
     amount: dollars,
     type: z.enum(INCOME_EXPENSE),
-    categoryId: z.string().uuid().or(z.literal("")).optional(),
-    payee: z.string().trim().max(120).or(z.literal("")).optional(),
-    description: z.string().trim().max(300).or(z.literal("")).optional(),
+    categoryId: categoryIdField,
+    payee: payeeField,
+    description: descriptionField,
     freq: z.enum(TRANSACTION_RECURRENCE_FREQS),
     recurrenceInterval: z.number().int().min(1).max(999),
     // Weekly BYDAY mask (0–127); 0 = the start date's weekday.

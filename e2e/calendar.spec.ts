@@ -1,6 +1,12 @@
 import { test, expect } from "./_test"
 
-import { deleteEventsMatching } from "./_events"
+import {
+  deleteCalendarsMatching,
+  deleteEventsMatching,
+  seedCalendar,
+  seedEvent,
+} from "./_events"
+import { noToast } from "./_toast"
 
 // A safety net, NOT the cleanup. Deleting the event is this test's second half and stays in
 // the body where it is asserted — but an assertion that throws before reaching it used to
@@ -8,6 +14,61 @@ import { deleteEventsMatching } from "./_events"
 // dashboard specs all read.
 test.afterEach(async () => {
   await deleteEventsMatching("E2E event")
+  // Calendars cascade their events, so this is both cleanups in one — and it runs on a
+  // failure too, where the test may have left a calendar the app refuses to be without.
+  await deleteCalendarsMatching("E2E calendar")
+})
+
+/**
+ * T42 (Pass 8): deleting a calendar deletes its events, and used to do it on one click
+ * with nothing said. The FK cascade is invisible from the row — the manager lists a name
+ * and a colour — so the events went with it before anyone could know they would.
+ */
+test("deleting a calendar names what goes with it, and Cancel keeps both", async ({
+  page,
+}) => {
+  const stamp = Date.now()
+  const name = `E2E calendar ${stamp}`
+  const title = `E2E event on ${stamp}`
+  const calendarId = await seedCalendar(name)
+  await seedEvent({ title, calendarId, date: "2027-06-15" })
+  await seedEvent({ title: `${title} two`, calendarId, date: "2027-06-16" })
+
+  await page.goto("/calendar?view=month&date=2027-06-15")
+  const chip = page.getByRole("button").filter({ hasText: title })
+  await expect(chip.first()).toBeVisible()
+
+  await page.getByRole("button", { name: "Manage calendars" }).click()
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+
+  // The count is the whole point: a cascade nobody was told about is the mistake.
+  // `alertdialog`, which `getByRole("dialog")` does not find.
+  const confirm = page.getByRole("alertdialog")
+  await expect(confirm).toContainText(
+    `“${name}” and the 2 events on it will be deleted.`,
+  )
+
+  // Cancel keeps both, and says nothing — a toast here would read as a delete.
+  await confirm.getByRole("button", { name: "Cancel" }).click()
+  await expect(
+    page.getByRole("button", { name: `Delete ${name}` }),
+  ).toBeVisible()
+  await noToast(page)
+  await page.keyboard.press("Escape")
+  await expect(chip.first()).toBeVisible()
+
+  // And confirming takes the calendar and its events together.
+  await page.getByRole("button", { name: "Manage calendars" }).click()
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+  await page
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "Delete calendar" })
+    .click()
+  await expect(
+    page.getByRole("button", { name: `Delete ${name}` }),
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(chip).toHaveCount(0)
 })
 
 // Exercises the event dialog + Server Action + grid render through a real browser

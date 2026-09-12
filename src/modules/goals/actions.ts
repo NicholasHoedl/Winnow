@@ -5,7 +5,12 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import { z } from "zod"
 
 import { db } from "@/db"
-import { type ActionResult, invalid, nullify } from "@/lib/action-result"
+import {
+  type ActionFailure,
+  type ActionResult,
+  invalid,
+  nullify,
+} from "@/lib/action-result"
 import { revalidateHubs } from "@/lib/revalidate"
 import { requireUserId } from "@/lib/session"
 
@@ -148,10 +153,17 @@ export async function deleteGoal(
 
 // --- Milestones ---
 
+/**
+ * Carries the new milestone's id, for the same reason `createRoutine` does: applying an
+ * AI plan creates each row and then has to be able to take exactly those rows back (T42).
+ * A wider success branch — callers that only read `.ok` are unaffected.
+ */
+export type AddMilestoneResult = { ok: true; id: string } | ActionFailure
+
 export async function addMilestone(
   goalId: unknown,
   input: unknown,
-): Promise<ActionResult> {
+): Promise<AddMilestoneResult> {
   const userId = await requireUserId()
   const parsedId = idSchema.safeParse(goalId)
   if (!parsedId.success) return invalid(parsedId.error)
@@ -170,15 +182,18 @@ export async function addMilestone(
     .orderBy(desc(milestones.sortOrder))
     .limit(1)
 
-  await db.insert(milestones).values({
-    userId,
-    goalId: parsedId.data,
-    title: parsed.data.title,
-    dueDate: nullify(parsed.data.dueDate),
-    sortOrder: (last?.sortOrder ?? -1) + 1,
-  })
+  const [created] = await db
+    .insert(milestones)
+    .values({
+      userId,
+      goalId: parsedId.data,
+      title: parsed.data.title,
+      dueDate: nullify(parsed.data.dueDate),
+      sortOrder: (last?.sortOrder ?? -1) + 1,
+    })
+    .returning({ id: milestones.id })
   revalidateGoals()
-  return { ok: true }
+  return { ok: true, id: created.id }
 }
 
 export async function toggleMilestone(

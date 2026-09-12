@@ -1,6 +1,18 @@
 import "server-only"
 import { cache } from "react"
-import { and, asc, desc, eq, gte, inArray, lte, isNull, lt, or } from "drizzle-orm"
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  isNull,
+  lt,
+  or,
+} from "drizzle-orm"
 
 import { db } from "@/db"
 import { addDays } from "@/lib/date"
@@ -54,6 +66,32 @@ export async function getCalendars(): Promise<Calendar[]> {
     where: eq(calendars.userId, userId),
     orderBy: [asc(calendars.sortOrder), asc(calendars.createdAt)],
   })
+}
+
+/**
+ * How many events sit on each calendar, keyed by calendar id.
+ *
+ * For the manager's delete confirmation (T42), which has to name the number before the FK
+ * cascade takes them. A count query rather than reading the events: the manager holds no
+ * events, and the grid beside it only ever loaded the month on screen — a number drawn
+ * from that would have said "2" about a calendar holding two hundred.
+ *
+ * Rows, not occurrences: a weekly standup is one event, which is also what you made.
+ */
+export async function getCalendarEventCounts(): Promise<
+  Record<string, number>
+> {
+  const userId = await requireUserId()
+  const rows = await db
+    .select({ calendarId: events.calendarId, total: count() })
+    .from(events)
+    .where(eq(events.userId, userId))
+    .groupBy(events.calendarId)
+  const byCalendar: Record<string, number> = {}
+  for (const row of rows) {
+    if (row.calendarId) byCalendar[row.calendarId] = row.total
+  }
+  return byCalendar
 }
 
 // How far a multi-day occurrence is assumed to reach past the day it starts on.

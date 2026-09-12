@@ -19,14 +19,16 @@ export async function seedTask(fields: {
   /** How the date binds — "by" is a deadline (T28). Defaults to "on", like the column. */
   dueKind?: "on" | "by"
   goalId?: string | null
+  /** Which list files it. Null is Unfiled, which is what a list's deletion leaves. */
+  listId?: string | null
   status?: "open" | "done"
 }): Promise<string> {
   const done = fields.status === "done"
   return withTestDb(async (client) => {
     const userId = await seedUserId(client)
     const { rows } = await client.query<{ id: string }>(
-      `insert into tasks (user_id, title, due_date, due_kind, goal_id, status, completed_at)
-       values ($1, $2, $3, $4, $5, $6, $7)
+      `insert into tasks (user_id, title, due_date, due_kind, goal_id, list_id, status, completed_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
        returning id`,
       [
         userId,
@@ -34,6 +36,7 @@ export async function seedTask(fields: {
         fields.dueDate ?? null,
         fields.dueKind ?? "on",
         fields.goalId ?? null,
+        fields.listId ?? null,
         done ? "done" : "open",
         done ? new Date() : null,
       ],
