@@ -106,3 +106,67 @@ test("a tagged quick-add line files the same line next time", async ({
     await expect(page.getByText(category, { exact: true })).toHaveCount(0)
   }
 })
+
+/**
+ * T38 (Pass 4, uniform connectedness): the month control stays inside its own row.
+ *
+ * With "This month" on screen — which is every month but the current one — the five
+ * controls were wider than the row holding them, and `justify-center` split the overflow
+ * across both edges: "Previous month" hung 8px past the row's left and "This month" 9px
+ * past its right, over whatever sat beside them. A control that leaves its own box stops
+ * reading as one thing. The layout sweep only ever loaded the current month, which is why
+ * it never saw this; `_layout.ts` walks a past month too now.
+ *
+ * A fixed month rather than a computed one: the assertion is about the widest state of the
+ * control, and that state is "not this month", which any past month gives for good.
+ */
+test("the month control stays inside its row on a month that is not this one", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/budget?month=2026-01")
+  await expect(page.getByRole("link", { name: "This month" })).toBeVisible()
+
+  const children = await page
+    .getByRole("link", { name: "Previous month" })
+    .evaluate((link) => {
+      const row = link.parentElement!
+      const box = row.getBoundingClientRect()
+      const main = document.getElementById("content")!.getBoundingClientRect()
+      return Array.from(row.children).map((child) => {
+        const rect = child.getBoundingClientRect()
+        return {
+          name: (
+            child.textContent ||
+            child.getAttribute("aria-label") ||
+            ""
+          ).trim(),
+          pastRowLeft: Math.round(box.left - rect.left),
+          pastRowRight: Math.round(rect.right - box.right),
+          pastMainLeft: Math.round(main.left - rect.left),
+          pastMainRight: Math.round(rect.right - main.right),
+        }
+      })
+    })
+
+  // The control is five things when "This month" shows. Guards against a vacuous pass if
+  // the row ever stops being the links' parent.
+  expect(children.length).toBe(5)
+  for (const child of children) {
+    expect(child.pastRowLeft, `${child.name} past the row's left`).toBeLessThan(
+      2,
+    )
+    expect(
+      child.pastRowRight,
+      `${child.name} past the row's right`,
+    ).toBeLessThan(2)
+    expect(
+      child.pastMainLeft,
+      `${child.name} past the content's left`,
+    ).toBeLessThan(2)
+    expect(
+      child.pastMainRight,
+      `${child.name} past the content's right`,
+    ).toBeLessThan(2)
+  }
+})

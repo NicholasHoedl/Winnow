@@ -15,7 +15,11 @@ export function SettingsSection({
 }) {
   return (
     <section>
-      <div className="mb-3">
+      {/* Less room below a heading that stands alone (T38). The margin is sized for a
+          title with a description under it; on `/settings/account` and `/settings/data`,
+          the two pages without one, it left the heading as far from the card it heads as
+          from the tab strip above it. */}
+      <div className={description ? "mb-3" : "mb-1"}>
         <h2 className="font-display text-xl font-semibold tracking-tight">
           {title}
         </h2>

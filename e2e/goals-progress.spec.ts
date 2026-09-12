@@ -162,3 +162,81 @@ test("a target date in the past reads as at risk, unless the goal is done", asyn
   await expect(detail(page)).toContainText("Target")
   await closeDetail(page)
 })
+
+/**
+ * T38 (Pass 4, proximity): a field sits nearer its own label than its neighbour.
+ *
+ * The three-up number grid used a 12px gap while a label sits 8px above its control, so the
+ * distance to the unrelated field beside it was near enough the distance to the label that
+ * owns it — which is the one comparison proximity is made of. The same 12px grid was in the
+ * micronutrient fields, the food editor and the routine item dialog; this measures the one
+ * that is easiest to open.
+ *
+ * Nothing is saved: the dialog is opened and dismissed.
+ */
+test("the goal form's number fields sit closer to their labels than to each other", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "New goal" }).click()
+
+  const dialog = page.getByRole("dialog")
+  const current = (await dialog.getByLabel("Current").boundingBox())!
+  const target = (await dialog
+    .getByLabel("Target", { exact: true })
+    .boundingBox())!
+  const label = (await dialog.locator('label[for="g-current"]').boundingBox())!
+
+  // Unrounded, and `> 15` rather than `>= 16`: three `minmax(0,1fr)` tracks of a 329px
+  // dialog are fractional, so a 16px grid gap measures either side of 15.5 depending on
+  // where the columns land — one run of this read 15 and its retry 16. The number that
+  // matters is 12, the gap this replaced, and nothing near it can pass.
+  const between = target.x - (current.x + current.width)
+  const toLabel = current.y - (label.y + label.height)
+  expect(
+    between,
+    `between the fields (${between.toFixed(2)}px) vs label to control (${toLabel.toFixed(2)}px)`,
+  ).toBeGreaterThan(15)
+  expect(
+    between,
+    `between the fields (${between.toFixed(2)}px) vs label to control (${toLabel.toFixed(2)}px)`,
+  ).toBeGreaterThan(toLabel)
+
+  await page.keyboard.press("Escape")
+  await expect(dialog).toHaveCount(0)
+})
+
+/**
+ * T38 (Pass 4, uniform connectedness): the New goal dialog decides in its footer.
+ *
+ * Its Cancel and Add were a small right-aligned pair at the end of the fields, inside the
+ * scrolling body — part of the form rather than the dialog's own decision, and the only
+ * create dialog in the app shaped that way. They sit on the footer strip now, in the shape
+ * the task, transaction and routine item dialogs use.
+ */
+test("the New goal dialog's actions stack full width on a phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "New goal" }).click()
+
+  const dialog = page.getByRole("dialog")
+  const add = dialog.getByRole("button", { name: "Add", exact: true })
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true })
+  const addBox = (await add.boundingBox())!
+  const cancelBox = (await cancel.boundingBox())!
+
+  expect(Math.round(addBox.width), "Add's width").toBeGreaterThanOrEqual(300)
+  expect(Math.round(cancelBox.width), "Cancel's width").toBeGreaterThanOrEqual(
+    300,
+  )
+  expect(
+    Math.round(addBox.y + addBox.height),
+    "Add sits above Cancel",
+  ).toBeLessThanOrEqual(Math.round(cancelBox.y))
+
+  await cancel.click()
+  await expect(dialog).toHaveCount(0)
+})

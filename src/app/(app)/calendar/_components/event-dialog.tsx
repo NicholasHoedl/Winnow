@@ -723,7 +723,10 @@ export function EventDialog({
             ) : (
               <span />
             )}
-            <div className="flex gap-2">
+            {/* Stacked full width on a phone, the shape the task, transaction and routine
+                item dialogs use, and inline opposite Delete from `sm` up (T38). The pair
+                was a small left-aligned huddle at every width. */}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"

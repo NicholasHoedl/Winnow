@@ -227,7 +227,8 @@ export function FoodManager({
                 />
               </Field>
             )}
-            <div className="grid grid-cols-2 gap-3">
+            {/* `gap-4`, wider than the 8px a label sits above its control — see T38. */}
+            <div className="grid grid-cols-2 gap-4">
               <Field className="col-span-2">
                 <FieldLabel htmlFor="f-name">Name</FieldLabel>
                 <Input id="f-name" {...register("name")} />

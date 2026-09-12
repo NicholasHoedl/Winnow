@@ -79,3 +79,39 @@ test("the dashboard's Add event opens the dialog on the calendar", async ({
   await expect(page).toHaveURL(/\/calendar/)
   await expect(page.getByRole("dialog", { name: "Add event" })).toBeVisible()
 })
+
+/**
+ * T38 (Pass 4, uniform connectedness): the event dialog's actions are the app's footer.
+ *
+ * Twelve of the app's twenty dialogs stack a full-width primary over a full-width Cancel on
+ * a phone; this one drew the pair small and left-aligned inside its footer strip, so the two
+ * buttons read as a fragment of the form rather than as the dialog's decision. Desktop is
+ * unchanged — the pair still sits at the right, opposite Delete.
+ *
+ * Nothing is saved: the dialog is opened and cancelled.
+ */
+test("the event dialog's actions stack full width on a phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/calendar")
+  await page.getByRole("button", { name: "Add event" }).click()
+
+  const dialog = page.getByRole("dialog")
+  const add = dialog.getByRole("button", { name: "Add", exact: true })
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true })
+  const addBox = (await add.boundingBox())!
+  const cancelBox = (await cancel.boundingBox())!
+
+  expect(Math.round(addBox.width), "Add's width").toBeGreaterThanOrEqual(300)
+  expect(Math.round(cancelBox.width), "Cancel's width").toBeGreaterThanOrEqual(
+    300,
+  )
+  expect(
+    Math.round(addBox.y + addBox.height),
+    "Add sits above Cancel",
+  ).toBeLessThanOrEqual(Math.round(cancelBox.y))
+
+  await cancel.click()
+  await dialog.waitFor({ state: "hidden" })
+})

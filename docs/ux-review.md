@@ -31,7 +31,7 @@ the daily driver until then.
 | 1   | Structure   | Navigation and menus              | Jakob's law + Hick's law              | Medium | Done 2026-09-11 |
 | 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Done 2026-09-11 |
 | 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Done 2026-09-12 |
-| 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Not started     |
+| 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Done 2026-09-12 |
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Not started     |
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Not started     |
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Not started     |
@@ -186,15 +186,42 @@ narrates; the settings index and the seven settings pages that open with the sam
 blocks; the calendar's chips, month nav and grid; the sidebar and tab bar opening with
 Dashboard and closing with Review.
 
-### Pass 4: visible grouping
+### Pass 4: visible grouping — done 2026-09-12 (T38)
 
-- Keep: dashboard cards group by container, each with a real heading.
-- Look at (Pass 1, measured): Budget's month control spills its row by 9 px at 393 px when
-  "This month" shows, which is whenever a month other than the current one is on screen. The
-  layout sweep only loads the current month, so it has never seen it. Review's new week
-  control wraps instead.
-- Look at (Pass 2): the event dialog's footer is a small left-aligned Cancel and Add, while
-  the task, transaction and routine item dialogs stack a full-width primary over Cancel.
+Walked every screen at both widths in light, the daily five in dark, and every dialog at
+393 px, and measured gaps, containers, alignment and dialog footers from bounding boxes,
+against proximity (things that belong together sit closer to each other than to anything
+else) and uniform connectedness (things inside one border or background read as one group).
+
+Fixed:
+
+- The budget month control spilled its row at 393 px whenever "This month" showed: five
+  controls 362 px wide in a 345 px row, hanging 8 px past the left edge and 9 px past the
+  right. It wraps now, as Review's week control does, and the layout sweeps load a past
+  month, which reports the spill unaided; the blind spot was the route list, not the detector.
+- On the Activity page, open tasks sat 28 px right of done tasks, because the reorder grip
+  sits outside the card; the done list takes the same inset, so every card shares one edge.
+- Four field grids put 12 px between fields while a label sits 8 px above its own control;
+  they use 16 px.
+- The event dialog's footer was a small left-aligned pair where twelve dialogs stack a
+  full-width primary over Cancel; it stacks on a phone. New goal's actions sat at the end of
+  its fields, and Plan review's were the only dialog buttons drawn smaller than their fields;
+  both take the footer shape.
+- Section headings on the Activity page, and on the two settings pages with no description,
+  sat as close to what came before as to what they head; their bottom margins shrank. The
+  "Clear all data" button aligned with its icon rather than its text.
+
+Kept, with reasons: rows 8 px apart whose parts are 12 px apart read correctly because every
+row has a border and a tint; the dashboard's Budget and Categories cards duplicate a figure
+only when one category is budgeted; the weigh-in card's quote of the trend is ADR-0030's
+mechanism; the water and weight block is two boxes for two logs; the field ladders (8, 16,
+20, 40 px), the data page's rhythm, the goal editor's rules and the Slate band labels were
+measured and right; the reorder grip stays outside the card, as `sortable-list.tsx` intends.
+
+Noticed for the suite: the layout sweeps walk default URL state, so `/activity?goal=`,
+`/calendar?view=week` and `/meals?date=` are the same shape as the month blind spot; and
+`clearQueue` in `companion.spec.ts` reads the page before it has settled, so a proposal can
+survive it and open the review dialog on `/goals` under a later spec.
 
 ### Pass 5: one thing stands out
 
@@ -206,6 +233,15 @@ Dashboard and closing with Review.
 - Look at (Pass 3): the budget page's two AI panels open with a paragraph each, 436 px
   together at 393 px; the repeating tasks page opens with a 140 px explainer above a 74 px
   list, where the lists page's is 100 px and the habits and routines pages' 40 px.
+- Look at (Pass 4): dashboard card headers come in two weights and two left edges. Macros
+  and Budget carry an icon and a small muted heading starting at x = 56; Slate, Practice and
+  Categories a base heading at x = 32. Their actions differ too ("All" with an arrow against
+  a small corner icon).
+- Look at (Pass 4): three panel species do the same job, untinted bordered boxes, tinted
+  bordered panels (the three AI panels, and the habit card) and tinted borderless cards, and
+  three row species (tasks and transactions; lists, repeating and categories; routine items
+  and calendars). They sit side by side on `/review` and `/meals`, and in dark mode the tint
+  carries no information.
 
 ### Pass 6: reach
 
@@ -227,6 +263,8 @@ Dashboard and closing with Review.
   description, which the payee memory reads but the ledger's payee column does not show.
 - Look at (Pass 2): some `FieldLabel`s had no `htmlFor`, so their select triggers had no
   accessible name; Meal, Priority, Type and Category were fixed in passing. Sweep the rest.
+- Look at (Pass 4): the label on the budgets page's total row stretches to 171 px while its
+  text is about 120, so its click target is wider than its ink.
 
 ### Pass 8: mistakes
 

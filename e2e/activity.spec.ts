@@ -1,9 +1,10 @@
 import { test, expect, type Page } from "./_test"
 
 import { visibleCard } from "./_card"
-import { addGoal, deleteGoalsMatching } from "./_goals"
+import { addGoal, deleteGoalsMatching, seedGoal } from "./_goals"
 import { deleteListsMatching, seedList } from "./_lists"
 import { announces, meter } from "./_habits"
+import { deleteTasksMatching, seedTask } from "./_tasks"
 
 /**
  * Browser coverage for T10: the merged Activity page (ADR-0013).
@@ -293,4 +294,90 @@ test("the list filter scopes the list, and Unfiled is the rest", async ({
   await page.getByRole("button", { name: "Clear the Unfiled filter" }).click()
   await expect(visibleCard(page, IN_A)).toHaveCount(1)
   await expect(page).toHaveURL(/\/activity$/)
+})
+
+/**
+ * T38 (Pass 4, proximity and uniform connectedness): one left edge, and a heading that
+ * belongs to the list under it.
+ *
+ * Two findings from one screen. Open tasks render through `SortableList`, which draws a
+ * grip and its gap OUTSIDE each card, while done tasks rendered in a plain column with no
+ * inset — so two lists on one screen started 28px apart and the page had no single left
+ * edge. And the section heading sat nearer the block above it than the list it heads,
+ * which reads as a label for the wrong thing.
+ *
+ * Scoped to a seeded goal on purpose: `?goal=` narrows the page to this test's own rows,
+ * so "Today" is the first section whatever else the account holds, and the gap above the
+ * heading is a fixed part of the page rather than whichever card happened to precede it.
+ *
+ * The heading's gaps are measured to the CARD'S OWN BOX on the way down and to the nearest
+ * thing drawn on the way up. The card's border is where the group starts — uniform
+ * connectedness — so the 12px of padding inside it is part of the group, not part of the
+ * distance to it.
+ */
+test("open and done tasks share a left edge, and a heading hugs its own list", async ({
+  page,
+}) => {
+  const prefix = `E2E act edge ${Date.now()}`
+  const today = new Date().toLocaleDateString("en-CA")
+  const goalId = await seedGoal({ title: `${prefix} goal` })
+  await seedTask({ title: `${prefix} open`, dueDate: today, goalId })
+  await seedTask({ title: `${prefix} done`, status: "done", goalId })
+
+  try {
+    await page.setViewportSize({ width: 393, height: 852 })
+    await page.goto(`/activity?goal=${goalId}`)
+
+    const open = visibleCard(page, `${prefix} open`)
+    const done = visibleCard(page, `${prefix} done`)
+    await expect(open).toHaveCount(1)
+    await expect(done).toHaveCount(1)
+
+    // Soft, both of them: this is one screen making two claims, and a hard first
+    // assertion would hide whichever of the two was also wrong.
+    const openBox = (await open.boundingBox())!
+    const doneBox = (await done.boundingBox())!
+    expect
+      .soft(Math.round(doneBox.x), "the done list's left edge")
+      .toBe(Math.round(openBox.x))
+
+    const gaps = await page
+      .locator("main")
+      .getByRole("heading", { name: "Today", exact: true })
+      .evaluate((heading) => {
+        const section = heading.closest("section")!
+        const box = heading.getBoundingClientRect()
+        const card = section.querySelector("div.bg-card")!
+        // The nearest thing drawn above the heading, whatever it belongs to: the gap the
+        // eye sees, not the one the DOM implies.
+        let above = -Infinity
+        for (const element of Array.from(document.querySelectorAll("main *"))) {
+          if (element.contains(heading) || heading.contains(element)) continue
+          const rect = element.getBoundingClientRect()
+          if (rect.width === 0 || rect.height === 0) continue
+          if (rect.bottom > box.top + 1) continue
+          if (rect.right < box.left + 1 || rect.left > box.right - 1) continue
+          above = Math.max(above, rect.bottom)
+        }
+        return {
+          above: Math.round(box.top - above),
+          below: Math.round(card.getBoundingClientRect().top - box.bottom),
+        }
+      })
+
+    // Twice as close, not merely closer. The heading used to sit 8px above its list and
+    // 16px below the toolbar — "closer" on paper, ambiguous on screen, and the walk that
+    // filed this read it the other way round because it measured to the card's CONTENT,
+    // counting the card's own 12px of padding as distance. A label has to be unmistakably
+    // nearer the thing it names than the thing it follows.
+    expect
+      .soft(
+        gaps.below * 2,
+        `the "Today" heading: ${gaps.above}px above it, ${gaps.below}px below`,
+      )
+      .toBeLessThan(gaps.above)
+  } finally {
+    await deleteTasksMatching(prefix)
+    await deleteGoalsMatching(prefix)
+  }
 })

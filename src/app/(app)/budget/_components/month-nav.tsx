@@ -26,6 +26,11 @@ function formatMonth(month: string, locale: string): string {
  * The links are built from the current path, so moving a month keeps you on the page you
  * are reading rather than sending you to the ledger. It lived in `BudgetView` until T30,
  * when the section split into pages that all read the same month.
+ *
+ * `flex-wrap`, like Review's week control (T38). With "This month" showing — which is every
+ * month but the current one — the five controls are wider than a 393px row, and a centred
+ * row that cannot wrap spills out of BOTH its edges rather than scrolling: "Previous month"
+ * hung 8px past the left and "This month" 9px past the right, over whatever sat beside them.
  */
 export function MonthNav({
   month,
@@ -39,7 +44,7 @@ export function MonthNav({
   const to = (m: string) => `${pathname}?month=${m}`
 
   return (
-    <div className="mt-4 flex items-center justify-center gap-1">
+    <div className="mt-4 flex flex-wrap items-center justify-center gap-1">
       <Link
         href={to(shiftMonth(month, -1))}
         aria-label="Previous month"

@@ -10,6 +10,7 @@ import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalRow } from "@/modules/goals/queries"
 import { goalInputSchema } from "@/modules/goals/validation"
 import { Button } from "@/components/ui/button"
+import { DialogFooter } from "@/components/ui/dialog"
 import {
   Field,
   FieldError,
@@ -88,6 +89,7 @@ export function GoalForm({
   submitLabel,
   onSaved,
   onCancel,
+  actions = "inline",
 }: {
   goal: GoalRow | null
   /** Every event, for the target-date link. Already fetched by the (app) layout. */
@@ -98,6 +100,14 @@ export function GoalForm({
   onSaved: () => void
   /** Renders a Cancel button beside the submit when given. */
   onCancel?: () => void
+  /**
+   * Where the buttons go (T38). `"dialog"` puts them on the dialog's footer strip — a
+   * full-width primary over Cancel on a phone, inline on desktop — which is what the task,
+   * transaction and routine item dialogs do. `"inline"` leaves them at the end of the
+   * fields, which is what the goal editor's Details section needs: that is a section inside
+   * a dialog whose footer belongs to the editor, not to this form.
+   */
+  actions?: "dialog" | "inline"
 }) {
   const {
     register,
@@ -143,6 +153,21 @@ export function GoalForm({
     toast.success(goal ? "Goal updated" : "Goal added")
     onSaved()
   })
+
+  // Written once and placed by `actions`: the footer strip and the inline row hold the same
+  // two buttons, and two copies of them is how the create path and the edit path drift.
+  const buttons = (
+    <>
+      {onCancel && (
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+      )}
+      <Button type="submit" disabled={isSubmitting}>
+        {isSubmitting ? "Saving…" : submitLabel}
+      </Button>
+    </>
+  )
 
   return (
     <form onSubmit={onSubmit}>
@@ -216,8 +241,9 @@ export function GoalForm({
 
         {/* Progress for a goal you don't break into milestones. Left blank, the goal
             simply isn't tracked numerically — `optionalNumberField` is what keeps an
-            empty input as null rather than 0, which would read as "0 of 0". */}
-        <div className="grid grid-cols-3 gap-3">
+            empty input as null rather than 0, which would read as "0 of 0". `gap-4`,
+            wider than the 8px a label sits above its own control (T38). */}
+        <div className="grid grid-cols-3 gap-4">
           <Field>
             <FieldLabel htmlFor="g-current">Current</FieldLabel>
             <Input
@@ -249,16 +275,11 @@ export function GoalForm({
           </Field>
         </div>
       </FieldGroup>
-      <div className="mt-5 flex justify-end gap-2">
-        {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-        )}
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Saving…" : submitLabel}
-        </Button>
-      </div>
+      {actions === "dialog" ? (
+        <DialogFooter className="mt-5">{buttons}</DialogFooter>
+      ) : (
+        <div className="mt-5 flex justify-end gap-2">{buttons}</div>
+      )}
     </form>
   )
 }

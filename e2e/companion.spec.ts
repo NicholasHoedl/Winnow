@@ -1,7 +1,12 @@
 import { test, expect, type Page } from "./_test"
 
 import { goalCard, visibleCard } from "./_card"
-import { addGoal, deleteGoal, openGoalDetail } from "./_goals"
+import {
+  addGoal,
+  deleteGoal,
+  deleteGoalsMatching,
+  openGoalDetail,
+} from "./_goals"
 import { announces, deleteHabitsMatching, meter } from "./_habits"
 import { serverWrites } from "./_server-write"
 import { deleteTasksMatching } from "./_tasks"
@@ -748,4 +753,59 @@ test("re-planning an applied goal confirms first, and keeps what exists", async 
   await expect(page.getByText("Proposed plan")).toBeVisible()
   await page.getByRole("button", { name: "Discard", exact: true }).click()
   await expect(page.getByText("is waiting")).toHaveCount(0)
+})
+
+/**
+ * T38 (Pass 4, uniform connectedness): the plan review decides in its footer strip.
+ *
+ * Discard and Apply were a small inline pair — 28px tall, tucked beside the "Creates …"
+ * count — on the one dialog the app draws full-screen. On a phone they now stack the way
+ * every other dialog's do, full width with the primary on top and at the standard size;
+ * on desktop they stay opposite the count, which is the anti-surprise device they answer.
+ *
+ * The plan is discarded rather than applied: this is about the frame, not what is inside
+ * it, and applying would leave rows for the rest of the run.
+ */
+test("the plan review's actions stack full width on a phone", async ({
+  page,
+}) => {
+  const goalTitle = `E2E plan footer ${Date.now()}`
+  await createGoal(page, goalTitle)
+
+  // Discarded in a `finally`, not after the assertions. A proposal left pending opens this
+  // dialog on every later visit to `/goals`, and its backdrop swallows the clicks of every
+  // spec that runs after — so a failure here must not be able to take the goal specs with
+  // it. The queue cleaner cannot be relied on for that: it reads the page straight after
+  // `goto` and returns early if the dialog has not rendered yet.
+  try {
+    await page.setViewportSize({ width: 393, height: 852 })
+    await planGoal(page, goalTitle)
+
+    const applyBox = (await page
+      .getByRole("button", { name: "Apply" })
+      .boundingBox())!
+    const discardBox = (await page
+      .getByRole("button", { name: "Discard", exact: true })
+      .boundingBox())!
+
+    expect(Math.round(applyBox.width), "Apply's width").toBeGreaterThanOrEqual(
+      300,
+    )
+    expect(
+      Math.round(discardBox.width),
+      "Discard's width",
+    ).toBeGreaterThanOrEqual(300)
+    expect(
+      Math.round(applyBox.y + applyBox.height),
+      "Apply sits above Discard",
+    ).toBeLessThanOrEqual(Math.round(discardBox.y))
+  } finally {
+    const discard = page.getByRole("button", { name: "Discard", exact: true })
+    if ((await discard.count()) > 0) {
+      await discard.click()
+      await expect(page.getByRole("button", { name: "Apply" })).toHaveCount(0)
+    }
+    // By fragment, so a goal left behind by an earlier failed run goes too.
+    await deleteGoalsMatching("E2E plan footer")
+  }
 })

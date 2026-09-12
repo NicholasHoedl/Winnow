@@ -126,7 +126,11 @@ export function DataSection() {
               </p>
             </div>
           </div>
-          <div>
+          {/* `pl-6` — the warning icon's 16px plus the 8px gap beside it, so the button
+              starts on the same left edge as the title and the paragraph it acts on. It
+              lined up with the ICON instead, which made one box read as two columns; the
+              Export and Restore blocks above align their button with their text (T38). */}
+          <div className="pl-6">
             <Button
               variant="destructive"
               size="sm"

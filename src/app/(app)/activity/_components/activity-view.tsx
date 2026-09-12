@@ -573,7 +573,10 @@ export function ActivityView({
                   if (rows.length === 0) return null
                   return (
                     <section key={section.key}>
-                      <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+                      {/* `mb-1`, tighter than the 16px above it: a heading has to read as
+                          the label of the list under it rather than the tail of whatever
+                          it follows (T38). */}
+                      <h2 className="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
                         {section.label}
                         {/* aria-hidden: the heading should announce "Today", not "Today3".
                             The count is a visual convenience and is fully recoverable from
@@ -607,7 +610,7 @@ export function ActivityView({
 
                 {filter !== "active" && done.length > 0 && (
                   <section>
-                    <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+                    <h2 className="text-muted-foreground mb-1 text-xs font-semibold tracking-wide uppercase">
                       Done
                       <span
                         aria-hidden
@@ -616,7 +619,11 @@ export function ActivityView({
                         {done.length}
                       </span>
                     </h2>
-                    <div className="flex flex-col gap-2">
+                    {/* Inset by the drag handle's width plus its gap, so a done card starts
+                        on the same left edge as the open cards above it (T38). `SortableList`
+                        draws that 24px grip OUTSIDE each card it carries, by design; there is
+                        nothing to reorder down here, but the page has one left edge. */}
+                    <div className="flex flex-col gap-2 pl-7">
                       {done.map((task) => (
                         <TaskItem
                           key={task.id}

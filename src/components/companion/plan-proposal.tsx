@@ -501,7 +501,7 @@ export function PlanProposal({
 
       {/* The anti-surprise device: it counts what will actually be created, live, so
           Apply never does more than the number sitting next to it. */}
-      <div className="bg-muted/40 flex items-center justify-between gap-3 border-t p-3">
+      <div className="bg-muted/40 flex flex-col gap-3 border-t p-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-muted-foreground text-xs">
           Creates{" "}
           <span className="text-foreground font-mono">
@@ -517,17 +517,15 @@ export function PlanProposal({
           </span>{" "}
           task{final.setupTasks.length === 1 ? "" : "s"}
         </p>
-        <div className="flex shrink-0 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onDiscard}
-            disabled={pending}
-          >
+        {/* The app's dialog footer on a phone: a full-width primary over a full-width
+            Discard, at the standard button size. This was a 28px inline pair — the only
+            dialog in the app whose decision was drawn smaller than its fields (T38). From
+            `sm` up it sits opposite the count, which is what it answers. */}
+        <div className="flex flex-col-reverse gap-2 sm:shrink-0 sm:flex-row">
+          <Button variant="outline" onClick={onDiscard} disabled={pending}>
             Discard
           </Button>
           <Button
-            size="sm"
             onClick={() => onApply(final)}
             disabled={
               pending ||

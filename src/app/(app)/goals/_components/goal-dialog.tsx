@@ -43,6 +43,9 @@ export function GoalDialog({
           submitLabel="Add"
           onSaved={() => onOpenChange(false)}
           onCancel={() => onOpenChange(false)}
+          // The dialog's decision belongs on its footer strip, not at the end of the
+          // fields (T38). The editor's Details section takes the same form inline.
+          actions="dialog"
         />
       </DialogContent>
     </Dialog>

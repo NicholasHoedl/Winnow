@@ -1,6 +1,10 @@
 # Handoff
 
-Last updated: **2026-09-12**. T37 is the review's third pass, sections and their order: the
+Last updated: **2026-09-12**. T38 is the review's fourth pass, visible grouping: the budget
+month control wraps instead of spilling at phone width, task cards share one left edge, four
+field grids and three headings space by what belongs together, and the event, New goal and
+plan review dialogs take the app's footer shape; no migration, no ADR.
+T37 is the review's third pass, sections and their order: the
 weight chart reads last on the meals page (ADR-0030), the Meal field moves up in the log food
 dialog, and the region settings page is chunked under two headings; no migration.
 T36 is the review's second pass, what each screen asks of
@@ -49,7 +53,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T37 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T38 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -611,6 +615,28 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T38 is shipped: the review's Pass 4, visible grouping.** No migration, no ADR; every change
+is spacing, alignment or a footer, recorded with its measurement in `docs/ux-review.md`.
+
+- **Budget**: `month-nav.tsx` wraps (`flex-wrap`), and the layout sweeps' route list in
+  `e2e/_layout.ts` includes `/budget?month=2026-01`, so the spill that only shows on a
+  non-current month is walked; the detector reported it unaided once the route was there.
+- **Activity**: `activity-view.tsx` gives the done list the grip's inset (`pl-7`) and its
+  section headings `mb-1`.
+- **Dialogs**: `event-dialog.tsx`'s Cancel and Add stack full width below `sm`; `goal-form.tsx`
+  takes `actions: "dialog" | "inline"`, `goal-dialog.tsx` passes `"dialog"` and the buttons
+  render in a `DialogFooter`, while the goal editor's Details section keeps them inline;
+  `plan-proposal.tsx`'s strip has the footer shape at the standard button size. The field
+  grids in `nutrition-extra-fields.tsx`, `food-manager.tsx`, `routine-item-dialog.tsx` and
+  `goal-form.tsx` use `gap-4`.
+- **Settings**: `settings-section.tsx` uses `mb-1` when there is no description;
+  `data-section.tsx` aligns the clear button with its text column (`pl-6`).
+- Tests: bounding-box assertions in the activity, budget-date-nav, calendar, goals-progress
+  and settings specs; `settings-section.test.tsx` is new. Two suite caveats noticed:
+  `clearQueue` in `companion.spec.ts` reads the page before it has settled, so a pending
+  proposal can survive it and open the review dialog on `/goals` under a later spec; and the
+  sweeps still walk default URL state everywhere but the budget's past month.
 
 **T37 is shipped: the review's Pass 3, sections and their order.** No migration. **ADR-0030**
 amends ADR-0023: the weight trend chart reads last on `/meals`, and the weigh-in card's quote

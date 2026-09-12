@@ -193,3 +193,32 @@ test("the confirmation has to be typed", async ({ page }) => {
       .getByRole("button", { name: "Replace everything" }),
   ).toBeDisabled()
 })
+
+/**
+ * T38 (Pass 4, proximity): the danger box's button belongs to the words above it.
+ *
+ * The warning triangle is outside the text column, and the button had been left outside it
+ * too — so on `/settings/data` the button started 24px left of the title it acts on, while
+ * the Export and Restore blocks in the same card line their button up with their text. One
+ * box, two left edges, and the odd one out was the destructive control.
+ *
+ * Read-only: it opens nothing and changes nothing.
+ */
+test("the clear-all-data button lines up with the text it acts on", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto("/settings/data")
+
+  // The button carries the same words, so the title is matched as the paragraph it is.
+  const title = page.locator('p:text-is("Clear all data")')
+  const button = page.getByRole("button", { name: "Clear all data" })
+  await expect(title).toBeVisible()
+  await expect(button).toBeVisible()
+
+  const titleBox = (await title.boundingBox())!
+  const buttonBox = (await button.boundingBox())!
+  expect(Math.round(buttonBox.x), "the button's left edge").toBe(
+    Math.round(titleBox.x),
+  )
+})

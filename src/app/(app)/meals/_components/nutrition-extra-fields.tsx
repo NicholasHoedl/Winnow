@@ -56,7 +56,9 @@ export function NutritionExtraFields<T extends FieldValues & MicroFormValues>({
       <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-sm font-medium select-none">
         More nutrition (optional)
       </summary>
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      {/* `gap-4`: a label sits 8px above its own control, so a 12px gap to the field beside
+          it left the two distances near enough to read as one block (T38). */}
+      <div className="mt-3 grid grid-cols-2 gap-4">
         {MICROS.map(({ name, label, unit }) => (
           <Field key={name}>
             <FieldLabel htmlFor={`${idPrefix}-${name}`}>

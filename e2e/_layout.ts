@@ -44,6 +44,12 @@ export const ROUTES = [
   "/activity/lists",
   "/activity/repeating",
   "/budget",
+  // A month that is not this one, because the month control is WIDER there: "This month"
+  // only renders when you are away from it, and that fifth control is what pushed the row
+  // past its own edges at 393px (T38). Every sweep before this one loaded the current
+  // month on every Budget page, so the widest state of the control was never measured.
+  // Fixed rather than computed — any past month gives the state, for good.
+  "/budget?month=2026-01",
   "/budget/budgets",
   "/budget/categories",
   "/budget/trends",
