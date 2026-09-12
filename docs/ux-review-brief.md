@@ -44,9 +44,12 @@ Each of these was learned by breaking something.
    nothing. A process on 3100 left over from a crashed run is the test stub and may be
    stopped; nothing on 3000, ever.
 3. **Never run `pnpm format`.** The repository mixes CRLF and LF line endings file by file,
-   and a repo-wide format rewrites them. Format only the files you touched, and keep each
-   file's line ending (see "Tools" below). Before editing a file, note whether it is CRLF:
-   `grep -c $'\r' <file>` prints a non-zero count if it is.
+   and a repo-wide format rewrites them; `.prettierrc` also lacks `"semi": false`, so a bare
+   `prettier --write` adds semicolons to a codebase written without them. Format only the
+   files you touched, with `--no-semi`, and keep each file's line ending (see "Tools"
+   below). `grep` cannot see a carriage return in this shell; count them with node:
+   `node -e "const s=require('fs').readFileSync(process.argv[1],'latin1');console.log((s.match(/\r\n/g)||[]).length)" <file>`.
+   The Edit tool keeps a file's existing endings; the Write tool creates LF files.
 4. **Never commit, push, stash, reset or check out.** The supervisor is the only one who
    touches git.
 5. **Never type or echo the owner's password or any key.** The e2e suite signs in as its own
@@ -64,8 +67,10 @@ Each of these was learned by breaking something.
 
 - Typecheck: `npx tsc --noEmit`. Clean.
 - Lint: `pnpm lint`. 0 errors; 5 known `react-hooks/incompatible-library` warnings.
-- Unit tests: `npx vitest run` (jsdom; `vitest.setup.ts` polyfills `PointerEvent` so base-ui
-  controls can be clicked in component tests).
+- Unit tests: `npx vitest run` (jsdom; `vitest.setup.ts` polyfills `PointerEvent` and
+  `ResizeObserver` so base-ui and cmdk controls can be rendered and clicked in component
+  tests). A base-ui Select can be driven in jsdom: click the trigger, then `keyDown` Enter on
+  the option; a synthetic click on the item does not commit it.
 - E2E: `pnpm test:e2e <spec files>`. Projects: `chromium` (desktop, most specs), `mobile`
   (iPhone 15 in WebKit, runs only `mobile-layout.spec.ts`), `desktop-layout` (runs only
   `desktop-layout.spec.ts`). Passing spec files without `--project` runs each in the
@@ -108,14 +113,15 @@ Each of these was learned by breaking something.
 The supervisor's scratchpad holds three helpers:
 `C:/Users/nickh/AppData/Local/Temp/claude/C--Users-nickh-Documents-GitHub-Winnow/b9449f7a-5898-459b-81ac-c7c08b87e6dc/scratchpad/`
 
-- `fmt.mjs <files>`: runs prettier on exactly those files and restores each one's original
-  line ending. Use it instead of any repo-wide format.
+- `fmt.mjs <files>`: runs prettier with `--no-semi` on exactly those files and restores each
+  one's original line ending. Use it instead of any repo-wide format.
 - `rep.cjs < spec`: batch exact replacements that keep line endings. The spec is blocks of
   `@@FILE <path>`, `@@OLD`, the old text, `@@NEW`, the new text, `@@END`, with an `@@FILE`
   line before every block. All blocks are checked before anything is written.
 - `fmtcheck.mjs`: a quick formatting check. It does not load the Tailwind plugin, so it can
-  flag class order that is actually correct; `npx prettier --check --no-semi <file>` in the
-  repo is the authority.
+  flag class order that is actually correct. The authority, run in the repo:
+  `npx prettier --check --no-semi --end-of-line auto <file>` (without `--end-of-line auto`
+  every CRLF file warns).
 
 The Edit and Write tools are fine too. After editing a CRLF file, confirm it is still CRLF.
 
