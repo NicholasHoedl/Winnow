@@ -470,6 +470,41 @@ export function LogFoodDialog({
               </Field>
             </div>
 
+            {/* With the serving, not after the optional micros: the meal decides which
+                section of the day's log this entry lands in, which is a fact about the
+                entry rather than a detail of its nutrition. */}
+            <Field>
+              <FieldLabel htmlFor="l-meal">Meal</FieldLabel>
+              <Controller
+                control={control}
+                name="mealType"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ? field.value : NO_MEAL}
+                    onValueChange={(value) =>
+                      field.onChange(
+                        value && value !== NO_MEAL ? (value as MealType) : "",
+                      )
+                    }
+                  >
+                    <SelectTrigger id="l-meal" className="w-full">
+                      <SelectValue>
+                        {(value) => MEAL_LABELS[value as MealType] ?? "No meal"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_MEAL}>No meal</SelectItem>
+                      {MEAL_TYPES.map((mealType) => (
+                        <SelectItem key={mealType} value={mealType}>
+                          {MEAL_LABELS[mealType]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
+
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel htmlFor="l-cal">Calories</FieldLabel>
@@ -518,38 +553,6 @@ export function LogFoodDialog({
               errors={errors}
               idPrefix="l"
             />
-
-            <Field>
-              <FieldLabel htmlFor="l-meal">Meal</FieldLabel>
-              <Controller
-                control={control}
-                name="mealType"
-                render={({ field }) => (
-                  <Select
-                    value={field.value ? field.value : NO_MEAL}
-                    onValueChange={(value) =>
-                      field.onChange(
-                        value && value !== NO_MEAL ? (value as MealType) : "",
-                      )
-                    }
-                  >
-                    <SelectTrigger id="l-meal" className="w-full">
-                      <SelectValue>
-                        {(value) => MEAL_LABELS[value as MealType] ?? "No meal"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_MEAL}>No meal</SelectItem>
-                      {MEAL_TYPES.map((mealType) => (
-                        <SelectItem key={mealType} value={mealType}>
-                          {MEAL_LABELS[mealType]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
 
             {!isEdit && !foodId && (
               <Controller

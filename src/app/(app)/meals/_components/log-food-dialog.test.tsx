@@ -120,4 +120,16 @@ describe("LogFoodDialog", () => {
     show()
     expect(screen.getByLabelText("Serving")).toHaveValue("1 serving")
   })
+
+  // Which meal an entry belongs to is primary — it decides which section of the day's log
+  // the entry lands in — so it is asked with the serving, not after the optional micros.
+  it("asks for the meal before the optional nutrition", () => {
+    show()
+
+    const meal = screen.getByLabelText("Meal")
+    const extras = screen.getByText("More nutrition (optional)")
+    expect(
+      meal.compareDocumentPosition(extras) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
 })

@@ -1,5 +1,7 @@
 import { test, expect } from "./_test"
 
+import { seedWeights } from "./_weights"
+
 // Browser coverage for T4-S12: logging water, recording a weigh-in, and the trend chart.
 //
 // Per-run days, and every row this spec creates is deleted at the end. `body_weights` is
@@ -171,4 +173,57 @@ test("a weigh-in saves, corrects in place, and drives the trend chart", async ({
   // Cleanup — both rows, or the next run's inputs come up pre-filled.
   await clearWeight(page, DAY)
   await clearWeight(page, EARLIER)
+})
+
+test("the day's log comes before the trend, and starts on the first screen", async ({
+  page,
+}) => {
+  // 393 × 852, where the order is felt: a desktop shows the whole stack at once and a
+  // phone shows one block at a time, so this is the width the page has to be ordered for.
+  await page.setViewportSize({ width: 393, height: 852 })
+
+  // Two weigh-ins, planted rather than typed: what this test is about is where the trend
+  // card sits, and one weigh-in draws a note instead of a chart.
+  await seedWeights([
+    { date: EARLIER, weightLb: 184.2 },
+    { date: DAY, weightLb: 181.8 },
+  ])
+
+  const name = `e2eorder${Date.now()}`
+  await page.goto(`/meals?date=${DAY}`)
+  const bar = page.getByLabel("Quick add meal")
+  await bar.fill(`${name} 600cal 40p 30c 10f`)
+  await bar.press("Enter")
+
+  const row = page.locator(`div.bg-card:has-text("${name}")`)
+  await expect(row.first()).toBeVisible()
+  // Scoped to `main`: sonner's toast container is a `<section>` too, and the toast that
+  // follows a quick add quotes the entry's name — so a bare `section` filter matches both.
+  const log = page.locator("main section").filter({ hasText: name })
+  const trend = page.getByRole("heading", { name: "Weight trend" })
+  await expect(trend).toBeVisible()
+
+  // Document order, which down a single column is reading order: the meal section the
+  // entry is in, then the trend card. The chart is the tallest thing on the page and
+  // (Pass 0) the least used, so it closes the page rather than pushing the log off it.
+  const heading = (await trend.elementHandle())!
+  const logIsFirst = await log.evaluate(
+    (section, other) =>
+      !!(
+        section.compareDocumentPosition(other) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+      ),
+    heading,
+  )
+  expect(logIsFirst).toBe(true)
+
+  // And with one entry on the day, the log begins inside the first screenful — the page
+  // is not scrolled here, so this is the offset from the top of the document.
+  const box = (await log.boundingBox())!
+  expect(box.y).toBeLessThan(852)
+
+  // Cleanup: the entry. The two weigh-ins go with the rest in afterEach.
+  await row.first().getByRole("button", { name: "Entry actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(row).toHaveCount(0)
 })

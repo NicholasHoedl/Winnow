@@ -8,10 +8,14 @@
 // "nothing is done with them" T29 was asked to fix. See `weightTrend`.
 //
 // T32 put it in the dashboard's fold shell: the chart is the tallest thing on the page and
-// the readout above it already says what it shows, so it folds to its heading and stays
+// the weigh-in card already says what it shows, so it folds to its heading and stays
 // folded — through the same preference and the same chevron as a dashboard card
 // (ADR-0027). The shell is a client component holding this server-rendered chart, which
 // is exactly the arrangement ADR-0016 chose for the dashboard.
+//
+// T37 moved it to the foot of the page, after the day's log (ADR-0030). It reads last: the
+// weigh-in card that feeds it sits up under the macro summary and quotes the same readout,
+// and the log — what the page is for — no longer starts below the tallest card on it.
 
 import { DashboardCard } from "../../_components/dashboard-card"
 import { LineChart } from "@/components/charts/line-chart"
@@ -61,8 +65,8 @@ export function WeightTrendSection({
   /** Read from the folded-cards preference by the page, like a dashboard card's. */
   collapsed: boolean
 }) {
-  // Nothing logged: stay quiet. The weigh-in card sits directly above, so there's no
-  // discovery problem to solve with an empty box here.
+  // Nothing logged: stay quiet. A weigh-in is taken on the card up under the macro
+  // summary, so there is no discovery problem to solve with an empty box down here.
   if (!readout || trend.points.length === 0) return null
 
   if (trend.points.length === 1) {
@@ -112,8 +116,8 @@ export function WeightTrendSection({
       className="mt-4"
     >
       {/* The readout, as a caption to the chart. It was in the heading until T32, and a
-          heading that folds away with its body is no heading; the weigh-in card above
-          quotes the same figures, so a folded card loses nothing from the page. */}
+          heading that folds away with its body is no heading; the weigh-in card further up
+          the page quotes the same figures, so a folded card loses nothing from the page. */}
       <p className="text-muted-foreground mb-3 text-xs tabular-nums">
         trend {formatWeight(readout.trendLb, unit)}
         {readout.ratePerWeekLb !== null &&

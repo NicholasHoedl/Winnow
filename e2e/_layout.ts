@@ -241,9 +241,12 @@ export async function seedWideContent(
   browser: Browser,
   prefix: string,
 ): Promise<void> {
-  // `browser.newPage()` inherits NOTHING from the project's `use` — not the storage state
-  // and not the base URL — so it would run signed out against a relative path. Reading
-  // them off `test.info()` keeps this correct if either ever moves in the config.
+  // A context made off the `browser` fixture INHERITS the project's `use`, the storage
+  // state included: `browser.newContext({ baseURL })` alone comes back signed IN. The
+  // awkward direction is the other one — a signed-OUT page here would take
+  // `storageState: undefined` AND `context.clearCookies()`. Both options are read off
+  // `test.info()` and passed anyway, so the seed states what it runs as instead of leaning
+  // on the inheritance, and stays correct if either ever moves in the config.
   const { baseURL, storageState } = test.info().project.use
   const context = await browser.newContext({ baseURL, storageState })
   const page = await context.newPage()

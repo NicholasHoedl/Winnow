@@ -101,7 +101,11 @@ Each of these was learned by breaking something.
   inside a `Dialog` must stop Escape from propagating, or Escape closes the whole dialog.
 - In specs: cmdk items are `role="option"`; drive a base-ui Select with
   `getByLabel(...).click()` then `getByRole("option", ...)`; use `{ exact: true }` when a
-  label also appears in helper text. Helpers live in `e2e/_*.ts` (`_menu.ts` for the Meals
+  label also appears in helper text; the delete-goal confirm is `role="alertdialog"`, which
+  `getByRole("dialog")` does not find; sonner's toast region is a `<section>` too, so scope a
+  section locator to `main`. Run any e2e batch longer than a few minutes as a background
+  command and poll its output; a foreground command that prints nothing for ten minutes gets
+  the agent stopped while the run keeps going. Helpers live in `e2e/_*.ts` (`_menu.ts` for the Meals
   actions menu, `_card.ts` for `visibleCard`, `_tasks.ts`, `_habits.ts`, `_goals.ts`,
   `_transactions.ts`, `_weights.ts`, `_server-write.ts`).
 - Tailwind classes only, colors from the tokens in `src/app/globals.css`. Code comments

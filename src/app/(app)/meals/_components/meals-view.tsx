@@ -321,11 +321,6 @@ export function MealsView({
         readout={weightReadout}
       />
 
-      {/* Directly under the card that feeds it, not after the meal log. It sat at the
-          foot of the page until T29, below every entry of the day, which is how several
-          weigh-ins could be logged without the trend ever being seen. */}
-      {weightTrend}
-
       <div className="mt-4 flex flex-col gap-3">
         <MealQuickAdd date={date} foods={foods} />
         {/* Saved meals before recent foods: a meal is something you chose to keep. */}
@@ -394,6 +389,13 @@ export function MealsView({
           ))
         )}
       </div>
+
+      {/* After the log, not above it. T29 put the trend directly under the weigh-in card
+          that feeds it, so a weigh-in could not be logged without it being seen; the cost
+          was that the day's log — the thing this page is for — started seventh of seven
+          blocks, below the tallest card on the page. The weigh-in card still quotes the
+          trend, the rate and the goal, so nothing is lost by reading the chart last. */}
+      {weightTrend}
 
       <LogFoodDialog
         date={date}

@@ -30,7 +30,7 @@ the daily driver until then.
 | 0   | Setup       | Rank the flows                    | Pareto principle                      | Light  | Done 2026-09-11 |
 | 1   | Structure   | Navigation and menus              | Jakob's law + Hick's law              | Medium | Done 2026-09-11 |
 | 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Done 2026-09-11 |
-| 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Not started     |
+| 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Done 2026-09-12 |
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Not started     |
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Not started     |
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Not started     |
@@ -155,16 +155,36 @@ order and emphasis questions, filed for Passes 3 and 5; carbs derived from the o
 tax spread across receipt rows, plain-language quick add and "More nutrition" were already
 right.
 
-### Pass 3: sections and their order
+### Pass 3: sections and their order — done 2026-09-12 (T37, ADR-0030)
 
-- Keep: the sidebar and tab bar open with Dashboard and close with Review; settings is split
-  into seven pages by subject.
-- Look at: the meals page puts its main content, the day's log, below seven other blocks.
-- Look at (Pass 2): the budget page's two AI panels each carry a paragraph of description,
-  about 490 px together on a phone, below the ledger.
-- Look at (Pass 2): the Activity page puts the quick-add bar, the search box and the status
-  row above the first task; the dashboard offers two ways to start a task, the New task
-  button and the quick-add bar.
+Walked every screen at 393 px and 1366 px in light, the daily five in dark, and every dialog
+at 393 px, and measured each screen's blocks in order with their heights, against chunking
+(content in a few units under headings that say what they hold) and the serial position
+effect (the first block is the screen's main job).
+
+Fixed:
+
+- The meals page put the day's log seventh of seven blocks, 913 px down at 393 px, with the
+  weight trend chart directly above it. The chart reads last now (ADR-0030, amending
+  ADR-0023's placement); the weigh-in card keeps quoting the trend, so a weigh-in is still
+  logged with it in view.
+- The log food dialog put the Meal field below the optional "More nutrition" disclosure,
+  second from last on the most-used dialog. Meal sits under Serving and Servings.
+- The region settings page was seven unlike settings in one 751 px column. It is two groups
+  under small headings, Dates and times and Units, the shape the defaults page already had.
+- A wrong comment in the layout sweep said a fresh browser context inherits nothing from the
+  project; it inherits the signed-in state.
+
+Kept, with reasons: Repeat sits last in the task and transaction dialogs, since repeating
+tasks and transactions have never been used and last is where a rare option belongs, while
+the event dialog puts Repeat under Ends because recurrence is common for events; the Activity
+page's quick-add bar, search and status row above the list, since capture is the page's
+daily job, the other two are the list's own controls, and the first task starts at 316 px;
+the categories page's add form above its list, the app's pattern for every add bar; the
+dashboard, which opens with Slate; the review, whose AI summary sits above the figures it
+narrates; the settings index and the seven settings pages that open with the same three
+blocks; the calendar's chips, month nav and grid; the sidebar and tab bar opening with
+Dashboard and closing with Review.
 
 ### Pass 4: visible grouping
 
@@ -183,6 +203,9 @@ right.
 - Keep: pages lead with one filled action, such as Log food on Meals.
 - Look at (Pass 1): the dashboard stacks two filled buttons that both create a task, New task
   in the header and Add in the quick-add bar.
+- Look at (Pass 3): the budget page's two AI panels open with a paragraph each, 436 px
+  together at 393 px; the repeating tasks page opens with a 140 px explainer above a 74 px
+  list, where the lists page's is 100 px and the habits and routines pages' 40 px.
 
 ### Pass 6: reach
 
@@ -192,6 +215,7 @@ right.
   icon, which it calls a real regression in click target.
 - Look at: list rows use small icon buttons for edit and delete.
 - Look at: on a phone, page actions such as Log food sit in the top corner, the hardest reach.
+- Look at (Pass 3): the budget ledger puts 112 px of filter controls above a 62 px row.
 
 ### Pass 7: input
 
@@ -229,6 +253,8 @@ right.
   without a word.
 - Look at (Pass 0, weak): in testing, AI goal plans were discarded about twice as often as they
   were applied (24 to 11). Test data, so a hint rather than a finding.
+- Look at (Pass 3): the saved meals dialog with nothing saved is a heading and "New meal",
+  with no sentence saying what a saved meal is for.
 
 ## Screens and dialogs
 

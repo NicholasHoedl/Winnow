@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-11**. T36 is the review's second pass, what each screen asks of
+Last updated: **2026-09-12**. T37 is the review's third pass, sections and their order: the
+weight chart reads last on the meals page (ADR-0030), the Meal field moves up in the log food
+dialog, and the region settings page is chunked under two headings; no migration.
+T36 is the review's second pass, what each screen asks of
 the user: the forms fill in what the app already knows (the default meal, the due date as
 a repeat's start, the routine defaults, the category a payee had last time), the transaction
 amount opens empty, Add event dates the event where you are looking, the create links open
@@ -46,7 +49,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T36 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T37 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -608,6 +611,22 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T37 is shipped: the review's Pass 3, sections and their order.** No migration. **ADR-0030**
+amends ADR-0023: the weight trend chart reads last on `/meals`, and the weigh-in card's quote
+of the trend is what keeps a weigh-in logged with the trend in view. `docs/ux-review.md` has
+the block-by-block measurements the pass was judged on.
+
+- **Meals**: `meals-view.tsx` renders `weightTrend` after the day's log, and
+  `weight-trend-section.tsx`'s comments say so. `log-food-dialog.tsx` puts the Meal field
+  under Serving and Servings, above the calories, the macros and the "More nutrition" fold.
+- **Settings**: `region-section.tsx` is two groups, Dates and times and Units, drawn with the
+  same local `Group` (an `h3` and a `Separator`) that `defaults-section.tsx` has; the two
+  copies could become one next to `SettingsSection` when a third page needs it.
+- Tests: `meals-view.test.tsx` and `region-section.test.tsx` are new (heading order);
+  `meals-water-weight.spec.ts` holds the log before the trend card at 393 px with the log's
+  top inside the first screen; `e2e/_layout.ts`'s comment on what a fresh context inherits is
+  corrected (it inherits the project's storage state, so it arrives signed in).
 
 **T36 is shipped: the review's Pass 2, what each screen asks of the user.** No migration, no
 ADR: every change is a prefill or a fold, recorded in `docs/ux-review.md`.
