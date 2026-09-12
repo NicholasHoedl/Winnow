@@ -4,6 +4,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { createTransaction } from "@/modules/budget/actions"
 import type { Category } from "@/modules/budget/queries"
 import type { PayeeMemory } from "@/modules/budget/service"
+import { DEFAULT_PREFERENCES } from "@/lib/preferences"
+import { PreferencesProvider } from "@/components/preferences/preferences-provider"
 
 import { BudgetQuickAdd } from "./budget-quick-add"
 
@@ -52,11 +54,13 @@ describe("BudgetQuickAdd", () => {
 
   function renderBar(memory: PayeeMemory[] = MEMORY) {
     return render(
-      <BudgetQuickAdd
-        date="2026-09-10"
-        categories={CATEGORIES}
-        payeeMemory={memory}
-      />,
+      <PreferencesProvider value={DEFAULT_PREFERENCES}>
+        <BudgetQuickAdd
+          date="2026-09-10"
+          categories={CATEGORIES}
+          payeeMemory={memory}
+        />
+      </PreferencesProvider>,
     )
   }
 
@@ -109,6 +113,38 @@ describe("BudgetQuickAdd", () => {
       expect(createTransaction).toHaveBeenCalledWith(
         expect.objectContaining({ type: "income", categoryId: "cat-pay" }),
       ),
+    )
+  })
+
+  // A line that is all amount and tag leaves nothing to name the row by, and the toast
+  // read "Added transaction" — the one entry in the app whose ending says what KIND of
+  // thing happened rather than what happened. The amount is always there, and the
+  // category is there whenever the tag resolved.
+  it("names the amount, and the category, when the line has no words", async () => {
+    renderBar()
+    type("+500 #salary")
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Added $500.00 to Salary"),
+    )
+  })
+
+  it("falls back to the amount alone when nothing filed it", async () => {
+    renderBar([])
+    type("4.50")
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Added $4.50"),
+    )
+  })
+
+  // Unchanged where the line does say something: the words are the better name.
+  it("still names the payee when the line has one", async () => {
+    renderBar()
+    type("Tesco 45")
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Added Tesco"),
     )
   })
 

@@ -385,6 +385,10 @@ test("a discarded proposal creates nothing and leaves the queue empty", async ({
   await planGoal(page, goalTitle)
 
   await page.getByRole("button", { name: "Discard", exact: true }).click()
+  // T44 (Pass 10): the panel vanishing used to be the only sign the discard had landed —
+  // on the same clearing write that toasts "Marked as read" when a summary is dismissed.
+  // A flow ends with a word for what happened.
+  await expect(page.getByText("Discarded", { exact: true })).toBeVisible()
   // `/companion` had an empty-state pane reading "Nothing proposed yet"; the dispersed
   // pages have no placeholder, because the renderer simply is not rendered. Absence of the
   // dismissal control is the same claim, made against what is actually on screen.

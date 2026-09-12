@@ -23,6 +23,7 @@ import {
   sortByCompletion,
   UNFILED,
 } from "@/modules/todos/service"
+import { dueStatus } from "@/lib/date"
 import { tagKey } from "@/lib/tags"
 import { undoToast } from "@/lib/toast"
 
@@ -324,13 +325,25 @@ export function ActivityView({
 
   // `bucketTasks` drops completed tasks, so the "All" filter keeps its own flat list —
   // a Done task has no date section it belongs in.
+  const now = new Date()
   const openTasks = matched.filter((task) => task.status === "open")
-  const buckets = bucketTasks(openTasks, new Date(), timeZone)
+  const buckets = bucketTasks(openTasks, now, timeZone)
   // Newest first: `getTasks` orders by sort_order then due date, which says nothing useful
   // about finished work and scattered the thing you just ticked through the list.
   const done = sortByCompletion(
     matched.filter((task) => task.status === "done"),
   )
+  /**
+   * The day's work is finished (T44, the peak-end rule).
+   *
+   * Ticking the last thing due today empties the Today bucket, and the section built from
+   * it simply disappeared — the page then ended on "Done", a label over a pile of finished
+   * work rather than a word about the day. Said only when there WAS something due: an
+   * empty day has nothing to have finished, and the page's own empty state covers that.
+   */
+  const todayFinished =
+    buckets.today.length === 0 &&
+    done.some((task) => dueStatus(task.dueDate, now, timeZone) === "due-today")
   const isEmpty =
     filter === "active"
       ? openTasks.length === 0
@@ -563,7 +576,18 @@ export function ActivityView({
                   // built from open tasks only.
                   if (filter === "completed") return null
                   const rows = applyPending(buckets[section.key])
-                  if (rows.length === 0) return null
+                  if (rows.length === 0) {
+                    // Where Today was, in the page's own empty-state style: the section is
+                    // gone because its work is done, which is worth a sentence.
+                    return section.key === "today" && todayFinished ? (
+                      <p
+                        key={section.key}
+                        className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm"
+                      >
+                        Everything due today is done.
+                      </p>
+                    ) : null
+                  }
                   return (
                     <section key={section.key}>
                       {/* `mb-1`, tighter than the 16px above it: a heading has to read as

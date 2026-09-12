@@ -74,7 +74,7 @@ import { QuotaMeter } from "@/components/ui/quota-meter"
 
 import { DeleteGoalDialog } from "./delete-goal-dialog"
 import { GoalForm } from "./goal-form"
-import { formatGoalDate, windowLabel } from "./goal-format"
+import { formatGoalDate, goalEnding, windowLabel } from "./goal-format"
 
 /** A task linked to the goal, in the shape `getGoalPlan` returns it. */
 export type GoalTask = {
@@ -414,8 +414,11 @@ export function GoalEditorDialog({
 
   const urgency = dueStatus(goal.targetDate, new Date(), timeZone)
   // "Complete" only means something for a goal that is actually measured — an untracked
-  // goal is never finished, so it can still be past its target.
-  const complete = goal.progress.kind !== "none" && goal.progress.percent >= 100
+  // goal is never finished, so it can still be past its target. Since T44 the word for it
+  // is shared with the card (`goalEnding`), which is also what this line is now derived
+  // from: a finished goal SAYS so here, where it used to do nothing but suppress the
+  // "Past target" warning and then read like a goal that had not started.
+  const ending = goalEnding(goal.progress)
   const rowById = new Map(habitRows.map((row) => [row.id, row]))
 
   return (
@@ -425,13 +428,15 @@ export function GoalEditorDialog({
           <DialogHeader>
             <DialogTitle>{goal.title}</DialogTitle>
             <DialogDescription>
-              {goal.targetDate
-                ? urgency === "overdue" && !complete
-                  ? `Past target · ${formatGoalDate(goal.targetDate, locale)}`
-                  : urgency === "due-today" && !complete
-                    ? "Target today"
-                    : `Target ${formatGoalDate(goal.targetDate, locale)}`
-                : "No target date."}
+              {ending
+                ? ending
+                : goal.targetDate
+                  ? urgency === "overdue"
+                    ? `Past target · ${formatGoalDate(goal.targetDate, locale)}`
+                    : urgency === "due-today"
+                      ? "Target today"
+                      : `Target ${formatGoalDate(goal.targetDate, locale)}`
+                  : "No target date."}
             </DialogDescription>
           </DialogHeader>
 

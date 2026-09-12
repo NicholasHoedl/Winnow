@@ -79,7 +79,11 @@ async function runRoutine(page: Page, routineName: string, count: number) {
   })
   await expect(create).toBeVisible()
   await create.click()
-  await expect(page.getByText(`Added ${count} tasks`)).toBeVisible()
+  // Named, since T44 (Pass 10): the toast is read on `/activity/routines`, where every
+  // card has a Run button, so "Added 2 tasks" did not say which run it was the end of.
+  await expect(
+    page.getByText(`Added ${count} tasks from “${routineName}”`),
+  ).toBeVisible()
 }
 
 test.afterEach(async ({ page }) => {
@@ -229,7 +233,9 @@ test("a drop routine deletes only its own unfinished tasks", async ({
     })
     await expect(create).toBeVisible()
     await create.click()
-    await expect(page.getByText("Added 1 task")).toBeVisible()
+    // Named (T44), which also tells the two runs' toasts apart: both said "Added 1 task"
+    // before, so the second assertion could match either.
+    await expect(page.getByText(`Added 1 task from “${name}”`)).toBeVisible()
   }
 
   // Both tasks exist at this point — the toasts said so. Reading /activity is what runs

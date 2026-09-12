@@ -12,11 +12,14 @@ export function CategoryBars({
   categories,
   currency,
   collapsed,
+  firstRun = false,
 }: {
   budget: MonthSummary
   categories: Category[]
   currency: string
   collapsed: boolean
+  /** The first-run panel has said it; this card does not say it again (T44). */
+  firstRun?: boolean
 }) {
   const rows = budget.byCategory
     .filter((c) => c.budgetedCents > 0 || c.spentCents > 0)
@@ -45,9 +48,11 @@ export function CategoryBars({
       }
     >
       {rows.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No spending or budgets yet this month.
-        </p>
+        firstRun ? null : (
+          <p className="text-muted-foreground text-sm">
+            No spending or budgets yet this month.
+          </p>
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((row) => {

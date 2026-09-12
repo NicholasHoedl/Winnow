@@ -159,8 +159,17 @@ test("a target date in the past reads as at risk, unless the goal is done", asyn
   })
   await openDetail(page, finished)
   await expect(detail(page)).not.toContainText("Past target")
-  await expect(detail(page)).toContainText("Target")
+  // T44 (Pass 10): and it says which state it IS in. The dialog read "Target <date>" at
+  // 10 of 10 — the same line a goal that has not started carries — so the one reading
+  // worth having was the only one not made.
+  await expect(detail(page)).toContainText("Target reached")
   await closeDetail(page)
+
+  // The card says it too, in place of the momentum word: at target there is nothing left
+  // to be moving towards.
+  const card = goalCard(page, finished)
+  await expect(card.getByText("Target reached")).toBeVisible()
+  await expect(card.getByText("Moving")).toHaveCount(0)
 })
 
 /**

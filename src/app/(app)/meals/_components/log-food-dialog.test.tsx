@@ -101,6 +101,23 @@ describe("LogFoodDialog", () => {
     })
   })
 
+  // Its four siblings — the meals bar, the quick-pick strip, the day's log and a saved
+  // meal — all end with the food's name. A bare "Logged" made the one way in that you
+  // have to type into the one that would not say what it took.
+  it("names the food it logged", async () => {
+    vi.mocked(logMeal).mockResolvedValue({ ok: true })
+    show()
+
+    fireEvent.change(screen.getByLabelText("Food"), {
+      target: { value: "Porridge" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Log" }))
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Logged Porridge"),
+    )
+  })
+
   // No preference means what it always did: nothing is assumed, and "No meal" is still
   // a choice the user can make with the preference set.
   it("leaves the meal unset when there is no preference", () => {

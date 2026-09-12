@@ -197,8 +197,14 @@ export function CategoriesView({
       </form>
 
       <div className="mt-6 max-w-xl space-y-4">
+        {/* In the dashed box every other list draws its empty state in (T44). This was the
+            app's one bare line, and a sentence with no frame around it reads as a row that
+            failed to render rather than as the list saying it is empty. What a category is
+            for is the header's sentence, two inches up, so it is not repeated here. */}
         {categories.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No categories yet.</p>
+          <p className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
+            No categories yet.
+          </p>
         ) : (
           groups.map((group) =>
             group.items.length === 0 ? null : (

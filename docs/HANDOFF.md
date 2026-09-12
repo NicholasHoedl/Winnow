@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-12**. T43 is the review's ninth pass, speed and feedback: every
+Last updated: **2026-09-12**. T44 is the review's tenth and last pass, progress and endings:
+every flow ends with a word that names what happened, a finished goal and a finished day say
+so, the last two bare empty states say what they are for, and the first-run panel replaces
+the card sentences it was written to replace; no migration, no ADR. **The review is complete;
+`docs/ux-review.md` holds every pass's findings and the ideas it left.**
+T43 is the review's ninth pass, speed and feedback: every
 daily interaction measured on a production build sits inside the thresholds, so the pass
 adds feedback where a wait had none, a spinner and a sentence about the wait on the five AI
 triggers, a busy Revise button, and a success toast on the Activity quick-add; no migration,
@@ -71,12 +76,15 @@ practice grouped by cadence on the dashboard — shipped without entries here; `
 them. §1 still describes the deploy as of 2026-08-25 and nothing about the running stack
 was re-checked; the green baseline in §3 is as re-measured after T23.
 
-**A UX review is under way.** `docs/ux-review.md` holds the order of its eleven passes, the
-flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read it before
-UI work, so a change lands in the pass that owns it.
+**The UX review is complete** (T35 to T44, 2026-09-11 and 12). `docs/ux-review.md` holds the
+order of its eleven passes, the flow tiers Pass 0 set, each pass's findings with the
+measurements they were judged on, and the ideas each pass recorded rather than built. Read
+it before UI work: the tests the passes installed (`navigation`, `emphasis`, `reach`,
+`offline-write`, the layout sweeps' past-month route) hold what they found, and a change
+that trips one is arguing with a measurement.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T43 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T44 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -638,6 +646,27 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T44 is shipped: the review's Pass 10, progress and endings, and the review is complete.** No
+migration, no ADR; the flow-by-flow table is in `docs/ux-review.md`, with the ideas the pass
+recorded rather than built.
+
+- **Endings that name what happened**: `log-food-dialog.tsx` toasts the food; `use-proposal.ts`'s
+  discard toasts "Discarded"; `run-routine-dialog.tsx` names the routine; `budget-quick-add.tsx`
+  falls back to the amount and category when a line has no words.
+- **Honest finishes**: a goal at its target (or with every milestone done) says so on the card
+  and in the editor (`goal-card.tsx`, `goal-editor-dialog.tsx`, from the `complete` the editor
+  already computed); a day whose due tasks are all done says "Everything due today is done."
+  on `/activity` and on the Slate.
+- **Empty states**: `routines-view.tsx` says what a routine is for; `categories-view.tsx`'s
+  sits in the dashed box; the dashboard `page.tsx` passes `firstRun` to the Slate, the stat
+  cards and the category bars, which drop their own empty sentences while the first-run
+  panel shows (the cards keep their headers, with nothing beneath, on a brand-new account;
+  no e2e covers first run, since it needs the dashboard before any spec has seeded anything).
+  A finished goal's word comes from `goalEnding` in `goals/_components/goal-format.ts`,
+  shared by the card and the editor.
+- e2e: `_transactions.ts`'s `deleteTransactionsMatching` matches payee or description, so rows
+  the quick-add bar makes (no payee) are cleaned up; before, that cleanup silently did nothing.
 
 **T43 is shipped: the review's Pass 9, speed and feedback.** No migration, no ADR; the
 measurements are in `docs/ux-review.md`. To measure again: `NEXT_DIST_DIR=.next-pass9 pnpm

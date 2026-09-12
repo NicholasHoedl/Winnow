@@ -170,6 +170,68 @@ describe("Slate", () => {
   })
 
   /**
+   * T44 (Pass 10, the peak-end rule): a finished day gets a word for it.
+   *
+   * A ticked task stays on the board until midnight, struck through — which is the right
+   * call, and it left the end of a day looking exactly like the middle of one. The line is
+   * the Today band's, so it goes whenever something is still open there.
+   */
+  it("says so once everything due today is done", () => {
+    show({ bands: bands([task({ status: "done" })]) })
+
+    expect(
+      screen.getByText("Everything due today is done."),
+    ).toBeInTheDocument()
+  })
+
+  it("says nothing of the sort while a task is still open", () => {
+    show({ bands: bands([task({ status: "done" }), task({ id: "task-2" })]) })
+
+    expect(
+      screen.queryByText("Everything due today is done."),
+    ).not.toBeInTheDocument()
+  })
+
+  // Ticking the last one says it, before the write has even landed — the same optimistic
+  // state that strikes the row through.
+  it("says it as the last task is ticked", async () => {
+    vi.mocked(toggleTaskStatus).mockResolvedValue({ ok: true })
+    show()
+
+    fireEvent.click(screen.getByLabelText("Complete Water the plants"))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Everything due today is done."),
+      ).toBeInTheDocument(),
+    )
+  })
+
+  // A clear day is not a finished one: there was nothing to do, so there is nothing to
+  // have finished, and the card already has a sentence for it.
+  it("keeps it off an empty day", () => {
+    show({ bands: bands([]) })
+
+    expect(
+      screen.queryByText("Everything due today is done."),
+    ).not.toBeInTheDocument()
+  })
+
+  /**
+   * T44: the first-run panel says what to do; the cards under it must not each say it
+   * again in their own words. The CARD stays — an account with no data still has a
+   * dashboard — only its sentence goes.
+   */
+  it("drops its empty sentence while the first-run panel is up", () => {
+    show({ bands: bands([]), firstRun: true })
+
+    expect(
+      screen.queryByText(/Nothing due and nothing scheduled/),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Slate" })).toBeInTheDocument()
+  })
+
+  /**
    * T28: a deadline is on the board from the day it is set. Which tasks are deadlines is
    * `buildSlate`'s decision and has its tests; what is pinned here is that the block draws
    * them with their day, that a deadline whose day has come says so in today's list, and

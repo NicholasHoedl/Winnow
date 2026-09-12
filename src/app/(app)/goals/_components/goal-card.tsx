@@ -3,6 +3,7 @@
 import Link from "next/link"
 import {
   CalendarDays,
+  Check,
   ChevronRight,
   ListTodo,
   Pause,
@@ -14,6 +15,8 @@ import { formatLongDate } from "@/lib/format"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 import type { GoalWithProgress } from "@/modules/goals/queries"
 import { Progress } from "@/components/ui/progress"
+
+import { goalEnding } from "./goal-format"
 
 /** How many of a goal's tasks are still open, for the count under its name. */
 function openTaskCount(goal: GoalWithProgress): number {
@@ -38,14 +41,28 @@ function ProgressFigure({ goal }: { goal: GoalWithProgress }) {
 }
 
 /**
- * Movement.
+ * Movement, until there is nowhere left to move.
  *
  * The rail compressed this to a bare icon for the healthy case, because in a 280px column
  * "3 finished in the last week" cost more room than it earned. A page is not 280px wide, so
  * the moving case gets its words back — the whole reason momentum is computed is to be read,
  * and an icon that means "fine" is one nobody learns.
+ *
+ * A finished goal takes this slot instead (T44). Momentum answers "is it moving", which is
+ * the wrong question at target: the card was the halfway card with a longer bar, still
+ * reporting "Moving" about work that is over. No celebration, and no extra element — the
+ * honest state in the place the reading already was.
  */
 function MomentumMark({ goal }: { goal: GoalWithProgress }) {
+  const ending = goalEnding(goal.progress)
+  if (ending) {
+    return (
+      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+        <Check className="size-3.5" />
+        {ending}
+      </span>
+    )
+  }
   if (!goal.momentum) return null
   if (!goal.momentum.stalled) {
     return (

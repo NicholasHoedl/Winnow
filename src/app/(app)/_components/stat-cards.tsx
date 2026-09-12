@@ -127,6 +127,7 @@ export function StatCards({
   budget,
   currency,
   collapsed,
+  firstRun = false,
 }: {
   macros: { progress: MacroProgressSet }
   /** Null with tracking off or nothing logged; the tile then says nothing about weight. */
@@ -135,6 +136,13 @@ export function StatCards({
   currency: string
   /** The two tiles fold independently, so this is a pair rather than one flag. */
   collapsed: { macros: boolean; budget: boolean }
+  /**
+   * The first-run panel is on screen and has already answered "what do I do now" (T44).
+   * These two tiles then said "Nothing logged today." and "No activity yet this month."
+   * underneath it, which is the same answer twice more in weaker words. The tiles stay;
+   * their sentences go. One flag, not a pair — the panel is on or it is not.
+   */
+  firstRun?: boolean
 }) {
   const nothingLogged = MACROS.every(
     ({ key }) => macros.progress[key].consumed === 0,
@@ -180,9 +188,11 @@ export function StatCards({
         collapsed={collapsed.macros}
       >
         {nothingLogged ? (
-          <p className="text-muted-foreground flex flex-1 items-center text-sm">
-            Nothing logged today.
-          </p>
+          firstRun ? null : (
+            <p className="text-muted-foreground flex flex-1 items-center text-sm">
+              Nothing logged today.
+            </p>
+          )
         ) : (
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
             {MACROS.map(({ key, label, accent }) => {
@@ -236,9 +246,11 @@ export function StatCards({
         collapsed={collapsed.budget}
       >
         {budget.expenseCents === 0 && budget.totalBudgetedCents === 0 ? (
-          <p className="text-muted-foreground flex flex-1 items-center text-sm">
-            No activity yet this month.
-          </p>
+          firstRun ? null : (
+            <p className="text-muted-foreground flex flex-1 items-center text-sm">
+              No activity yet this month.
+            </p>
+          )
         ) : (
           <div className="flex flex-col gap-2">
             {/* `flex-wrap` and a gap, because money must never be the thing that gets

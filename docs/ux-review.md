@@ -37,7 +37,7 @@ the daily driver until then.
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Done 2026-09-12 |
 | 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Done 2026-09-12 |
 | 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Done 2026-09-12 |
-| 10  | Feel        | Progress and endings              | Goal-gradient effect + peak-end rule  | Light  | Not started     |
+| 10  | Feel        | Progress and endings              | Goal-gradient effect + peak-end rule  | Light  | Done 2026-09-12 |
 
 Sizes: **Light** is a handful of screens, or measuring before judging. **Medium** is every
 screen once. **Heavy** is every screen and dialog, field by field.
@@ -437,21 +437,50 @@ why. Left for another day: a way to cancel a generation, which needs an abort si
 the request and a decision about a half-finished generation on the server; the dashboard's
 and the calendar's data cost on a cold load, which HANDOFF §6 already names.
 
-### Pass 10: progress and endings
+### Pass 10: progress and endings — done 2026-09-12 (T44)
 
-- Keep: macro bars, habit meters, goal momentum and the budget's month bar; a pending AI
-  proposal survives a reload.
-- Look at (withdrawn by Pass 9): applying an AI proposal used to end in silence; since T42 it
-  toasts what was created, with an Undo.
-- Look at (Pass 0, weak): in testing, AI goal plans were discarded about twice as often as they
-  were applied (24 to 11). Test data, so a hint rather than a finding.
-- Look at (Pass 3, withdrawn by Pass 5): the saved meals dialog's empty state does carry a
-  sentence saying what a saved meal is for.
-- Look at (Pass 7): `+500 #bonus` in the budget bar toasts "Added transaction" because the
-  line is all amount and tag, where a line with words toasts them.
-- Look at (Pass 8): applying a plan used to end with the previous toast ("Goal added") still on
-  screen, so the ending read as the wrong action's; T42's apply toast now follows it. Check
-  the order reads right.
+Walked ten flows from start to end at 393 px (a day of tasks on both surfaces, a habit's
+week, a day of food and water, a goal to its target, a routine run, the four AI flows, the
+weekly review, a budget month, and every capture bar and dialog's closing toast) and every
+list's empty state, against the goal-gradient effect (progress visible and honest, and the
+finish shown as it nears) and the peak-end rule (a flow ends with a word that says what
+happened, and an empty state says what the thing is for).
+
+Fixed:
+
+- Log food ended in the bare word "Logged" while its four siblings name the food; it names
+  the food. Discarding an AI proposal ended in silence, and Pass 0 found discard the more
+  common ending; it says "Discarded", the shape "Marked as read" already had. A routine run's
+  toast names the routine. `+500 #bonus` toasted "Added transaction"; with no words to name
+  it says the amount and the category.
+- A finished goal read as unfinished: a full bar, and the momentum still "Moving". At the
+  target, or with every milestone done, the card and the editor say so. A finished day of
+  tasks ended with the Today heading gone and struck rows on the Slate until midnight; both
+  say "Everything due today is done."
+- The routines page's empty state was the one Activity page saying only "No routines yet."; it
+  says what a routine is for. The categories page's was the one drawn as a bare line; it sits
+  in the dashed box every other list uses. The first-run panel said it replaced the four
+  card-level empty sentences and did not; it does.
+- Suite: the transaction cleanup helper matched on payee only, so rows the quick-add bar
+  created were never deleted and every such cleanup reported success; it matches the
+  description too.
+
+Kept, with reasons: the habit meter's growing overshoot, an honest reading; the macro
+percentages past 100 with the bar clamped; the budget's per-category and month readings and
+the dashboard's month bar; the AI apply toast naming exactly what it created, taking the
+front of the stack (the Pass 8 order note resolves); the receipt and summary endings; the
+Slate, tasks, habits, lists, repeating, goals, saved meals, food library and trends empty
+states; the review's headline and its elapsed-days denominator; a pending AI proposal
+surviving a reload.
+
+Ideas recorded, not done, because each adds a state or a target the app does not have and
+is a taste call: a moment at a habit's quota beyond the surplus colour; protein past its
+target drawn the same red as calories past theirs, where one is a floor and the other a
+ceiling; the review ending on a card and pointing nowhere, and an empty week printing
+"Nothing recorded" above four cards of zeros; a water target, the one daily log with no
+progress and no end; a budget month's ending, since a past month renders exactly like the
+current one; a goal card that holds both milestones and a number showing only the
+milestones.
 
 ## Screens and dialogs
 

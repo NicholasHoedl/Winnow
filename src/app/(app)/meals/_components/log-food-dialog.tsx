@@ -349,7 +349,9 @@ export function LogFoodDialog({
       toast.error(result.error)
       return
     }
-    toast.success(isEdit ? "Entry updated" : "Logged")
+    // Named, like the four other ways in (the bar, the quick picks, the day's log and a
+    // saved meal). The form holds the name whether it was searched for or typed.
+    toast.success(isEdit ? "Entry updated" : `Logged ${data.name}`)
     onOpenChange(false)
   })
 

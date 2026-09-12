@@ -8,10 +8,13 @@ import { createTransaction } from "@/modules/budget/actions"
 import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import type { Category } from "@/modules/budget/queries"
 import {
+  amountToMinor,
+  formatCents,
   parseTransactionQuickAdd,
   rememberedCategory,
   type PayeeMemory,
 } from "@/modules/budget/service"
+import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
@@ -34,6 +37,9 @@ export function BudgetQuickAdd({
 }) {
   const [text, setText] = React.useState("")
   const [pending, startTransition] = React.useTransition()
+  // Only for the toast below: the row itself is written in major units and shaped by the
+  // server, as it always was.
+  const { currency } = usePreferences()
 
   function submit(event: React.FormEvent) {
     event.preventDefault()
@@ -82,7 +88,20 @@ export function BudgetQuickAdd({
         setText(restoreIfEmpty(trimmed))
         return
       }
-      toast.success(`Added ${parsed.description || "transaction"}`)
+      // A line that is all amount and tag — "+500 #bonus" — leaves nothing to name the
+      // row by, and the fallback named the KIND of thing that happened rather than the
+      // thing. The amount is always there, and the category is there whenever the tag or
+      // the payee memory resolved one.
+      const filed = categoryId
+        ? categories.find((category) => category.id === categoryId)
+        : undefined
+      toast.success(
+        parsed.description
+          ? `Added ${parsed.description}`
+          : `Added ${formatCents(amountToMinor(parsed.amount, currency), currency)}${
+              filed ? ` to ${filed.name}` : ""
+            }`,
+      )
     })
   }
 

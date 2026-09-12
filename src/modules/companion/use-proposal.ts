@@ -197,40 +197,49 @@ export function useProposal({
   )
 
   /**
-   * Clears the proposal only once the write has landed.
+   * Clears the proposal only once the write has landed, and says which ending it was.
    *
    * It used to null the local state first and fire the action unawaited, which looked
    * instant and lost the write to any navigation that outran it — the proposal was back
    * on the next page load. Same shape as the quick-add capture bug: optimistic UI in
    * front of an unawaited action. A single UPDATE is fast enough not to need the
    * optimism, and `busy` keeps the button honest while it runs.
+   *
+   * One write, two endings (T44): the same clearing UPDATE is a discard from a panel that
+   * proposed rows and a "read it" from one that only had something to say. The word is the
+   * caller's, so neither has to raise its own and the toast cannot fire for a write that
+   * failed — which is what the second one did while it sat outside this.
    */
-  const discard = React.useCallback(() => {
-    if (!active) return
-    const id = active.id
-    setBusy(true)
-    void discardProposal(id)
-      .then((result) => {
-        if (!result.ok) {
-          toast.error(result.error)
-          return
-        }
-        setActive(null)
-        setPayload(null)
-        router.refresh()
-      })
-      .finally(() => setBusy(false))
-  }, [active, router])
+  const clear = React.useCallback(
+    (ending: string) => {
+      if (!active) return
+      const id = active.id
+      setBusy(true)
+      void discardProposal(id)
+        .then((result) => {
+          if (!result.ok) {
+            toast.error(result.error)
+            return
+          }
+          setActive(null)
+          setPayload(null)
+          router.refresh()
+          toast.success(ending)
+        })
+        .finally(() => setBusy(false))
+    },
+    [active, router],
+  )
+
+  /** Throwing a proposal away. The panel simply vanished before T44. */
+  const discard = React.useCallback(() => clear("Discarded"), [clear])
 
   /**
    * A summary has nothing to create, so Done just clears it from the queue. Reusing
    * `discardProposal` rather than inventing a fourth status: "read and finished with" and
    * "rejected" are the same outcome for something that was only ever going to be read.
    */
-  const done = React.useCallback(() => {
-    discard()
-    toast.success("Marked as read")
-  }, [discard])
+  const done = React.useCallback(() => clear("Marked as read"), [clear])
 
   /**
    * Take back exactly the rows one apply created.

@@ -111,9 +111,16 @@ test("a library food can be edited, and past entries keep their snapshot", async
 
   // Assert on the rendered library row rather than re-opening the form: saving
   // revalidates /meals, which re-mounts the list, and a second click would race it.
-  await expect(page.locator("li").filter({ hasText: food })).toContainText(
-    "400 kcal",
-  )
+  //
+  // Scoped to the dialog since T44: the log toast names the food it logged, and sonner
+  // draws each toast as an `<li>` — so a bare `li` filtered on the food's name resolves to
+  // the toast as well as the library row. Same trap as the toast region being a `<section>`.
+  await expect(
+    page
+      .getByRole("dialog", { name: "Food library" })
+      .locator("li")
+      .filter({ hasText: food }),
+  ).toContainText("400 kcal")
 
   await page.keyboard.press("Escape")
 

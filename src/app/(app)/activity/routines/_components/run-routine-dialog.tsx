@@ -78,8 +78,10 @@ export function RunRoutineDialog({
       }
       const { taskIds, count } = result
       onOpenChange(false)
+      // Named: this is read on a page where every card has a Run button, so a bare count
+      // does not say which run it is the end of.
       undoToast(
-        `Added ${count} ${count === 1 ? "task" : "tasks"}`,
+        `Added ${count} ${count === 1 ? "task" : "tasks"} from “${routine.name}”`,
         () =>
           startTransition(async () => {
             const undone = await undoRoutineRun(taskIds)

@@ -381,3 +381,40 @@ test("open and done tasks share a left edge, and a heading hugs its own list", a
     await deleteGoalsMatching(prefix)
   }
 })
+
+/**
+ * T44 (Pass 10, the peak-end rule): a finished day gets a word for it.
+ *
+ * Every date section is built from OPEN tasks, so ticking the last thing due today takes
+ * the "Today" heading away with it and leaves the page ending on "Done" — a label over a
+ * pile of finished work, which is not the same as being told the day is finished.
+ *
+ * Goal-scoped for the reason the test above is: the claim here is that a section is EMPTY,
+ * and what else the account has due today is not this test's to control.
+ */
+test("a day whose tasks are all done says so where Today was", async ({
+  page,
+}) => {
+  const prefix = `E2E act ending ${Date.now()}`
+  const today = new Date().toLocaleDateString("en-CA")
+  const goalId = await seedGoal({ title: `${prefix} goal` })
+  await seedTask({ title: `${prefix} task`, dueDate: today, goalId })
+
+  try {
+    await page.goto(`/activity?goal=${goalId}`)
+    const heading = page
+      .locator("main")
+      .getByRole("heading", { name: "Today", exact: true })
+    const ending = page.getByText("Everything due today is done.")
+    await expect(heading).toBeVisible()
+    await expect(ending).toHaveCount(0)
+
+    await visibleCard(page, `${prefix} task`).getByLabel("Mark as done").click()
+
+    await expect(ending).toBeVisible()
+    await expect(heading).toHaveCount(0)
+  } finally {
+    await deleteTasksMatching(prefix)
+    await deleteGoalsMatching(prefix)
+  }
+})

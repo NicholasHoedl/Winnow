@@ -301,7 +301,9 @@ export function RoutinesView({
 
       {routines.length === 0 ? (
         <div className="text-muted-foreground rounded-xl border border-dashed p-10 text-center text-sm">
-          No routines yet.
+          No routines yet. A routine is a set of tasks created together when you
+          run it, so starting a morning or packing for a trip is one action
+          rather than five.
         </div>
       ) : (
         <div className="flex flex-col gap-4">

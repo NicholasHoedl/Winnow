@@ -287,6 +287,7 @@ export default async function DashboardPage({
               calendars={calendars}
               use24Hour={use24HourTime}
               collapsed={folded("slate")}
+              firstRun={isFirstRun}
             />
           </Reveal>
           {/* Directly under the tasks, so *what I have to do*, *what I have to keep doing*
@@ -340,14 +341,19 @@ export default async function DashboardPage({
               budget={budget}
               currency={currency}
               collapsed={{ macros: folded("macros"), budget: folded("budget") }}
+              firstRun={isFirstRun}
             />
           </Reveal>
           <Reveal delay={0.2}>
+            {/* `firstRun` on these three (T44): the panel above replaces the cards' own
+                empty sentences, which is what its own note has always said it was for —
+                they were all still printing theirs underneath it. */}
             <CategoryBars
               budget={budget}
               categories={categories}
               currency={currency}
               collapsed={folded("categories")}
+              firstRun={isFirstRun}
             />
           </Reveal>
         </div>

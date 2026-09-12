@@ -219,6 +219,7 @@ export function Slate({
   calendars,
   use24Hour,
   collapsed,
+  firstRun = false,
 }: {
   overdue: TaskWithSeries[]
   /** Deadlines still ahead, nearest first — see `Slate.dueBy` in `_lib/agenda.ts`. */
@@ -227,6 +228,11 @@ export function Slate({
   calendars: Calendar[]
   use24Hour: boolean
   collapsed: boolean
+  /**
+   * The first-run panel is on screen, so this card's own empty sentence is one of four
+   * saying what that panel has already answered (T44). The card stays; the sentence goes.
+   */
+  firstRun?: boolean
 }) {
   // `isPending` is wanted now, for the dashboard agenda's reorder: it is true exactly while an
   // optimistic write is open, which is the window a hard navigation would throw away.
@@ -316,10 +322,12 @@ export function Slate({
   if (empty) {
     return (
       <DashboardCard card="slate" title="Slate" collapsed={collapsed}>
-        <p className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-center text-sm">
-          <Sparkles className="size-6 opacity-60" />
-          Nothing due and nothing scheduled. The day is yours.
-        </p>
+        {firstRun ? null : (
+          <p className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-center text-sm">
+            <Sparkles className="size-6 opacity-60" />
+            Nothing due and nothing scheduled. The day is yours.
+          </p>
+        )}
       </DashboardCard>
     )
   }
@@ -425,6 +433,24 @@ export function Slate({
           )
           const shown = isLater ? tasks.slice(0, ROWS_SHOWN) : tasks
 
+          /**
+           * Today's work is finished (T44, the peak-end rule).
+           *
+           * A ticked task stays on the board until midnight — the rule `_lib/agenda.ts`
+           * owns, and the right one — so the end of a day looked exactly like the middle
+           * of one: struck rows, no word. Read off `isDone`, so the last tick says it
+           * before the write has landed. Routine groups count; an event is not a task and
+           * has nothing to be done about.
+           */
+          const todayTasks = [
+            ...band.groups.flatMap((group) => group.tasks),
+            ...tasks,
+          ]
+          const finished =
+            isToday &&
+            todayTasks.length > 0 &&
+            todayTasks.every((task) => isDone(task))
+
           return (
             <div key={band.date ?? "later"}>
               <div className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -442,6 +468,15 @@ export function Slate({
               </div>
 
               <div className="flex flex-col gap-1.5">
+                {/* Above the rows, not instead of them: the struck-through list is the
+                    record of the day and stays until midnight. Same line as `/activity`
+                    puts where its Today section was. */}
+                {finished && (
+                  <p className="text-muted-foreground py-1 pl-14 text-sm">
+                    Everything due today is done.
+                  </p>
+                )}
+
                 {/* All-day events lead: they colour the whole day rather than sitting at
                       a point in it, which is the same reason the time sort puts them
                       first. */}
