@@ -259,6 +259,54 @@ describe("parseMealQuickAdd — explicit macros", () => {
   it("defaults the name to 'Quick entry' when only macros are given", () => {
     expect(parseMealQuickAdd("300cal 20p", FOODS)?.name).toBe("Quick entry")
   })
+
+  // T41 (Pass 7): the unit letter had to touch the digits, so "banana 100 cal 1 g
+  // protein" — a label read out loud — logged a food called "banana 1 g protein" with no
+  // protein in it. A figure, an optional unit, and the macro's name or its letter.
+  it("reads a macro written with a space and a unit", () => {
+    expect(
+      parseMealQuickAdd("banana 100 cal 1 g protein", FOODS),
+    ).toMatchObject({
+      name: "banana",
+      calories: 100,
+      proteinG: 1,
+    })
+    expect(
+      parseMealQuickAdd("toast 12g carbs 3 g fat 1g protein", FOODS),
+    ).toMatchObject({ name: "toast", carbsG: 12, fatG: 3, proteinG: 1 })
+    expect(parseMealQuickAdd("shake 1 g p 2 g c 3 g f", FOODS)).toMatchObject({
+      name: "shake",
+      proteinG: 1,
+      carbsG: 2,
+      fatG: 3,
+    })
+  })
+
+  it("still reads the compact forms", () => {
+    expect(parseMealQuickAdd("50kcal 10p 20c 5f", FOODS)).toMatchObject({
+      calories: 50,
+      proteinG: 10,
+      carbsG: 20,
+      fatG: 5,
+    })
+    expect(parseMealQuickAdd("50 cal 20 p", FOODS)).toMatchObject({
+      calories: 50,
+      proteinG: 20,
+    })
+  })
+
+  // The other side of accepting a space: a digit inside a name is part of the name, not a
+  // figure. Both of these are real drinks.
+  it("leaves a number that belongs to the name alone", () => {
+    expect(parseMealQuickAdd("7-up 140 cal", FOODS)).toMatchObject({
+      name: "7-up",
+      calories: 140,
+    })
+    expect(parseMealQuickAdd("v8 juice 45 cal", FOODS)).toMatchObject({
+      name: "v8 juice",
+      calories: 45,
+    })
+  })
 })
 
 describe("parseMealQuickAdd — a macro token must be a whole word", () => {
@@ -309,6 +357,19 @@ describe("parseMealQuickAdd — library food match", () => {
   it("defaults servings to 1 and ignores a zero quantity", () => {
     expect(parseMealQuickAdd("banana", FOODS)?.servings).toBe(1)
     expect(parseMealQuickAdd("banana x0", FOODS)?.servings).toBe(1)
+  })
+
+  // T41 (Pass 7): the bar's own placeholder offers "2 eggs", and a leading number was
+  // read as part of the name — so the bar answered "nothing called 2 eggs" to its own
+  // example. Postel's law: take the quantity the way a person writes it.
+  it("reads a leading number as the quantity", () => {
+    expect(parseMealQuickAdd("2 banana", FOODS)).toEqual(banana)
+    expect(parseMealQuickAdd("1.5 banana", FOODS)?.servings).toBe(1.5)
+    expect(parseMealQuickAdd("lunch 2 banana", FOODS)).toMatchObject({
+      foodId: "f-ban",
+      servings: 2,
+      mealType: "lunch",
+    })
   })
 
   it("matches a multi-word food without stripping its meal-type-like first word", () => {
@@ -532,6 +593,39 @@ describe("parseQuickAddFallback", () => {
     })
     expect(parseQuickAddFallback("  Apple  ")).toEqual({
       query: "Apple",
+      servings: 1,
+      mealType: "",
+    })
+  })
+
+  // The placeholder's two examples, on the path they actually take: the library has no
+  // egg, so the name goes to the reference foods — with the 2 taken off it either way.
+  it("takes a leading number as the quantity, like the x forms", () => {
+    expect(parseQuickAddFallback("2 eggs")).toEqual({
+      query: "eggs",
+      servings: 2,
+      mealType: "",
+    })
+    expect(parseQuickAddFallback("Eggs x2")).toEqual({
+      query: "Eggs",
+      servings: 2,
+      mealType: "",
+    })
+    expect(parseQuickAddFallback("breakfast 1.5 porridge")).toEqual({
+      query: "porridge",
+      servings: 1.5,
+      mealType: "breakfast",
+    })
+  })
+
+  it("leaves a number that belongs to the name alone", () => {
+    expect(parseQuickAddFallback("7-up")).toEqual({
+      query: "7-up",
+      servings: 1,
+      mealType: "",
+    })
+    expect(parseQuickAddFallback("v8 juice")).toEqual({
+      query: "v8 juice",
       servings: 1,
       mealType: "",
     })

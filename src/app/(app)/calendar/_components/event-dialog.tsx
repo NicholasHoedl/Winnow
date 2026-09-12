@@ -387,8 +387,15 @@ export function EventDialog({
           <FieldGroup>
             {isRecurring && (
               <Field>
-                <FieldLabel>Apply changes to</FieldLabel>
-                <div className="flex gap-2">
+                <FieldLabel id="e-scope-label">Apply changes to</FieldLabel>
+                {/* A row of buttons is a group, and a `FieldLabel` over one names
+                    nothing: without this the buttons read out as "This event" with no
+                    word about what they applied to (T41). */}
+                <div
+                  role="group"
+                  aria-labelledby="e-scope-label"
+                  className="flex gap-2"
+                >
                   {SCOPE_OPTIONS.map(({ value, label }) => (
                     <button
                       key={value}
@@ -428,7 +435,7 @@ export function EventDialog({
 
             {calendars.length > 0 && (
               <Field>
-                <FieldLabel>Calendar</FieldLabel>
+                <FieldLabel htmlFor="e-calendar">Calendar</FieldLabel>
                 <Controller
                   control={control}
                   name="calendarId"
@@ -437,7 +444,7 @@ export function EventDialog({
                       value={field.value || undefined}
                       onValueChange={(value) => value && field.onChange(value)}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger id="e-calendar" className="w-full">
                         <SelectValue>
                           {(value) =>
                             calendars.find((c) => c.id === value)?.name ??
@@ -556,7 +563,7 @@ export function EventDialog({
 
             {scope !== "this" && (
               <Field>
-                <FieldLabel>Repeat</FieldLabel>
+                <FieldLabel htmlFor="e-repeat">Repeat</FieldLabel>
                 <Controller
                   control={control}
                   name="recurrenceFreq"
@@ -565,7 +572,7 @@ export function EventDialog({
                       value={field.value}
                       onValueChange={(value) => value && field.onChange(value)}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger id="e-repeat" className="w-full">
                         <SelectValue>
                           {(value) => FREQ_LABELS[value as RecurrenceFreq]}
                         </SelectValue>
@@ -613,7 +620,7 @@ export function EventDialog({
 
                 {freq === "weekly" && (
                   <Field>
-                    <FieldLabel>Repeat on</FieldLabel>
+                    <FieldLabel id="e-weekdays-label">Repeat on</FieldLabel>
                     <Controller
                       control={control}
                       name="recurrenceWeekdays"
@@ -624,7 +631,11 @@ export function EventDialog({
                             ? 1 << startWd
                             : field.value
                         return (
-                          <div className="flex flex-wrap gap-1">
+                          <div
+                            role="group"
+                            aria-labelledby="e-weekdays-label"
+                            className="flex flex-wrap gap-1"
+                          >
                             {WEEKDAY_TOGGLES.map((label, wd) => {
                               const on = (mask & (1 << wd)) !== 0
                               return (
@@ -656,7 +667,7 @@ export function EventDialog({
 
                 {freq === "monthly" && (
                   <Field>
-                    <FieldLabel>Repeats on</FieldLabel>
+                    <FieldLabel id="e-monthly-label">Repeats on</FieldLabel>
                     <Controller
                       control={control}
                       name="recurrenceMonthlyMode"
@@ -673,7 +684,11 @@ export function EventDialog({
                           },
                         ]
                         return (
-                          <div className="flex flex-col gap-2 sm:flex-row">
+                          <div
+                            role="group"
+                            aria-labelledby="e-monthly-label"
+                            className="flex flex-col gap-2 sm:flex-row"
+                          >
                             {options.map((o) => (
                               <button
                                 key={o.value}

@@ -247,9 +247,19 @@ export type ParsedMeal = {
   saveToLibrary: boolean
 }
 
+const MEAL_WORDS = "breakfast|lunch|dinner|snack"
+
 // Quantity: "x2" / "×2" / "*2" (operator-first) or "2x" / "2×" (number-first).
 const QTY_OP_FIRST = /(?:^|\s)[x×*]\s?(\d+(?:\.\d+)?)(?=\s|$)/i
 const QTY_NUM_FIRST = /(?:^|\s)(\d+(?:\.\d+)?)\s?[x×](?=\s|$)/i
+// …or a bare number in front of the name, which is how the bar's own placeholder writes
+// it ("2 eggs") and how a person says it out loud. Anchored at the front, past a leading
+// meal-type word, so a digit anywhere else stays part of the name ("v8 juice", "7-up").
+// Read AFTER the macros, or "50 cal" would be fifty of something called "cal".
+const QTY_LEADING = new RegExp(
+  `^\\s*(?:(?:${MEAL_WORDS})\\s+)?(\\d+(?:\\.\\d+)?)\\s+(?=\\S)`,
+  "i",
+)
 // Macro tokens. Calories REQUIRE "cal"/"kcal" so a bare "c" is unambiguously carbs.
 //
 // **The leading word boundary is a bug fix, not tidying.** These ended at a boundary but did
@@ -260,11 +270,17 @@ const QTY_NUM_FIRST = /(?:^|\s)(\d+(?:\.\d+)?)\s?[x×](?=\s|$)/i
 //
 // It works because `c` and `2` are both word characters, so there is no boundary between
 // them — while a genuine `600cal` after a space still matches.
+//
+// `\s?(?:g\s?)?` is the other half of the same idea: a label is read out as "1 g
+// protein", and that spelled the figure away from its letter — so "banana 100 cal 1 g
+// protein" logged a food called "banana 1 g protein" with no protein in it. The gram is
+// optional and so is each space; the leading `\b` still keeps all of it out of the middle
+// of a word.
 const MACRO_CALORIES = /\b(\d+(?:\.\d+)?)\s?k?cals?\b/i
-const MACRO_PROTEIN = /\b(\d+(?:\.\d+)?)\s?p(?:rotein)?\b/i
-const MACRO_CARBS = /\b(\d+(?:\.\d+)?)\s?c(?:arbs?)?\b/i
-const MACRO_FAT = /\b(\d+(?:\.\d+)?)\s?f(?:at)?\b/i
-const LEADING_MEAL_TYPE = /^(breakfast|lunch|dinner|snack)\b/i
+const MACRO_PROTEIN = /\b(\d+(?:\.\d+)?)\s?(?:g\s?)?p(?:rotein)?\b/i
+const MACRO_CARBS = /\b(\d+(?:\.\d+)?)\s?(?:g\s?)?c(?:arbs?)?\b/i
+const MACRO_FAT = /\b(\d+(?:\.\d+)?)\s?(?:g\s?)?f(?:at)?\b/i
+const LEADING_MEAL_TYPE = new RegExp(`^(${MEAL_WORDS})\\b`, "i")
 
 // Blank a span with spaces so indices are preserved and later regexes can't re-see it.
 function blankSpan(text: string, start: number, length: number): string {
@@ -277,6 +293,33 @@ function collapse(text: string): string {
 
 function capitalizeWord(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+/**
+ * The quantity, and the line with its span blanked: "x2", "2x", or a bare "2 " in front
+ * of the name. The leading form blanks only the digits, so a meal-type word before them
+ * ("lunch 2 eggs") survives for the caller to read the way it always has.
+ */
+function takeQuantity(text: string): { servings: number; rest: string } {
+  const op = QTY_OP_FIRST.exec(text) ?? QTY_NUM_FIRST.exec(text)
+  if (op) {
+    const q = parseFloat(op[1])
+    return {
+      servings: q > 0 ? q : 1,
+      rest: blankSpan(text, op.index, op[0].length),
+    }
+  }
+  const lead = QTY_LEADING.exec(text)
+  if (!lead) return { servings: 1, rest: text }
+  const q = parseFloat(lead[1])
+  return {
+    servings: q > 0 ? q : 1,
+    rest: blankSpan(
+      text,
+      lead.index + lead[0].indexOf(lead[1]),
+      lead[1].length,
+    ),
+  }
 }
 
 // Exact (normalized) name, else a UNIQUE prefix match, else none.
@@ -302,14 +345,6 @@ export function parseMealQuickAdd(
   if (!text.trim()) return null
 
   let work = text
-  let servings = 1
-
-  const qty = QTY_OP_FIRST.exec(work) ?? QTY_NUM_FIRST.exec(work)
-  if (qty) {
-    const q = parseFloat(qty[1])
-    if (q > 0) servings = q
-    work = blankSpan(work, qty.index, qty[0].length)
-  }
 
   const macros = { calories: 0, proteinG: 0, carbsG: 0, fatG: 0 }
   let hasMacro = false
@@ -324,6 +359,11 @@ export function parseMealQuickAdd(
   extract(MACRO_PROTEIN, "proteinG")
   extract(MACRO_CARBS, "carbsG")
   extract(MACRO_FAT, "fatG")
+
+  // The quantity comes out of what the macros left, not before them: "50 cal 20 p" opens
+  // with a figure, and a leading number is only a quantity when a name follows it.
+  const { servings, rest } = takeQuantity(work)
+  work = rest
 
   if (hasMacro) {
     let leftover = collapse(work)
@@ -390,15 +430,8 @@ export function parseQuickAddFallback(text: string): {
   servings: number
   mealType: "" | MealType
 } | null {
-  let work = text
-  let servings = 1
-  const qty = QTY_OP_FIRST.exec(work) ?? QTY_NUM_FIRST.exec(work)
-  if (qty) {
-    const q = parseFloat(qty[1])
-    if (q > 0) servings = q
-    work = blankSpan(work, qty.index, qty[0].length)
-  }
-  let query = collapse(work)
+  const { servings, rest } = takeQuantity(text)
+  let query = collapse(rest)
   let mealType: "" | MealType = ""
   const lead = LEADING_MEAL_TYPE.exec(query)
   if (lead) {

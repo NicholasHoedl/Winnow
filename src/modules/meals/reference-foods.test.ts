@@ -92,9 +92,73 @@ describe("tokenize", () => {
     ])
   })
 
-  it("leaves a short word its s — 'peas' and 'eggs' are not stems of anything", () => {
-    expect(tokenize("Peas, green, raw")).toEqual(["peas", "green", "raw"])
-    expect(tokenize("Eggs")).toEqual(["eggs"])
+  // T41 (Pass 7): a four-letter word used to keep its s, on the reasoning that a query
+  // typed without one still lands as a prefix. The reverse never worked — "eggs" typed at
+  // a name that reads "Egg, whole, raw" matched nothing — and "2 eggs" is the meals bar's
+  // own placeholder. Both sides stem, so the match works in either direction.
+  it("stems a short plural too, both sides of the match", () => {
+    expect(tokenize("Peas, green, raw")).toEqual(["pea", "green", "raw"])
+    expect(tokenize("Eggs")).toEqual(["egg"])
+    expect(tokenize("Oats")).toEqual(["oat"])
+  })
+
+  it("leaves a word that only looks plural", () => {
+    // Three letters: too short to be a plural of anything worth finding.
+    expect(tokenize("Gas")).toEqual(["gas"])
+    // "ss" is not a plural — and "bass" stemmed to "bas" would be a prefix of "basil".
+    expect(tokenize("Bass, fresh")).toEqual(["bass", "fresh"])
+    expect(tokenize("Watercress")).toEqual(["watercress"])
+  })
+})
+
+// The bug the stemming fixes, end to end: the quick-add bar hands the reference foods a
+// name, and "eggs" has to reach "Egg, whole, raw, fresh".
+describe("plural queries reach the singular name", () => {
+  const plurals = buildReferenceIndex(
+    decodeReferenceFoods({
+      source: "test",
+      foods: [
+        [
+          748967,
+          "Egg, whole, raw, fresh",
+          "Dairy and Egg Products",
+          [143, 12.56, 0.72, 9.51, 0, 0.37, 3.13, 142],
+          [["1 large", 50]],
+        ],
+        [
+          170419,
+          "Peas, green, raw",
+          "Vegetables and Vegetable Products",
+          [81, 5.42, 14.45, 0.4, 5.1, 5.67, 0.071, 5],
+          [["1 cup", 145]],
+        ],
+        [
+          169705,
+          "Oats",
+          "Breakfast Cereals",
+          [389, 16.89, 66.27, 6.9, 10.6, null, 1.217, 2],
+          [["1 cup", 156]],
+        ],
+      ],
+    }),
+  )
+
+  it("finds the singular name from the plural, and the plural from the singular", () => {
+    expect(bestReferenceFood(plurals, "eggs")?.name).toBe(
+      "Egg, whole, raw, fresh",
+    )
+    expect(bestReferenceFood(plurals, "egg")?.name).toBe(
+      "Egg, whole, raw, fresh",
+    )
+    expect(bestReferenceFood(plurals, "peas")?.name).toBe("Peas, green, raw")
+    expect(bestReferenceFood(plurals, "pea")?.name).toBe("Peas, green, raw")
+    expect(bestReferenceFood(plurals, "oats")?.name).toBe("Oats")
+    expect(bestReferenceFood(plurals, "oat")?.name).toBe("Oats")
+  })
+
+  it("does not turn a short word into a match for something else", () => {
+    expect(bestReferenceFood(plurals, "gas")).toBeNull()
+    expect(names(searchReferenceFoods(plurals, "pears"))).toEqual([])
   })
 })
 

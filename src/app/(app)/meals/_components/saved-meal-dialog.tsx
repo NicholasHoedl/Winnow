@@ -272,13 +272,16 @@ export function SavedMealDialog({
             </Field>
 
             <Field>
-              <FieldLabel>Foods</FieldLabel>
+              <FieldLabel id="sm-foods-label">Foods</FieldLabel>
               {rows.length === 0 ? (
                 <p className="text-muted-foreground rounded-md border border-dashed p-4 text-center text-sm">
                   Nothing in this meal yet. Add a food below.
                 </p>
               ) : (
-                <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+                <ul
+                  aria-labelledby="sm-foods-label"
+                  className="flex max-h-48 flex-col gap-1 overflow-y-auto"
+                >
                   {rows.map(({ key, seed, item }) => (
                     <li
                       key={key}
@@ -300,6 +303,7 @@ export function SavedMealDialog({
                         type="number"
                         step="any"
                         min="0"
+                        inputMode="decimal"
                         className="w-20"
                         aria-label={`Servings of ${item.name}`}
                         defaultValue={seed}
@@ -334,6 +338,7 @@ export function SavedMealDialog({
             <Field>
               <FieldLabel>Add a food</FieldLabel>
               <FoodSearch
+                label="Add a food"
                 foods={foods}
                 quickPicks={quickPicks}
                 offEnabled={offEnabled}

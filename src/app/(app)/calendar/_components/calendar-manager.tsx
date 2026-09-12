@@ -23,7 +23,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
 type CalendarFormValues = { name: string; color: number }
@@ -111,12 +116,16 @@ export function CalendarManager({
               <FieldError errors={[errors.name]} />
             </Field>
             <Field>
-              <FieldLabel>Colour</FieldLabel>
+              <FieldLabel id="cal-colour-label">Colour</FieldLabel>
               <Controller
                 control={control}
                 name="color"
                 render={({ field }) => (
-                  <div className="flex gap-2">
+                  <div
+                    role="group"
+                    aria-labelledby="cal-colour-label"
+                    className="flex gap-2"
+                  >
                     {COLOR_SLOTS.map((slot) => {
                       const on = field.value === slot
                       return (

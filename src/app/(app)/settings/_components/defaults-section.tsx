@@ -181,7 +181,7 @@ export function DefaultsSection({
         <FieldGroup>
           <Group title="Dashboard">
             <Field>
-              <FieldLabel>Start on</FieldLabel>
+              <FieldLabel htmlFor="landing-trigger">Start on</FieldLabel>
               <Controller
                 control={control}
                 name="landingPage"
@@ -372,7 +372,9 @@ export function DefaultsSection({
 
           <Group title="Meals">
             <Field>
-              <FieldLabel>Quick-added meals go to</FieldLabel>
+              <FieldLabel htmlFor="meal-type-trigger">
+                Quick-added meals go to
+              </FieldLabel>
               <Controller
                 control={control}
                 name="defaultMealType"

@@ -105,8 +105,9 @@ function show(props: Partial<React.ComponentProps<typeof EventDialog>> = {}) {
  * The moved-occurrence test below is that pin, and it is not reachable from a browser
  * without first dragging an occurrence and then editing it.
  *
- * The Calendar and Repeat controls are base-ui `Select`s and stay in `e2e/` — see the note
- * in `transaction-dialog.test.tsx`.
+ * CHOOSING from the Calendar and Repeat controls stays in `e2e/` — they are base-ui
+ * `Select`s; see the note in `transaction-dialog.test.tsx`. What they are CALLED is here,
+ * because a name is a property of the render and nothing else was holding it.
  */
 describe("EventDialog", () => {
   beforeEach(() => {
@@ -205,6 +206,48 @@ describe("EventDialog", () => {
     // The split point is the series' own date too, for the same reason.
     expect(from).toBe("2026-09-10")
     expect(updateEvent).not.toHaveBeenCalled()
+  })
+
+  /**
+   * T41 (Pass 7): what a control is CALLED, which nothing here was pinning.
+   *
+   * Both selects had a `FieldLabel` with no `htmlFor`, so the trigger's accessible name
+   * was the value it happened to be showing — "Personal", "Does not repeat" — and the
+   * three button rows were named nothing at all. The names are the reason `getByLabel`
+   * and `getByRole(..., { name })` can address them, so an assertion on the name is also
+   * an assertion that the locators in `e2e/` keep working.
+   */
+  it("names both selects after the label above them", () => {
+    show()
+    expect(screen.getByRole("combobox", { name: "Calendar" })).toBeVisible()
+    expect(screen.getByRole("combobox", { name: "Repeat" })).toBeVisible()
+  })
+
+  it("names the scope and repeat toggles after their labels", () => {
+    show({ occurrence: occurrence() })
+
+    const scope = screen.getByRole("group", { name: "Apply changes to" })
+    expect(scope).toContainElement(
+      screen.getByRole("button", { name: "All events" }),
+    )
+
+    // Weekly: the day toggles. They only render once the edit is not scoped to one date.
+    fireEvent.click(screen.getByRole("button", { name: "All events" }))
+    const days = screen.getByRole("group", { name: "Repeat on" })
+    expect(days).toContainElement(
+      screen.getByRole("button", { name: "Monday" }),
+    )
+  })
+
+  it("names the monthly toggle after its label", () => {
+    show({
+      occurrence: occurrence({
+        seriesEvent: { ...SERIES_EVENT, recurrenceFreq: "monthly" },
+      }),
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "All events" }))
+    expect(screen.getByRole("group", { name: "Repeats on" })).toBeVisible()
   })
 
   it("puts a server field error on the field that caused it", async () => {

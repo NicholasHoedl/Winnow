@@ -132,4 +132,31 @@ describe("LogFoodDialog", () => {
       meal.compareDocumentPosition(extras) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
+
+  // T41 (Pass 7): five figures, typed on a phone more often than anywhere else in the
+  // app, and not one of them asked for the number keypad.
+  it("asks a phone for the decimal keypad on every figure", () => {
+    show()
+
+    for (const label of [
+      "Servings",
+      "Calories",
+      "Protein (g)",
+      "Carbs (g)",
+      "Fat (g)",
+    ]) {
+      expect(screen.getByLabelText(label)).toHaveAttribute(
+        "inputmode",
+        "decimal",
+      )
+    }
+  })
+
+  // The search bar said "Search foods" to a screen reader under a label reading "Find a
+  // food" — two names for one control, and the visible one is the one you would say.
+  it("calls the search bar what the label above it says", () => {
+    show()
+
+    expect(screen.getByRole("combobox", { name: "Find a food" })).toBeVisible()
+  })
 })

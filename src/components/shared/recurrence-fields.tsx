@@ -212,7 +212,7 @@ export function RecurrenceFields<
 
           {repeat === "weekly" && !flexible && (
             <Field>
-              <FieldLabel>On days</FieldLabel>
+              <FieldLabel id={`${idPrefix}-weekdays-label`}>On days</FieldLabel>
               <Controller
                 control={c}
                 name="weekdays"
@@ -223,7 +223,11 @@ export function RecurrenceFields<
                       ? 1 << startWd
                       : field.value
                   return (
-                    <div className="flex flex-wrap gap-1">
+                    <div
+                      role="group"
+                      aria-labelledby={`${idPrefix}-weekdays-label`}
+                      className="flex flex-wrap gap-1"
+                    >
                       {WEEKDAY_TOGGLES.map((label, wd) => {
                         const on = (mask & (1 << wd)) !== 0
                         return (
@@ -253,7 +257,7 @@ export function RecurrenceFields<
 
           {repeat === "monthly" && !flexible && (
             <Field>
-              <FieldLabel>On</FieldLabel>
+              <FieldLabel id={`${idPrefix}-monthly-label`}>On</FieldLabel>
               <Controller
                 control={c}
                 name="monthlyMode"
@@ -267,7 +271,11 @@ export function RecurrenceFields<
                     { value: "nth_weekday" as const, label: labels.nthWeekday },
                   ]
                   return (
-                    <div className="flex flex-col gap-2 sm:flex-row">
+                    <div
+                      role="group"
+                      aria-labelledby={`${idPrefix}-monthly-label`}
+                      className="flex flex-col gap-2 sm:flex-row"
+                    >
                       {options.map((option) => (
                         <button
                           key={option.value}

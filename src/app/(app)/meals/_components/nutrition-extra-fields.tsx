@@ -71,6 +71,7 @@ export function NutritionExtraFields<T extends FieldValues & MicroFormValues>({
               type="number"
               step="any"
               min="0"
+              inputMode="decimal"
               // Not "0" — an empty field means "no figure for this", which is stored
               // as NULL and kept out of the day's totals.
               placeholder="unknown"

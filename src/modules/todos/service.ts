@@ -3,6 +3,7 @@
 // `now` and IANA `timeZone` for determinism.
 
 import { dueStatus } from "@/lib/date"
+import { parseNaturalDate, type ParsedDate } from "@/lib/nl-date"
 import type { Cycle } from "@/lib/recurrence"
 import { TAG, stripSpans, tagKey } from "@/lib/tags"
 
@@ -225,4 +226,44 @@ export function parseListTag(text: string, lists: ListOption[]): ParsedListTag {
     .replace(/\s{2,}/g, " ")
     .trim()
   return { listId: list?.id ?? null, cleaned }
+}
+
+export type ParsedCapture = {
+  /** The line with the date phrase and the tag taken out — never empty. */
+  title: string
+  /** YYYY-MM-DD, or null when the line named no date. */
+  dueDate: string | null
+  /** `tasks.due_kind` — "by" when the date was introduced by "by". */
+  dueKind: ParsedDate["kind"]
+  /** The list the tag named, or null. */
+  listId: string | null
+}
+
+/**
+ * Everything one typed quick-add line says: the date, whether "by" made it a deadline,
+ * the `#list`, and the title that is left over.
+ *
+ * Both capture bars read a line through here, so the same words mean the same thing on
+ * the dashboard and on the Activity page (T41). What they do with an undated line is
+ * theirs to decide, which is why `dueDate` comes back null rather than defaulted: the
+ * dashboard assumes today, the Activity bar leaves it for later and lands in Someday.
+ *
+ * The date first, then the tag: neither parser knows about the other's phrase, and the
+ * tag matcher stops at a space, so the order only decides which one tidies up.
+ */
+export function parseTaskCapture(
+  text: string,
+  lists: ListOption[],
+  today: string,
+): ParsedCapture {
+  const trimmed = text.trim()
+  const dated = parseNaturalDate(trimmed, today)
+  const tagged = parseListTag(dated.cleaned, lists)
+  return {
+    // A line that was ONLY a date and a tag keeps its text rather than saving a blank.
+    title: tagged.cleaned || trimmed,
+    dueDate: dated.date,
+    dueKind: dated.kind,
+    listId: tagged.listId,
+  }
 }

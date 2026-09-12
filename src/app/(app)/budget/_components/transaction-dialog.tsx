@@ -415,8 +415,15 @@ export function TransactionDialog({
           <FieldGroup>
             {isRecurring && (
               <Field>
-                <FieldLabel>Apply changes to</FieldLabel>
-                <div className="flex gap-2">
+                <FieldLabel id="t-scope-label">Apply changes to</FieldLabel>
+                {/* A row of buttons is a group, and a `FieldLabel` over one names
+                    nothing: without this the buttons read out as "This one" with no word
+                    about what they applied to (T41). */}
+                <div
+                  role="group"
+                  aria-labelledby="t-scope-label"
+                  className="flex gap-2"
+                >
                   {(
                     [
                       ["this", "This one"],
@@ -450,6 +457,7 @@ export function TransactionDialog({
                   type="number"
                   step={step}
                   min="0"
+                  inputMode="decimal"
                   // The shape of the figure, in the box that is now empty rather than
                   // holding a 0 to overtype. `step` already knows whether this currency
                   // has minor units.

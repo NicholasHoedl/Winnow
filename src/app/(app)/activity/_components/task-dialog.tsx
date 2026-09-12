@@ -388,8 +388,15 @@ export function TaskDialog({
           <FieldGroup>
             {isRecurring && (
               <Field>
-                <FieldLabel>Apply changes to</FieldLabel>
-                <div className="flex gap-2">
+                <FieldLabel id="task-scope-label">Apply changes to</FieldLabel>
+                {/* A row of buttons is a group, and a `FieldLabel` over one names
+                    nothing: without this the buttons read out as "This task" with no
+                    word about what they applied to (T41). */}
+                <div
+                  role="group"
+                  aria-labelledby="task-scope-label"
+                  className="flex gap-2"
+                >
                   {(
                     [
                       ["this", "This task"],

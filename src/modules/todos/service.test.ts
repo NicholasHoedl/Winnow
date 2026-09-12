@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   bucketTasks,
+  parseTaskCapture,
   reopenWouldDestroy,
   repeatLabel,
   searchTasks,
@@ -288,5 +289,55 @@ describe("sortByCompletion", () => {
     const input = [older, newer]
     sortByCompletion(input)
     expect(input.map((t) => t.title)).toEqual(["older", "newer"])
+  })
+})
+
+/**
+ * What both quick-add bars read out of one typed line (T41, Pass 7). The dashboard's bar
+ * had the date parser and the Activity page's did not, so the same words meant two
+ * different things on two screens: "Call mum tomorrow" became a task called "Call mum
+ * tomorrow" on one of them. The two bars still DIFFER on what an undated line means —
+ * the dashboard assumes today, Activity leaves it for later — and that is the caller's
+ * decision, which is why `dueDate` comes back null rather than defaulted here.
+ *
+ * `2026-07-21` is a Tuesday.
+ */
+describe("parseTaskCapture", () => {
+  const TODAY = "2026-07-21"
+  const LISTS = [{ id: "list-home", name: "Home" }]
+
+  it("takes the date out of the title and hands it back", () => {
+    expect(parseTaskCapture("Call mum tomorrow", LISTS, TODAY)).toEqual({
+      title: "Call mum",
+      dueDate: "2026-07-22",
+      dueKind: "on",
+      listId: null,
+    })
+  })
+
+  it("reads 'by' as a deadline, and the tag beside the date", () => {
+    expect(parseTaskCapture("Pay rent by friday #home", LISTS, TODAY)).toEqual({
+      title: "Pay rent",
+      dueDate: "2026-07-24",
+      dueKind: "by",
+      listId: "list-home",
+    })
+  })
+
+  it("leaves an undated line undated, for the caller to decide", () => {
+    expect(parseTaskCapture("Buy milk", LISTS, TODAY)).toEqual({
+      title: "Buy milk",
+      dueDate: null,
+      dueKind: "on",
+      listId: null,
+    })
+  })
+
+  it("keeps the whole line as the title when the parsers take all of it", () => {
+    expect(parseTaskCapture("tomorrow #home", LISTS, TODAY)).toMatchObject({
+      title: "tomorrow #home",
+      dueDate: "2026-07-22",
+      listId: "list-home",
+    })
   })
 })

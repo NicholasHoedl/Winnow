@@ -79,20 +79,33 @@ export function decodeReferenceFoods(file: ReferenceFile): ReferenceFood[] {
 // --- Search ---
 
 /**
- * A description split into search tokens, lower-cased, with a trailing "s" dropped from
- * a word of five letters or more so that "banana" meets "Bananas, raw" as an exact token
- * rather than a prefix. Crude stemming, and enough: USDA names are plural nouns followed
- * by qualifiers. Short words keep their s — "peas", "eggs" and "oats" are not stems of
- * anything, and a query typed without the s still lands on them as a prefix.
+ * A word reduced to its stem: a trailing "s" dropped from a word of four letters or more.
+ *
+ * A word ending in "ss" keeps it — "bass" and "watercress" are not plurals, and "bass"
+ * stemmed to "bas" would match "Basil" as a prefix.
+ */
+function stem(token: string): string {
+  return token.length >= 4 && token.endsWith("s") && !token.endsWith("ss")
+    ? token.slice(0, -1)
+    : token
+}
+
+/**
+ * A description split into search tokens, lower-cased and stemmed, so that "banana" meets
+ * "Bananas, raw" as an exact token rather than a prefix. Crude, and enough: USDA names are
+ * plural nouns followed by qualifiers.
+ *
+ * Both the query and the name go through this, which is the point. Four-letter words used
+ * to keep their s, on the reasoning that a query typed without one still lands as a
+ * prefix — but the other direction never worked: "eggs", the meals bar's own placeholder,
+ * matched nothing at all in a dataset that says "Egg, whole, raw, fresh" (T41).
  */
 export function tokenize(text: string): string[] {
   return text
     .toLowerCase()
     .split(/[^a-z0-9%]+/)
     .filter((token) => token.length > 0)
-    .map((token) =>
-      token.length > 4 && token.endsWith("s") ? token.slice(0, -1) : token,
-    )
+    .map(stem)
 }
 
 export type IndexedFood = {

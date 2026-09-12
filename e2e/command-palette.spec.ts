@@ -13,6 +13,10 @@ test("opens from the trigger and closes with Escape", async ({ page }) => {
 
   const input = page.getByPlaceholder(PLACEHOLDER)
   await expect(input).toBeVisible()
+  // And it is CALLED something. cmdk renders a hidden label of its own and points the
+  // input's `aria-labelledby` at it, which beats an `aria-label` on the input — so the
+  // name the palette thought it had was reaching nobody until T41 moved it to the root.
+  await expect(page.getByRole("combobox", { name: "Search" })).toBeVisible()
 
   await page.keyboard.press("Escape")
   await expect(input).toBeHidden()

@@ -208,6 +208,7 @@ export function TargetsDialog({
                   id="t-cal"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("calories", numberField)}
                 />
                 <FieldError errors={[errors.calories]} />
@@ -218,6 +219,7 @@ export function TargetsDialog({
                   id="t-pro"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("proteinG", numberField)}
                 />
                 <FieldError errors={[errors.proteinG]} />
@@ -236,6 +238,7 @@ export function TargetsDialog({
                     id="t-carb"
                     type="number"
                     step="any"
+                    inputMode="decimal"
                     {...register("carbsG", numberField)}
                   />
                 ) : (
@@ -284,6 +287,7 @@ export function TargetsDialog({
                   id="t-fat"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("fatG", numberField)}
                 />
                 <FieldError errors={[errors.fatG]} />

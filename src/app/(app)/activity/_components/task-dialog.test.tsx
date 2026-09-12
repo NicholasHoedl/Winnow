@@ -305,6 +305,31 @@ describe("TaskDialog", () => {
     expect(screen.getByLabelText("Starts")).toHaveValue("2026-12-08")
   })
 
+  /**
+   * T41 (Pass 7): a `FieldLabel` above a row of buttons is a label pointing at nothing.
+   * The buttons said "This task" and "Series" to a screen reader with no word about what
+   * they decided, and the same row exists in the transaction and event dialogs.
+   */
+  it("names the scope toggle after its label", () => {
+    show({ task: task({ series: SERIES, seriesId: "rule-1" }) })
+
+    expect(
+      screen.getByRole("group", { name: "Apply changes to" }),
+    ).toContainElement(screen.getByRole("button", { name: "Series" }))
+  })
+
+  it("names the repeat toggles after their labels", () => {
+    show()
+
+    pickOption("Repeat", "Weekly")
+    expect(screen.getByRole("group", { name: "On days" })).toContainElement(
+      screen.getByRole("button", { name: "Monday" }),
+    )
+
+    pickOption("Repeat", "Monthly")
+    expect(screen.getByRole("group", { name: "On" })).toBeVisible()
+  })
+
   // base-ui's SelectValue needs a function child; a bare one renders the raw stored value,
   // so this trigger read "medium" while every other select in the app read a label.
   it("names the priority rather than showing its stored value", () => {

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 
-import { DEFAULT_PREFERENCES } from "@/lib/preferences"
 import { createTask } from "@/modules/todos/actions"
+import { addDays, todayInZone } from "@/lib/date"
+import { DEFAULT_PREFERENCES } from "@/lib/preferences"
 import { PreferencesProvider } from "@/components/preferences/preferences-provider"
 
 import { QuickAdd } from "./quick-add"
@@ -139,6 +140,47 @@ describe("QuickAdd", () => {
       expect(createTask).toHaveBeenCalledWith({
         title: "Fix the tap",
         listId: LISTS[0].id,
+      }),
+    )
+  })
+
+  // T41 (Pass 7): the same words had to mean the same thing on both capture bars. The
+  // dashboard's turned "pay rent by friday" into a dated task; this one kept the date in
+  // the title, where it read as part of the name and set nothing.
+  it("takes a date out of the title and sends it as the due date", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+    const today = todayInZone(new Date(), DEFAULT_PREFERENCES.timeZone)
+
+    renderBar()
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Call mum tomorrow" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() =>
+      expect(createTask).toHaveBeenLastCalledWith({
+        title: "Call mum",
+        dueDate: addDays(today, 1),
+        dueKind: "on",
+        listId: "",
+      }),
+    )
+  })
+
+  // The bar's own rule, and the reason the parser hands back a null date rather than
+  // today's: a line with no date in it still lands in Someday. See the comment in
+  // `submit` — the dashboard bar assumes today, this one deliberately does not.
+  it("still sends no due date when the line carries no date", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true })
+
+    renderBar()
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Buy milk" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() =>
+      expect(createTask).toHaveBeenLastCalledWith({
+        title: "Buy milk",
+        listId: "",
       }),
     )
   })

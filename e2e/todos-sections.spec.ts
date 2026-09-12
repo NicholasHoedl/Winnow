@@ -34,7 +34,7 @@ const sectionBody = (page: import("@playwright/test").Page, name: string) =>
 test.afterEach(async ({ page }) => {
   await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
-  const strays = visibleCard(page, /E2E (someday|todayish|donesec) \d+/)
+  const strays = visibleCard(page, /E2E (someday|todayish|donesec|capdate) \d+/)
   for (let i = 0; i < 12; i++) {
     const before = await strays.count()
     if (before === 0) break
@@ -91,6 +91,38 @@ test("quick-add captures into Someday, the dialog schedules for today", async ({
     await expect(row(title)).toHaveCount(0)
     await page.reload()
   }
+})
+
+/**
+ * T41 (Pass 7): the same words, the same meaning, on both capture bars.
+ *
+ * The dashboard's bar has read a date out of the sentence since T5a; this one kept the
+ * word in the title and filed the task in Someday — so "call mum tomorrow" was a task
+ * called "call mum tomorrow" with no date on it. The test above still holds the other
+ * half: a line with NO date in it lands in Someday, which is this bar's own rule.
+ */
+test("quick-add reads a date written in words", async ({ page }) => {
+  const title = `E2E capdate ${Date.now()}`
+  const row = () => visibleCard(page, title)
+
+  await page.goto("/activity")
+  const input = page.getByLabel("Quick add task")
+  await input.fill(`${title} tomorrow`)
+  await input.press("Enter")
+
+  // The date came out of the title — `visibleCard` matches on a substring, so the exact
+  // text is what proves "tomorrow" is not still sitting in the name.
+  await expect(row()).toHaveCount(1)
+  await expect(row().getByText(title, { exact: true })).toBeVisible()
+
+  // And it became the due date, which is what put the row under Upcoming — a section an
+  // undated task cannot appear in.
+  await expect(sectionBody(page, "Upcoming")).toContainText(title)
+
+  // --- Cleanup.
+  await row().getByRole("button", { name: "Task actions" }).click()
+  await page.getByRole("menuitem", { name: "Delete" }).click()
+  await expect(row()).toHaveCount(0)
 })
 
 test("a completed task leaves the date sections for Done", async ({ page }) => {

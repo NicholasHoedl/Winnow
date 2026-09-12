@@ -34,7 +34,7 @@ the daily driver until then.
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Done 2026-09-12 |
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Done 2026-09-12 |
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Done 2026-09-12 |
-| 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Not started     |
+| 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Done 2026-09-12 |
 | 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Not started     |
 | 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Not started     |
 | 10  | Feel        | Progress and endings              | Goal-gradient effect + peak-end rule  | Light  | Not started     |
@@ -301,22 +301,48 @@ measured and right; nothing is hover-only, so a touch user gets the mouse user's
 Noticed for the suite: `playwright.config.ts` sets no `actionTimeout`, so a click on a locator
 that never appears burns the whole test timeout and its retry; a modest one would fail fast.
 
-### Pass 7: input
+### Pass 7: input — done 2026-09-12 (T41)
 
-- Keep: the quick-add bars read plain language, dates included, and the meals bar keeps its
-  text when it cannot parse it; a new transaction's date starts at today, or at the first of
-  the month being viewed.
-- Look at: amounts are number inputs, which cannot take a pasted "$1,234.50".
-- Look at (Pass 2): the budget quick-add bar writes no payee; its text becomes the
-  description, which the payee memory reads but the ledger's payee column does not show.
-- Look at (Pass 2): some `FieldLabel`s had no `htmlFor`, so their select triggers had no
-  accessible name; Meal, Priority, Type and Category were fixed in passing. Sweep the rest.
-- Look at (Pass 4): the label on the budgets page's total row stretches to 171 px while its
-  text is about 120, so its click target is wider than its ink.
-- Look at (Pass 5): the appearance page saves on every change while the other six settings
-  pages have a Save button.
-- Look at (Pass 6): the plan review dialog edits a proposal through 16 to 20 px inline inputs
-  packed 26 px apart, an input design rather than a reach question.
+Catalogued every input from the source (type, keyboard hint, schema rule, normalisation,
+error text) and the four quick-add parsers, then probed the daily forms and bars in the
+browser with the values a person types or pastes, against Postel's law: liberal in what a
+field accepts, conservative and consistent in what the app answers.
+
+Fixed:
+
+- The meals bar rejected its own placeholder: `2 eggs` and `Eggs x2` both answered "nothing
+  called", because a leading bare number was not read as a quantity and the food index only
+  stripped a plural from words longer than four letters, so `eggs` never met "Egg". Both
+  read now. `banana 100 cal 1 g protein` logged a food named "banana 1 g protein" with no
+  protein, because a macro's unit letter had to touch its digits; a unit and a space are
+  allowed.
+- The Activity page's quick-add bar read only the `#list` tag, so `Call mum tomorrow` kept
+  the word in the title and set no date, while the same words in the dashboard's bar
+  scheduled the task. Both bars read dates the same way; an undated line on the Activity
+  page still lands in Someday, the default its comment defends.
+- The transaction Amount was the one money field without `inputMode="decimal"`, and the log
+  food dialog's five number fields had none, so a phone raised the wide keyboard for the two
+  daily dialogs; every money and macro field raises the decimal keypad.
+- The event dialog's Calendar and Repeat selects and two settings selects had no accessible
+  name; eight button groups had a label pointing at nothing; the food search's name, "Search
+  foods", disagreed with its visible label, "Find a food", and cmdk names its input from its
+  root rather than from `aria-label`, so the food bars and the palette's search box are named
+  there; one label sat over a list. Each is named as it reads.
+
+Kept, with reasons: the Amount takes `1,234.50`, `$12`, `12` and `12.` as a person would
+expect (the earlier note that it could not was wrong in Chromium); `#tag` handling folds
+case, spaces, underscores and hyphens and strips the tag whether or not it resolves; the
+budget parser reads signs, `$`, grouped thousands and bare numbers; every text field trims;
+blank micronutrients stay unknown rather than zero; Enter is safe in both search boxes and
+submits the right form everywhere; water is presets, not a field; a bar keeps its text when
+it cannot parse it. The decimal comma (`12,50` reads as 1250 in the Amount and `72,5` as
+725 lb) is left: the owner's locale uses a point, and a locale-aware amount is a text field
+with its own parse, a larger change than this pass; the weight bound goes to Pass 8. The
+browser's validation bubbles answering before the app's own messages go to Pass 8 too.
+
+Still filed: the budget quick-add bar writes no payee (its text is the description); the
+budgets page's total label is wider than its text; the appearance page auto-saves where six
+pages have Save; the plan review dialog edits through small inline inputs.
 
 ### Pass 8: mistakes
 
@@ -329,12 +355,21 @@ that never appears burns the whole test timeout and its retry; a modest one woul
 - Look at (Pass 6): a calendar event chip is 18 px tall inside a day cell that is itself a
   target, the one target-spacing failure in the app, so a tap meant for the event can open
   the day's create dialog instead.
+- Look at (Pass 7): the browser answers before the app does. `0` or `1.5` in a habit's "How
+  often", `-12` in an amount and a transaction date outside the viewed month all get the
+  browser's bubble in the browser's words, and the app's own messages ("At least one",
+  "Whole sessions only", "Must be 0 or more") never show. `noValidate` would make zod the one
+  voice, but the transaction date's month fence lives only in the input's `min` and `max`.
+- Look at (Pass 7): a weight of `72,5` saves as 725 lb; the 20 to 1500 lb bound is wide
+  enough to swallow a typo. A meals line that half-parses is logged rather than questioned.
 
 ### Pass 9: speed and feedback
 
 - Keep: dashboard folds update optimistically; the meals quick-add bar clears at once; route
   changes show loading skeletons.
 - Look at: an AI request can run for up to 90 seconds with only "Reading…" on its button.
+- Look at (Pass 7): the Activity page's quick-add bar is the one capture bar with no success
+  feedback; the row appears and nothing else says so.
 - Measure on a production build, never the dev server. Targets: Interaction to Next Paint of
   200 ms or less; Doherty's original threshold was 400 ms.
 
@@ -348,6 +383,8 @@ that never appears burns the whole test timeout and its retry; a modest one woul
   were applied (24 to 11). Test data, so a hint rather than a finding.
 - Look at (Pass 3, withdrawn by Pass 5): the saved meals dialog's empty state does carry a
   sentence saying what a saved meal is for.
+- Look at (Pass 7): `+500 #bonus` in the budget bar toasts "Added transaction" because the
+  line is all amount and tag, where a line with words toasts them.
 
 ## Screens and dialogs
 

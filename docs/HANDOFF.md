@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-12**. T40 is the review's sixth pass, reach: every target measured
+Last updated: **2026-09-12**. T41 is the review's seventh pass, input: the meals bar reads a
+leading quantity and a plural, macro words may carry a unit, the Activity quick-add reads
+dates in words like the dashboard's, the daily amount and macro fields raise the decimal
+keypad, and every select, button group and search field has the name it shows; no migration,
+no ADR.
+T40 is the review's sixth pass, reach: every target measured
 at phone width now meets WCAG 2.2's 24 px floor, with the daily chrome at 28, by hit-area
 padding alone; nothing moved or drawn larger; no migration, no ADR.
 T39 is the review's fifth pass, one thing stands out: each daily
@@ -61,7 +66,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T40 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T41 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -623,6 +628,28 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T41 is shipped: the review's Pass 7, input.** No migration, no ADR; the input catalogue and
+the probe table are in `docs/ux-review.md`.
+
+- **Meals parsing** (`modules/meals/service.ts`, `reference-foods.ts`): a leading number is
+  the quantity (`2 eggs`, `1.5 banana`) beside the existing `x2` forms; the index's tokeniser
+  matches a plural to its singular for short words; the macro matchers take `1 g protein`,
+  `12g carbs`, `3 g fat` as well as `10p`/`20c`/`5f`/`50kcal`.
+- **Activity quick-add** (`activity/_components/quick-add.tsx`) parses dates in words through
+  `parseTaskCapture` in `modules/todos/service.ts`, the one path both capture bars use now
+  (`quick-capture.tsx` too); it returns no date when none was typed, so the dashboard bar
+  still defaults to today and an undated Activity line still lands in Someday.
+- **Keyboards**: `inputMode="decimal"` on the transaction Amount and every servings and macro
+  field (log food, food library, targets, saved meal editor, the shared micros).
+- **Names**: `event-dialog.tsx`'s Calendar and Repeat triggers and `defaults-section.tsx`'s
+  "Start on" and "Quick-added meals go to" have `id`/`htmlFor`; eight button groups (task,
+  transaction and event dialogs, `recurrence-fields.tsx`, `calendar-manager.tsx`) are
+  `role="group"` named by their label; `FoodSearch` takes a required `label` prop, since cmdk
+  names its input from the `Command` root's `label` (an `aria-label` on `CommandInput` only
+  wins as a browser fallback, and not in jsdom), which is also how the palette's search box
+  is named; `saved-meal-dialog.tsx`'s "Foods" label names its list. Specs that named "Search
+  foods" were updated.
 
 **T40 is shipped: the review's Pass 6, reach.** No migration, no ADR; the measurements are in
 `docs/ux-review.md`. The rule: a control's hit area meets 24 × 24 CSS px (28 for the daily

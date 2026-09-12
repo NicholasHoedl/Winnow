@@ -67,6 +67,7 @@ export function FoodSearch({
   foods = [],
   quickPicks = [],
   offEnabled,
+  label,
   onPickFood,
   onPickReference,
   onPickImported,
@@ -78,6 +79,14 @@ export function FoodSearch({
   quickPicks?: QuickPickFood[]
   /** Whether Open Food Facts is switched on for this install. */
   offEnabled: boolean
+  /**
+   * What this bar is called — the SAME words as the `FieldLabel` above it ("Find a food",
+   * "Add a food"). Required, and for the reason `Segmented`'s own `label` is: the bar said
+   * "Search foods" to a screen reader while the label above it said something else, so the
+   * one control had two names and neither a person nor a locator could rely on either
+   * (T41). The placeholder still reads "Search foods…", which is a hint, not a name.
+   */
+  label: string
   onPickFood?: (food: Food) => void
   onPickReference: (food: ReferenceFood) => void
   onPickImported: (food: ImportedFood) => void
@@ -151,12 +160,16 @@ export function FoodSearch({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <Command shouldFilter={false} className="rounded-lg border">
+      {/* The name goes on the ROOT, not on the input. cmdk renders a visually hidden
+          `<label for>` of its own and points the input's `aria-labelledby` at it, and
+          that wins over any `aria-label` passed to the input — which is why the
+          `aria-label="Search foods"` this had was doing nothing at all and the bar had no
+          accessible name whatsoever. `label` on `Command` is what fills cmdk's label. */}
+      <Command label={label} shouldFilter={false} className="rounded-lg border">
         <CommandInput
           value={query}
           onValueChange={setQuery}
           placeholder="Search foods…"
-          aria-label="Search foods"
         />
         <CommandList className="max-h-72">
           {q.length < MIN_QUERY && (

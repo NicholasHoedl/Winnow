@@ -145,6 +145,26 @@ describe("TransactionDialog", () => {
     expect(screen.getByLabelText(/Amount/)).toHaveValue(null)
   })
 
+  // T41 (Pass 7): every other money field in the app asks a phone for the decimal keypad;
+  // this one, the one you type an amount into most often, opened the full keyboard.
+  it("asks a phone for the decimal keypad", () => {
+    show()
+    expect(screen.getByLabelText(/Amount/)).toHaveAttribute(
+      "inputmode",
+      "decimal",
+    )
+  })
+
+  // The label above the scope buttons named nothing, so "This one" and "Schedule" were
+  // read out with no word about what they applied to.
+  it("names the scope toggle after its label", () => {
+    show({ transaction: row({ series: SERIES }) })
+
+    expect(
+      screen.getByRole("group", { name: "Apply changes to" }),
+    ).toContainElement(screen.getByRole("button", { name: "Schedule" }))
+  })
+
   it("says what to do when the amount is left empty", async () => {
     show()
 

@@ -372,6 +372,7 @@ export function LogFoodDialog({
               <Field>
                 <FieldLabel>Find a food</FieldLabel>
                 <FoodSearch
+                  label="Find a food"
                   foods={foods}
                   quickPicks={quickPicks}
                   offEnabled={offEnabled}
@@ -464,6 +465,7 @@ export function LogFoodDialog({
                   id="l-servings"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("servings", numberField)}
                 />
                 <FieldError errors={[errors.servings]} />
@@ -512,6 +514,7 @@ export function LogFoodDialog({
                   id="l-cal"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("calories", numberField)}
                 />
                 <FieldError errors={[errors.calories]} />
@@ -522,6 +525,7 @@ export function LogFoodDialog({
                   id="l-pro"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("proteinG", numberField)}
                 />
                 <FieldError errors={[errors.proteinG]} />
@@ -532,6 +536,7 @@ export function LogFoodDialog({
                   id="l-carb"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("carbsG", numberField)}
                 />
                 <FieldError errors={[errors.carbsG]} />
@@ -542,6 +547,7 @@ export function LogFoodDialog({
                   id="l-fat"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("fatG", numberField)}
                 />
                 <FieldError errors={[errors.fatG]} />

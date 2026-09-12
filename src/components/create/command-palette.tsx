@@ -323,12 +323,15 @@ export function CommandPalette() {
     <CommandDialog
       open={open}
       onOpenChange={(next) => (next ? setOpen(true) : closePalette())}
-      commandProps={{ shouldFilter: false }}
+      // `label` names the INPUT, and it belongs here rather than on it: cmdk renders a
+      // hidden label of its own and points the input's `aria-labelledby` at it, so an
+      // `aria-label` on the input is only the fallback for when that label is empty -
+      // which some name computations honour and others do not (T41, as in `FoodSearch`).
+      commandProps={{ shouldFilter: false, label: "Search" }}
     >
       <CommandInput
         value={query}
         onValueChange={handleQueryChange}
-        aria-label="Search"
         placeholder="Search tasks, events, foods… or jump to a page"
       />
       <CommandList>

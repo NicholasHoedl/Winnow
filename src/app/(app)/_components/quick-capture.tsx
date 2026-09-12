@@ -5,9 +5,8 @@ import { Plus, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
-import { parseListTag, type ListOption } from "@/modules/todos/service"
+import { parseTaskCapture, type ListOption } from "@/modules/todos/service"
 import { restoreIfEmpty } from "@/lib/forms"
-import { parseNaturalDate } from "@/lib/nl-date"
 import { todayInZone } from "@/lib/date"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { useCreateIntent } from "@/components/create/create-intent"
@@ -44,13 +43,13 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
     if (!trimmed) return
 
     const today = todayInZone(new Date(), timeZone)
-    // The date first, then the tag: neither parser knows about the other's phrase, and
-    // the tag matcher stops at a space, so the order only decides which one tidies up.
-    const dated = parseNaturalDate(trimmed, today)
-    const tagged = parseListTag(dated.cleaned, lists)
-    const title = tagged.cleaned || trimmed
-    const dueDate = dated.date ?? today
-    const listId = tagged.listId ?? defaultListId ?? ""
+    const parsed = parseTaskCapture(trimmed, lists, today)
+    const title = parsed.title
+    // Today when the line named no day: opening the dashboard to type a task is saying
+    // it is on today's mind. The Activity page's bar makes the opposite call — see the
+    // note in its `submit` — and the parser leaves the choice to both of them.
+    const dueDate = parsed.dueDate ?? today
+    const listId = parsed.listId ?? defaultListId ?? ""
     const listName = lists.find((list) => list.id === listId)?.name
 
     // Cleared here, synchronously, not after the await: the field is free for the next
@@ -61,12 +60,12 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
       const result = await createTask({
         title,
         dueDate,
-        dueKind: dated.kind,
+        dueKind: parsed.dueKind,
         listId,
       })
       if (result.ok) {
         toast.success(`Added “${title}”`, {
-          description: `${dated.kind === "by" ? "Due by" : "Due"} ${formatDue(
+          description: `${parsed.dueKind === "by" ? "Due by" : "Due"} ${formatDue(
             dueDate,
             locale,
           )}${listName ? ` · ${listName}` : ""}`,

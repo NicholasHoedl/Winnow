@@ -221,6 +221,7 @@ export function FoodManager({
               <Field>
                 <FieldLabel>Find a food</FieldLabel>
                 <FoodSearch
+                  label="Find a food"
                   offEnabled={offEnabled}
                   onPickReference={onPickReference}
                   onPickImported={onPickImported}
@@ -249,6 +250,7 @@ export function FoodManager({
                   id="f-cal"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("calories", numberField)}
                 />
                 <FieldError errors={[errors.calories]} />
@@ -259,6 +261,7 @@ export function FoodManager({
                   id="f-pro"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("proteinG", numberField)}
                 />
                 <FieldError errors={[errors.proteinG]} />
@@ -269,6 +272,7 @@ export function FoodManager({
                   id="f-carb"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("carbsG", numberField)}
                 />
                 <FieldError errors={[errors.carbsG]} />
@@ -279,6 +283,7 @@ export function FoodManager({
                   id="f-fat"
                   type="number"
                   step="any"
+                  inputMode="decimal"
                   {...register("fatG", numberField)}
                 />
                 <FieldError errors={[errors.fatG]} />

@@ -5,7 +5,8 @@ import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createTask } from "@/modules/todos/actions"
-import { parseListTag, type ListOption } from "@/modules/todos/service"
+import { parseTaskCapture, type ListOption } from "@/modules/todos/service"
+import { todayInZone } from "@/lib/date"
 import { restoreIfEmpty } from "@/lib/forms"
 import { usePreferences } from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 
 export function QuickAdd({ lists }: { lists: ListOption[] }) {
-  const { defaultListId } = usePreferences()
+  const { defaultListId, timeZone } = usePreferences()
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
 
@@ -23,22 +24,29 @@ export function QuickAdd({ lists }: { lists: ListOption[] }) {
     if (!trimmed) return
 
     // `#home` files it as it is captured; a line with no tag goes to the default list, if
-    // one is set. The tag is stripped from the title either way — see `parseListTag`. A
-    // line that was ONLY a tag keeps its text as the title rather than saving a blank.
-    const { listId, cleaned } = parseListTag(trimmed, lists)
-    const taskTitle = cleaned || trimmed
+    // one is set. The tag is stripped from the title either way, and so is a date written
+    // in words — the dashboard's bar reads the same line through the same parser, so
+    // "call mum tomorrow" cannot mean two different things on two screens (T41).
+    const {
+      title: taskTitle,
+      dueDate,
+      dueKind,
+      listId,
+    } = parseTaskCapture(trimmed, lists, todayInZone(new Date(), timeZone))
 
     // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
     setTitle("")
 
     startTransition(async () => {
-      // NO due date. Quick-add is capture — get it out of your head now, decide when
-      // later — so it lands in Someday. The full task dialog still prefills today,
-      // because opening it is already an act of deliberate scheduling. Until T5a both
-      // paths defaulted to today, which made "no due date" a state you had to go out of
-      // your way to produce, and left the Someday bucket permanently empty.
+      // No date typed, NO due date — not today's. Quick-add is capture — get it out of
+      // your head now, decide when later — so an undated line lands in Someday. The full
+      // task dialog still prefills today, because opening it is already an act of
+      // deliberate scheduling. Until T5a both paths defaulted to today, which made "no
+      // due date" a state you had to go out of your way to produce, and left the Someday
+      // bucket permanently empty.
       const result = await createTask({
         title: taskTitle,
+        ...(dueDate ? { dueDate, dueKind } : {}),
         listId: listId ?? defaultListId ?? "",
       })
       if (!result.ok) {
