@@ -155,7 +155,11 @@ function RoutineCard({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {/* Outline, like the habit card's "Log" — the same shape of control, one per
+              card, doing the card's own thing. Filled, it repeated the page's one fill
+              once per routine and left "New routine" no louder than the list (T39). */}
           <Button
+            variant="outline"
             size="sm"
             onClick={() => setRunOpen(true)}
             disabled={items.length === 0}

@@ -212,8 +212,13 @@ function ReceiptPanel({
             <Camera className="size-4" />
             {image ? "Choose another photo" : "Choose a photo"}
           </Button>
+          {/* Outline, like "Read them" in the panel above it. The two are the same kind of
+              occasional AI action on a daily money screen, and only one of them was
+              filled — which made the receipt reader look like the page's main action
+              rather than "Add" (T39). */}
           <Button
             type="button"
+            variant="outline"
             disabled={busy || !image}
             aria-busy={busy}
             onClick={onRead}

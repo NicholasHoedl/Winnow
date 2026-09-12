@@ -70,7 +70,10 @@ export function SavedMealsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Button type="button" variant="outline" onClick={onNew}>
+        {/* Filled, like the one action of every other dialog in the app. This was the only
+            dialog whose main action was drawn as a secondary one, so the thing it is for
+            read as an afterthought (T39). */}
+        <Button type="button" onClick={onNew}>
           <Plus className="size-4" />
           New meal
         </Button>

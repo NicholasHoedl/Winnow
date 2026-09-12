@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { CalendarPlus, Share, Target, Wallet } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
 /**
@@ -32,24 +33,28 @@ export function FirstRun() {
         language, and everything else starts from one of these.
       </p>
 
+      {/* `cn(...)` around each of these, not the bare variant call: without tailwind-merge
+          the base's `border-transparent` outlives the variant's `border-border` and these
+          three drew no border at all in light mode — on the one screen a new account
+          sees first. See the dashboard's Review link (T39). */}
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           href="/goals"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <Target className="size-4" />
           Set a goal
         </Link>
         <Link
           href="/calendar"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <CalendarPlus className="size-4" />
           Add an event
         </Link>
         <Link
           href="/budget"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
         >
           <Wallet className="size-4" />
           Set up a budget

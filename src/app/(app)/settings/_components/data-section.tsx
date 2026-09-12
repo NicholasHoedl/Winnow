@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Download, TriangleAlert, Upload } from "lucide-react"
 import { toast } from "sonner"
 
+import { cn } from "@/lib/utils"
 import { clearAllData, importUserData } from "@/modules/account/actions"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { ConfirmWordDialog } from "@/components/ui/confirm-word-dialog"
@@ -82,7 +83,10 @@ export function DataSection() {
           <a
             href="/settings/export"
             download
-            className={buttonVariants({ variant: "outline", size: "sm" })}
+            // `cn(...)`, not the bare call: without tailwind-merge the base's
+            // `border-transparent` outlives the variant's `border-border` and the link
+            // draws no border in light mode. See the dashboard's Review link (T39).
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
             <Download className="size-4" />
             Export

@@ -226,7 +226,10 @@ function WeightCard({
         <span className="text-muted-foreground text-xs">
           {weightUnitLabel(weightUnit)}
         </span>
-        <Button type="submit" size="sm" disabled={pending}>
+        {/* Outline, like the water buttons on the card beside it. "Log food" is what this
+            page is for; a weigh-in is an aside, and it was the only other fill on the
+            screen (T39). */}
+        <Button type="submit" variant="outline" size="sm" disabled={pending}>
           Save
         </Button>
       </div>

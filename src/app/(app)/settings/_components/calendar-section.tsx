@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Check, Copy, Download, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
+import { cn } from "@/lib/utils"
 import { regenerateFeedToken } from "@/modules/calendar/actions"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -95,7 +96,10 @@ export function CalendarSection({ feedUrl }: { feedUrl: string }) {
           <a
             href="/settings/calendar.ics"
             download
-            className={buttonVariants({ variant: "outline", size: "sm" })}
+            // `cn(...)`, not the bare call: without tailwind-merge the base's
+            // `border-transparent` outlives the variant's `border-border` and the link
+            // draws no border in light mode. See the dashboard's Review link (T39).
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
           >
             <Download className="size-4" />
             Download

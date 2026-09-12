@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-12**. T38 is the review's fourth pass, visible grouping: the budget
+Last updated: **2026-09-12**. T39 is the review's fifth pass, one thing stands out: each daily
+screen draws one filled button, its main action, with the quick-add submits, Read the
+receipt, the weigh-in Save and Run gone outline, seven outline buttons get their border back
+in light mode, the dashboard cards share one heading, and the barcode scanner keeps its scrim;
+no migration, no ADR.
+T38 is the review's fourth pass, visible grouping: the budget
 month control wraps instead of spilling at phone width, task cards share one left edge, four
 field grids and three headings space by what belongs together, and the event, New goal and
 plan review dialogs take the app's footer shape; no migration, no ADR.
@@ -53,7 +58,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T38 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T39 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -615,6 +620,27 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T39 is shipped: the review's Pass 5, one thing stands out.** No migration, no ADR; the
+emphasis inventory behind it is in `docs/ux-review.md`.
+
+- **One fill per daily screen.** The quick-add submits (`quick-capture.tsx`, activity's
+  `quick-add.tsx`, `budget-quick-add.tsx`, `meal-quick-add.tsx`), "Read the receipt"
+  (`budget-ai-tools.tsx`), the weigh-in Save (`day-extras.tsx`) and each routine card's Run
+  (`routines-view.tsx`) are `variant="outline"`. `e2e/emphasis.spec.ts` resolves `--primary`
+  through a probe element and asserts, on `/`, `/activity`, `/activity/routines`, `/budget`
+  and `/meals` at 393 px, exactly one visible button painted in it, by name.
+- **`cn(buttonVariants(...))` everywhere.** A bare `buttonVariants()` in `className` keeps the
+  base `border-transparent`, so an outline link drew no border in light mode (dark was saved
+  by `dark:border-input`). Eight call sites wrapped; grep for `buttonVariants(` without `cn(`
+  before adding another.
+- **Dashboard headings.** `stat-cards.tsx` no longer overrides `headingClassName`; the
+  `DashboardCard` prop stays for the calendar card's month title.
+- **Dialogs.** `saved-meals-dialog.tsx`'s "New meal" is the default fill.
+  `components/ui/dialog.tsx` gains an opt-in `forceOverlay` on `DialogContent`, which
+  `barcode-scanner-dialog.tsx` sets: base-ui suppresses the backdrop of a nested dialog, and
+  the scanner is nested inside Log food on purpose (one focus trap), so only the scrim is
+  forced. `meals-barcode.spec.ts` counts the overlays.
 
 **T38 is shipped: the review's Pass 4, visible grouping.** No migration, no ADR; every change
 is spacing, alignment or a footer, recorded with its measurement in `docs/ux-review.md`.

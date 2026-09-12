@@ -30,6 +30,13 @@ const MACROS = [
  * So the link moved to the header's arrow, which is where the affordance already pointed,
  * and the tile became a `DashboardCard` like every other surface here. The trade is real and
  * worth naming: the click target for "go to /meals" shrank from a whole tile to an icon.
+ *
+ * No `headingClassName`. These two used to pass `text-muted-foreground text-sm`, which left
+ * the dashboard with two species of card heading — Macros and Budget small and muted, Slate,
+ * Practice and Categories base-sized in the foreground colour — for no difference in kind.
+ * A weight that carries no information is noise, so the override went and all five now read
+ * as one row of headings (T39). The calendar card keeps its own, because its heading is the
+ * month rather than a name.
  */
 function StatShell({
   card,
@@ -52,7 +59,6 @@ function StatShell({
       title={label}
       icon={icon}
       collapsed={collapsed}
-      headingClassName="text-muted-foreground text-sm font-medium"
       actions={
         <Link
           href={href}

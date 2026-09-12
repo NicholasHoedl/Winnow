@@ -43,13 +43,24 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  forceOverlay = false,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  /**
+   * Draw the backdrop even when this dialog is nested inside another one.
+   *
+   * base-ui suppresses a nested dialog's backdrop on purpose — the usual nested dialog is
+   * a small confirm over a parent that should stay visible. Where the child covers the
+   * same ground as its parent, that leaves two titles and two footers stacked with
+   * nothing between them, which is what the barcode scanner over Log food looked like
+   * until T39.
+   */
+  forceOverlay?: boolean
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay forceRender={forceOverlay} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

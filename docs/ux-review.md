@@ -32,7 +32,7 @@ the daily driver until then.
 | 2   | Structure   | What each screen asks of the user | Tesler's law + progressive disclosure | Heavy  | Done 2026-09-11 |
 | 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Done 2026-09-12 |
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Done 2026-09-12 |
-| 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Not started     |
+| 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Done 2026-09-12 |
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Not started     |
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Not started     |
 | 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Not started     |
@@ -223,25 +223,49 @@ Noticed for the suite: the layout sweeps walk default URL state, so `/activity?g
 `clearQueue` in `companion.spec.ts` reads the page before it has settled, so a proposal can
 survive it and open the review dialog on `/goals` under a later spec.
 
-### Pass 5: one thing stands out
+### Pass 5: one thing stands out — done 2026-09-12 (T39)
 
-- Look at: on `/budget`, "Read them" is an outline button and "Read the receipt" a filled one —
-  two panels with the same role and different weight.
-- Keep: pages lead with one filled action, such as Log food on Meals.
-- Look at (Pass 1): the dashboard stacks two filled buttons that both create a task, New task
-  in the header and Add in the quick-add bar.
-- Look at (Pass 3): the budget page's two AI panels open with a paragraph each, 436 px
-  together at 393 px; the repeating tasks page opens with a 140 px explainer above a 74 px
-  list, where the lists page's is 100 px and the habits and routines pages' 40 px.
-- Look at (Pass 4): dashboard card headers come in two weights and two left edges. Macros
-  and Budget carry an icon and a small muted heading starting at x = 56; Slate, Practice and
-  Categories a base heading at x = 32. Their actions differ too ("All" with an arrow against
-  a small corner icon).
-- Look at (Pass 4): three panel species do the same job, untinted bordered boxes, tinted
-  bordered panels (the three AI panels, and the habit card) and tinted borderless cards, and
-  three row species (tasks and transactions; lists, repeating and categories; routine items
-  and calendars). They sit side by side on `/review` and `/meals`, and in dark mode the tint
-  carries no information.
+Walked every screen at both widths in light, the daily screens, the review and the trends
+page in dark, and every dialog at 393 px, with an inventory of everything drawn to stand
+out (filled and destructive buttons, coloured text, tints, heading weights), against the
+Von Restorff effect (the one element that differs is the one noticed, so a screen gives its
+main action the one distinctive treatment) and Prägnanz (a weight, colour or border that
+carries no information is noise).
+
+Fixed:
+
+- The daily screens drew two or three filled buttons: the page's action and the quick-add
+  bar's submit on the dashboard, Activity, Budget and Meals, plus "Read the receipt" on
+  Budget, a weekly action at the daily one's weight, and the weigh-in Save on Meals, the
+  rarest log drawn loudest. Every quick-add submit, Read the receipt, the weigh-in Save and
+  each routine card's Run (the habit card's Log was already outline) are outline now, so New
+  task, Add, Log food and New routine are the one fill on their screens. `emphasis.spec.ts`
+  counts the filled buttons on the daily screens and names the one allowed.
+- Seven outline buttons drew no border in light mode (the dashboard's Review and Add event,
+  the data page's Export and Download, the first-run panel's three), because
+  `buttonVariants()` was used without `cn()` and the base `border-transparent` survived.
+  Every call site goes through `cn()`.
+- The Macros and Budget cards drew their titles small and muted where the other three
+  dashboard cards did not; all five share one heading. Their icons stay.
+- The saved meals dialog's one action was outline, the only dialog whose main action was
+  not filled; it is filled.
+- The barcode scanner opened as a second dialog over Log food with no scrim, so two titles
+  and two footers showed at once: base-ui drops the backdrop of a nested dialog, and
+  `DialogContent` now takes `forceOverlay` to keep it.
+
+Kept, with reasons: the goal editor's Delete is already the quiet treatment (ghost, red
+text), the same as every secondary delete; the data page's red "Clear all data" panel is a
+warning and should stand out; the two Save buttons on the defaults and AI pages each save
+their own section; the PageTabs icons are one convention across three strips and removing
+them would not stop the strips scrolling; the dashboard calendar's display-face heading is
+the month's name, content rather than a card label; sixteen of twenty dialogs have exactly
+one filled primary and the title as the heaviest text, and the delete confirm's tinted
+destructive over outline Cancel is right.
+
+Asked, and open: whether to shorten the explainer paragraphs (the repeating tasks page's
+140 px, the lists page's 100 px, the two budget AI panels' 436 px together, 38 percent of
+the page); and the three panel species and three row species Pass 4 listed, which Pass 5
+judged a consistency question too broad for a single pass and left recorded here.
 
 ### Pass 6: reach
 
@@ -252,6 +276,8 @@ survive it and open the review dialog on `/goals` under a later spec.
 - Look at: list rows use small icon buttons for edit and delete.
 - Look at: on a phone, page actions such as Log food sit in the top corner, the hardest reach.
 - Look at (Pass 3): the budget ledger puts 112 px of filter controls above a 62 px row.
+- Look at (Pass 5): the dashboard's "Open Macros" and "Open Budget" arrows are drawn at half
+  the muted foreground, the faintest controls measured anywhere, and are 24 px square.
 
 ### Pass 7: input
 
@@ -265,6 +291,8 @@ survive it and open the review dialog on `/goals` under a later spec.
   accessible name; Meal, Priority, Type and Category were fixed in passing. Sweep the rest.
 - Look at (Pass 4): the label on the budgets page's total row stretches to 171 px while its
   text is about 120, so its click target is wider than its ink.
+- Look at (Pass 5): the appearance page saves on every change while the other six settings
+  pages have a Save button.
 
 ### Pass 8: mistakes
 
@@ -291,8 +319,8 @@ survive it and open the review dialog on `/goals` under a later spec.
   without a word.
 - Look at (Pass 0, weak): in testing, AI goal plans were discarded about twice as often as they
   were applied (24 to 11). Test data, so a hint rather than a finding.
-- Look at (Pass 3): the saved meals dialog with nothing saved is a heading and "New meal",
-  with no sentence saying what a saved meal is for.
+- Look at (Pass 3, withdrawn by Pass 5): the saved meals dialog's empty state does carry a
+  sentence saying what a saved meal is for.
 
 ## Screens and dialogs
 

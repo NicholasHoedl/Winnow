@@ -100,6 +100,11 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
       <Button
         type="submit"
         size="sm"
+        // Outline, not the primary fill. This bar sits directly under a header whose
+        // "New task" is filled, and the two create the same thing — so the screen was
+        // spending its one distinctive treatment twice and neither read as the main
+        // action. The header keeps the fill; every quick-add bar is outline (T39).
+        variant="outline"
         // Never `disabled`: a form whose submit button is disabled does no implicit
         // submission, so Enter would be dead while the previous entry was in flight and
         // anything typed in that window would vanish silently. Busy, not blocked.

@@ -146,7 +146,11 @@ export function BarcodeScannerDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      {/* `forceOverlay`, because this one is mounted inside the Log food dialog and base-ui
+          drops a nested dialog's backdrop. Without it the scanner opened flush over a
+          dialog the same width, so two titles and two footers showed at once with nothing
+          separating them. */}
+      <DialogContent forceOverlay>
         <DialogHeader>
           <DialogTitle>Scan a barcode</DialogTitle>
           <DialogDescription>

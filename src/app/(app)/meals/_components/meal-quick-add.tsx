@@ -98,6 +98,9 @@ export function MealQuickAdd({ date, foods }: { date: string; foods: Food[] }) {
       <Button
         type="submit"
         size="icon"
+        // Outline: the page's one fill belongs to "Log food" in the header, which logs the
+        // same thing through the full dialog. See the note in `quick-capture` (T39).
+        variant="outline"
         // Never `disabled`: a form whose submit button is disabled does no implicit
         // submission, so Enter would be dead while the previous entry was in flight and
         // anything typed in that window would vanish silently. Busy, not blocked.

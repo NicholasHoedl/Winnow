@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { Search } from "lucide-react"
 
 import { auth } from "@/lib/auth"
+import { cn } from "@/lib/utils"
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
@@ -81,7 +82,12 @@ export default async function AppLayout({
               <div className="flex items-center gap-1">
                 <CommandPaletteTrigger
                   aria-label="Search"
-                  className={buttonVariants({ variant: "ghost", size: "icon" })}
+                  // `cn(...)` like every other call site. Ghost sets no border, so this
+                  // one never showed the bug the outline links had — and wrapping it is
+                  // what stops a later change of variant from bringing it back (T39).
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "icon" }),
+                  )}
                 >
                   <Search className="size-5" />
                 </CommandPaletteTrigger>

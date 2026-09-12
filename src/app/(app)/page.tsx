@@ -19,6 +19,7 @@ import { getLists, getTasks } from "@/modules/todos/queries"
 import { formatLongDate, greeting } from "@/lib/format"
 import { dateLocale } from "@/lib/preferences"
 import type { DashboardCard } from "@/lib/preferences"
+import { cn } from "@/lib/utils"
 import { Reveal } from "@/components/shared/reveal"
 import { buttonVariants } from "@/components/ui/button"
 
@@ -223,9 +224,15 @@ export default async function DashboardPage({
 
                 `/review` kept its button even though it gained a nav tab in T13, as a
                 second door from the surface you land on. */}
+            {/* `cn(...)`, not the bare variant call. `buttonVariants` concatenates rather
+                than merges, so the base's `border-transparent` and the outline variant's
+                `border-border` both survive and the later rule in the compiled sheet wins —
+                which in light mode is the transparent one, so the button drew no border at
+                all. Dark mode hid it, because `dark:border-input` is more specific than
+                either. tailwind-merge, which is all `cn` adds here, drops the loser (T39). */}
             <Link
               href="/review"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               <ClipboardList className="size-4" />
               Review
@@ -235,7 +242,7 @@ export default async function DashboardPage({
                 press. */}
             <Link
               href="/calendar?new=event"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             >
               <CalendarPlus className="size-4" />
               Add event

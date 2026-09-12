@@ -49,6 +49,27 @@ test("the scanner offers manual entry when there's no camera", async ({
   await expect(page.getByRole("heading", { name: "Log food" })).toBeVisible()
 })
 
+test("the scanner draws a backdrop over the dialog it opens from", async ({
+  page,
+}) => {
+  await page.goto("/meals")
+  await page.getByRole("button", { name: "Log food" }).click()
+
+  // base-ui suppresses a NESTED dialog's backdrop, and the scanner is mounted inside the
+  // Log food dialog — so without `forceOverlay` it opened flush over a dialog of the same
+  // width and the two titles and two footers read as one confused surface.
+  const scrims = page
+    .locator('[data-slot="dialog-overlay"]')
+    .filter({ visible: true })
+  await expect(scrims).toHaveCount(1)
+
+  await page.getByRole("button", { name: "Scan a barcode" }).click()
+  await expect(
+    page.getByRole("heading", { name: "Scan a barcode" }),
+  ).toBeVisible()
+  await expect(scrims).toHaveCount(2)
+})
+
 test("the scan button is absent when the food database is switched off", async ({
   page,
 }) => {
