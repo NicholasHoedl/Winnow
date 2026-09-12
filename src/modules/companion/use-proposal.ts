@@ -59,6 +59,16 @@ export function readPayload(proposal: ProposalRow): ActivePayload | null {
 export type UseProposal = {
   /** A write or a generation is in flight. Every control reads this. */
   busy: boolean
+  /**
+   * The in-flight work is specifically an APPLY.
+   *
+   * Separate from `busy` because the two answer different questions, and the renderers'
+   * footers were reading the wrong one: `busy` says whether anything is running, which is
+   * what should lock Apply and Discard, while `applying` says whether the thing running is
+   * the one that writes rows. Refining a proposal made every footer announce "Applying…"
+   * for the length of a generation, naming the one action that had not been asked for.
+   */
+  applying: boolean
   /** The proposal on screen, or null. */
   active: ProposalRow | null
   /** Its parsed payload — kept separately because the user edits it in place. */
@@ -127,6 +137,8 @@ export function useProposal({
   )
   const [instruction, setInstruction] = React.useState("")
   const [busy, setBusy] = React.useState(false)
+  /** Set only by `apply`, and read only by the footers that name it. See the type above. */
+  const [applying, setApplying] = React.useState(false)
   /**
    * Bumped whenever a different payload arrives, and used as the renderer's `key`.
    *
@@ -249,6 +261,7 @@ export function useProposal({
     (finalized: AppliablePayload) => {
       if (!active) return
       setBusy(true)
+      setApplying(true)
       void applyProposal({ id: active.id, ...finalized })
         .then((result) => {
           if (!result.ok) {
@@ -292,13 +305,17 @@ export function useProposal({
             router.refresh()
           }
         })
-        .finally(() => setBusy(false))
+        .finally(() => {
+          setBusy(false)
+          setApplying(false)
+        })
     },
     [active, onApplied, router, undoApplied],
   )
 
   return {
     busy,
+    applying,
     active,
     payload,
     version,

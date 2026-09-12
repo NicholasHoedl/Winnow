@@ -1,6 +1,11 @@
 # Handoff
 
-Last updated: **2026-09-12**. T42 is the review's eighth pass, mistakes: calendar and list
+Last updated: **2026-09-12**. T43 is the review's ninth pass, speed and feedback: every
+daily interaction measured on a production build sits inside the thresholds, so the pass
+adds feedback where a wait had none, a spinner and a sentence about the wait on the five AI
+triggers, a busy Revise button, and a success toast on the Activity quick-add; no migration,
+no ADR.
+T42 is the review's eighth pass, mistakes: calendar and list
 deletes confirm and name what goes, a weigh-in delete and an applied AI proposal can be
 undone, a write that fails offline keeps what was typed instead of replacing the page, the
 dialog forms validate through their schemas alone with plain messages, and Undo toasts stay
@@ -71,7 +76,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T42 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T43 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -633,6 +638,25 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T43 is shipped: the review's Pass 9, speed and feedback.** No migration, no ADR; the
+measurements are in `docs/ux-review.md`. To measure again: `NEXT_DIST_DIR=.next-pass9 pnpm
+build`, restore `tsconfig.json` (the build rewrites it, §4), then `NEXT_DIST_DIR=.next-pass9
+DATABASE_URL=<TEST_DATABASE_URL from e2e/_test-db.ts> npx next start -p 3002` after one
+e2e run has migrated and seeded `winnow_test`; the chromium storage state signs in on 3002
+since cookies are host-scoped. Never on 3000.
+
+- `refinement-box.tsx`'s Revise shows the Spinner and disables while busy; `useProposal`
+  exposes `applying`, set only by `apply`, and the three proposal renderers (`plan-proposal`,
+  `routine-proposal`, `import-proposal`) take it as a required prop so "Applying…" means an
+  apply while `pending` still locks the buttons.
+- The five AI triggers (`budget-ai-tools.tsx` twice, `week-summary.tsx`, `plan-goal-dialog.tsx`,
+  `routine-tool.tsx`) show the Spinner beside their busy label and `GenerationWait`
+  (`components/companion/generation-wait.tsx`, one shared sentence with `role="status"`)
+  about how long a request can take (the 90 s ceiling is `GENERATE_TIMEOUT_MS` in
+  `ai-request.ts`). `companion.spec.ts` holds the generate route for three seconds to see it.
+- `activity/_components/quick-add.tsx` toasts what it parsed on success, like the other three
+  capture bars.
 
 **T42 is shipped: the review's Pass 8, mistakes.** No migration, no ADR; the destructive-action
 and failure-path tables are in `docs/ux-review.md`.

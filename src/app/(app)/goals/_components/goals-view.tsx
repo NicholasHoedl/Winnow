@@ -306,6 +306,7 @@ export function GoalsView({
             today={today}
             existingCommitments={existingCommitments}
             pending={busy}
+            applying={proposal.applying}
             onApply={(next) =>
               proposal.apply({ kind: "goal_plan", payload: next })
             }

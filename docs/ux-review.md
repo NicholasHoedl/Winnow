@@ -36,7 +36,7 @@ the daily driver until then.
 | 6   | Interaction | Reach                             | Fitts's law                           | Medium | Done 2026-09-12 |
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Done 2026-09-12 |
 | 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Done 2026-09-12 |
-| 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Not started     |
+| 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Done 2026-09-12 |
 | 10  | Feel        | Progress and endings              | Goal-gradient effect + peak-end rule  | Light  | Not started     |
 
 Sizes: **Light** is a handful of screens, or measuring before judging. **Medium** is every
@@ -397,26 +397,52 @@ Asked, and open: whether Escape and a backdrop tap should discard a half-typed d
 without a word (24 dialogs; the narrower version keeps Escape and makes only the backdrop
 non-dismissive on the long forms).
 
-### Pass 9: speed and feedback
+### Pass 9: speed and feedback — done 2026-09-12 (T43)
 
-- Keep: dashboard folds update optimistically; the meals quick-add bar clears at once; route
-  changes show loading skeletons.
-- Look at: an AI request can run for up to 90 seconds with only "Reading…" on its button.
-- Look at (Pass 7): the Activity page's quick-add bar is the one capture bar with no success
-  feedback; the row appears and nothing else says so.
-- Look at (Pass 8): the route error boundary's "Try again" neither resubmits nor notices the
-  network returning; before T42 a failed write cost a full route re-render.
-- Keep (Pass 8): the transaction dialog's Add stays disabled above the initial-posts cap with
-  a line saying why, the bound the other forms could copy.
-- Measure on a production build, never the dev server. Targets: Interaction to Next Paint of
-  200 ms or less; Doherty's original threshold was 400 ms.
+Measured on a production build of the tree, started on its own port against the test
+database, never the dev server: fourteen daily interactions ten times each at 393 px, the
+event's own duration from a `PerformanceObserver` and the time from the input to the first
+frame with the result on screen, plus a cold load of every daily route; then catalogued what
+shows during and after every wait. Against the Doherty threshold (400 ms) and today's
+Interaction to Next Paint target (200 ms).
+
+**Measured, and within threshold everywhere.** The worst event duration at p95 was 136 ms
+(opening the log food or transaction dialog); the worst input-to-result 212 ms, of which
+150 is the food search's deliberate debounce; optimistic paths (ticking a task, a fold) 8 to
+49 ms; a tab-bar change acknowledges in 5 to 11 ms and every app route has a skeleton, the
+Activity and Budget ones carrying the real heading. Cold, every route paints within about
+110 ms; the dashboard and the calendar reach real content at about 450 ms, the other six at
+130 to 160, the difference being data work after the shell, not the server (36 to 50 ms to
+first byte everywhere).
+
+Fixed:
+
+- The refinement box's Revise button showed nothing at all while a generation ran, keeping
+  its icon and staying enabled, while the plan review's footer button read "Applying…"
+  because it read the same busy flag. Revise shows the spinner and disables while busy, and
+  "Applying…" appears only for an apply.
+- An AI request can run up to 90 seconds with only a label change ("Reading…", "Thinking…")
+  on its trigger, at five places. Each shows the spinner beside the label and one shared
+  sentence saying how long it can take.
+- The Activity page's quick-add bar was the one capture bar that said nothing on success; it
+  toasts what it parsed like its three siblings.
+
+Kept, with reasons: every interaction measured; dashboard folds and task ticks update
+optimistically and the capture bars clear at once; the section strips without a pending
+spinner, since the destination's skeleton arrives within about 30 ms; the water card and
+quick-pick strip disabling during a write, a window of one insert; the error boundary's
+"Try again", whose acute case T42 removed by keeping failed writes out of it; the
+transaction dialog's Add staying disabled above the initial-posts cap with a line saying
+why. Left for another day: a way to cancel a generation, which needs an abort signal through
+the request and a decision about a half-finished generation on the server; the dashboard's
+and the calendar's data cost on a cold load, which HANDOFF §6 already names.
 
 ### Pass 10: progress and endings
 
 - Keep: macro bars, habit meters, goal momentum and the budget's month bar; a pending AI
   proposal survives a reload.
-- Look at: applying an AI proposal ends in silence — the panel closes and the rows appear
-  without a word.
+- Look at (withdrawn by Pass 9): applying an AI proposal used to end in silence; since T42 it
+  toasts what was created, with an Undo.
 - Look at (Pass 0, weak): in testing, AI goal plans were discarded about twice as often as they
   were applied (24 to 11). Test data, so a hint rather than a finding.
 - Look at (Pass 3, withdrawn by Pass 5): the saved meals dialog's empty state does carry a

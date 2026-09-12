@@ -4,8 +4,10 @@ import * as React from "react"
 import { Sparkles, Target } from "lucide-react"
 
 import type { GoalWithProgress } from "@/modules/goals/queries"
+import { GenerationWait } from "@/components/companion/generation-wait"
 import { ConfirmDialog } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Dialog,
   DialogContent,
@@ -109,6 +111,10 @@ export function PlanGoalDialog({
             </Select>
           </Field>
 
+          {/* Above the footer rather than beside the button: the footer is a row on every
+              width, and a sentence squeezed into it would wrap to two lines on a phone. */}
+          <GenerationWait busy={busy} />
+
           <DialogFooter>
             <Button
               type="button"
@@ -123,7 +129,13 @@ export function PlanGoalDialog({
               disabled={busy || !selectedId}
               aria-busy={busy}
             >
-              <Target className="size-4" />
+              {/* The target gives way to the spinner rather than sitting beside it: one
+                  icon slot, so the label does not shift as the wait begins. */}
+              {busy ? (
+                <Spinner className="size-4" />
+              ) : (
+                <Target className="size-4" />
+              )}
               {busy ? "Thinking…" : "Plan"}
             </Button>
           </DialogFooter>

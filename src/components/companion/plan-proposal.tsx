@@ -36,6 +36,7 @@ export function PlanProposal({
   today,
   existingCommitments,
   pending,
+  applying,
   onApply,
   onDiscard,
   frame = "card",
@@ -64,7 +65,16 @@ export function PlanProposal({
    * round trip for a number somebody upstairs is holding.
    */
   existingCommitments: number
+  /** Anything is in flight — a generation, a refinement, the apply itself. Locks both. */
   pending: boolean
+  /**
+   * That work is the apply, which is the only one this footer may name.
+   *
+   * Both came off one flag until T43, so pressing Revise put "Applying…" on a button that
+   * was doing nothing of the sort — the wrong verb for a 90-second wait, on the one action
+   * in this panel that creates rows.
+   */
+  applying: boolean
   onApply: (finalized: GoalPlanPayload) => void
   onDiscard: () => void
   /**
@@ -535,7 +545,7 @@ export function PlanProposal({
                 0
             }
           >
-            {pending ? "Applying…" : "Apply"}
+            {applying ? "Applying…" : "Apply"}
           </Button>
         </div>
       </div>

@@ -53,6 +53,7 @@ function show(props: Partial<React.ComponentProps<typeof PlanProposal>> = {}) {
       today="2026-09-03"
       existingCommitments={0}
       pending={false}
+      applying={false}
       onApply={onApply}
       onDiscard={onDiscard}
       {...props}
@@ -126,6 +127,34 @@ describe("PlanProposal", () => {
 })
 
 /**
+ * Which job the footer is allowed to name.
+ *
+ * `pending` means "something is in flight" and it is right that it locks both buttons —
+ * a refinement is about to replace the payload Apply would send. But the label was read off
+ * the same flag, so pressing Revise made the footer announce "Applying…", the one word for
+ * the one action that writes rows. Two flags, because they answer two questions: `pending`
+ * asks whether anything is running, `applying` asks whether THIS is.
+ */
+describe("PlanProposal — the footer's word for what is running", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("stays Apply while a refinement runs", () => {
+    show({ pending: true, applying: false })
+
+    const apply = screen.getByRole("button", { name: "Apply" })
+    // Locked, because the plan under it is being replaced — but not claiming to be writing.
+    expect(apply).toBeDisabled()
+    expect(screen.queryByRole("button", { name: "Applying…" })).toBeNull()
+  })
+
+  it("says Applying… once Apply is the thing in flight", () => {
+    show({ pending: true, applying: true })
+
+    expect(screen.getByRole("button", { name: "Applying…" })).toBeDisabled()
+  })
+})
+
+/**
  * Adding rows, which the panel could not do until now — the model's plan was the only
  * plan, and a step it had missed meant discarding the whole thing or adding it by hand on
  * another page afterwards.
@@ -151,6 +180,7 @@ describe("PlanProposal — adding", () => {
           today="2026-09-03"
           existingCommitments={0}
           pending={false}
+          applying={false}
           onApply={onApply}
           onDiscard={vi.fn()}
         />

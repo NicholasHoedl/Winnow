@@ -56,6 +56,7 @@ function show(onApply = vi.fn()) {
       categories={CATEGORIES}
       currency="USD"
       pending={false}
+      applying={false}
       onApply={onApply}
       onDiscard={vi.fn()}
     />,
@@ -122,6 +123,7 @@ describe("ImportProposal", () => {
         categories={CATEGORIES}
         currency="USD"
         pending={false}
+        applying={false}
         onApply={vi.fn()}
         onDiscard={vi.fn()}
       />,

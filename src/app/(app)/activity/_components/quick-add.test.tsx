@@ -12,7 +12,9 @@ import { QuickAdd } from "./quick-add"
 // matters here; the point of this file is what the BUTTON does while it is unresolved.
 vi.mock("@/modules/todos/actions", () => ({ createTask: vi.fn() }))
 
-const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }))
+const toast = vi.hoisted(() =>
+  Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }),
+)
 vi.mock("sonner", () => ({ toast }))
 
 /** A promise this test resolves by hand, so "in flight" is an observable state. */
@@ -66,6 +68,7 @@ describe("QuickAdd", () => {
     vi.mocked(createTask).mockReset()
     toast.mockReset()
     toast.error.mockReset()
+    toast.success.mockReset()
   })
 
   it("looks busy while the write is in flight, and stays submittable", async () => {
@@ -183,6 +186,57 @@ describe("QuickAdd", () => {
         listId: "",
       }),
     )
+  })
+
+  /**
+   * T43 (Pass 9): this was the one capture bar that said nothing when it worked.
+   *
+   * The dashboard's, the budget's and the meals' bars all name what they parsed; this one
+   * had `toast.error` and nothing else, so the only confirmation was a row appearing in a
+   * list you might not be looking at — and the parsing it had just done (the tag stripped,
+   * a date read out of the words) was invisible until you opened the task.
+   *
+   * The date is claimed ONLY when one was read. This bar deliberately does not assume
+   * today, so a toast saying "Due" on an undated line would be reporting a decision the
+   * bar did not make.
+   */
+  it("toasts the title, the date it read and the list it filed under", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
+
+    renderBar({ lists: LISTS })
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Call mum tomorrow #home" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    const [message, options] = toast.success.mock.calls[0]
+    expect(message).toBe("Added “Call mum”")
+    expect(options.description).toMatch(/^Due .+ · Home$/)
+  })
+
+  it("names the list alone when the line carried no date", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
+
+    renderBar({ lists: LISTS, defaultListId: LISTS[0].id })
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Buy milk" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    expect(toast.success.mock.calls[0][1].description).toBe("Home")
+  })
+
+  it("says only what it did when there is no list and no date", async () => {
+    vi.mocked(createTask).mockResolvedValue({ ok: true, id: "t1" })
+
+    renderBar()
+    const input = screen.getByLabelText<HTMLInputElement>("Quick add task")
+    fireEvent.change(input, { target: { value: "Buy milk" } })
+    fireEvent.submit(input.closest("form")!)
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1))
+    expect(toast.success.mock.calls[0][0]).toBe("Added “Buy milk”")
+    expect(toast.success.mock.calls[0][1]).toBeUndefined()
   })
 
   it("falls back to the default list when no tag was typed, and a tag wins over it", async () => {

@@ -6,12 +6,14 @@ import { Camera, ClipboardPaste, ScanLine } from "lucide-react"
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
 import { resizeImageFile, type ResizedImage } from "@/lib/resize-image"
+import { GenerationWait } from "@/components/companion/generation-wait"
 import {
   ImportProposal,
   type CategoryOption,
 } from "@/components/companion/import-proposal"
 import { ToolPanel } from "@/components/companion/tool-panel"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 
 /**
@@ -111,8 +113,10 @@ export function BudgetAiTools({
             disabled={busy || !text}
             aria-busy={busy}
           >
+            {busy && <Spinner className="size-4" />}
             {busy ? "Reading…" : "Read them"}
           </Button>
+          <GenerationWait busy={busy} />
         </form>
       </ToolPanel>
 
@@ -137,6 +141,7 @@ export function BudgetAiTools({
           categories={categories}
           currency={currency}
           pending={busy}
+          applying={proposal.applying}
           onApply={(next) => proposal.apply({ kind: "import", payload: next })}
           onDiscard={proposal.discard}
         />
@@ -223,9 +228,11 @@ function ReceiptPanel({
             aria-busy={busy}
             onClick={onRead}
           >
+            {busy && <Spinner className="size-4" />}
             {busy ? "Reading…" : "Read the receipt"}
           </Button>
         </div>
+        <GenerationWait busy={busy} />
         {image && (
           // eslint-disable-next-line @next/next/no-img-element -- a data URL preview, not an asset
           <img

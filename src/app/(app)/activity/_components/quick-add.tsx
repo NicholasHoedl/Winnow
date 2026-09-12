@@ -8,13 +8,31 @@ import { createTask } from "@/modules/todos/actions"
 import { parseTaskCapture, type ListOption } from "@/modules/todos/service"
 import { todayInZone } from "@/lib/date"
 import { restoreIfEmpty, tryWrite } from "@/lib/forms"
-import { usePreferences } from "@/components/preferences/preferences-provider"
+import {
+  useDateLocale,
+  usePreferences,
+} from "@/components/preferences/preferences-provider"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 
+// Short, human date for the confirmation toast ("Sat, Jul 26"). The dashboard bar's own
+// copy, deliberately: the two bars read the same line through the same parser, so they
+// report it in the same words. Local to each bar, as the app's other seven date formatters
+// are.
+function formatDue(date: string, locale: string): string {
+  const [y, m, d] = date.split("-").map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  })
+}
+
 export function QuickAdd({ lists }: { lists: ListOption[] }) {
   const { defaultListId, timeZone } = usePreferences()
+  const locale = useDateLocale()
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
 
@@ -33,6 +51,8 @@ export function QuickAdd({ lists }: { lists: ListOption[] }) {
       dueKind,
       listId,
     } = parseTaskCapture(trimmed, lists, todayInZone(new Date(), timeZone))
+    const filedListId = listId ?? defaultListId ?? ""
+    const listName = lists.find((list) => list.id === filedListId)?.name
 
     // Cleared here, synchronously, not after the await — see `restoreIfEmpty`.
     setTitle("")
@@ -48,7 +68,7 @@ export function QuickAdd({ lists }: { lists: ListOption[] }) {
         createTask({
           title: taskTitle,
           ...(dueDate ? { dueDate, dueKind } : {}),
-          listId: listId ?? defaultListId ?? "",
+          listId: filedListId,
         }),
       )
       // Nothing came back: the server is unreachable and `tryWrite` has said so. The
@@ -60,7 +80,27 @@ export function QuickAdd({ lists }: { lists: ListOption[] }) {
       if (!result.ok) {
         toast.error(result.error)
         setTitle(restoreIfEmpty(trimmed))
+        return
       }
+      // What was parsed, read back: this was the one capture bar that said nothing at all
+      // when it worked, while the dashboard's, the budget's and the meals' all name what
+      // they made (T43). The work worth confirming is the parsing — the tag taken out of
+      // the title, a date read from the words — which is otherwise invisible until the
+      // task is opened.
+      //
+      // The date is named only when one was READ. This bar leaves an undated line undated,
+      // so a toast saying "Due" would be reporting a decision it deliberately did not make.
+      const description = [
+        dueDate &&
+          `${dueKind === "by" ? "Due by" : "Due"} ${formatDue(dueDate, locale)}`,
+        listName,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+      toast.success(
+        `Added “${taskTitle}”`,
+        description ? { description } : undefined,
+      )
     })
   }
 

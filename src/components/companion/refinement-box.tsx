@@ -5,6 +5,7 @@ import { Wand2 } from "lucide-react"
 import type { ActivePayload } from "@/modules/companion/use-proposal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 
 /**
  * Per-kind copy, as lookups rather than nested ternaries.
@@ -98,9 +99,17 @@ export function RefinementBox({
           size="icon"
           aria-label="Revise the proposal"
           aria-busy={busy}
-          disabled={!body}
+          // `disabled` here, unlike the capture bars, which must never be: a bar takes a
+          // burst of Enters and a disabled submit button kills implicit submission, so
+          // anything typed while one was in flight vanished. A refinement is one call of up
+          // to `GENERATE_TIMEOUT_MS` that REPLACES the proposal on screen — a second one
+          // fired into that window is only a wasted call against a payload about to go.
+          disabled={!body || busy}
         >
-          <Wand2 className="size-4" />
+          {/* Swapped, not merely `aria-busy`: that attribute alone renders nothing, so this
+              button sat there with its wand for the whole of a 90-second generation, above
+              a proposal that had not changed. Same `size-4` box, so nothing shifts. */}
+          {busy ? <Spinner className="size-4" /> : <Wand2 className="size-4" />}
         </Button>
       </div>
     </form>

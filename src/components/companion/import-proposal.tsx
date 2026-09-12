@@ -66,13 +66,17 @@ export function ImportProposal({
   categories,
   currency,
   pending,
+  applying,
   onApply,
   onDiscard,
 }: {
   payload: ImportProposalPayload
   categories: CategoryOption[]
   currency: string
+  /** Anything is in flight — a generation, a refinement, the apply itself. Locks both. */
   pending: boolean
+  /** That work is the apply. See the note on `PlanProposal`: refining said "Applying…". */
+  applying: boolean
   onApply: (finalized: ImportPayload) => void
   onDiscard: () => void
 }) {
@@ -246,7 +250,7 @@ export function ImportProposal({
             onClick={() => onApply(final)}
             disabled={pending || final.rows.length === 0}
           >
-            {pending ? "Applying…" : "Apply"}
+            {applying ? "Applying…" : "Apply"}
           </Button>
         </div>
       </div>

@@ -310,6 +310,73 @@ test("a refinement replaces the proposal rather than stacking another", async ({
   await removeGoal(page, goalTitle)
 })
 
+/**
+ * What a generation looks like while it is running (T43, Pass 9).
+ *
+ * The stub answers instantly, so the pending window is held open here rather than waited
+ * for — `pending-feedback.spec.ts` does the same to the RSC request, and for the same
+ * reason: a real window of a few hundred milliseconds would flake, and the window this
+ * guards is up to `GENERATE_TIMEOUT_MS`, which is 90 seconds.
+ *
+ * Three claims, all of which were false before: the trigger shows a moving mark, the wait
+ * says how long it can be, and the footer does not name the one action that writes rows
+ * while something else is running. `aria-busy` carried all of this and renders nothing.
+ */
+test("a generation shows it is working, says how long, and never claims to be applying", async ({
+  page,
+}) => {
+  const goalTitle = `E2E waiting ${Date.now()}`
+  await createGoal(page, goalTitle)
+
+  // Held for three seconds: long enough to assert in, short enough that the test is not
+  // waiting on it. Installed after the goal exists so only the generations are delayed.
+  await page.route("**/api/companion/generate", async (route) => {
+    await new Promise((r) => setTimeout(r, 3000))
+    await route.continue()
+  })
+
+  await page.goto("/goals")
+  await page.getByRole("button", { name: "Plan a goal" }).click()
+  await page.getByRole("combobox", { name: "Goal" }).click()
+  await page.getByRole("option", { name: goalTitle }).click()
+  await page.getByRole("button", { name: "Plan", exact: true }).click()
+
+  // Located by `[data-pending]`, as the navigation spinners are: the swap renders no text
+  // of its own, and the label beside it is the button's own word for the job.
+  const thinking = page.getByRole("button", { name: "Thinking…" })
+  await expect(thinking.locator("[data-pending]")).toBeVisible()
+  await expect(
+    page.getByText("This can take up to a minute and a half."),
+  ).toBeVisible()
+
+  await expect(page.getByText("Proposed plan")).toBeVisible()
+
+  await page.getByLabel("Change this plan").fill("make it shorter")
+  const revise = page.getByRole("button", { name: "Revise the proposal" })
+  await revise.click()
+
+  await expect(revise.locator("[data-pending]")).toBeVisible()
+  // Locked while the plan under it is being replaced — but "Applying…" is the word for the
+  // one action that creates rows, and a refinement creates none. `exact`, because the
+  // default substring match would find "Applying…" inside an assertion about "Apply".
+  await expect(
+    page.getByRole("button", { name: "Apply", exact: true }),
+  ).toBeDisabled()
+  await expect(page.getByRole("button", { name: "Applying…" })).toHaveCount(0)
+
+  await expect(page.getByLabel("Milestone 1 title")).toHaveValue(
+    "STUB refined milestone",
+  )
+  await page.unrouteAll({ behavior: "ignoreErrors" })
+
+  await page.getByRole("button", { name: "Discard", exact: true }).click()
+  await expect(
+    page.getByRole("button", { name: /^(Discard|Done)$/ }),
+  ).toHaveCount(0)
+
+  await removeGoal(page, goalTitle)
+})
+
 test("a discarded proposal creates nothing and leaves the queue empty", async ({
   page,
 }) => {

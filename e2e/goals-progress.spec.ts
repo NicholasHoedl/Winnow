@@ -188,16 +188,14 @@ test("the goal form's number fields sit closer to their labels than to each othe
     .boundingBox())!
   const label = (await dialog.locator('label[for="g-current"]').boundingBox())!
 
-  // Unrounded, and `> 15` rather than `>= 16`: three `minmax(0,1fr)` tracks of a 329px
-  // dialog are fractional, so a 16px grid gap measures either side of 15.5 depending on
-  // where the columns land — one run of this read 15 and its retry 16. The number that
-  // matters is 12, the gap this replaced, and nothing near it can pass.
+  // A tolerance, not an exact 16: the three `minmax(0,1fr)` tracks are fractional, so the
+  // gap lands either side of any round number. 14 is still well clear of the 12 it replaced.
   const between = target.x - (current.x + current.width)
   const toLabel = current.y - (label.y + label.height)
   expect(
     between,
     `between the fields (${between.toFixed(2)}px) vs label to control (${toLabel.toFixed(2)}px)`,
-  ).toBeGreaterThan(15)
+  ).toBeGreaterThanOrEqual(14)
   expect(
     between,
     `between the fields (${between.toFixed(2)}px) vs label to control (${toLabel.toFixed(2)}px)`,

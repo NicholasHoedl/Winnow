@@ -5,10 +5,12 @@ import { Repeat } from "lucide-react"
 
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
+import { GenerationWait } from "@/components/companion/generation-wait"
 import { RoutineProposal } from "@/components/companion/routine-proposal"
 import { ToolPanel } from "@/components/companion/tool-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 
 /**
  * "Build a routine", on the routines page.
@@ -77,9 +79,13 @@ export function RoutineTool({ pending }: { pending: ProposalRow[] }) {
             disabled={busy || !brief.trim()}
             aria-busy={busy}
           >
+            {busy && <Spinner className="size-4" />}
             {busy ? "Thinking…" : "Build"}
           </Button>
         </form>
+        {/* Outside the form, which is a single row of input and button — a sentence inside
+            it would have to be a third column. */}
+        <GenerationWait busy={busy} />
       </ToolPanel>
 
       {active && payload?.kind === "routine" && (
@@ -90,6 +96,7 @@ export function RoutineTool({ pending }: { pending: ProposalRow[] }) {
             proposal.setPayload({ kind: "routine", payload: next })
           }
           pending={busy}
+          applying={proposal.applying}
           onApply={(next) => proposal.apply({ kind: "routine", payload: next })}
           onDiscard={proposal.discard}
         />

@@ -4,9 +4,11 @@ import { ScrollText } from "lucide-react"
 
 import type { ProposalRow } from "@/modules/companion/queries"
 import { useProposal } from "@/modules/companion/use-proposal"
+import { GenerationWait } from "@/components/companion/generation-wait"
 import { SummaryProposal } from "@/components/companion/summary-proposal"
 import { ToolPanel } from "@/components/companion/tool-panel"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
 
 /** "Jul 27" from the date a review was generated for. */
@@ -89,6 +91,7 @@ export function WeekSummary({
           disabled={busy}
           aria-busy={busy}
         >
+          {busy && <Spinner className="size-4" />}
           {/* "so far" only on the week in progress. On a past week nothing is provisional
               and the hedge would be a lie about a week that is complete. */}
           {busy
@@ -97,6 +100,7 @@ export function WeekSummary({
               ? "Summarise my week so far"
               : "Summarise this week"}
         </Button>
+        <GenerationWait busy={busy} />
       </ToolPanel>
 
       {active && payload?.kind === "summary" && (
