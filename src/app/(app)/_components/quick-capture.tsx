@@ -95,7 +95,12 @@ export function QuickCapture({ lists }: { lists: ListOption[] }) {
         // is all this hint is for.
         placeholder="Quick add — try “pay rent by friday”"
         aria-label="Quick add a task"
-        className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
+        // `py-1.5 -my-0.5`: a 20px line of text was the whole target on the app's primary
+        // capture surface, where the other three quick-add bars use `Input` at 32px. The
+        // padding makes the box fill its bar; the negative margin cancels the growth, so
+        // the bar stays the height it is and the box grows into the form's own padding
+        // (T40).
+        className="placeholder:text-muted-foreground -my-0.5 min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none"
       />
       <Button
         type="submit"

@@ -33,7 +33,7 @@ the daily driver until then.
 | 3   | Layout      | Sections and their order          | Chunking + serial position effect     | Medium | Done 2026-09-12 |
 | 4   | Layout      | Visible grouping                  | Proximity + uniform connectedness     | Medium | Done 2026-09-12 |
 | 5   | Layout      | One thing stands out              | Von Restorff effect + Prägnanz        | Medium | Done 2026-09-12 |
-| 6   | Interaction | Reach                             | Fitts's law                           | Medium | Not started     |
+| 6   | Interaction | Reach                             | Fitts's law                           | Medium | Done 2026-09-12 |
 | 7   | Interaction | Input                             | Postel's law + defaults               | Medium | Not started     |
 | 8   | Interaction | Mistakes                          | Error prevention + error recovery     | Medium | Not started     |
 | 9   | Feel        | Speed and feedback                | Doherty threshold                     | Light  | Not started     |
@@ -267,17 +267,39 @@ Asked, and open: whether to shorten the explainer paragraphs (the repeating task
 the page); and the three panel species and three row species Pass 4 listed, which Pass 5
 judged a consistency question too broad for a single pass and left recorded here.
 
-### Pass 6: reach
+### Pass 6: reach — done 2026-09-12 (T40)
 
-- Look at: the dashboard's fold chevrons are about 24 px square, exactly the WCAG 2.2 AA
-  minimum (24 × 24 CSS px; comfortable is 44 pt on iOS, 48 dp on Android).
-- Look at: ADR-0016 records the stat tiles' link moving from the whole tile to a small arrow
-  icon, which it calls a real regression in click target.
-- Look at: list rows use small icon buttons for edit and delete.
-- Look at: on a phone, page actions such as Log food sit in the top corner, the hardest reach.
-- Look at (Pass 3): the budget ledger puts 112 px of filter controls above a 62 px row.
-- Look at (Pass 5): the dashboard's "Open Macros" and "Open Budget" arrows are drawn at half
-  the muted foreground, the faintest controls measured anywhere, and are 24 px square.
+Measured the hit box of every interactive element on every screen and dialog at 393 px
+(478 targets on the phone, 633 on the desktop) with a probe at each box's centre, plus each
+daily action's position against the thumb zone, against Fitts's law: the time to hit a
+target grows with distance and shrinks with size, and WCAG 2.2 AA's floor is 24 × 24 CSS px.
+
+Fixed, each by enlarging the hit area with padding the way the checkbox already hides a
+38 × 30 target behind its 16 px box, nothing moved or drawn larger:
+
+- The dashboard's capture input was a bare 20 px input where the other three quick-add bars
+  are 32 px; the Slate's task titles were 20 px links in 32 px rows; four "see all" links
+  were 16 px; the Lists page's names were 20 px links in 40 px rows.
+- Five icon buttons had no padding, 14 to 16 px: the subtask toggle and delete, and three in
+  the goal editor. Four disclosures (Details, Show on the Tasks page, and the two `<summary>`
+  folds) were 16 to 20 px.
+- The fold chevrons, the "Open Macros" and "Open Budget" arrows and the drag grips sat
+  exactly on the 24 px floor for daily chrome; they are 28. `reach.spec.ts` measures each of
+  them and holds the floors.
+
+Kept, with reasons: every daily screen's page action sits top right, the platform's own
+convention for a page action (Jakob's law, Pass 1), with the quick-add bar just beneath it,
+and a floating button would be a second fill (Pass 5); the calendar event chip inside its
+day cell, the app's one target-spacing failure, is filed for Pass 8 as a mis-tap; the goal
+card's body opens the goal's tasks while its editor is a chevron, a split made on purpose;
+the button and input scale (36 and 32 px, per-item controls 28) is the app's density, above
+the floor everywhere now and a system-wide call to change; the tab bar's five 79 × 56 slots
+flush to the bottom edge, the More sheet's 48 px rows, every dialog's low full-width
+primary, the rows' wide title targets, the day cells and the palette's 44 px rows were
+measured and right; nothing is hover-only, so a touch user gets the mouse user's targets.
+
+Noticed for the suite: `playwright.config.ts` sets no `actionTimeout`, so a click on a locator
+that never appears burns the whole test timeout and its retry; a modest one would fail fast.
 
 ### Pass 7: input
 
@@ -293,6 +315,8 @@ judged a consistency question too broad for a single pass and left recorded here
   text is about 120, so its click target is wider than its ink.
 - Look at (Pass 5): the appearance page saves on every change while the other six settings
   pages have a Save button.
+- Look at (Pass 6): the plan review dialog edits a proposal through 16 to 20 px inline inputs
+  packed 26 px apart, an input design rather than a reach question.
 
 ### Pass 8: mistakes
 
@@ -302,6 +326,9 @@ judged a consistency question too broad for a single pass and left recorded here
 - Look at (Pass 2): the budgets form seeds itself from server props in an effect whose
   dependencies are new arrays on every render, so it re-seeds on any re-render and can put
   a figure back over one being typed. `budgets-page.spec.ts` waits around it.
+- Look at (Pass 6): a calendar event chip is 18 px tall inside a day cell that is itself a
+  target, the one target-spacing failure in the app, so a tap meant for the event can open
+  the day's create dialog instead.
 
 ### Pass 9: speed and feedback
 

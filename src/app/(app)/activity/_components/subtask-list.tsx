@@ -77,7 +77,13 @@ export function SubtaskList({
             disabled={pending}
             aria-label={`Delete ${subtask.title}`}
             onClick={() => run(() => deleteSubtask(subtask.id))}
-            className="text-muted-foreground hover:text-destructive shrink-0 disabled:opacity-50"
+            // `p-1.5 -my-1.5`: 14px of icon is the smallest target in the app, well under
+            // the 24px floor. The padding takes the box to 26 and the negative margin is
+            // VERTICAL ONLY — a negative margin on the right would push the border box
+            // past the row's own edge, which is what the layout sweep calls a spill (see
+            // the note on the fold chevron in `dashboard-card.tsx`). So the row keeps its
+            // height and the icon moves 6px in from the edge it used to sit on (T40).
+            className="text-muted-foreground hover:text-destructive -my-1.5 shrink-0 p-1.5 disabled:opacity-50"
           >
             <Trash2 className="size-3.5" />
           </button>

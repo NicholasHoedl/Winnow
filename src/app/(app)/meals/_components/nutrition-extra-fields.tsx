@@ -53,7 +53,9 @@ export function NutritionExtraFields<T extends FieldValues & MicroFormValues>({
 
   return (
     <details className="group rounded-lg border px-3 py-2">
-      <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-sm font-medium select-none">
+      {/* `py-1 -my-1` takes a 20px line to a 28px target, inside the disclosure's own
+          padding so nothing moves; same as the task dialog's link picker (T40). */}
+      <summary className="text-muted-foreground hover:text-foreground -my-1 cursor-pointer py-1 text-sm font-medium select-none">
         More nutrition (optional)
       </summary>
       {/* `gap-4`: a label sits 8px above its own control, so a 12px gap to the field beside

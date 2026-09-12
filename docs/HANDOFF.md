@@ -1,6 +1,9 @@
 # Handoff
 
-Last updated: **2026-09-12**. T39 is the review's fifth pass, one thing stands out: each daily
+Last updated: **2026-09-12**. T40 is the review's sixth pass, reach: every target measured
+at phone width now meets WCAG 2.2's 24 px floor, with the daily chrome at 28, by hit-area
+padding alone; nothing moved or drawn larger; no migration, no ADR.
+T39 is the review's fifth pass, one thing stands out: each daily
 screen draws one filled button, its main action, with the quick-add submits, Read the
 receipt, the weigh-in Save and Run gone outline, seven outline buttons get their border back
 in light mode, the dashboard cards share one heading, and the barcode scanner keeps its scrim;
@@ -58,7 +61,7 @@ flow tiers Pass 0 set on 2026-09-11, and each pass's findings as they land. Read
 UI work, so a change lands in the pass that owns it.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T39 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T40 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -620,6 +623,23 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T40 is shipped: the review's Pass 6, reach.** No migration, no ADR; the measurements are in
+`docs/ux-review.md`. The rule: a control's hit area meets 24 × 24 CSS px (28 for the daily
+chrome) through padding or a negative margin, never by drawing it larger or moving it, the
+pattern `checkbox.tsx` set with its invisible 38 × 30 target.
+
+- `quick-capture.tsx`'s input fills its bar like the other three quick-add bars; `slate.tsx`'s
+  task titles and the dashboard's "see all" links (`slate.tsx`, `category-bars.tsx`,
+  `goals-practice-card.tsx`) and `lists-view.tsx`'s names stretch to their rows.
+- The subtask toggle (`task-item.tsx`), the subtask delete (`subtask-list.tsx`) and three icon
+  buttons in `goal-editor-dialog.tsx` use the app's 24 px icon size; the goal editor's two
+  disclosures and the two `<summary>` folds (`task-dialog.tsx`, `nutrition-extra-fields.tsx`)
+  gained vertical padding.
+- `dashboard-card.tsx`'s chevrons, `stat-cards.tsx`'s arrows and `sortable-list.tsx`'s grips
+  are 28 px (`p-1.5`); the done-task inset on `/activity` follows the grip's box.
+- `e2e/reach.spec.ts` measures each at 393 px. Test infrastructure caveat: the config sets no
+  `actionTimeout`, so a click on a missing locator burns the whole test timeout and a retry.
 
 **T39 is shipped: the review's Pass 5, one thing stands out.** No migration, no ADR; the
 emphasis inventory behind it is in `docs/ux-review.md`.

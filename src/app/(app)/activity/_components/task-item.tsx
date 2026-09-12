@@ -195,7 +195,10 @@ export function TaskItem({
                 ? `Hide subtasks of ${task.title}`
                 : `Show subtasks of ${task.title}`
             }
-            className="text-muted-foreground hover:text-foreground shrink-0"
+            // `p-1 -m-1`: the icon alone was a 16px target between two controls that are
+            // 24 and 28. The padding takes it to the 24px floor and the negative margin
+            // hands the room back, so the row is laid out exactly as before (T40).
+            className="text-muted-foreground hover:text-foreground -m-1 shrink-0 p-1"
           >
             {expanded ? (
               <ChevronDown className="size-4" />

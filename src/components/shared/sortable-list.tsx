@@ -65,7 +65,13 @@ function SortableRow({
           // arrows to move, space to drop. That is the entire reason this is a dependency
           // rather than hand-rolled pointer handlers — see ADR-0006.
           aria-label={`Reorder ${label}`}
-          className="text-muted-foreground/40 hover:text-muted-foreground focus-visible:ring-ring mt-3.5 shrink-0 cursor-grab touch-none rounded p-1 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+          // `p-1.5 -mx-0.5 mt-3` where it was `p-1 mt-3.5` (T40). A 24px grip is the floor
+          // rather than clear of it, and this one is dragged. The padding takes the box to
+          // 28; the horizontal margin gives the 4px back to the layout, so the card beside
+          // it does not move and the done-task inset on /activity (24 + 4) still lines up;
+          // and `mt-3` less the extra 2px of padding leaves the icon exactly where it was,
+          // level with the first line of the row.
+          className="text-muted-foreground/40 hover:text-muted-foreground focus-visible:ring-ring -mx-0.5 mt-3 shrink-0 cursor-grab touch-none rounded p-1.5 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >

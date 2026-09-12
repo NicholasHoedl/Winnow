@@ -137,7 +137,12 @@ describe("Slate", () => {
     show({ bands: bands([task({ status: "done" })]) })
 
     expect(screen.getByLabelText("Reopen Water the plants")).toBeInTheDocument()
-    expect(screen.getByText("Water the plants")).toHaveClass("line-through")
+    // `.closest("a")`: the title text sits in a clamp span inside the link, and the done
+    // styling is on the link (T40 — the span exists because a `-webkit-line-clamp` box is
+    // clipped at its padding edge, and the link now carries padding to be a target).
+    expect(screen.getByText("Water the plants").closest("a")).toHaveClass(
+      "line-through",
+    )
   })
 
   it("surfaces a refused toggle rather than swallowing it", async () => {

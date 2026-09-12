@@ -34,9 +34,11 @@ export function CategoryBars({
       title="Categories"
       collapsed={collapsed}
       actions={
+        /* `inline-flex items-center py-1 -my-1` takes a 16px link to the 24px floor
+           without changing the header's height; see the note in `slate.tsx` (T40). */
         <Link
           href="/budget"
-          className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
+          className="text-muted-foreground hover:text-foreground -my-1 inline-flex items-center py-1 text-xs font-normal underline-offset-4 hover:underline"
         >
           All →
         </Link>

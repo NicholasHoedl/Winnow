@@ -63,7 +63,11 @@ function StatShell({
         <Link
           href={href}
           aria-label={`Open ${label}`}
-          className="text-muted-foreground/50 hover:text-foreground -m-1 rounded-md p-1 transition-colors"
+          // `p-1.5 -m-1.5` where it was `p-1 -m-1` (T40). ADR-0016 moved this tile's link
+          // from the whole tile to this arrow and called the loss of target a real
+          // regression; 24px was the floor rather than clear of it. The margin grows with
+          // the padding, so the link occupies exactly the room it did and nothing moves.
+          className="text-muted-foreground/50 hover:text-foreground -m-1.5 rounded-md p-1.5 transition-colors"
         >
           <ArrowUpRight className="size-4" />
         </Link>

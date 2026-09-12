@@ -205,16 +205,19 @@ export function GoalsPracticeCard({
             are the way out to each — a destination after the content, not a control that
             competes with the heading. Same move the "N short" line above made, and for the
             same reason: the header holds the name and the fold, and nothing else. */}
+        {/* `inline-flex items-center py-1 -my-1` on both: 16px of link becomes a 24px
+            target, and the negative margin keeps the row the height it was; see the note
+            in `slate.tsx` (T40). */}
         <div className="flex items-center gap-4 border-t pt-3">
           <Link
             href="/goals"
-            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+            className="text-muted-foreground hover:text-foreground -my-1 inline-flex items-center py-1 text-xs underline-offset-4 hover:underline"
           >
             Goals →
           </Link>
           <Link
             href="/activity/habits"
-            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+            className="text-muted-foreground hover:text-foreground -my-1 inline-flex items-center py-1 text-xs underline-offset-4 hover:underline"
           >
             Habits →
           </Link>

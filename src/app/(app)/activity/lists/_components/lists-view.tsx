@@ -122,9 +122,15 @@ export function ListsView({
               that have none, and its count is the thing worth glancing at — a growing pile
               here is the sign the lists are not being used. */}
           <li className="flex items-center justify-between gap-2 rounded-md border border-dashed p-2 text-sm">
+            {/* `py-1 -my-1`, here and on each list below: the name is the way into the
+                list and it was a 20px target in a 40px row. The padding takes it to 28
+                and the negative margin gives the height back to the row, so the target
+                fills the row it sits in without the row changing (T40). No `inline-flex`
+                to go with it — these truncate, and a flex box does not pass an ellipsis
+                down to the text inside it. */}
             <Link
               href={`/activity?list=${UNFILED}`}
-              className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+              className="hover:text-foreground text-muted-foreground -my-1 min-w-0 truncate py-1"
             >
               Unfiled
             </Link>
@@ -144,7 +150,7 @@ export function ListsView({
               >
                 <Link
                   href={`/activity?list=${list.id}`}
-                  className="min-w-0 truncate font-medium hover:underline"
+                  className="-my-1 min-w-0 truncate py-1 font-medium hover:underline"
                 >
                   {list.name}
                 </Link>

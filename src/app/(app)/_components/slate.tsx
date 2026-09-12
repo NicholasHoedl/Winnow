@@ -93,22 +93,31 @@ function TaskRow({
       <Link
         href="/activity"
         className={cn(
-          // `line-clamp-3`, not `truncate`. The dashboard's outer columns are ~274px at
-          // 1280px and ~211px at 1024px — NARROWER than the 361px a 393px phone gives this
-          // same card, so a single-line ellipsis cut MORE off on a laptop than on a phone,
-          // which is the geometry backwards.
-          //
-          // Three rather than two, and the number is measured rather than picked. After
-          // `Gutter`'s 56px (which exists so an event's "all-day" lines up with a task's
-          // checkbox) the text gets ~190px on a laptop against ~263px on a phone — about
-          // 20 characters a line versus 30. Two lines on a phone is ~60 characters, so
-          // three lines here is what shows the SAME amount of a title at both widths.
-          // It costs nothing on a phone, which reaches 60 characters in two.
-          "line-clamp-3 min-w-0 flex-1 text-sm",
+          // `py-1.5 -my-1.5`: the link was 20px tall inside a 32px row, while the same
+          // task on /activity gives 44px. The padding stretches the target to the row it
+          // sits in and the negative margin cancels it again, so the row keeps its height
+          // and the title stays where it was drawn (T40).
+          "-my-1.5 min-w-0 flex-1 py-1.5 text-sm",
           done && "text-muted-foreground line-through",
         )}
       >
-        {task.title}
+        {/* The clamp is on this span rather than on the link, and it has to be: a
+            `-webkit-line-clamp` box is clipped at its PADDING edge, so the link's padding
+            let a fourth line show through beneath the ellipsis the moment the link became
+            a target (T40). Nothing else here wants a wrapper.
+
+            `line-clamp-3`, not `truncate`. The dashboard's outer columns are ~274px at
+            1280px and ~211px at 1024px — NARROWER than the 361px a 393px phone gives this
+            same card, so a single-line ellipsis cut MORE off on a laptop than on a phone,
+            which is the geometry backwards.
+
+            Three rather than two, and the number is measured rather than picked. After
+            `Gutter`'s 56px (which exists so an event's "all-day" lines up with a task's
+            checkbox) the text gets ~190px on a laptop against ~263px on a phone — about
+            20 characters a line versus 30. Two lines on a phone is ~60 characters, so
+            three lines here is what shows the SAME amount of a title at both widths.
+            It costs nothing on a phone, which reaches 60 characters in two. */}
+        <span className="line-clamp-3">{task.title}</span>
       </Link>
       {showDate && task.dueDate && !done && (
         <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -324,9 +333,13 @@ export function Slate({
         /* `All →`, never `Calendar →`. An earlier agenda header linked to /calendar for no
            reason a reader could infer, and `dashboard-agenda.spec.ts` asserts negatively
            that no such link comes back. */
+        /* `inline-flex items-center py-1 -my-1`: 12px type draws a 16px target, two
+           thirds of the 24px floor. The padding takes it to 24 and the negative margin
+           gives the height back to the header, so the card's title row is unchanged
+           (T40). Every "see all" link on the dashboard carries the same three. */
         <Link
           href="/activity"
-          className="text-muted-foreground hover:text-foreground text-xs font-normal underline-offset-4 hover:underline"
+          className="text-muted-foreground hover:text-foreground -my-1 inline-flex items-center py-1 text-xs font-normal underline-offset-4 hover:underline"
         >
           All →
         </Link>

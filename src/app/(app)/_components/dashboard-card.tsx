@@ -115,12 +115,18 @@ export function DashboardCard({
               // "Expand Slate" swap with the state, which is both what a screen reader
               // needs and what lets a test assert the toggle actually took.
               aria-label={open ? `Collapse ${name}` : `Expand ${name}`}
-              // NO negative margin. `-mr-1` here for optical alignment cost exactly 4px of
-              // horizontal overflow at 393px: it pulls the flex row in while the button's
-              // border box still occupies its full width, so the row's content is wider than
-              // the row. Third time this pattern has bitten — see `habit-strip`,
-              // `routines-line`, and Slate's routine block.
-              className="text-muted-foreground hover:text-foreground hover:bg-accent rounded-md p-1 transition-colors"
+              // NO negative HORIZONTAL margin. `-mr-1` here for optical alignment cost
+              // exactly 4px of horizontal overflow at 393px: it pulls the flex row in while
+              // the button's border box still occupies its full width, so the row's content
+              // is wider than the row. Third time this pattern has bitten — see
+              // `habit-strip`, `routines-line`, and Slate's routine block.
+              //
+              // `p-1.5 -my-0.5` (T40): this is the control every card is folded by, and at
+              // `p-1` it sat exactly on the 24px floor rather than clear of it. The padding
+              // takes the box to 28 and the vertical margin — which is safe, the fault
+              // above is horizontal — keeps the header row at the height it was, so no card
+              // body moves. The icon and the actions beside it come 4px in from the edge.
+              className="text-muted-foreground hover:text-foreground hover:bg-accent -my-0.5 rounded-md p-1.5 transition-colors"
             >
               {open ? (
                 <ChevronDown className="size-4" />

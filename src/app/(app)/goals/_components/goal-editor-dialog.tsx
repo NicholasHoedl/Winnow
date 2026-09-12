@@ -157,11 +157,21 @@ function TaskRow({
           run(() => updateTask(task.id, { title: task.title, dueDate, goalId }))
         }
       />
+      {/* `p-1.5 -my-1.5`: 14px of icon against a 24px floor. Vertical only — a negative
+          margin on the right would push the border box past the row's edge, which the
+          layout sweep reads as a spill — so the row keeps its height and the icon comes
+          6px in from the edge (T40). Same on every trash button below.
+
+          `self-center` with it, and only on this row: it aligns on the BASELINE, and a
+          padded box with no text in it has its baseline synthesized from the bottom of its
+          border box — so the padding alone lifted the icon 6px and made the row taller.
+          The `ListTodo` at the head of the row opted out of the baseline for its own
+          version of this. */}
       <button
         type="button"
         aria-label={`Delete ${task.title}`}
         onClick={() => onRemove(task)}
-        className="text-muted-foreground hover:text-destructive shrink-0"
+        className="text-muted-foreground hover:text-destructive -my-1.5 shrink-0 self-center p-1.5"
       >
         <Trash2 className="size-3.5" />
       </button>
@@ -446,7 +456,10 @@ export function GoalEditorDialog({
                 type="button"
                 aria-expanded={detailsOpen}
                 onClick={() => setDetailsOpen((value) => !value)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase"
+                // `py-1 -my-1`: the whole disclosure was 16px tall. The padding takes it
+                // to the 24px floor and the negative margin keeps the column's spacing
+                // (T40).
+                className="text-muted-foreground hover:text-foreground -my-1 flex items-center gap-1.5 py-1 text-xs font-semibold tracking-wide uppercase"
               >
                 <ChevronDown
                   className={cn(
@@ -762,7 +775,10 @@ export function GoalEditorDialog({
                             type="button"
                             aria-label={`Make a task from ${milestone.title}`}
                             onClick={() => makeTask(milestone)}
-                            className="text-muted-foreground hover:text-foreground shrink-0"
+                            // `p-1.5 -m-1.5`: 14px to 26px. This one is mid-row rather
+                            // than at its end, so the margin can come off all four sides
+                            // and nothing moves at all (T40).
+                            className="text-muted-foreground hover:text-foreground -m-1.5 shrink-0 p-1.5"
                           >
                             <ListPlus className="size-3.5" />
                           </button>
@@ -771,7 +787,8 @@ export function GoalEditorDialog({
                           type="button"
                           aria-label={`Delete ${milestone.title}`}
                           onClick={() => removeMilestone(milestone)}
-                          className="text-muted-foreground hover:text-destructive shrink-0"
+                          // Vertical only, for the reason given at `TaskRow` above (T40).
+                          className="text-muted-foreground hover:text-destructive -my-1.5 shrink-0 p-1.5"
                         >
                           <Trash2 className="size-3.5" />
                         </button>
@@ -827,7 +844,9 @@ export function GoalEditorDialog({
                 action={
                   <Link
                     href={`/activity?goal=${goal.id}`}
-                    className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+                    // `py-1 -my-1`, as on the dashboard's "see all" links: 16px of link
+                    // becomes a 24px target and the heading row is unchanged (T40).
+                    className="text-muted-foreground hover:text-foreground -my-1 flex items-center gap-1 py-1 text-xs"
                   >
                     Show on the Tasks page
                     <ArrowRight className="size-3" />

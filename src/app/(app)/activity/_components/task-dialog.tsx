@@ -550,7 +550,10 @@ export function TaskDialog({
                 open={linksOpen || !!errors.goalId || !!errors.eventId}
                 className="group rounded-lg border px-3 py-2"
               >
-                <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-sm font-medium select-none">
+                {/* `py-1 -my-1`: a 20px line is the whole of what opens this, under the
+                    24px floor. The padding takes it to 28 into the disclosure's own
+                    padding, so nothing moves (T40). */}
+                <summary className="text-muted-foreground hover:text-foreground -my-1 cursor-pointer py-1 text-sm font-medium select-none">
                   {/* Named for what is behind it: the block renders for goals OR events,
                       and an account with no calendar events was being offered one. */}
                   {goals.length > 0 && events.length > 0
