@@ -5,12 +5,13 @@ import { Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
+import { restoreIfEmpty, tryWrite } from "@/lib/forms"
 import {
   addSubtask,
   deleteSubtask,
   toggleSubtask,
 } from "@/modules/todos/actions"
-import type { Subtask } from "@/modules/todos/queries"
+import type { ActivitySubtask } from "@/modules/todos/queries"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 
@@ -30,23 +31,42 @@ export function SubtaskList({
   subtasks,
 }: {
   taskId: string
-  subtasks: Subtask[]
+  subtasks: ActivitySubtask[]
 }) {
   const [title, setTitle] = React.useState("")
   const [pending, startTransition] = React.useTransition()
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>) {
     startTransition(async () => {
-      const result = await action()
-      if (!result.ok && result.error) toast.error(result.error)
+      // `tryWrite`, because a bare `await` inside a transition has no catch: with the
+      // network down a Server Action's fetch REJECTS, the rejection escapes, and React
+      // hands the whole route to its error boundary — taking the open task dialog with it.
+      const result = await tryWrite(action)
+      if (result && !result.ok && result.error) toast.error(result.error)
     })
   }
 
   function add() {
     const trimmed = title.trim()
     if (!trimmed) return
+    // Cleared synchronously, so a second Enter has nothing left to resubmit — and so the
+    // failure path below has to put it back. The four capture bars' pattern; until T45 this
+    // box did the clearing without the restoring, and a dropped connection simply ate what
+    // had been typed.
     setTitle("")
-    run(() => addSubtask(taskId, { title: trimmed }))
+    startTransition(async () => {
+      const result = await tryWrite(() =>
+        addSubtask(taskId, { title: trimmed }),
+      )
+      if (!result) {
+        setTitle(restoreIfEmpty(trimmed))
+        return
+      }
+      if (!result.ok && result.error) {
+        toast.error(result.error)
+        setTitle(restoreIfEmpty(trimmed))
+      }
+    })
   }
 
   return (

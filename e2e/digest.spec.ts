@@ -30,10 +30,28 @@ test("the daily digest appears once a day and stays dismissed", async ({
 
   // Pretend this is the first load of a new day.
   await page.evaluate(CLEAR_SEEN)
+
+  // The digest is computed during the app shell's SERVER render now (T45), so showing it
+  // costs no request at all — where it used to cost a Server Action POST (676–825ms on a 5G
+  // profile) that this banner's heading, the page's LCP element on six of eight routes,
+  // then waited on.
+  //
+  // Counted rather than timed, and counted the way `_server-write.ts` identifies the digest:
+  // a zero-argument action posts `[]`, which `withArguments` exists to reject. Matching on
+  // that rather than on "any Server Action" keeps this about the digest — a future write
+  // that legitimately fires on load should not fail this test.
+  const zeroArgPosts: string[] = []
+  page.on("request", (request) => {
+    if (request.method() !== "POST") return
+    if (!("next-action" in request.headers())) return
+    if ((request.postData() ?? "").trim() === "[]")
+      zeroArgPosts.push(request.url())
+  })
   await page.reload()
 
   const banner = page.getByRole("status").filter({ hasText: "Daily digest" })
   await expect(banner).toBeVisible()
+  expect(zeroArgPosts).toEqual([])
   // It summarises the task we just created rather than rendering an empty shell.
   await expect(banner).toContainText(/\d+ task/)
   await expect(banner).toContainText("due today")
@@ -42,8 +60,12 @@ test("the daily digest appears once a day and stays dismissed", async ({
   await page.getByLabel("Dismiss digest").click()
   await expect(banner).toBeHidden()
 
-  // ...and the day is already recorded, so a reload doesn't bring it back.
+  // ...and the day is already recorded, so a reload doesn't bring it back. The server
+  // computes the digest either way — it cannot know what this device has been shown — but
+  // the banner renders nothing at all until the client says it belongs on screen, so there
+  // is no hidden copy of its text left in the document to trip a loose locator elsewhere.
   await page.reload()
+  await expect(banner).toHaveCount(0)
   await expect(page.getByText("Daily digest")).toHaveCount(0)
 
   // Cleanup.

@@ -67,6 +67,13 @@ export function PageTabs({
             <Link
               key={tab.href}
               href={tab.href}
+              // Not prefetched (T45). A strip of five to seven pills is five to seven
+              // viewport links, and on a dynamic route — every route here is, since
+              // `auth()` reads cookies — Next's client router cache holds a prefetched
+              // payload for zero seconds. So the tap refetches the page anyway and the
+              // prefetch bought nothing but the loading skeleton. `LinkPending` is what
+              // covers the wait, and it works whether or not a prefetch ran.
+              prefetch={false}
               aria-current={tab.active ? "page" : undefined}
               className={cn(
                 "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors",

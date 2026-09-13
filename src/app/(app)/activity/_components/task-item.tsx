@@ -16,7 +16,7 @@ import { dueStatus } from "@/lib/date"
 
 import { cn } from "@/lib/utils"
 
-import type { TaskWithSeries } from "@/modules/todos/queries"
+import type { ActivityTask } from "@/modules/todos/queries"
 import { repeatLabel } from "@/modules/todos/service"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -49,13 +49,13 @@ export function TaskItem({
   onSkip,
   listName,
 }: {
-  task: TaskWithSeries
+  task: ActivityTask
   timeZone: string
   onToggle: (id: string) => void
-  onEdit: (task: TaskWithSeries) => void
-  onDelete: (task: TaskWithSeries) => void
+  onEdit: (task: ActivityTask) => void
+  onDelete: (task: ActivityTask) => void
   /** Skip just this cycle. Only offered for a generated instance. */
-  onSkip: (task: TaskWithSeries) => void
+  onSkip: (task: ActivityTask) => void
   /** The task's list, by name, drawn as a badge — you cannot use what you cannot see. */
   listName?: string
 }) {

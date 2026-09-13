@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import { Plus, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
@@ -18,10 +19,25 @@ import type { HabitRow, HabitStripCard } from "@/modules/habits/queries"
 import { useWriteGuard } from "@/components/shared/use-write-guard"
 
 import { GoalCard } from "./goal-card"
-import { GoalDialog } from "./goal-dialog"
-import { GoalEditorDialog } from "./goal-editor-dialog"
 import { PlanGoalDialog } from "./plan-goal-dialog"
 import { PlanReviewDialog } from "./plan-review-dialog"
+
+/**
+ * Both loaded when first opened, not with the page (T45).
+ *
+ * They are what pulls `standardSchemaResolver` and a zod schema onto `/goals` — 63KB on the
+ * wire, 277KB decoded — through `goal-form.tsx`, and the editor drags `HabitDialog` in
+ * behind it. The page itself is cards you read. Same two-level lazy load the meals scanner
+ * uses; `ssr: false` is legal because this module is itself a client component.
+ */
+const GoalDialog = dynamic(
+  () => import("./goal-dialog").then((m) => m.GoalDialog),
+  { ssr: false },
+)
+const GoalEditorDialog = dynamic(
+  () => import("./goal-editor-dialog").then((m) => m.GoalEditorDialog),
+  { ssr: false },
+)
 
 export function GoalsView({
   goals,
@@ -232,30 +248,29 @@ export function GoalsView({
         />
       )}
 
-      <GoalDialog
-        events={events}
-        open={goalDialogOpen}
-        onOpenChange={setGoalDialogOpen}
-      />
-      <GoalEditorDialog
-        goal={editorGoal}
-        // Filtered here rather than in the dialog so the dialog takes exactly what it draws.
-        habits={
-          editorGoal
-            ? habits.filter((habit) => habit.goalId === editorGoal.id)
-            : []
-        }
-        habitRows={
-          editorGoal
-            ? habitRows.filter((row) => row.goalId === editorGoal.id)
-            : []
-        }
-        tasks={editorGoal ? (plans[editorGoal.id]?.setupTasks ?? []) : []}
-        goalOptions={goalOptions}
-        events={events}
-        open={editorGoal !== null}
-        onOpenChange={(open) => !open && setEditorGoalId(null)}
-      />
+      {goalDialogOpen && (
+        <GoalDialog
+          events={events}
+          open={goalDialogOpen}
+          onOpenChange={setGoalDialogOpen}
+        />
+      )}
+      {/* Mounted only once a goal is open — which also makes the three "no goal yet"
+          ternaries the props used to carry unnecessary. */}
+      {editorGoal !== null && (
+        <GoalEditorDialog
+          goal={editorGoal}
+          // Filtered here rather than in the dialog so the dialog takes exactly what it
+          // draws.
+          habits={habits.filter((habit) => habit.goalId === editorGoal.id)}
+          habitRows={habitRows.filter((row) => row.goalId === editorGoal.id)}
+          tasks={plans[editorGoal.id]?.setupTasks ?? []}
+          goalOptions={goalOptions}
+          events={events}
+          open
+          onOpenChange={(open) => !open && setEditorGoalId(null)}
+        />
+      )}
 
       {companionEnabled && (
         <PlanGoalDialog

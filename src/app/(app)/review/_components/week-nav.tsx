@@ -36,6 +36,10 @@ export function WeekNav({
     <div className="mb-6 flex flex-wrap items-center justify-center gap-1">
       <Link
         href={`/review?week=${addDays(weekStart, -7)}`}
+        // Not prefetched (T45), for the reason the month stepper gives: a same-route
+        // parameter change on a dynamic route is refetched on tap whatever was prefetched,
+        // so each arrow was buying a round trip and a skeleton and nothing else.
+        prefetch={false}
         aria-label="Previous week"
         className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
       >
@@ -48,6 +52,7 @@ export function WeekNav({
       <span className="min-w-40 text-center text-sm font-medium">{range}</span>
       <Link
         href={`/review?week=${addDays(weekStart, 7)}`}
+        prefetch={false}
         aria-label="Next week"
         className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
       >
@@ -63,6 +68,7 @@ export function WeekNav({
       {!isCurrentWeek && (
         <Link
           href="/review"
+          prefetch={false}
           className={cn(buttonVariants({ variant: "link", size: "sm" }))}
         >
           This week

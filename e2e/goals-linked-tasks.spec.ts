@@ -118,7 +118,15 @@ test("selecting a goal scopes the task list to its work", async ({ page }) => {
   await expect(visibleCard(page, LATE)).toHaveCount(1)
   await expect(visibleCard(page, OPEN)).toHaveCount(1)
   await expect(visibleCard(page, OTHER)).toHaveCount(0)
-  await expect(page.getByText("Overdue").first()).toBeVisible()
+  // The task list's own section heading, by role — not `getByText("Overdue").first()`.
+  // `getByText` matches hidden nodes too, so `.first()` returns whatever comes first in
+  // DOM order rather than the thing meant, and the banner above `{children}` in the (app)
+  // layout is earlier than the list. The same shape `routines.spec.ts`'s `section()` uses.
+  await expect(
+    page
+      .locator("main")
+      .getByRole("heading", { level: 2, name: "Overdue", exact: true }),
+  ).toBeVisible()
 
   // --- The selection is in the URL, so it survives a reload and can be linked to. This is
   // what the goal search result now points at.

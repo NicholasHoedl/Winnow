@@ -4,6 +4,7 @@
 // menu, and the `+1` with its undo toast — the same shape `routines-view.tsx` uses.
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import {
   Archive,
   ArchiveRestore,
@@ -46,9 +47,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { QuotaMeter } from "@/components/ui/quota-meter"
 
-import { HabitDialog } from "@/components/habits/habit-dialog"
 import { useCreateFlag } from "@/components/shared/use-create-flag"
 import { useDateLocale } from "@/components/preferences/preferences-provider"
+
+/**
+ * Loaded when the dialog is first opened, not with the page (T45).
+ *
+ * It is the only thing on `/activity/habits` that pulls `standardSchemaResolver` and a zod
+ * schema — 63KB on the wire, 277KB decoded — and the page is a strip of rings you read and
+ * tap. `?new=habit` and the palette still open it: they set `open`, which mounts this, and
+ * the import resolves before it renders. Same two-level lazy load the meals scanner uses;
+ * `ssr: false` is legal because this module is itself a client component.
+ */
+const HabitDialog = dynamic(
+  () => import("@/components/habits/habit-dialog").then((m) => m.HabitDialog),
+  { ssr: false },
+)
 
 import { ActivityHeader } from "../../_components/activity-header"
 
@@ -410,12 +424,14 @@ export function HabitsView({
         </section>
       )}
 
-      <HabitDialog
-        habit={editing}
-        goals={goals}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
+      {dialogOpen && (
+        <HabitDialog
+          habit={editing}
+          goals={goals}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmTarget !== null}

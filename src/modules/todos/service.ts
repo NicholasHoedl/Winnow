@@ -195,6 +195,47 @@ export function sortByCompletion<T extends TaskCompletionInput>(
   })
 }
 
+/** What the optimistic reducer below needs off a row. */
+export type TaskChangeInput = {
+  id: string
+  status: "open" | "done"
+}
+
+/**
+ * What an in-flight write does to the list before the server has answered.
+ *
+ * `/activity` fed `useOptimistic` a bare toggled id until T45, so only ticking a task felt
+ * immediate: deleting or skipping one waited the whole round trip — 306ms on a 5G profile —
+ * with the row sitting there unchanged after the menu had already closed. The row is what
+ * the tap was about, so it leaves at once, and because `useOptimistic` discards this the
+ * moment the transition ends, a failed write puts it back with nothing to undo by hand.
+ *
+ * The Undo path is NOT expressed here. It opens its own transition and lands through
+ * revalidation, so a restored row arrives as ordinary server state.
+ *
+ * Untouched rows are returned by IDENTITY, which is what keeps a tick from remounting every
+ * card in the list.
+ */
+export type TaskChange = { kind: "toggle" | "remove"; id: string }
+
+export function applyTaskChange<T extends TaskChangeInput>(
+  tasks: T[],
+  change: TaskChange,
+): T[] {
+  if (change.kind === "remove") {
+    return tasks.filter((task) => task.id !== change.id)
+  }
+  return tasks.map((task) =>
+    task.id === change.id
+      ? {
+          ...task,
+          status:
+            task.status === "open" ? ("done" as const) : ("open" as const),
+        }
+      : task,
+  )
+}
+
 // --- Lists ---
 
 /** Sentinel for "tasks with no list" in `?list=` — a filter value, not an id. */

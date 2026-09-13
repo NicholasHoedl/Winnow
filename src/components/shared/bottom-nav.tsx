@@ -87,6 +87,13 @@ export function BottomNav() {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    // Not prefetched, unlike the four tabs above (T45). These are the
+                    // weekly places and Settings — gone to deliberately and rarely — and
+                    // they enter the viewport the moment the sheet opens, so all of them
+                    // prefetched at once for the one tap that follows. The four daily tabs
+                    // keep the default: they are the app's main movement, and they are
+                    // on screen from first paint.
+                    prefetch={false}
                     aria-current={active ? "page" : undefined}
                     onClick={() => setMoreOpen(false)}
                     className={cn(

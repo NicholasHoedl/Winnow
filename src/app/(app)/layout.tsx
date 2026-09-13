@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth"
 import { cn } from "@/lib/utils"
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
+import { computeDigest } from "@/modules/digest/queries"
 import { getGoalOptions } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
 import { getLists } from "@/modules/todos/queries"
@@ -41,11 +42,16 @@ export default async function AppLayout({
   // deleted that page, so the nav no longer varies by AI state and each page reads the
   // setting itself. One query fewer on every authenticated render, and no value with no
   // reader — which is the same anti-pattern as a column with no writer.
-  const [preferences, lists, goals, events] = await Promise.all([
+  // `computeDigest()` rides along here rather than being fetched by the banner from an
+  // effect (T45). It reads `getUserPreferences()` itself, which is `cache()`d — so the two
+  // entries share one query — and returns null the moment the digest preference is off,
+  // before any of its three aggregations run.
+  const [preferences, lists, goals, events, digest] = await Promise.all([
     getUserPreferences(),
     getLists(),
     getGoalOptions(),
     getEventOptions(),
+    computeDigest(),
   ])
 
   return (
@@ -103,12 +109,13 @@ export default async function AppLayout({
               // the nav is ~88px, so the last few pixels of every page sat underneath it.
               className="flex-1 pb-[calc(var(--bottom-nav-height)_+_1.5rem)] outline-none md:pb-0"
             >
-              {/* Renders itself (and its own spacing) only on the first visit of
-                  a new local day; otherwise nothing at all. */}
+              {/* Shows itself (and its own spacing) only on the first visit of a new
+                  local day; otherwise it renders hidden, since only this device knows
+                  whether today's has been had. Nothing at all when there is no digest. */}
               <DigestBanner
                 userId={session.user.id}
                 today={todayInZone(new Date(), preferences.timeZone)}
-                enabled={preferences.digestEnabled}
+                digest={digest}
                 use24Hour={preferences.use24HourTime}
               />
               {children}

@@ -9,7 +9,10 @@ import { visibleCard } from "./_card"
 // a task has none — so there was no way to add the first one. The menu entry is the fix,
 // and starting from a task with an empty checklist is what proves it.
 
-test.afterEach(async ({ page }) => {
+test.afterEach(async ({ page, context }) => {
+  // Restored first: a test that fails mid-body would otherwise leave the whole browser
+  // context offline, and the cleanup below could not reach the page at all.
+  await context.setOffline(false)
   await page.goto("/activity")
   await page.getByRole("button", { name: "All", exact: true }).click()
   const strays = visibleCard(page, "E2E subtask ")
@@ -103,4 +106,47 @@ test("deleting a task takes its checklist with it", async ({ page }) => {
   // otherwise still be in the export and the clear-all count.
   await page.reload()
   await expect(page.getByText("orphan-check")).toHaveCount(0)
+})
+
+test("a subtask typed with the network off is put back, not swallowed", async ({
+  page,
+  context,
+}) => {
+  // T45: this box cleared itself synchronously — right, so a second Enter cannot
+  // double-post — but had neither `restoreIfEmpty` nor `tryWrite`, so a dropped connection
+  // took the line with it AND let the rejection escape the transition into the route's
+  // error boundary. The four capture bars fixed both in T42; the checklist was missed.
+  //
+  // `context.setOffline`, not `page.route(... abort)`: a Server Action POSTs to the page's
+  // own URL, and only a real offline context reproduces the rejection (see
+  // `offline-write.spec.ts`).
+  const title = `E2E subtask offline ${Date.now()}`
+  const row = () => visibleCard(page, title)
+
+  await page.goto("/activity")
+  const input = page.getByLabel("Quick add task")
+  await input.fill(title)
+  await input.press("Enter")
+  await expect(row()).toHaveCount(1)
+
+  await row().getByRole("button", { name: "Task actions" }).click()
+  await page.getByRole("menuitem", { name: "Add a subtask" }).click()
+  const add = row().getByLabel("Add a subtask")
+  await expect(add).toBeVisible()
+
+  await context.setOffline(true)
+  await add.fill("survives-the-drop")
+  await add.press("Enter")
+
+  await expect(page.getByText("Nothing was saved.")).toBeVisible()
+  // The list is still a list — this is the assertion the error boundary used to fail.
+  await expect(add).toBeVisible()
+  await expect(add).toHaveValue("survives-the-drop")
+
+  // And the network coming back costs one keystroke, not the line again.
+  await context.setOffline(false)
+  await add.press("Enter")
+  await expect(
+    row().getByText("survives-the-drop", { exact: true }),
+  ).toBeVisible()
 })

@@ -294,6 +294,28 @@ describe("service worker — lifecycle", () => {
   })
 })
 
+describe("service worker — precache list vs the offline page", () => {
+  it("precaches every same-origin file offline.html asks for", async () => {
+    // `/fonts/bricolage-grotesque-latin.woff2` is in PRECACHE_PATHS for ONE reader, and it
+    // is not in src/: `public/offline.html` is plain HTML with its own `@font-face`, since
+    // `next/font` serves the family from a content-hashed path no static file can name.
+    // Nothing in the app bundle references it, so it reads as dead weight (T45 nearly took
+    // it out on exactly that reasoning) — and dropping it would strip the offline page of
+    // its type at the one moment the network cannot supply it.
+    const offline = readFileSync(
+      join(process.cwd(), "public", "offline.html"),
+      "utf8",
+    )
+    const referenced = [...offline.matchAll(/url\("(\/[^"]+)"\)/g)].map(
+      (m) => m[1],
+    )
+    expect(referenced.length).toBeGreaterThan(0)
+
+    const paths = await precachedPaths()
+    for (const path of referenced) expect(paths).toContain(path)
+  })
+})
+
 describe("service worker — precache list vs the proxy", () => {
   it("precaches only files the proxy will serve unauthenticated", async () => {
     // This is the bug that actually happened: /fonts/*.woff2 was not exempt in

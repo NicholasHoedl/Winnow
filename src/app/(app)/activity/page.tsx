@@ -1,7 +1,7 @@
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"
-import { getLists, getTasks } from "@/modules/todos/queries"
+import { getLists, getTasks, toActivityTask } from "@/modules/todos/queries"
 
 import { ActivityView } from "./_components/activity-view"
 
@@ -36,7 +36,10 @@ export default async function ActivityPage({
 
   return (
     <ActivityView
-      tasks={tasks}
+      // Narrowed at the boundary, not passed whole: `getTasks` returns every column of the
+      // row and the screen reads twelve of them. The six it does not were 99KB of this
+      // page's 146KB document (T45) — see `toActivityTask`.
+      tasks={tasks.map(toActivityTask)}
       lists={lists}
       goalOptions={goalOptions}
       events={events}

@@ -43,6 +43,64 @@ export type TaskWithSeries = Task & {
   subtasks: Subtask[]
 }
 
+/** The three fields a checklist row draws. `subtasks.$inferSelect` also carries `userId`,
+ *  `taskId`, `sortOrder` and `createdAt`, none of which the list reads — and they repeat
+ *  per subtask, under every task. */
+export type ActivitySubtask = Pick<Subtask, "id" | "title" | "done">
+
+/**
+ * A task as `/activity` draws it.
+ *
+ * `getTasks` returns every column of the row, because the query needs several of them —
+ * `userId` scopes it, `sortOrder` and `createdAt` order it, `seriesId` joins the rule. The
+ * SCREEN reads twelve, and the rest were 99KB of the page's 146KB document (T45).
+ *
+ * Spelled out as a `Pick` rather than an `Omit` so adding a column to the table does not
+ * silently start shipping it: a field arrives here only when something on the page reads
+ * it. `routineId` is the one deliberate absence worth naming — the dashboard's agenda
+ * groups by it (see `_lib/agenda.ts`), and this page has no grouping to do.
+ */
+export type ActivityTask = Pick<
+  Task,
+  | "id"
+  | "listId"
+  | "occurrenceDate"
+  | "goalId"
+  | "eventId"
+  | "title"
+  | "notes"
+  | "dueDate"
+  | "dueKind"
+  | "priority"
+  | "status"
+  | "completedAt"
+> & {
+  series: TaskSeries | null
+  subtasks: ActivitySubtask[]
+}
+
+/** Narrow a row to what `/activity` reads, at the boundary into the client components. */
+export function toActivityTask(task: TaskWithSeries): ActivityTask {
+  return {
+    id: task.id,
+    listId: task.listId,
+    // Read by "Skip this one", which needs the cycle it is suppressing.
+    occurrenceDate: task.occurrenceDate,
+    goalId: task.goalId,
+    eventId: task.eventId,
+    title: task.title,
+    notes: task.notes,
+    dueDate: task.dueDate,
+    dueKind: task.dueKind,
+    priority: task.priority,
+    status: task.status,
+    // Read by `sortByCompletion`, which is what orders the Completed view.
+    completedAt: task.completedAt,
+    series: task.series,
+    subtasks: task.subtasks.map(({ id, title, done }) => ({ id, title, done })),
+  }
+}
+
 /** Skipped cycles, keyed `ruleId::occurrenceDate` — see {@link loadSkipped}. */
 export type SkippedCycles = ReadonlySet<string>
 

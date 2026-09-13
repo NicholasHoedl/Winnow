@@ -45,11 +45,7 @@ export type Calendar = typeof calendars.$inferSelect
 
 // Seed the two default calendars the first time a user has none (no seed-script
 // exists; this also provisions the pre-existing account). Idempotent.
-async function ensureDefaultCalendars(userId: string): Promise<void> {
-  const existing = await db.query.calendars.findFirst({
-    where: eq(calendars.userId, userId),
-  })
-  if (existing) return
+async function seedDefaultCalendars(userId: string): Promise<void> {
   await db
     .insert(calendars)
     .values([
@@ -59,13 +55,24 @@ async function ensureDefaultCalendars(userId: string): Promise<void> {
     .onConflictDoNothing()
 }
 
+/**
+ * Every calendar the user has, seeding the two defaults on the one render where there
+ * are none.
+ *
+ * Read FIRST and seed on an empty result, rather than the `findFirst` existence probe this
+ * used to open with (T45). The probe answered the same question the list answers, so every
+ * render of `/calendar` and the dashboard paid two round trips to the `calendars` table to
+ * learn one thing — and on all but the first render of an account's life the first of them
+ * could only say yes.
+ */
 export async function getCalendars(): Promise<Calendar[]> {
   const userId = await requireUserId()
-  await ensureDefaultCalendars(userId)
-  return db.query.calendars.findMany({
-    where: eq(calendars.userId, userId),
-    orderBy: [asc(calendars.sortOrder), asc(calendars.createdAt)],
-  })
+  const where = eq(calendars.userId, userId)
+  const orderBy = [asc(calendars.sortOrder), asc(calendars.createdAt)]
+  const rows = await db.query.calendars.findMany({ where, orderBy })
+  if (rows.length > 0) return rows
+  await seedDefaultCalendars(userId)
+  return db.query.calendars.findMany({ where, orderBy })
 }
 
 /**

@@ -418,3 +418,53 @@ test("a day whose tasks are all done says so where Today was", async ({
     await deleteGoalsMatching(prefix)
   }
 })
+
+test("a deleted row leaves before the write lands", async ({ page }) => {
+  // T45: the list held still for the whole round trip — 306ms on a 5G profile — with the
+  // menu already closed, because `useOptimistic` was fed a bare toggled id and had no way
+  // to express a removal. Proved by HOLDING the Server Action open: the row has to be gone
+  // while the POST is still in flight, which is only possible optimistically.
+  const prefix = `E2E act optimistic ${Date.now()}`
+  await seedTask({ title: prefix })
+
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let released = false
+
+  await page.route(
+    (url) => url.pathname === "/activity",
+    async (route, request) => {
+      const isAction =
+        request.method() === "POST" && "next-action" in request.headers()
+      if (isAction) await held
+      await route.continue()
+    },
+  )
+
+  try {
+    await page.goto("/activity")
+    await page.getByRole("button", { name: "All", exact: true }).click()
+    const row = visibleCard(page, prefix)
+    await expect(row).toHaveCount(1)
+
+    await row.getByRole("button", { name: "Task actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+
+    // Nothing has answered yet — `held` only resolves on the line below — so this can
+    // only pass because the client took the row out itself.
+    await expect(row).toHaveCount(0)
+    expect(released).toBe(false)
+
+    released = true
+    release()
+    // And the write does land, with its Undo.
+    await expect(page.getByText("Task deleted")).toBeVisible()
+  } finally {
+    released = true
+    release()
+    await page.unrouteAll({ behavior: "ignoreErrors" })
+    await deleteTasksMatching(prefix)
+  }
+})

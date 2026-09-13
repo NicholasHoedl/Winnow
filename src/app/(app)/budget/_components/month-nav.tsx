@@ -47,6 +47,11 @@ export function MonthNav({
     <div className="mt-4 flex flex-wrap items-center justify-center gap-1">
       <Link
         href={to(shiftMonth(month, -1))}
+        // Not prefetched (T45). A month step is a same-route parameter change on a dynamic
+        // route — every route here is one, since `auth()` reads cookies — so Next's client
+        // router cache holds the prefetched payload for zero seconds and the tap refetches
+        // regardless. The spinner below is the feedback, and it does not need a prefetch.
+        prefetch={false}
         aria-label="Previous month"
         className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
       >
@@ -61,6 +66,7 @@ export function MonthNav({
       </span>
       <Link
         href={to(shiftMonth(month, 1))}
+        prefetch={false}
         aria-label="Next month"
         className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}
       >
@@ -76,6 +82,7 @@ export function MonthNav({
       {month !== currentMonth && (
         <Link
           href={pathname}
+          prefetch={false}
           className={cn(buttonVariants({ variant: "link", size: "sm" }))}
         >
           This month

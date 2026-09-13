@@ -1,6 +1,14 @@
 # Handoff
 
-Last updated: **2026-09-12**. T44 is the review's tenth and last pass, progress and endings:
+Last updated: **2026-09-12**. T45 is a performance tranche measured on a production build
+(`docs/perf-review.md`): compression was already right everywhere; the digest is computed on
+the server so the largest paint no longer waits a round trip; the calendar page runs its
+queries together; task delete and skip are optimistic; the mono font is no longer preloaded;
+prefetch is off on the rare strips; six dialogs load on demand so the validation library
+leaves two routes; the Activity payload is trimmed. **Open and important:** on production
+builds a write's revalidated state is intermittently never committed until something else
+re-renders (a Next.js reconciler bug, discussion 88767); see the perf review's "Open".
+T44 is the review's tenth and last pass, progress and endings:
 every flow ends with a word that names what happened, a finished goal and a finished day say
 so, the last two bare empty states say what they are for, and the first-run panel replaces
 the card sentences it was written to replace; no migration, no ADR. **The review is complete;
@@ -84,7 +92,7 @@ it before UI work: the tests the passes installed (`navigation`, `emphasis`, `re
 that trips one is arguing with a measurement.
 
 **`main` is the truth, it is pushed, and it is now the only branch.** Every tranche through
-T44 is merged into it. The seven stale branches that used to sit beside it are gone, as are
+T45 is merged into it. The seven stale branches that used to sit beside it are gone, as are
 two abandoned worktrees under `.claude/worktrees/`; `git branch` should show exactly `main`,
 and `git worktree list` exactly one entry. If you find otherwise, someone has been working
 since this was written.
@@ -646,6 +654,42 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T45 is shipped: the performance tranche.** No migration, no ADR; `docs/perf-review.md` has
+the method, the numbers and what is still open. To measure again, the recipe under T43
+applies (a production build on port 3002 against `winnow_test`).
+
+- **Digest**: `computeDigest()` (`modules/digest/queries.ts`, which now owns the
+  `digestEnabled` gate) joins the `(app)` layout's `Promise.all` and reaches `DigestBanner`
+  as a prop; the banner renders nothing until `useHydrated()` and its localStorage read say
+  this device has not seen today's (an earlier draft rendered it `hidden`, and its "N
+  overdue" text then shadowed the Activity page's own heading for a `getByText` locator;
+  `digest.spec.ts` asserts the text is absent when dismissed). The `getDigest()` Server Action is gone, so the
+  `serverWrites` guard against "the digest POST" (§4) has nothing left to guard against,
+  though `withArguments` stays. Cost: the digest, with its recurring-task upkeep, now runs
+  on every authenticated render of every route (before: once a day from the client).
+- **Calendar**: `calendar/page.tsx` runs calendars, event counts and events in one
+  `Promise.all`; `getCalendars` no longer probes before reading.
+- **Optimistic delete and skip**: `applyTaskChange` in `modules/todos/service.ts` takes
+  `{ kind: "toggle" | "remove", id }`; `activity-view.tsx` applies `remove` before the
+  await; the undo fallback is `result.task` only (a narrowed row cannot satisfy
+  `restoreTaskSchema`; a missing row toasts). `subtask-list.tsx` uses `tryWrite` and
+  `restoreIfEmpty`.
+- **Fonts and prefetch**: JetBrains Mono `preload: false` in `app/layout.tsx`; the
+  service worker keeps `/fonts/bricolage-grotesque-latin.woff2` because `offline.html`
+  uses it (`sw.test.ts` checks every same-origin URL in offline.html is precached).
+  `prefetch={false}` on `PageTabs`, `month-nav.tsx`, `week-nav.tsx` and the More sheet.
+- **On-demand dialogs**: `next/dynamic` plus `{open && …}` at the mount points of the
+  transaction, event, calendar-manager, habit, goal and goal-editor dialogs. zod still ships
+  to `/budget`, `/goals` and `/review` through `use-proposal.ts`'s client-side parsing, and
+  to `/meals` and `/activity/routines` through dialogs not yet on the pattern.
+- **Activity payload**: `ActivityTask`/`ActivitySubtask` and `toActivityTask` in
+  `modules/todos/queries.ts`, a `Pick` applied in `activity/page.tsx`.
+- Tests: `digest-banner.test.tsx`, `page-tabs.test.tsx`, `sw.test.ts`'s offline link check,
+  `applyTaskChange` unit tests; e2e in `digest.spec.ts` (zero action POSTs on the load that
+  shows the banner), `activity.spec.ts` (the row leaves before the delete's response),
+  `subtasks.spec.ts` (offline restore), `pending-feedback.spec.ts` (a spinner on a link with
+  no prefetch).
 
 **T44 is shipped: the review's Pass 10, progress and endings, and the review is complete.** No
 migration, no ADR; the flow-by-flow table is in `docs/ux-review.md`, with the ideas the pass

@@ -20,10 +20,17 @@ const fraunces = Fraunces({
   axes: ["opsz"],
 })
 
+// Not preloaded, unlike the two above (T45). `next/font` emits a `<link rel="preload">` for
+// every family by default, so all three faces — 145KB — were fetched at the highest priority
+// before first paint on every route, and the mono was measured as the last thing that paint
+// waited on across five of them. It is the smallest job of the three: eyebrow labels, tabular
+// figures and code. `display: "swap"` already covers the gap, so it loads on demand and the
+// numbers it styles are laid out by the fallback for a frame rather than the page waiting.
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 })
 
 export const metadata: Metadata = {

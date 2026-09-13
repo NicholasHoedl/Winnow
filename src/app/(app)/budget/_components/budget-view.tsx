@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import { Plus } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,9 +29,21 @@ import { Button } from "@/components/ui/button"
 
 import { BudgetHeader } from "./budget-header"
 import { BudgetQuickAdd } from "./budget-quick-add"
-import { TransactionDialog } from "./transaction-dialog"
 import { TransactionFilters } from "./transaction-filters"
 import { TransactionItem } from "./transaction-item"
+
+/**
+ * Loaded when the dialog is first opened, not with the page (T45).
+ *
+ * It is the only thing on `/budget` that pulls `standardSchemaResolver` and the module's
+ * zod schema — 63KB on the wire, 277KB decoded — and the ledger is readable without ever
+ * opening it. The same two-level lazy load the meals scanner uses; `ssr: false` is legal
+ * because this module is itself a client component.
+ */
+const TransactionDialog = dynamic(
+  () => import("./transaction-dialog").then((m) => m.TransactionDialog),
+  { ssr: false },
+)
 
 function Stat({
   label,
@@ -274,16 +287,20 @@ export function BudgetView({
           reads in that order. */}
       {aiTools && <div className="mt-6">{aiTools}</div>}
 
-      <TransactionDialog
-        defaultDate={defaultDate}
-        month={month}
-        today={today}
-        categories={categories}
-        payeeMemory={payeeMemory}
-        transaction={editingTx}
-        open={txOpen}
-        onOpenChange={setTxOpen}
-      />
+      {/* Mounted only once opened, so the module above is fetched on the first Add or
+          Edit rather than with the ledger. */}
+      {txOpen && (
+        <TransactionDialog
+          defaultDate={defaultDate}
+          month={month}
+          today={today}
+          categories={categories}
+          payeeMemory={payeeMemory}
+          transaction={editingTx}
+          open={txOpen}
+          onOpenChange={setTxOpen}
+        />
+      )}
       <ConfirmDialog
         open={stoppingTx !== null}
         onOpenChange={(next) => !next && setStoppingTx(null)}

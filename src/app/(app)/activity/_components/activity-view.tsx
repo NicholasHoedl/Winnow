@@ -16,11 +16,13 @@ import {
   skipTaskOccurrence,
   toggleTaskStatus,
 } from "@/modules/todos/actions"
-import type { List, TaskWithSeries } from "@/modules/todos/queries"
+import type { ActivityTask, List } from "@/modules/todos/queries"
 import {
+  applyTaskChange,
   bucketTasks,
   searchTasks,
   sortByCompletion,
+  type TaskChange,
   UNFILED,
 } from "@/modules/todos/service"
 import { dueStatus } from "@/lib/date"
@@ -81,7 +83,7 @@ export function ActivityView({
   selectedListId: initialListId,
   timeZone,
 }: {
-  tasks: TaskWithSeries[]
+  tasks: ActivityTask[]
   lists: List[]
   /** Just id and title, for the task dialog's goal picker. */
   goalOptions: GoalOption[]
@@ -100,11 +102,12 @@ export function ActivityView({
   const [filter, setFilter] = React.useState<Filter>("all")
   const [query, setQuery] = React.useState("")
   const [dialogOpen, setDialogOpen] = React.useState(false)
-  const [editingTask, setEditingTask] = React.useState<TaskWithSeries | null>(
+  const [editingTask, setEditingTask] = React.useState<ActivityTask | null>(
     null,
   )
-  const [confirmSeries, setConfirmSeries] =
-    React.useState<TaskWithSeries | null>(null)
+  const [confirmSeries, setConfirmSeries] = React.useState<ActivityTask | null>(
+    null,
+  )
   // `isPending` is wanted now, for the task list's reorder: it is true exactly while an
   // optimistic write is open, which is the window a hard navigation would throw away.
   const [writing, startTransition] = React.useTransition()
@@ -162,30 +165,23 @@ export function ActivityView({
     )
   }
 
+  // `{ kind, id }` rather than the bare toggled id this used to take, so a delete or a skip
+  // paints as fast as a tick does. The reducer is in `todos/service.ts`, where it is unit
+  // tested — this file cannot be imported by one, since it pulls in the Server Actions.
   const [optimisticTasks, applyOptimistic] = React.useOptimistic<
-    TaskWithSeries[],
-    string
-  >(tasks, (state, toggledId) =>
-    state.map((task) =>
-      task.id === toggledId
-        ? {
-            ...task,
-            status:
-              task.status === "open" ? ("done" as const) : ("open" as const),
-          }
-        : task,
-    ),
-  )
+    ActivityTask[],
+    TaskChange
+  >(tasks, applyTaskChange)
 
   function handleToggle(id: string) {
     startTransition(async () => {
-      applyOptimistic(id)
+      applyOptimistic({ kind: "toggle", id })
       const result = await toggleTaskStatus(id)
       if (!result.ok) toast.error(result.error)
     })
   }
 
-  function handleDelete(task: TaskWithSeries) {
+  function handleDelete(task: ActivityTask) {
     // Deleting a recurring instance stops the whole SERIES and drops its upcoming
     // occurrences — not cleanly undoable, so confirm first. One-off tasks delete with
     // an Undo. Dropping a single cycle is now "Skip this one" (handleSkip); before T5a
@@ -196,18 +192,30 @@ export function ActivityView({
       return
     }
     startTransition(async () => {
+      // Gone before the round trip, and back by itself if the delete failed — the error
+      // toast below is then the whole explanation, with the row still where it was.
+      applyOptimistic({ kind: "remove", id: task.id })
       const result = await deleteTask(task.id)
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      const restorable = result.task ?? task
-      undoToast("Task deleted", () =>
-        startTransition(async () => {
-          const restored = await restoreTask(restorable)
-          if (!restored.ok) toast.error(restored.error)
-        }),
-      )
+      // The DELETED row, from the server, and no client-side fallback any more (T45).
+      // `restoreTaskSchema` requires `seriesId`, `sortOrder` and `createdAt`, which this
+      // page no longer holds — and the case the fallback covered was `ok` with no row,
+      // meaning the task was already gone. Putting one back from a stale copy would
+      // re-create work deleted in another tab rather than undo this delete.
+      const restorable = result.task
+      if (restorable) {
+        undoToast("Task deleted", () =>
+          startTransition(async () => {
+            const restored = await restoreTask(restorable)
+            if (!restored.ok) toast.error(restored.error)
+          }),
+        )
+      } else {
+        toast("Task deleted")
+      }
     })
   }
 
@@ -218,11 +226,14 @@ export function ActivityView({
    * so removing the row would only make it vanish until the next page load. The server
    * writes an exception row, which is also what undo removes.
    */
-  function handleSkip(task: TaskWithSeries) {
+  function handleSkip(task: ActivityTask) {
     const seriesId = task.series?.id
     const occurrenceDate = task.occurrenceDate
     if (!seriesId || !occurrenceDate) return
     startTransition(async () => {
+      // Same as a delete from the list's point of view: the instance leaves now, and the
+      // exception row the server writes is what keeps the generator from putting it back.
+      applyOptimistic({ kind: "remove", id: task.id })
       const result = await skipTaskOccurrence(seriesId, occurrenceDate)
       if (!result.ok) {
         toast.error(result.error)
@@ -240,7 +251,7 @@ export function ActivityView({
     })
   }
 
-  function stopRepeating(task: TaskWithSeries) {
+  function stopRepeating(task: ActivityTask) {
     if (!task.series) return
     startTransition(async () => {
       const result = await deleteTaskRecurrence(task.series!.id)
@@ -264,7 +275,7 @@ export function ActivityView({
   }
 
   /** Apply a just-dropped order to one section, ignoring ids from other sections. */
-  function applyPending(rows: TaskWithSeries[]): TaskWithSeries[] {
+  function applyPending(rows: ActivityTask[]): ActivityTask[] {
     if (!pendingOrder) return rows
     const rank = new Map(pendingOrder.map((id, index) => [id, index]))
     if (!rows.some((task) => rank.has(task.id))) return rows
@@ -280,7 +291,7 @@ export function ActivityView({
     setDialogOpen(true)
   }
 
-  function openEdit(task: TaskWithSeries) {
+  function openEdit(task: ActivityTask) {
     setEditingTask(task)
     setDialogOpen(true)
   }

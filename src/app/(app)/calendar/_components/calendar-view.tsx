@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { LinkPending } from "@/components/shared/link-pending"
 import { CalendarPlus, ChevronLeft, ChevronRight, Layers } from "lucide-react"
@@ -37,8 +38,7 @@ import {
 } from "@/components/preferences/preferences-provider"
 
 import { AgendaView } from "./agenda-view"
-import { CalendarManager } from "./calendar-manager"
-import { EventDialog, type EditScope } from "./event-dialog"
+import type { EditScope } from "./event-dialog"
 import { MonthGrid } from "./month-grid"
 import {
   CALENDAR_VIEWS,
@@ -49,6 +49,24 @@ import {
   viewTitle,
   type CalendarViewKind,
 } from "./views"
+
+/**
+ * Both loaded when first opened, not with the grid (T45).
+ *
+ * They are the two things on `/calendar` that pull `standardSchemaResolver` and a zod
+ * schema — 63KB on the wire, 277KB decoded — and the calendar is a page you READ. Nothing
+ * changes for either one's callers: the `?new=event` flag and the palette set `open`, which
+ * mounts the component, and the import resolves before it renders. The same two-level lazy
+ * load the meals scanner uses; `ssr: false` is legal because this is a client component.
+ */
+const EventDialog = dynamic(
+  () => import("./event-dialog").then((m) => m.EventDialog),
+  { ssr: false },
+)
+const CalendarManager = dynamic(
+  () => import("./calendar-manager").then((m) => m.CalendarManager),
+  { ssr: false },
+)
 
 /** What the prev/next arrows step by, for their labels. Agenda is a month of events,
  *  so it steps like the month view. */
@@ -422,21 +440,25 @@ export function CalendarView({
         />
       )}
 
-      <EventDialog
-        timeZone={timeZone}
-        defaultDate={defaultDate}
-        occurrence={editingOccurrence}
-        calendars={calendars}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onDelete={handleDialogDelete}
-      />
-      <CalendarManager
-        calendars={calendars}
-        eventCounts={eventCounts}
-        open={managerOpen}
-        onOpenChange={setManagerOpen}
-      />
+      {dialogOpen && (
+        <EventDialog
+          timeZone={timeZone}
+          defaultDate={defaultDate}
+          occurrence={editingOccurrence}
+          calendars={calendars}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onDelete={handleDialogDelete}
+        />
+      )}
+      {managerOpen && (
+        <CalendarManager
+          calendars={calendars}
+          eventCounts={eventCounts}
+          open={managerOpen}
+          onOpenChange={setManagerOpen}
+        />
+      )}
     </div>
   )
 }

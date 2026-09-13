@@ -85,3 +85,28 @@ test("a same-route date stepper shows a spinner, where no skeleton ever fires", 
   await page.unrouteAll({ behavior: "ignoreErrors" })
   await expect(previous.locator("[data-pending]")).toHaveCount(0)
 })
+
+test("a stepper that no longer prefetches still shows its spinner", async ({
+  page,
+}) => {
+  // T45 turned the month and week steppers' prefetch off: every route here is dynamic —
+  // `auth()` reads cookies — so Next's client router cache keeps a prefetched payload for
+  // zero seconds and the tap refetched it anyway. The prefetch bought the round trip and
+  // nothing else.
+  //
+  // What that must NOT cost is this spinner, which is the only feedback a same-route
+  // parameter change has. `useLinkStatus` reports the NAVIGATION, not the prefetch, so it
+  // is unaffected — asserted here rather than argued, on a link that now has no prefetch
+  // at all (the test above uses Meals' day stepper, which still has one).
+  await page.goto("/budget")
+  const previous = page.getByRole("link", { name: "Previous month" })
+  await expect(previous).toBeVisible()
+
+  await delayNavigation(page, 1500)
+  await previous.click()
+
+  await expect(previous.locator("[data-pending]")).toBeVisible()
+
+  await page.unrouteAll({ behavior: "ignoreErrors" })
+  await expect(previous.locator("[data-pending]")).toHaveCount(0)
+})

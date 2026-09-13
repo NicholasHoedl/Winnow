@@ -34,49 +34,46 @@ export default async function CalendarPage({
         ? `${params.month}-01`
         : today
 
-  const calendars = await getCalendars()
-  // For the manager's delete confirmation only; see `getCalendarEventCounts`.
-  const eventCounts = await getCalendarEventCounts()
+  // Which days the view asks for, decided before anything is fetched so the three reads
+  // below can start together.
+  const dates =
+    view === "week"
+      ? weekDates(date, weekStartsOn)
+      : view === "day"
+        ? [date]
+        : []
 
-  if (view === "week" || view === "day") {
-    const dates = view === "week" ? weekDates(date, weekStartsOn) : [date]
-    const occurrences = await getRangeEvents(
-      dates[0],
-      addDays(dates[dates.length - 1], 1),
-      timeZone,
-    )
-    return (
-      <CalendarView
-        view={view}
-        date={date}
-        today={today}
-        timeZone={timeZone}
-        grid={[]}
-        dates={dates}
-        byDay={bucketByDay(occurrences)}
-        occurrences={occurrences}
-        calendars={calendars}
-        eventCounts={eventCounts}
-      />
-    )
-  }
+  // One await where there were three (T45). The calendars, the per-calendar counts and the
+  // occurrences are independent — none of them reads anything another returns — and running
+  // them one after the other cost ~30ms of serial round trips inside an 85ms document.
+  const [calendars, eventCounts, events] = await Promise.all([
+    getCalendars(),
+    // For the manager's delete confirmation only; see `getCalendarEventCounts`.
+    getCalendarEventCounts(),
+    dates.length > 0
+      ? getRangeEvents(
+          dates[0],
+          addDays(dates[dates.length - 1], 1),
+          timeZone,
+        ).then((occurrences) => ({
+          // Week and day draw a time grid, not a month grid.
+          grid: [],
+          byDay: bucketByDay(occurrences),
+          occurrences,
+        }))
+      : getMonthEvents(date.slice(0, 7), timeZone, weekStartsOn),
+  ])
 
-  const month = date.slice(0, 7)
-  const { grid, byDay, occurrences } = await getMonthEvents(
-    month,
-    timeZone,
-    weekStartsOn,
-  )
   return (
     <CalendarView
       view={view}
       date={date}
       today={today}
       timeZone={timeZone}
-      grid={grid}
-      dates={[]}
-      byDay={byDay}
-      occurrences={occurrences}
+      grid={events.grid}
+      dates={dates}
+      byDay={events.byDay}
+      occurrences={events.occurrences}
       calendars={calendars}
       eventCounts={eventCounts}
     />

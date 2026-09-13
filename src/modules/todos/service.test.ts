@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applyTaskChange,
   bucketTasks,
   parseTaskCapture,
   reopenWouldDestroy,
@@ -339,5 +340,45 @@ describe("parseTaskCapture", () => {
       dueDate: "2026-07-22",
       listId: "list-home",
     })
+  })
+})
+
+describe("applyTaskChange", () => {
+  const rows = [
+    { id: "a", status: "open" as const },
+    { id: "b", status: "open" as const },
+    { id: "c", status: "done" as const },
+  ]
+
+  it("takes a removed row out", () => {
+    // What a delete and a skip both look like while the write is in flight. Before T45
+    // neither of them looked like anything: the list held still for the whole round trip.
+    expect(applyTaskChange(rows, { kind: "remove", id: "b" })).toEqual([
+      rows[0],
+      rows[2],
+    ])
+  })
+
+  it("flips a toggled row's status, both ways", () => {
+    expect(applyTaskChange(rows, { kind: "toggle", id: "a" })[0].status).toBe(
+      "done",
+    )
+    expect(applyTaskChange(rows, { kind: "toggle", id: "c" })[2].status).toBe(
+      "open",
+    )
+  })
+
+  it("returns untouched rows by identity", () => {
+    // A reducer that rebuilt every row would remount every card in the list on each tick.
+    const next = applyTaskChange(rows, { kind: "toggle", id: "a" })
+    expect(next[1]).toBe(rows[1])
+    expect(next[2]).toBe(rows[2])
+    expect(next).not.toBe(rows)
+  })
+
+  it("does nothing for an id the list no longer holds", () => {
+    // A revalidation can land between the tap and the reducer.
+    expect(applyTaskChange(rows, { kind: "remove", id: "gone" })).toEqual(rows)
+    expect(applyTaskChange(rows, { kind: "toggle", id: "gone" })).toEqual(rows)
   })
 })

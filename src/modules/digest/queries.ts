@@ -11,10 +11,16 @@ import { buildDigest, type Digest } from "./service"
 
 /** The current user's digest for today, or null when there's nothing worth saying.
  * Pure orchestration: each source query scopes itself to the session user, and the
- * guard below states that requirement locally rather than leaving it emergent. */
+ * guard below states that requirement locally rather than leaving it emergent.
+ *
+ * The `digestEnabled` check moved here from the banner in T45. The banner used to fetch
+ * this itself and so could decide not to; it is now handed the result by the app shell's
+ * server render, and the cheapest place to answer "the preference is off" is before the
+ * three aggregations rather than after them. */
 export async function computeDigest(): Promise<Digest | null> {
   await requireUserId()
-  const { timeZone } = await getUserPreferences()
+  const { timeZone, digestEnabled } = await getUserPreferences()
+  if (!digestEnabled) return null
   const today = todayInZone(new Date(), timeZone)
 
   const [tasks, events, macros] = await Promise.all([

@@ -35,6 +35,11 @@ const OFFLINE_URL = "/offline.html"
 // Every one of these must be exempt from the proxy matcher in src/proxy.ts. `addAll`
 // is all-or-nothing, so if one path answers with a redirect to /login the whole install
 // fails — which is how the font's missing exemption got caught. Strictness is the point.
+//
+// The woff2 is here for OFFLINE_URL, not for the app: `next/font` serves Bricolage from a
+// content-hashed path that nothing static can name, so offline.html carries its own
+// `@font-face` pointing at this copy. Grep src/ for it and you find nothing, which is why
+// `sw.test.ts` now asserts the coupling instead of leaving it to a comment.
 const PRECACHE_PATHS = [
   OFFLINE_URL,
   "/fonts/bricolage-grotesque-latin.woff2",

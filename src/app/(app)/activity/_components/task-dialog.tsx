@@ -12,7 +12,7 @@ import {
 } from "@/modules/todos/actions"
 import type { EventOption } from "@/modules/calendar/queries"
 import type { GoalOption } from "@/modules/goals/queries"
-import type { List, TaskWithSeries } from "@/modules/todos/queries"
+import type { ActivityTask, List } from "@/modules/todos/queries"
 import { type DueKind, type Priority } from "@/modules/todos/validation"
 import { type ActionResult } from "@/lib/action-result"
 import { todayInZone } from "@/lib/date"
@@ -187,7 +187,7 @@ export function TaskDialog({
   // Optional cross-module link targets (T2).
   goals: GoalOption[]
   events: EventOption[]
-  task?: TaskWithSeries | null
+  task?: ActivityTask | null
   open: boolean
   onOpenChange: (open: boolean) => void
   // Seed values for a NEW task (from quick-capture / the create-intent bus); ignored
