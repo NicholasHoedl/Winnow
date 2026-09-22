@@ -1,3 +1,20 @@
+// About this file: task logic shared by the server and the browser: date sections,
+// summaries, repeat labels, search, sorting, the optimistic list update, and reading a
+// quick-add line.
+//
+// What you'll find here:
+// - `bucketTasks`: splits open tasks into Overdue, Today, Upcoming and Someday.
+// - `summarizeTasks`: the overdue count and the open tasks due today.
+// - `repeatLabel`: the "Weekly" or "Every 2 weeks" badge text for a repeating task.
+// - `reopenWouldDestroy`: whether reopening a finished repeating task would lose it.
+// - `searchTasks`: the /activity search box's match on title or notes.
+// - `sortByCompletion`: completed tasks, most recent first.
+// - `applyTaskChange`: the optimistic list update for ticking or removing a task.
+// - `UNFILED`, `parseListTag`: the "no list" filter value, and reading a `#list` tag.
+// - `parseTaskCapture`: splits a quick-add line into title, due date, due kind and list.
+//
+// Related: `service.test.ts` and `list-tag.test.ts`, worked examples of each function.
+
 // Pure, dependency-free to-do logic. No DB, no `server-only` — so it can be
 // unit-tested directly. All timezone-sensitive functions take an explicit
 // `now` and IANA `timeZone` for determinism.

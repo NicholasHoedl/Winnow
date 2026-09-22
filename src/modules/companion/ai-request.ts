@@ -1,3 +1,24 @@
+// About this file: the AI companion's request and response helpers, shared by every call
+// to the provider. They build the URL, headers and body for either protocol, read the
+// answer back out, and turn a failure into a sentence for the user.
+//
+// What you'll find here:
+// - `AiFailure`, `AiResult`: the ways a call can fail, and the result every call returns.
+// - `GENERATE_TIMEOUT_MS`: how long a generation may run before it counts as a `timeout`.
+// - `AiProvider`: the two wire protocols, `"openai"` and `"anthropic"`.
+// - `MAX_OUTPUT_TOKENS`: the answer-length ceiling sent with an Anthropic request.
+// - `buildRequestUrl`: the generation endpoint for a provider and base URL.
+// - `buildModelsUrl`, `MODELS_TIMEOUT_MS`, `AiModel`, `extractModels`: asking a provider
+//   which models it serves.
+// - `buildRequestHeaders`: the content type, the API key, and Anthropic's version header.
+// - `classifyFetchError`: a fetch that threw, read as `timeout` or `offline`.
+// - `buildChatBody`, `buildAnthropicBody`, `buildRequestBody`: the request body for each
+//   protocol, and the switch between them.
+// - `extractContent`, `extractToolInput`, `extractPayload`: the answer as a plain value.
+// - `describeAiFailure`: the message the user sees for each failure.
+//
+// Related: `ai-client.ts`, which sends these requests and validates what comes back.
+
 // The AI provider wire protocol: URL shape, timeout, the failure taxonomy, and the
 // request body. Pure and dependency-free so it can be unit-tested — ai-client.ts is
 // `server-only` and the test runner cannot import it at all.

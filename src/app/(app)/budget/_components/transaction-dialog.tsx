@@ -1,5 +1,27 @@
 "use client"
 
+// About this file: the ledger's transaction dialog on /budget, which adds a one-off or
+// repeating transaction, edits a posted one, or edits the schedule that posts it.
+//
+// What you'll find here:
+// - `TransactionFormValues` and `emptyValues`: the form's fields, a transaction plus an
+//   optional schedule, and their blank state.
+// - `monthLabel`, `hasAtMostDigits` and `toRecurrenceInput`: helpers that name a month,
+//   check an amount's decimals and build the schedule payload.
+// - `TransactionDialog`: the exported component; `scope` picks "This one" or "Schedule"
+//   when a recurring row is edited.
+// - `dialogSchema`: `transactionInputSchema` with two more checks, the amount's decimals
+//   and a date inside the viewed month.
+// - `availableCategories`: the categories that match the chosen income or expense type.
+// - `fillFromMemory`: on leaving the payee field, fills in a new transaction's category
+//   and type from what that payee was last filed under.
+// - `onSubmit`: creates a transaction or a schedule, or updates a row or its schedule.
+// - `pending`: how many transactions a new schedule would post at once to catch up.
+// - The form: scope (recurring rows), amount, type, date (one-offs), category, payee,
+//   description, and `RecurrenceFields` when adding, or when editing a schedule.
+//
+// Related: `src/modules/budget/actions.ts`, the four Server Actions it saves with.
+
 import * as React from "react"
 import { Controller, useForm, type Resolver } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"

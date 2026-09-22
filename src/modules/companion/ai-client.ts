@@ -1,3 +1,14 @@
+// About this file: the server-only part of the AI companion that calls the provider. It
+// reads the saved AI settings on every call, sends the request, and checks the answer.
+//
+// What you'll find here:
+// - `generatePayload`: sends a job's messages and parses the answer with the job's Zod
+//   schema, which also becomes the JSON Schema the provider is asked to follow.
+// - `currentModel`: the configured model's name, stored on each proposal.
+// - `fetchModels`: asks the provider which models it serves, for the Settings dropdown.
+//
+// Related: `ai-request.ts`, which builds each request and reads each response.
+
 import "server-only"
 import { z } from "zod"
 

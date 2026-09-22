@@ -1,3 +1,16 @@
+// About this file: the page component for /budget, the ledger, which loads the month
+// on the server and hands it to the client view.
+//
+// What you'll find here:
+// - `UUID_RE` and `oneOf`: validators for the filter values read from the URL.
+// - `BudgetPage`: the page itself. It takes the month from `?month=` and the filters
+//   from `q`, `cat`, `type`, `sort` and `dir`.
+// - Loads, in parallel: the categories, the filtered transactions, the whole month's
+//   summary, the payee memory, the AI settings and any pending AI imports.
+// - Renders: `BudgetView`, passing `BudgetAiTools` as `aiTools` when AI is configured.
+//
+// Related: `_components/budget-view.tsx`, the client view that lays the ledger out.
+
 import {
   getBudgetSummary,
   getCategories,

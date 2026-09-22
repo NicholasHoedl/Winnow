@@ -1,3 +1,16 @@
+// About this file: the Next.js configuration: security headers on every response,
+// redirects from retired routes, and build and Server Action settings.
+//
+// What you'll find here:
+// - `isDev`: turns on the dev-only CSP allowances (eval and the HMR socket).
+// - `contentSecurityPolicy`: the CSP header, built one directive per array entry.
+// - `headers()`: the CSP, frame, content-type, referrer and permissions headers.
+// - `output`, `distDir` and `turbopack.root`: the standalone server build, its output
+//   folder, and the pinned workspace root.
+// - `redirects()`: permanent redirects from `/today`, `/todos`, `/todos/routines` and
+//   `/todos/habits`.
+// - `experimental.serverActions.bodySizeLimit`: raised so a backup restore fits.
+
 import type { NextConfig } from "next"
 
 const isDev = process.env.NODE_ENV === "development"

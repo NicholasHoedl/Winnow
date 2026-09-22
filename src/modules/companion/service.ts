@@ -1,3 +1,23 @@
+// About this file: the logic behind the AI companion's jobs (goal plans, routines, the
+// weekly summary, and transactions read from pasted text or a receipt photo). For each
+// job it holds the prompt builder and the helpers that work on the answer.
+//
+// What you'll find here:
+// - `ContentPart`, `ChatMessage`: the message shape every prompt builder returns.
+// - Goal plans: `GoalPromptContext` and `buildGoalPlanMessages` make the prompt;
+//   `planWarnings` (with `proposedQuota` and `weeklyCommitments`) flags problems in the
+//   answer; `planCounts` and `finalizePlan` prepare what Apply creates.
+// - Routines: `buildRoutineMessages`, with `offsetLabel` and `routineSpan` for display.
+// - Weekly summary: `SummaryPromptContext`, `summaryObservations`,
+//   `buildSummaryMessages`, and `summaryReadiness`, which refuses a near-empty week.
+// - Transaction import: `toCategoryHints` and `describeCategories` (the categories the
+//   model picks from), `buildImportMessages`, `resolveCategory`, `uncategorisedCount`.
+// - Receipt scanning: `buildReceiptMessages`; `rowsFromReceipts`, which makes one
+//   transaction per category per receipt using `allocateCents`; `receiptWarnings`.
+// - After an apply: `describeCreated` words what was added, and `countCreated` counts it.
+//
+// Related: `validation.ts`, the Zod schemas that define the payloads used here.
+
 // Pure companion logic: what gets sent, and what the app checks about what comes back.
 // No DB, no framework — unit-testable directly.
 

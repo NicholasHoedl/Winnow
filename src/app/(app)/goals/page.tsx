@@ -1,3 +1,18 @@
+// About this file: the page component for /goals, a server component. It loads the goals
+// with their progress and momentum, the habits that serve them, and what the AI plan
+// tool needs, then hands it all to the client goals view.
+//
+// What you'll find here:
+// - `GoalsPage` (default export): reads the time zone and momentum window first, because
+//   `getGoals` needs both.
+// - Loads, in parallel: the goals, the habits as strip cards and as full rows, goal and
+//   event options for the forms, AI settings, and pending `goal_plan` proposals.
+// - Then: the week's existing commitments from those habits, the goals with an applied
+//   plan, and each goal's plan.
+// - Renders: `GoalsView`, with `companionEnabled` from `aiReady` and today's local date.
+//
+// Related: `_components/goals-view.tsx` draws the goal list and opens the goal dialogs.
+
 import { todayInZone } from "@/lib/date"
 import { getEventOptions } from "@/modules/calendar/queries"
 import { aiReady } from "@/modules/companion/ai-settings"

@@ -1,3 +1,15 @@
+// About this file: the page component for /activity, the task list. It loads the tasks
+// and what the task dialog needs on the server, then hands them to the client view.
+//
+// What you'll find here:
+// - `ActivityPage`: reads the user's time zone and goal momentum window first.
+// - The data load: tasks, lists, event options and goals, in parallel.
+// - `goalOptions`: the task dialog's goal picker, built from the goals already loaded.
+// - The render: `ActivityView`, with each task narrowed by `toActivityTask` and the
+//   `?goal=` and `?list=` filters read from the URL.
+//
+// Related: `_components/activity-view.tsx`, which draws the list and its filters.
+
 import { getEventOptions } from "@/modules/calendar/queries"
 import { getGoals } from "@/modules/goals/queries"
 import { getUserPreferences } from "@/modules/preferences/queries"

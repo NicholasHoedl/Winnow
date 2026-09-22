@@ -1,3 +1,18 @@
+// About this file: the catalogue of user-data tables that backup import works from. It
+// says what a valid file may contain and the order its rows go back into the database.
+//
+// What you'll find here:
+// - `Reference`, `UserTable`: one table as the backup sees it, with its JSON key, the
+//   columns that point at other user tables, and the columns to turn back into dates.
+// - `SINGLETON_KEYS`: `preferences`, the one key holding an object rather than an array.
+// - `UNDECLARED_REFERENCES`: foreign keys the database has and the drizzle schema lacks.
+// - `build`: finds every table with a `user_id` column and works out its references.
+// - `USER_TABLES`: what `build` returns, sorted by JSON key.
+// - `EXPORT_KEYS`: the JSON keys a complete export has.
+// - `INSERT_ORDER`: the tables ordered so each foreign key's target is inserted first.
+//
+// Related: `import.ts`, which checks a backup file against `USER_TABLES`.
+
 // The user-owned table graph, derived from the schemas rather than written down.
 //
 // Three lists could have lived here — which tables a backup covers, which columns point

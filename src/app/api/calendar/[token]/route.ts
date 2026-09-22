@@ -1,3 +1,13 @@
+// About this file: the endpoint calendar apps subscribe to for the user's Winnow events.
+// The token in the URL picks the user, and the response is their calendar as .ics text.
+//
+// What you'll find here:
+// - `GET`: resolves the token to a user and returns `buildCalendarIcs` as
+//   `text/calendar`; a 404 when the token matches nobody, a 500 when the feed cannot be
+//   built, and `Cache-Control: no-store` on all three.
+//
+// Related: `src/modules/calendar/queries.ts`, which checks the token and builds the feed.
+
 import { buildCalendarIcs, resolveFeedToken } from "@/modules/calendar/queries"
 
 // GET /api/calendar/<token> — the subscribe feed.

@@ -1,5 +1,25 @@
 "use client"
 
+// About this file: the client component behind /goals. It draws the header and the
+// reorderable list of goal cards, and runs the dialogs for adding a goal, editing one,
+// and planning one with the AI companion.
+//
+// What you'll find here:
+// - `GoalDialog`, `GoalEditorDialog`: the new-goal and goal editor dialogs, loaded on
+//   first open.
+// - `GoalsView`: the exported screen component.
+// - `proposal` (from `useProposal`), `dismissedId`: the pending AI plan, and whether its
+//   review was closed without a decision.
+// - `handleReorder`, `orderedGoals`: drag-to-reorder, keeping the dropped order on screen
+//   until the write lands.
+// - `editorGoal`: the goal open in the editor, looked up again on every render.
+// - `goalFor`, `goalTitleFor`, `refineBody`: goal lookups and the request body for
+//   refining a plan.
+// - Render: the header with Plan a goal and New goal, the "plan is waiting" note, the
+//   `SortableList` of `GoalCard`s, and the goal, editor, plan and review dialogs.
+//
+// Related: `goal-editor-dialog.tsx`, where everything about a single goal is edited.
+
 import * as React from "react"
 import dynamic from "next/dynamic"
 import { Plus, Sparkles } from "lucide-react"

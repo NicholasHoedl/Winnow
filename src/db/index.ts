@@ -1,3 +1,14 @@
+// About this file: the Drizzle client the app's queries and Server Actions use to reach
+// Postgres, imported as `db` from `@/db`.
+//
+// What you'll find here:
+// - `schema`: the core tables plus every module's tables, merged into one object.
+// - `pool`: the `pg` connection pool (`DATABASE_URL`, up to 10 connections), reused
+//   across dev reloads.
+// - `db`: the Drizzle client built on that pool and schema.
+//
+// Related: `src/db/schema.ts`, the core `users` table; modules each have a `schema.ts`.
+
 import "server-only"
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"

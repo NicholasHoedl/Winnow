@@ -1,3 +1,14 @@
+// About this file: the matching and ranking rules for search in the command palette,
+// which looks through tasks, events, goals, habits, foods and transactions at once.
+//
+// What you'll find here:
+// - `MIN_QUERY_LENGTH`, `PER_MODULE_LIMIT`, `TOTAL_LIMIT`: the query and result limits.
+// - `escapeLike`: makes `%`, `_` and `\` in a query match literally.
+// - `normalizeQuery`: trims a query, or returns null when it is too short to run.
+// - `scoreMatch`, `scoreResult`: relevance scores for one field, and for a whole result.
+// - `snippet`: flattens text to one line and cuts it to length with an ellipsis.
+// - `rankAndCap`: sorts the merged results by score, then title, and keeps the top ones.
+
 // Pure, dependency-free core of cross-module search: query normalization, LIKE-escaping,
 // relevance scoring, snippeting, and the final rank+cap. No DB, no `server-only` — so it's
 // directly unit-tested and safe to import anywhere. The DB fan-out lives in `queries.ts`.

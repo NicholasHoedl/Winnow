@@ -1,5 +1,18 @@
 "use client"
 
+// About this file: the sign-in page at /login, which shows the app's mark and name above
+// an email and password form.
+//
+// What you'll find here:
+// - `LoginPage` (default export): a client component, because it uses `useActionState`.
+// - `useActionState`: ties the form to `loginAction`, giving back `state` and `pending`.
+// - Backdrop: a soft wash of the primary colour across the top of the page.
+// - Brand: the `BrandMark`, the tagline and the "Winnow" wordmark.
+// - Form: email and password fields, and the action's error message when there is one.
+// - Submit button: marked `aria-busy` with a spinner while the sign-in runs.
+//
+// Related: `actions.ts`, where `loginAction` signs the user in and redirects.
+
 import { useActionState } from "react"
 
 import { BrandMark } from "@/components/shared/brand-mark"

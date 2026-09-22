@@ -1,3 +1,15 @@
+// About this file: the due-date step of task capture, used by the dashboard's and the
+// Activity page's capture bars.
+//
+// What you'll find here:
+// - `WEEKDAYS` and `MONTHS`: the day and month names it accepts, abbreviations included.
+// - `comingWeekday` and `monthDay`: turn a weekday, or a month and day, into a date.
+// - `findDate`: tries each phrase matcher in order and returns the first hit.
+// - `ParsedDate`: the result: the date, the cleaned text, and `kind` ("on" or "by").
+// - `parseNaturalDate`: the entry point.
+//
+// Related: `src/modules/todos/service.ts`, whose `parseTaskCapture` calls this first.
+
 // Tiny, dependency-free natural-language date parser for quick-add. Extracts a due
 // date from free text and returns the leftover text with the date phrase removed, so
 // "call mom tomorrow" → { date: <tomorrow>, cleaned: "call mom" }. Deliberately narrow

@@ -1,5 +1,16 @@
 "use client"
 
+// About this file: the React context that opens a create dialog on request. One part of
+// the app asks for a kind, such as a task, and the dialog listening for that kind opens.
+//
+// What you'll find here:
+// - `CreateKind`, `CreateIntent`: what can be asked for, and the request itself.
+// - `CreateIntentProvider`: holds the set of listeners and provides the context.
+// - `useCreateIntent`: the sending side; returns `requestCreate`.
+// - `useCreateIntentListener`: the receiving side; runs a handler for one kind.
+//
+// Related: `global-create-dialogs.tsx`, the listener that opens the task dialog.
+
 // Create-intent bus: a tiny in-app event channel that decouples *what wants to create
 // something* (the ⌘K palette, the dashboard quick-capture bar, an `n` shortcut, a "New"
 // button) from *the dialog that actually creates it* (each module's create dialog).

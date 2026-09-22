@@ -1,3 +1,20 @@
+// About this file: the app's service worker, registered in production builds only. It
+// sits between the app's pages and the network, and decides what comes from cache and
+// what shows when the network is gone.
+//
+// What you'll find here:
+// - `VERSION`, `PRECACHE`, `RUNTIME`: the two cache names, built from `VERSION`.
+// - `OFFLINE_URL`, `PRECACHE_PATHS`: the offline page, and the fixed-name files stored at
+//   install.
+// - `install` listener: stores `PRECACHE_PATHS` in the precache.
+// - `activate` listener: deletes older `winnow-*` caches and takes control of open pages.
+// - `isImmutableAsset`, `cacheFirst`: the test for hashed build files, and the
+//   cache-then-network fetch used for them and for the precached files.
+// - `fetch` listener: cache-first for build and precached files, the network with the
+//   offline page as a fallback for page loads, and untouched for everything else.
+//
+// Related: `src/components/pwa/register-service-worker.tsx`, which registers this worker.
+
 /*
  * Winnow's service worker. Hand-written and deliberately small — see
  * docs/adr/0007-hand-written-service-worker.md for why this is not @serwist/next.

@@ -1,5 +1,19 @@
 "use client"
 
+// About this file: the Slate card on the dashboard, a client component. It draws what
+// `buildSlate` returns and saves the ticks and drags made on the card.
+//
+// What you'll find here:
+// - `shortDate`: the "12 Sep" date shown on Overdue and Due by rows.
+// - `Gutter`: the fixed-width left column that lines up checkboxes and event times.
+// - `TaskRow`, `EventRow`: a task with its checkbox, and an event with its time.
+// - `TaskList`: a draggable run of task rows, used in the Today band.
+// - `Slate`: the exported card: Overdue, Due by, a band per day, or an empty message.
+// - `arrange`, `handleReorder`: the order after a drag, saved with `reorderTasks`.
+// - `toggle`, `isDone`: tick a task and show it ticked before the server answers.
+//
+// Related: `_lib/agenda.ts`, which decides which block each task and event lands in.
+
 // The dashboard's Slate: everything worth seeing today, nearest first.
 //
 // Replaces `today-agenda`, `dashboard-task-list` ("Coming up") and `tomorrow`, which split one

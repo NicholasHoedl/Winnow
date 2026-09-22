@@ -1,3 +1,21 @@
+// About this file: the Budget feature's calculations and parsers, used by the /budget
+// pages and the budget module, and wherever else the app shows money.
+//
+// What you'll find here:
+// - Money: `currencyFractionDigits` and `currencySymbol` describe a currency, and
+//   `amountToMinor`, `minorToAmount` and `formatCents` convert and display amounts.
+// - Months: `monthKey` and `monthRange`, a date's month and a month's date range.
+// - `summarizeMonth`: a month's `MonthSummary`, with income, expenses, net, the budget
+//   total, and spend and income by category.
+// - `savingsRate`: the share of income kept, as a fraction, or null with no income.
+// - `monthlyBudgetInEffect`: the monthly budget total in force for a given month.
+// - `summarizeMonths`: a `MonthSummary` for each month in a range, for the Trends page.
+// - `UNCATEGORIZED` and `TransactionFilters`: the transaction list's filter values.
+// - `parseTransactionQuickAdd`: turns a typed line like "coffee $4" into a transaction.
+// - `payeeKey` and `rememberedCategory`: the category a payee was last filed under.
+//
+// Related: `queries.ts`, which reads the rows these functions roll up.
+
 // Pure budget logic. Money is stored as integer minor units (cents for USD, whole
 // yen for JPY, …); the major amount appears only at the input/display boundary via
 // these helpers. No DB — unit-testable directly.

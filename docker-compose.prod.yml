@@ -1,3 +1,16 @@
+# About this file: the Docker Compose stack for a production install, with an app
+# container, a Postgres container, and a volume that holds the data.
+#
+# What you'll find here:
+# - `name`: the Compose project name, `winnow`.
+# - `app`: the Next.js server, built from `Dockerfile`. It starts once Postgres is
+#   healthy, takes its database URL, auth secret and time zone from the environment, is
+#   published on `127.0.0.1:3000`, and is healthy when `/login` loads.
+# - `postgres`: Postgres 17 with the `winnow` user and database, checked by `pg_isready`.
+# - `volumes`: `pgdata`, where the database's files outlive the containers.
+#
+# Related: `docs/runbooks/deploy.md`, the steps for standing this stack up on the server.
+
 # Production stack for the home-server deploy (Checkpoint 0.4).
 # Fronted by `tailscale serve` (HTTPS) — the app binds to localhost only.
 # Usage: docker compose -f docker-compose.prod.yml up -d --build

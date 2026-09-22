@@ -1,3 +1,12 @@
+// About this file: the server-side loader for the daily digest banner. The signed-in
+// layout, `src/app/(app)/layout.tsx`, calls it and passes the result to the banner.
+//
+// What you'll find here:
+// - `computeDigest`: returns null when the digest is turned off; otherwise loads today's
+//   task counts, events and macro progress together and hands them to `buildDigest`.
+//
+// Related: `service.ts`, where `buildDigest` decides what the banner says.
+
 import "server-only"
 
 import { todayInZone } from "@/lib/date"

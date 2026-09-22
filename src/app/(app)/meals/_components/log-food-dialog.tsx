@@ -1,5 +1,25 @@
 "use client"
 
+// About this file: the Meals screen's "Log food" dialog, for logging a new entry or
+// editing one, with figures typed in, found through a search, or looked up by barcode.
+//
+// What you'll find here:
+// - `BarcodeScannerDialog`: the barcode scanner, imported lazily.
+// - `LogFormValues`, `EMPTY` and `emptyValues`: the form's fields and their blank state,
+//   which starts on the meal chosen in preferences.
+// - `LogFoodDialog`: the exported component, a react-hook-form form checked against
+//   `formSchema`, the meal-entry schema minus the date.
+// - `onPickFood`, `onPickImported`, `onPickReference` and `onCreate`: fill the form from
+//   a library food, an Open Food Facts product, a reference food, or a typed name.
+// - `applyPortion`: sets the serving and every figure for a portion of a reference food.
+// - `handleDetected`: looks up a scanned barcode and fills the form from the product.
+// - `onSubmit`: saves with `logMeal` or `updateMealEntry` and closes once saved.
+// - The form, top to bottom: `FoodSearch` and the scan button (new entries only), food
+//   name, serving with a portion picker for reference foods, servings, meal, calories
+//   and macros, `NutritionExtraFields`, and the save-to-library checkbox.
+//
+// Related: `food-search.tsx`, the search bar that feeds the pick handlers.
+
 import * as React from "react"
 import dynamic from "next/dynamic"
 import { Barcode } from "lucide-react"

@@ -1,5 +1,20 @@
 "use client"
 
+// About this file: the client hook every AI panel uses to generate a proposal, revise it,
+// apply or discard it, and undo an apply. The goals, routines, weekly review and budget
+// pages each use it.
+//
+// What you'll find here:
+// - `ActivePayload`, `AppliablePayload`: a proposal's payload tagged with its kind, and
+//   the kinds that create rows (every kind but a summary).
+// - `readPayload`: parses a stored proposal's payload, or returns null.
+// - `UseProposal`: the state and actions the hook returns.
+// - `useProposal`: the hook. `open` shows a proposal, `generate` posts to the generate
+//   endpoint, `apply` creates the rows and offers Undo through `undoApplied`, and
+//   `discard` and `done` both clear the proposal through `clear`.
+//
+// Related: `src/app/api/companion/generate/route.ts`, the endpoint `generate` posts to.
+
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"

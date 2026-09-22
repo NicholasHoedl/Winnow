@@ -1,3 +1,18 @@
+// About this file: the server-side reads of saved preferences and AI companion settings.
+// Each read returns a complete, usable shape even when nothing has been saved yet.
+//
+// What you'll find here:
+// - `getUserPreferences`: the signed-in user's preferences, cached for the request.
+// - `preferencesFor`: the same for a given user id, and where a saved row is mapped
+//   field by field, with fallbacks for values the app does not recognise.
+// - `landingPageFor`: the page to open after sign-in, looked up by email.
+// - `getAiSettings`, `aiSettingsFor`: the AI companion's settings, without the API key.
+// - `getAiConfig`: the settings with the API key, for the code that calls the provider.
+// - `getAiSettingsView`: what the settings form needs, with a masked hint in place of
+//   the key.
+//
+// Related: `src/lib/preferences.ts`, which defines `UserPreferences` and its defaults.
+
 import "server-only"
 import { cache } from "react"
 import { eq } from "drizzle-orm"

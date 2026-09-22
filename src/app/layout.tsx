@@ -1,3 +1,16 @@
+// About this file: the root layout around every route, signed in or not. It sets up the
+// fonts, page metadata, theme, toasts and the service worker registration.
+//
+// What you'll find here:
+// - `bricolage`, `fraunces`, `jetbrainsMono`: the three `next/font` families, exposed as
+//   CSS variables on `<html>`.
+// - `metadata`: the title, description and home-screen web app settings.
+// - `viewport`: edge-to-edge layout, and the browser chrome's light and dark colors.
+// - `RootLayout`: `<html>` and `<body>`, with `RegisterServiceWorker`, and a
+//   `ThemeProvider` around the page and the `Toaster`.
+//
+// Related: `src/app/(app)/layout.tsx`, the signed-in shell rendered inside this one.
+
 import type { Metadata, Viewport } from "next"
 import { Bricolage_Grotesque, Fraunces, JetBrains_Mono } from "next/font/google"
 import "./globals.css"

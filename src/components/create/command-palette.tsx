@@ -1,5 +1,25 @@
 "use client"
 
+// About this file: the Search dialog on every signed-in page, opened from the sidebar,
+// the phone header or the keyboard. One list offers matching records, create commands
+// and pages to go to.
+//
+// What you'll find here:
+// - `openCommandPalette`: opens the palette from anywhere, through the `OPEN_EVENT`
+//   window event.
+// - `NAV_SHORTCUTS`: the page each `g`-then-letter shortcut goes to.
+// - `RESULT_ICON`, `RESULT_LABEL`: the icon and label for each kind of search result.
+// - `NAV_COMMANDS`: the pages under "Go to", from the main nav, the Activity and Budget
+//   sub-pages, and Settings with its pages.
+// - `CREATE_COMMANDS`: the commands under "Create", most often used first.
+// - `isTypingTarget`: whether a key press landed in a field, where single-key shortcuts
+//   stay off.
+// - `CommandPalette`: the dialog. Its effect handles the global keys, `handleQueryChange`
+//   runs a debounced `search`, and `go` and `runCreate` carry out a choice.
+// - `CommandPaletteTrigger`: the button that opens it, in the sidebar and phone header.
+//
+// Related: `src/modules/search/actions.ts`, the `search` action behind the Results group.
+
 // The ⌘K command palette: jump to any page or search across every module. Mounted once
 // in the app shell. Owns its open state and the global keyboard shortcuts:
 //   • ⌘K / Ctrl+K       toggle the palette (works even while typing)

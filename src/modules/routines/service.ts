@@ -1,3 +1,14 @@
+// About this file: the run logic for routines, which turns a routine's items into the
+// tasks a run will create, with due dates counted from the chosen start date.
+//
+// What you'll find here:
+// - `Priority`, `RoutineItemShape`, `PlannedTask`: the shapes a run reads and returns.
+// - `resolveItemDueDate`: the anchor date plus an item's day offset, or no due date.
+// - `previewRun`: the tasks a run creates, for both the confirm dialog and the insert.
+// - `offsetLabel`: how an offset reads in the item editor, such as "3 days before".
+//
+// Related: `actions.ts`, where `runRoutine` inserts what `previewRun` plans.
+
 // Pure routine spin-up logic. No DB, no framework — unit-testable directly.
 
 import { addDays } from "@/lib/date"

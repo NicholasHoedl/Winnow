@@ -1,3 +1,22 @@
+// About this file: the server-side reads for tasks and lists. Reading tasks also does two
+// jobs a scheduler would: it creates the current occurrence of each repeating task, and
+// deletes unfinished tasks from routines set to drop them once their day has passed.
+//
+// What you'll find here:
+// - `Task`, `List`, `TaskSeries`, `Subtask`, `TaskWithSeries`: the row types.
+// - `ActivityTask`, `toActivityTask`: the trimmed task shape sent to the /activity page.
+// - `loadSkipped`: internal; every skipped cycle for the user, in one query.
+// - `syncRuleInstances`: brings one repeating rule's open task up to its current cycle.
+// - `ensureRecurringTasks`: internal; runs that sync for every rule, once per request.
+// - `dropExpiredRoutineTasks`: internal; the routine-task cleanup described above.
+// - `getLists`, `getTasks`: the lists, and every task with its rule and subtasks.
+// - `getTaskRecurrences`: every repeating rule, whether or not it has a task right now.
+// - `getTaskSummary`: the overdue count and the open tasks due today.
+// - `getCompletedInRange`: the tasks completed between two dates.
+// - `getListTaskCounts`: how many open tasks each list holds.
+//
+// Related: `actions.ts` for the writes, and `schema.ts` for the tables these read.
+
 import "server-only"
 import { cache } from "react"
 import {

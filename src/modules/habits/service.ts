@@ -1,3 +1,25 @@
+// About this file: the pure maths behind habits. It works out a habit's quota, buckets
+// entries into days, weeks and months, and turns the buckets into what the habit screens
+// show: adherence, streaks, labels and the heatmap grid.
+//
+// What you'll find here:
+// - `HabitPeriod`, `HabitRule`, `Quota`, `EntryLike`: the shapes it reads and returns.
+// - `isMeasured`, `resolveQuota`: whether a habit tracks an amount (words, km) or
+//   sessions, and the target a period is judged against.
+// - `periodStart`, `shiftPeriod`, `periodRange`: the period a date falls in, stepping by
+//   whole periods, and a period's inclusive bounds.
+// - `currentPeriodFloor`: the oldest date a current-period reading needs entries from.
+// - `tallyByPeriod`: sessions, or the summed amount, logged in each period.
+// - `tallyByDay`: entries per local day, which the heatmap draws.
+// - `adherence`: done against target for the period containing today.
+// - `habitStreak`: the current and best runs of periods that met the target.
+// - `windowAdherence`: periods met out of periods elapsed in the loaded window.
+// - `periodLabel`, `periodPhrase`: the badge wording ("20 words a day") and the span a
+//   count covers ("this week").
+// - `heatmapLayout`: the heatmap's grid, one column per week and one row per weekday.
+//
+// Related: `queries.ts`, which loads the habits and entries these functions work on.
+
 // Pure quota-habit maths. No DB, no `server-only` — the caller supplies the entries and
 // the window they were loaded for, so this is directly unit-testable.
 //

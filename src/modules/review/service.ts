@@ -1,3 +1,19 @@
+// About this file: the figures behind the weekly review page. It turns one week's
+// completed tasks, goal progress, meal logs and money into a single `WeeklyReview`.
+//
+// What you'll find here:
+// - `ReviewTask`, `ReviewMilestone`, `ReviewGoalTask`, `ReviewMacroDay`, `ReviewMoney`:
+//   what each section of the review is built from.
+// - `weekProgress`: how many of the week's days have happened so far.
+// - `WeeklyReview`: the finished review the page renders.
+// - `CALORIE_TOLERANCE`, `macroWeek`: the week's days logged and days within 10% of the
+//   calorie target.
+// - `busiestDay`: the date with the most completed tasks.
+// - `buildWeeklyReview`: assembles the review and works out whether the week is empty.
+// - `reviewHeadline`: the line under the page title, such as "12 tasks done".
+//
+// Related: `queries.ts`, which gathers the week's rows and builds the review.
+
 // Pure weekly-review assembly. Dependency-free (no DB, no `server-only`) so it
 // unit-tests directly and the page can import its types — the same shape as
 // `digest/service.ts`, which is the closest existing cross-module rollup.

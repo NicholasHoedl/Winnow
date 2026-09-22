@@ -1,3 +1,27 @@
+// About this file: the calendar's recurrence engine. It expands stored events into the
+// dated occurrences a view draws, overlays per-date edits and skips, and provides the
+// date and grid helpers the calendar queries, screens and iCal writer share.
+//
+// What you'll find here:
+// - `RecurrenceFreq`, `RecurrenceMonthlyMode`, `RecurringEvent`, `Occurrence`: the repeat
+//   rule, the event fields the engine reads, and one dated instance of an event.
+// - `occurrenceKey`: an occurrence's stable id, the series id plus its original date.
+// - `localDateTime`, `zonedDateTimeToUtc`: an instant to a local date and time in a time
+//   zone, and back.
+// - `MAX_MOVE_DAYS`: the furthest one occurrence may be moved from its original day.
+// - `nthWeekdayOf`: the weekday, ordinal and last-of-month flag a monthly "nth weekday"
+//   rule derives from its anchor date.
+// - `expandOccurrences`: one event's occurrences overlapping a date range.
+// - `ExceptionOverlay`, `overrideDate`, `applyExceptions`: per-date overrides and skips,
+//   and laying them over expanded occurrences.
+// - `splitSeriesAt`: splits a series in two for a "this and following" edit.
+// - `inboundOccurrenceDates`: the original dates of occurrences an override moved into a
+//   view from outside it.
+// - `monthGrid`, `weekDates`, `gridRange`, `bucketByDay`: a month's grid weeks, a week's
+//   seven dates, a grid with its date range, and occurrences grouped by day.
+//
+// Related: `queries.ts` loads event and exception rows and runs them through this engine.
+
 // Pure calendar/recurrence logic. No DB — unit-testable directly. Occurrences use a
 // wall-clock model (local date + a constant time-of-day derived once from the anchor)
 // so recurrence stepping is plain calendar-date arithmetic with no timezone/DST

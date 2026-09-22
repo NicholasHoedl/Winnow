@@ -1,5 +1,26 @@
 "use client"
 
+// About this file: the client view for /activity, the task list. It filters and searches
+// the tasks, splits them into date sections, and calls the task Server Actions for each
+// tick, delete, skip and drag.
+//
+// What you'll find here:
+// - `FILTERS`, `SECTIONS`, `filterUrl`: the Active, All and Completed filter, the date
+//   sections in order, and the address for the goal and list filters.
+// - `ActivityView`: the exported view, with its state for the filter, search and dialogs.
+// - `selectGoal`, `selectList`: set a filter and write it to the URL without a reload.
+// - `handleToggle`, `handleDelete`, `handleSkip`: show a tick, delete or skip at once,
+//   offering Undo after a delete or skip; deleting a repeating task asks first.
+// - `stopRepeating`: deletes a repeating task's rule once the confirm dialog is accepted.
+// - `handleReorder`, `applyPending`: keep a dropped order on screen until it is saved.
+// - `activeGoal`, `activeList`, `buckets`, `done`: the chosen filters, and the matching
+//   tasks split into date sections and Done.
+// - `emptyMessage`: the empty-list wording for each filter and search.
+// - The render: `ActivityHeader`, `QuickAdd`, the search box, the filter controls, the
+//   date sections and Done, then `TaskDialog` and the stop-repeating `ConfirmDialog`.
+//
+// Related: `task-item.tsx`, the card each task in the list is drawn with.
+
 import * as React from "react"
 import Link from "next/link"
 import { ArrowRight, Filter, Folder, Plus, Search, X } from "lucide-react"

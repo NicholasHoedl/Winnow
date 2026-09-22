@@ -1,3 +1,20 @@
+// About this file: the page component for /meals, which loads one day's food log and
+// everything shown around it on the server and hands it to the client view.
+//
+// What you'll find here:
+// - `TREND_DAYS`: how many days back the weight trend reads.
+// - `MealsPage`: the page itself. It takes the day from `?date=`, else today in the
+//   account's time zone.
+// - Loads, in parallel: the day's entries, the food library, the targets in effect and
+//   their history, recent entries, water, saved meals and, when weight tracking is on,
+//   the weigh-in and the rows for the trend.
+// - Works out: the quick picks, saved meals resolved against the library, and the weight
+//   trend with its readout.
+// - Renders: `MealsView`, given a server-rendered `WeightTrendSection` and the Open Food
+//   Facts switch, `OFF_ENABLED`.
+//
+// Related: `_components/meals-view.tsx`, the client view that lays the day out.
+
 import {
   getBodyWeight,
   getFoods,

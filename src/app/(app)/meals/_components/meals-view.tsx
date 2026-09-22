@@ -1,5 +1,24 @@
 "use client"
 
+// About this file: the client view of the /meals screen: one day's food log, its totals,
+// the ways to log food, and the dialogs it opens.
+//
+// What you'll find here:
+// - `shiftDate` and `formatDay`: date helpers for the day navigation's links and label.
+// - `MealsView`: the exported component. It holds which dialog is open and works out the
+//   day's macro totals, progress against targets, micronutrients and meal sections.
+// - `handleDelete` and `handleRelog`: delete an entry with undo, or log it again.
+// - `openCreate` and `openEdit`: open `LogFoodDialog` blank or on an entry.
+// - `openSavedMealEditor`: opens `SavedMealDialog` on a draft.
+// - The layout, top to bottom: the header with its actions menu and "Log food" button,
+//   the day navigation, `MacroSummary`, `DayExtras` (water and the weigh-in), the
+//   quick-add bar with the saved-meal and quick-pick strips, the meal sections of
+//   `MealEntryItem` rows, and the weight trend passed in by the page.
+// - The dialogs: `LogFoodDialog`, `CopyDayDialog`, `FoodManager`, `TargetsDialog`,
+//   `SavedMealsDialog` and `SavedMealDialog`.
+//
+// Related: `log-food-dialog.tsx`, the form that logs and edits an entry.
+
 import * as React from "react"
 import Link from "next/link"
 import { LinkPending } from "@/components/shared/link-pending"

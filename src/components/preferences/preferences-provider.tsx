@@ -1,5 +1,16 @@
 "use client"
 
+// About this file: how client components get the signed-in user's preferences. The app
+// layout mounts the provider with the saved values, and components read them through the
+// hooks here.
+//
+// What you'll find here:
+// - `PreferencesProvider`: puts the preferences in React context for the pages below it.
+// - `usePreferences`: returns them, and throws outside the provider.
+// - `useDateLocale`: the locale to format dates with, from the date-format setting.
+//
+// Related: `src/lib/preferences.ts`, which defines `UserPreferences` and its defaults.
+
 import * as React from "react"
 
 import { dateLocale, type UserPreferences } from "@/lib/preferences"

@@ -1,3 +1,21 @@
+// About this file: the definition of each account setting: the values it allows, what a
+// new account starts with, and the choices its control offers.
+//
+// What you'll find here:
+// - Value types and lists: `WeekStart`, `Priority`, `Theme`, `MomentumDays`,
+//   `CalendarView`, `SlateHorizonDays`, with `CALENDAR_VIEWS`, `SLATE_HORIZONS`, `THEMES`
+//   and `MOMENTUM_DAYS`.
+// - `DASHBOARD_CARDS` and `parseCollapsedCards`: the cards that fold, and a stored list
+//   cleaned down to the known ones.
+// - `UserPreferences` and `DEFAULT_PREFERENCES`: every setting, and its starting value.
+// - Formats and units: `DATE_FORMATS` with `dateLocale`, `WEIGHT_UNITS`, `VOLUME_UNITS`.
+// - `CALENDAR_CARD_VIEWS` and `MEAL_TYPES`: the calendar card's views, and meal types.
+// - `CURRENCIES` and `CURRENCY_CODES`: the currencies on offer.
+// - `WEEK_START_OPTIONS` to `CALENDAR_VIEW_OPTIONS`: choices for the settings controls.
+// - `timeZoneOptions`: the runtime's time zones, or a short fallback list.
+//
+// Related: `src/modules/preferences/schema.ts`, the saved-settings table these mirror.
+
 // Client-safe constants, defaults, and option lists for user preferences.
 // (No server-only / DB imports — this is imported by both the settings UI and
 // the server validation/query layer.)

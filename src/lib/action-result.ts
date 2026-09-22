@@ -1,3 +1,15 @@
+// About this file: what a Server Action hands back to the form or dialog that called it:
+// success, or a message and the fields at fault.
+//
+// What you'll find here:
+// - `ActionFailure`: `ok: false` with a message and optional per-field errors.
+// - `ActionResult`: `{ ok: true }` or an `ActionFailure`.
+// - `fieldErrorsFrom`: the first Zod message for each top-level field.
+// - `invalid`: a "Please fix the errors below." failure built from a Zod error.
+// - `nullify`: turns an empty form string into `null`.
+//
+// Related: `src/modules/todos/actions.ts`, one of the Server Action files that use these.
+
 import { type ZodError } from "zod"
 
 // Shared Server Action result shape + the helpers every module's actions file uses.

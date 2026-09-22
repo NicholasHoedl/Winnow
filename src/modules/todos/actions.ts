@@ -1,5 +1,23 @@
 "use server"
 
+// About this file: the Server Actions that create, change and delete tasks, lists,
+// subtasks and repeating-task rules. Each one reads the user from the session and checks
+// its arguments before it touches the database.
+//
+// What you'll find here:
+// - `revalidateTaskViews`: internal; refreshes every page that shows tasks.
+// - `checkTaskLinks`: internal; checks the list, goal and event belong to the caller.
+// - Tasks: `createTask`, `updateTask`, `deleteTask`, `restoreTask` (undo) and
+//   `toggleTaskStatus`, which refuses to reopen a repeating task from an earlier cycle.
+// - Repeating tasks: `createTaskRecurrence`, `updateTaskRecurrence` and
+//   `deleteTaskRecurrence`.
+// - Lists: `createList`, `renameList`, `deleteList`.
+// - Skipping a cycle: `skipTaskOccurrence`, undone by `clearTaskRecurrenceException`.
+// - Manual order: `reorderTasks`, which saves a section's whole order at once.
+// - Subtasks: `addSubtask`, `toggleSubtask`, `deleteSubtask`.
+//
+// Related: `validation.ts` for the input schemas, `queries.ts` for the matching reads.
+
 import { revalidatePath } from "next/cache"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import { z } from "zod"

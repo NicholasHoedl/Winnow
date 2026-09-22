@@ -1,5 +1,25 @@
 "use client"
 
+// About this file: the dialog a goal card opens on /goals. It shows one goal's details,
+// progress, momentum, habits, milestones and tasks, and edits each of them in place.
+//
+// What you'll find here:
+// - `GoalTask`: a task linked to the goal, as this dialog receives it.
+// - `SectionHeading`: a section title with an optional action beside it.
+// - `TaskRow`: one task row, renamed on blur or Enter, re-dated, or deleted.
+// - `GoalEditorDialog`: the exported dialog component.
+// - `run`: runs a server action in a transition and toasts any error.
+// - `addOne`, `startEdit`, `saveEdit`, `cancelEdit`: add a milestone or edit one inline.
+// - `makeTask`, `addTask`, `removeMilestone`, `removeTask`: make a task from a milestone,
+//   add a task, and delete either with an undo toast.
+// - `openHabitDialog`, `handleArchiveHabit`: add, edit or archive a habit for this goal.
+// - Render: the folded Details form, the progress bar and momentum line, then the
+//   Practice, Milestones and Tasks sections and a Delete button.
+// - Also mounted: `DeleteGoalDialog`, a `ConfirmDialog` for deleting a habit, and
+//   `HabitDialog`.
+//
+// Related: `goal-form.tsx` holds the Details form that saves the goal's own fields.
+
 import * as React from "react"
 import Link from "next/link"
 import {

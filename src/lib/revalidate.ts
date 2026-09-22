@@ -1,3 +1,11 @@
+// About this file: the cache refresh for pages that combine data from several modules,
+// called from the modules' Server Action files after a write.
+//
+// What you'll find here:
+// - `revalidateHubs`: revalidates the dashboard (`/`) and the weekly review (`/review`).
+//
+// Related: `src/modules/todos/actions.ts`, one of the action files that call it.
+
 import { revalidatePath } from "next/cache"
 
 /**

@@ -1,3 +1,19 @@
+// About this file: the layout shared by every signed-in page. It confirms the session,
+// loads what the frame needs, and renders the navigation, search and create dialogs
+// around the page.
+//
+// What you'll find here:
+// - The session check: no signed-in user means a redirect to /login.
+// - One parallel load: preferences, lists, goal and event options, and the digest.
+// - Providers and sync: `CreateIntentProvider`, `PreferencesProvider`, `AppearanceSync`.
+// - The frame: a skip link, `AppSidebar` on desktop, and a phone top bar with the brand
+//   and a Search button that opens the command palette.
+// - `<main id="content">`: the `DigestBanner`, then the page itself.
+// - Also rendered: `BottomNav` (the phone tab bar), `CommandPalette` and
+//   `GlobalCreateDialogs`.
+//
+// Related: `src/components/shared/app-sidebar.tsx` and `bottom-nav.tsx`, the two navs.
+
 import { redirect } from "next/navigation"
 import { Search } from "lucide-react"
 

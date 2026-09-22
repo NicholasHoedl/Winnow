@@ -1,5 +1,26 @@
 "use client"
 
+// About this file: the client component behind /calendar. It draws the header, view
+// switcher, calendar filter and period navigation, shows the month, agenda or time-grid
+// view, and handles adding, editing, deleting and dragging events.
+//
+// What you'll find here:
+// - `EventDialog`, `CalendarManager`: the event and calendar-manager dialogs, loaded on
+//   first open.
+// - `STEP_LABEL`: what the previous and next arrows step by in each view.
+// - `CalendarView`: the exported screen component.
+// - `toggleCalendar`: hides or shows one calendar's events until the page reloads.
+// - `openCreate`, `openEdit`: open the event dialog to add or edit; `?new=event` opens it
+//   too, through `useCreateFlag`.
+// - `handleDeleteSeries`, `handleSkipOccurrence`, `handleDeleteFollowing`: delete the
+//   series, one occurrence, or the rest of the series, each with an undo toast.
+// - `handleDialogDelete`: routes the event dialog's Delete to one of those by scope.
+// - `handleReschedule`, `applyPendingMove`: drag-to-reschedule on the time grid, showing
+//   the block where it was dropped until the write lands.
+// - Render: `MonthGrid`, `AgendaView` or `TimeGrid` for the view, then the dialogs.
+//
+// Related: `event-dialog.tsx` holds the add and edit form this component opens.
+
 import * as React from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"

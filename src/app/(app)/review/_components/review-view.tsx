@@ -1,3 +1,21 @@
+// About this file: the view behind /review. It lays out the week the page loaded: a
+// heading, a week stepper, the companion's summary panel and four cards of figures.
+//
+// What you'll find here:
+// - `formatDay`, `formatMonth`: format a calendar date, or a month, in the given locale.
+// - `Stat`: a small label above a figure.
+// - `ReviewView`: the only export; the page hands it the loaded week as props.
+// - Top of the view: the title, `reviewHeadline`, `WeekNav` for stepping between weeks,
+//   and a note when the week is empty.
+// - `WeekSummary`: the companion's summary panel, only when the companion is ready and
+//   the week is not empty.
+// - Tasks card: the number completed, the busiest day and the task titles.
+// - Meals card: days logged out of the days so far, and days on the calorie target.
+// - Money card: money out and in, spending by category, and the month against budget.
+// - Goals card: milestones reached and completed tasks linked to a goal.
+//
+// Related: `src/modules/review/queries.ts`, where the `WeeklyReviewView` is built.
+
 // Read-only, so this is a server component — no "use client" on this route. Week
 // stepping is a link (`?week=`), not client state, which is also what makes a given week
 // shareable and reloadable.

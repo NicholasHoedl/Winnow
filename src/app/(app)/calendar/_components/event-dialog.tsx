@@ -1,5 +1,27 @@
 "use client"
 
+// About this file: the add and edit dialog for calendar events, opened from the calendar
+// screen. For a repeating event it asks whether a change applies to this occurrence, this
+// and following, or the whole series, and saves through the matching server action.
+//
+// What you'll find here:
+// - `EditScope`, `SCOPE_OPTIONS`: the three scopes and their button labels.
+// - `EventFormValues`: the form's fields, including the repeat rule.
+// - `FREQ_LABELS`, `INTERVAL_UNIT`, `WEEKDAY_TOGGLES`, `WEEKDAY_NAMES`, `ORDINALS`:
+//   labels for the repeat controls.
+// - `weekdayOf`, `monthlyLabels`, `formatOccurrenceDate`, `emptyValues`: small helpers
+//   for those labels, the description line, and a blank form.
+// - `EventDialog`: the exported dialog component.
+// - `openKey`, `resetKeyRef`: set the default scope when the dialog opens, and refill the
+//   fields only when the occurrence or the scope changes.
+// - `onSubmit`: creates the event, overrides one occurrence, splits the series, or
+//   updates the whole series, depending on the scope.
+// - `lockDate`: makes the dates read-only under "This and following".
+// - Render: scope buttons, title, notes, calendar, dashboard tracking, all day, start and
+//   end, the repeat rule, then Delete (handed to the parent), Cancel and Save.
+//
+// Related: `src/modules/calendar/actions.ts` holds the server actions this form calls.
+
 import * as React from "react"
 import { Controller, useForm } from "react-hook-form"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"

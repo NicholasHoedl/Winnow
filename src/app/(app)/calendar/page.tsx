@@ -1,3 +1,17 @@
+// About this file: the page component for /calendar, a server component. It works out
+// the view and date from the URL, loads the calendars and the events that view shows,
+// and hands them to the client calendar view.
+//
+// What you'll find here:
+// - `CalendarPage` (default export): reads the user's preferences, then `?view=`
+//   (falling back to their default view) and `?date=` (or the older `?month=`, or today).
+// - Loads, in parallel: the calendars, event counts per calendar, and the occurrences,
+//   from `getRangeEvents` for week and day or `getMonthEvents` for month and agenda.
+// - Renders: `CalendarView` with the month grid or the day columns, the occurrences
+//   bucketed by day, and the calendars.
+//
+// Related: `_components/calendar-view.tsx`, the client component that draws every view.
+
 import {
   getCalendarEventCounts,
   getCalendars,

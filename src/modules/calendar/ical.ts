@@ -1,3 +1,18 @@
+// About this file: the writer behind the calendar subscribe feed. It turns event rows and
+// their per-occurrence edits and skips into the text of an .ics document.
+//
+// What you'll find here:
+// - `IcalEvent`, `IcalException`: the event and exception fields the writer reads.
+// - `escapeText`, `foldLine`: escape a text value, and fold a content line to 75 octets.
+// - `icalDate`, `icalDateTime`, `icalStamp`: the DATE, floating date-time and UTC stamp
+//   formats.
+// - `rruleFor`: the RRULE line for a repeating series, or null.
+// - `vevent` (internal): one series as a VEVENT, with EXDATE for skipped dates and an
+//   extra VEVENT for each edited occurrence.
+// - `toVCalendar`: the whole VCALENDAR document, with CRLF line endings.
+//
+// Related: `buildCalendarIcs` in `queries.ts` loads the rows and calls `toVCalendar`.
+
 // Pure iCalendar (RFC 5545) serialization. No DB and no `server-only`, so it unit-tests
 // directly — same contract as service.ts and components/calendar/grid-geometry.ts.
 //

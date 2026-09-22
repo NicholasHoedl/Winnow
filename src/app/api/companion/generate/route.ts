@@ -1,3 +1,20 @@
+// About this file: the endpoint the AI panels call to generate a proposal or revise one.
+// It loads the data the job needs, builds the prompt, asks the provider, and saves the
+// answer as a pending proposal.
+//
+// What you'll find here:
+// - `POST`: accepts a `generateSchema` body. Its `kind` is `goal_plan` (`goalId`),
+//   `routine` (`brief`), `import` (`text`), `receipt` (`image`) or `summary` (`weekOf`),
+//   plus `proposalId` and `instruction` to revise. A receipt is saved as an `import`.
+// - Response: `{ ok: true, proposal }` with the saved row, or `{ ok: false, error }` with
+//   401 signed out, 503 companion off, 400 bad body, 404 goal gone, 422 week too empty
+//   to summarise, or 502 provider failure.
+// - `loadPrevious`: the pending proposal being revised, read from the database.
+// - `bad`: builds an `{ ok: false, error }` response.
+// - `TASK_TITLE_CAP`: how many finished task titles the summary prompt includes.
+//
+// Related: `src/modules/companion/service.ts`, where each job's prompt is built.
+
 import { and, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import type { z } from "zod"

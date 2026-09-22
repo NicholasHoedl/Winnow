@@ -1,5 +1,25 @@
 "use client"
 
+// About this file: the dialog for creating and editing a task, used on /activity and
+// mounted in the app shell so a new task can be started from any page. It also creates
+// repeating tasks, and edits either one occurrence or the whole series.
+//
+// What you'll find here:
+// - `NO_LIST`, `DUE_KIND_OPTIONS`, `NO_LINK`, `PRIORITY_LABELS`: the pickers' options,
+//   and the "none" values that stand for no list or no link.
+// - `eventLabel`: an event's title, date and (unless all-day) time, for the picker.
+// - `EditScope`, `TaskFormValues`: "this" or "series", and every field the form holds.
+// - `emptyValues`: a new task's starting values.
+// - `toTaskInput`, `toRecurrenceInput`: the payloads for a one-off task and for a rule.
+// - `TaskDialog`: the exported dialog, which refills the form whenever it opens.
+// - `onSubmit`: saves through `createTask`, `updateTask`, `createTaskRecurrence` or
+//   `updateTaskRecurrence`, and shows the server's field errors.
+// - `previousRepeat`: lets the first repeat choice start the schedule on the due date.
+// - The form: This task or Series, title, notes, due date with on or by, priority, list,
+//   goal and event links, and `RecurrenceFields`.
+//
+// Related: `src/modules/todos/actions.ts`, the Server Actions this dialog calls.
+
 import * as React from "react"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"

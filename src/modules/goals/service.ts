@@ -1,3 +1,17 @@
+// About this file: the logic behind a goal's two readings, its progress (how far along it
+// is) and its momentum (whether anything on it has been finished lately).
+//
+// What you'll find here:
+// - `GoalMeasure`: the numeric target, current value and unit a goal can carry.
+// - `GoalProgress`, `goalProgress`: progress by milestones, by number, or none.
+// - `GoalMomentum`, `MomentumInput`: the momentum reading and what it is computed from.
+// - `MOMENTUM_GRACE_DAYS`: how long a new goal has before it can be called stalled.
+// - `goalMomentum`: counts tasks, milestones and habit sessions finished in the window;
+//   null when there is nothing to track, or when nothing moved on a goal still in its
+//   grace period.
+//
+// Related: `getGoals` in `queries.ts` attaches both readings to each goal it returns.
+
 // Pure goal-progress logic. No DB, no framework — unit-testable directly.
 
 import { addDays, dayDiff, todayInZone } from "@/lib/date"

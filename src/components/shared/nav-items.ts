@@ -1,3 +1,17 @@
+// About this file: the app's main navigation destinations, defined once. The desktop
+// sidebar, the phone tab bar and its More sheet, the command palette and the landing-page
+// setting all read these lists.
+//
+// What you'll find here:
+// - `PhonePlacement`, `NavItem`: a destination's place on a phone, and the destination.
+// - `navItems`: the main destinations, in sidebar order.
+// - `SETTINGS_ITEM`: Settings, for the phone's More sheet.
+// - `phoneTabs`, `phoneMore`: what the phone tab bar and the More sheet show.
+// - `isNavActive`: whether a link matches the current path.
+// - `isMoreActive`: whether the More tab is lit.
+//
+// Related: `bottom-nav.tsx`, the phone tab bar and More sheet drawn from these lists.
+
 import {
   CalendarDays,
   ClipboardList,

@@ -1,3 +1,12 @@
+// About this file: the server-only helper that answers "who is signed in?" for data
+// queries and Server Actions.
+//
+// What you'll find here:
+// - `requireUserId`: the current user's id, read from the session once per request;
+//   throws when nobody is signed in.
+//
+// Related: `src/lib/auth.ts`, which builds the `auth()` this reads.
+
 import "server-only"
 import { cache } from "react"
 

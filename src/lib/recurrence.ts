@@ -1,3 +1,18 @@
+// About this file: the engine the todos and budget modules call to work out when a
+// repeating task or a recurring transaction is due.
+//
+// What you'll find here:
+// - `RecurrenceFreq`, `RecurrenceMonthlyMode`, `RecurrenceRule`: a repeat rule's shape.
+// - `Cycle`: one occurrence, as its cycle key and the date it lands on.
+// - `latestDaily`, `latestWeekly`, `latestMonthly`: the newest occurrence on or before a
+//   day, for rules pinned to specific days.
+// - `flexibleWeekly`, `flexibleMonthly`: the active period for "any day that week/month".
+// - `currentCycle`: the occurrence that should be open on a given day, if any.
+// - `MAX_CATCHUP_DAYS` and `cyclesInRange`: the occurrences owed over a span of days.
+// - `periodEnd`: when the current day, week or month of a rule ends.
+//
+// Related: `src/lib/recurrence.test.ts`, the unit tests for this engine.
+
 // Pure recurrence scheduling, shared by recurring to-dos and recurring transactions.
 // No DB — unit-testable with plain strings. Given a rule and the local "today" (already
 // resolved from a timezone by the caller) it answers which cycle(s) should exist. Date

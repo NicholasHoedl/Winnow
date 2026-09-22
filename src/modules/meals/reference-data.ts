@@ -1,3 +1,15 @@
+// About this file: the server-side entry point to the bundled reference foods, which the
+// Meals food search and the quick-add bar use to look up foods by name.
+//
+// What you'll find here:
+// - `FOODS`, `INDEX`, `BY_ID`: the decoded foods, their search index, a map by id.
+// - `REFERENCE_SOURCE`: the dataset's source, for attribution.
+// - `findReferenceFoods`: the foods matching a search query, six at most by default.
+// - `getReferenceFood`: one food by its id, or null.
+// - `resolveReferenceFood`: the single food a name clearly refers to, or null.
+//
+// Related: `actions.ts`, whose `searchReferenceFoods` and `logReferenceFood` use this.
+
 import "server-only"
 
 // The bundled reference foods, loaded once per server process. `server-only` because the

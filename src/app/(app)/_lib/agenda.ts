@@ -1,3 +1,17 @@
+// About this file: the logic that decides what the dashboard's Slate card shows, and in
+// which block. `(app)/page.tsx` calls `buildSlate`, and `_components/slate.tsx` draws it.
+//
+// What you'll find here:
+// - `AgendaTask`: the task fields read here.
+// - `onBoard`: whether a task still belongs on the card (open, or completed today).
+// - `AgendaOccurrence`, `AgendaItem`, `AgendaGroup`, `TodayAgenda`: the agenda's types.
+// - `buildTodayAgenda`: overdue tasks, routine blocks, and today's time-sorted rows.
+// - `SlateOccurrence`, `SlateBand`, `Slate`: the types for the whole Slate.
+// - `bandLabel`: a day heading such as "Sat 23".
+// - `buildSlate`: the whole card: Overdue, Due by, a band per day, and Later.
+//
+// Related: `agenda.test.ts`, whose cases show which band each kind of task lands in.
+
 // Pure agenda assembly for the dashboard: today's due tasks and today's event
 // occurrences merged into one chronological list. Dependency-free (no DB, no
 // `server-only`) so it unit-tests directly, and timezone-sensitive input is explicit

@@ -1,3 +1,13 @@
+// About this file: one step of undoing a task delete. `restoreTask` in `actions.ts`
+// passes the deleted row through `restorableTask` and inserts the result.
+//
+// What you'll find here:
+// - `RestorableTask`: the row it accepts, which has no `userId` or `updatedAt`.
+// - `NOT_RESTORED`: the names of the columns it leaves out.
+// - `restorableTask`: builds the insert values from the row and the caller's user id.
+//
+// Related: `restoreTaskSchema` in `validation.ts`, which validates the row sent back.
+
 // Row → insert-payload mapping for the undo path, kept OUT of actions.ts so it can be
 // tested. Pure: no DB access, only the schema's inferred row types.
 //

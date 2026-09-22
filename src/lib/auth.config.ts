@@ -1,3 +1,15 @@
+// About this file: the base Auth.js config that both `src/proxy.ts` and `src/lib/auth.ts`
+// build from: how long a session lasts, where sign-in lives, and who may open a page.
+//
+// What you'll find here:
+// - `authConfig.session`: JWT sessions, with a thirty-day `maxAge` and a one-day
+//   `updateAge`.
+// - `authConfig.pages` and `providers`: the /login page, and an empty provider list.
+// - `callbacks.authorized`: the proxy's rule. A signed-in visit to /login goes to `/`;
+//   every other page needs a session.
+// - `callbacks.jwt`: puts the user id on the token and merges in a changed display name.
+// - `callbacks.session`: copies that id onto `session.user.id`.
+
 import type { NextAuthConfig } from "next-auth"
 
 // Edge/Node-safe base config: no database or bcrypt imports, so it can be used

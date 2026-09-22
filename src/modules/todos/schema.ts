@@ -1,3 +1,21 @@
+// About this file: the Postgres tables and enums for tasks, declared with Drizzle. The
+// rest of the tasks module reads and writes the rows defined here.
+//
+// What you'll find here:
+// - `priorityEnum`, `statusEnum`: a task's priority, and whether it is open or done.
+// - `taskDueKindEnum`: whether a due date means "on this day" or "by this day".
+// - `taskRecurrenceFreqEnum`, `taskRecurrenceMonthlyModeEnum`: daily, weekly or monthly,
+//   and how a monthly repeat picks its day.
+// - `lists`: the named lists a task can be filed under.
+// - `taskRecurrences`: a repeating task's rule, holding its schedule and the title,
+//   notes, priority and list each generated task copies.
+// - `tasks`: the tasks themselves, one-off or generated from a rule, with optional links
+//   to a list, goal, event or routine.
+// - `subtasks`: a one-level checklist under a task.
+// - `taskRecurrenceExceptions`: the cycles of a repeating task that were skipped.
+//
+// Related: `queries.ts` for the reads, and `actions.ts` for the writes.
+
 import {
   boolean,
   date,

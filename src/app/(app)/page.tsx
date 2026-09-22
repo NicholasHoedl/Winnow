@@ -1,3 +1,19 @@
+// About this file: the page component for the dashboard at /, the app's home screen. It
+// loads every card's data in parallel and lays the cards out in three columns on desktop.
+//
+// What you'll find here:
+// - `DashboardPage`: the server component, which reads the user's preferences first.
+// - `calendarView`: month or week, from `?calendar=` or the saved preference.
+// - The data load: tasks, events, goals, habits, calendars, budget, meals and weight,
+//   routine names, the session for the greeting, and the lists for quick capture.
+// - `isFirstRun`: true while the account holds nothing, which shows the `FirstRun` panel.
+// - `buildSlate`: sorts the tasks and events into the Slate card's blocks.
+// - The header: the date, a greeting, and the Review, Add event and New task buttons.
+// - The cards: `QuickCapture` and `FirstRun`, then `Slate` and `GoalsPracticeCard`,
+//   `DashboardCalendar` (desktop only), and `StatCards` with `CategoryBars`.
+//
+// Related: `_lib/agenda.ts`, where `buildSlate` decides what the Slate card shows.
+
 import Link from "next/link"
 import { CalendarPlus, ClipboardList } from "lucide-react"
 

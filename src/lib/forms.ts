@@ -1,3 +1,17 @@
+// About this file: client helpers shared by the app's forms, dialogs and capture bars:
+// number-input parsing for React Hook Form, and a safe way to call a Server Action.
+//
+// What you'll find here:
+// - `numberField`: `register` options where an empty input means 0.
+// - `optionalNumberField`: the same, where empty means unknown and becomes `null`.
+// - `requiredNumberField`: the same, where empty stays "" so the schema asks for a value.
+// - `restoreIfEmpty`: puts a submitted value back after a failed save, unless the field
+//   has been typed in since.
+// - `UNREACHABLE_MESSAGE`: the toast text for when the server cannot be reached.
+// - `tryWrite`: runs a server write; a network failure becomes that toast and `null`.
+//
+// Related: `src/lib/action-result.ts`, the result `tryWrite` hands back from an action.
+
 import { toast } from "sonner"
 
 /**

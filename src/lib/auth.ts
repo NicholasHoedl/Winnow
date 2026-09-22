@@ -1,3 +1,17 @@
+// About this file: the app's full Auth.js setup, signing a person in with an email and a
+// password checked against the `users` table.
+//
+// What you'll find here:
+// - `FAILED_SIGN_IN_FLOOR_MS` and `reject`: pad each failed attempt to the same duration,
+//   then refuse it.
+// - `handlers`, `auth`, `signIn`, `signOut`, `unstable_update`: what `NextAuth()` returns
+//   for `authConfig` plus the Credentials provider; `handlers` backs
+//   `src/app/api/auth/[...nextauth]/route.ts`.
+// - The Credentials `authorize` function: checks the input with `loginSchema`, looks the
+//   user up by lowercased email, and compares the password with bcrypt.
+//
+// Related: `src/lib/session.ts`, where `auth()` becomes the user id every query needs.
+
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"

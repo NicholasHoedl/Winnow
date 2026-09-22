@@ -1,3 +1,22 @@
+// About this file: the Playwright configuration for the end-to-end tests, run with
+// `pnpm test:e2e`. It starts its own app on port 3001 against the `winnow_test`
+// database, with a stub AI provider beside it, and sets which specs run in which browser.
+//
+// What you'll find here:
+// - `baseURL`: the test app's address.
+// - Run settings: `testDir`, `globalSetup`, one worker, one retry, the timeouts, and
+//   traces kept on failure.
+// - `setup`: signs in once and saves the session the other projects reuse.
+// - `ai-setup`, `ai-teardown`: point the test account's AI settings at the stub, and put
+//   the saved settings back afterwards.
+// - `chromium`: desktop Chrome, running every spec but the two layout sweeps.
+// - `mobile`: iPhone 15 in WebKit, running only `mobile-layout.spec.ts`.
+// - `desktop-layout`: desktop Chrome, running only `desktop-layout.spec.ts`.
+// - `webServer`: the AI stub on port 3100, and `pnpm dev` on port 3001 with the test
+//   database and its own `.next-e2e` build folder.
+//
+// Related: `e2e/global-setup.ts`, which prepares `winnow_test` before any spec runs.
+
 import "dotenv/config"
 import { defineConfig, devices } from "@playwright/test"
 

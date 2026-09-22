@@ -1,3 +1,27 @@
+// About this file: the Meals feature's calculations and parsers, used by the /meals page
+// and its components, the rest of the meals module, the dashboard and the weekly review.
+//
+// What you'll find here:
+// - Macros: `entryTotals`, `sumMacros` and `groupByMealType` total a day's entries and
+//   split them into meal sections; `macroProgress` compares the totals with the targets.
+// - Calories from macros: the `KCAL_PER_*` Atwater factors, `macroCalories`, and
+//   `carbsForCalories`, which works out the carbs that balance a calorie target.
+// - Quick-add: `parseMealQuickAdd` turns a typed line into an entry,
+//   `parseQuickAddFallback` pulls out the name to look up when no library food matches,
+//   and `rankLibraryFoods` ranks library foods for the search bar.
+// - Quick picks: `recentFrequentFoods` ranks logged history into one-tap foods.
+// - Saved meals: `itemFromFood` and `itemsFromEntries` build a saved meal's items from a
+//   food or a section of the log; `resolveSavedMealItems` makes them follow the library.
+// - Micronutrients: `sumMicros` totals fiber, sugar, sodium and saturated fat, counting
+//   how many entries carried each.
+// - Body weight: `weightTrend` smooths weigh-ins into a trend and a weekly rate,
+//   `weightReadout` turns that into the figures the app shows, and `weightGoalPhrase`
+//   puts the goal into words.
+// - Barcodes: `isLikelyBarcode`, the digits-only check made before any product lookup.
+// - Targets by date: `targetsForDate` picks the macro targets in force on a given day.
+//
+// Related: `queries.ts`, the database reads whose rows these functions work on.
+
 // Pure meal-macros logic. No DB — unit-testable directly.
 
 import { addDays, dayDiff } from "@/lib/date"

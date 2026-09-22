@@ -1,3 +1,13 @@
+// About this file: the proxy Next.js runs before every matched request, used here as the
+// first sign-in gate: a signed-out request is sent to /login before any page renders.
+//
+// What you'll find here:
+// - default export `auth`: the Auth.js handler made from `authConfig`, run as the proxy.
+// - `config.matcher`: the paths the proxy covers, skipping API routes, build assets and
+//   the public files a signed-out browser still has to fetch.
+//
+// Related: `src/lib/auth.config.ts`, whose `authorized` callback decides each redirect.
+
 import NextAuth from "next-auth"
 
 import { authConfig } from "@/lib/auth.config"

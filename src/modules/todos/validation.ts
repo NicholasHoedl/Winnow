@@ -1,3 +1,19 @@
+// About this file: the Zod schemas that decide what valid task input looks like. The
+// Server Actions in `actions.ts` use them to check what the browser sends before writing.
+//
+// What you'll find here:
+// - `PRIORITIES`, `STATUSES`, `DUE_KINDS`: the allowed values, mirroring the enums in
+//   `schema.ts`, with the `Priority` and `DueKind` types.
+// - `taskInputSchema`, `TaskInput`: creating or editing a one-off task.
+// - `TASK_RECURRENCE_FREQS`, `taskRecurrenceSchema`, `TaskRecurrenceInput`: a repeating
+//   task's rule and schedule.
+// - `subtaskInputSchema`: a checklist item's title.
+// - `listInputSchema`, `ListInput`: a list's name.
+// - `daySchema`: a required 'YYYY-MM-DD' date, for actions that take a bare day.
+// - `restoreTaskSchema`: the deleted task that Undo sends back.
+//
+// Related: `actions.ts`, the Server Actions that parse their input with these schemas.
+
 import { z } from "zod"
 
 import { isValidDateString } from "@/lib/date"

@@ -1,3 +1,18 @@
+// About this file: the date functions behind due dates, calendar grids, week and month
+// ranges, and the account's own "today".
+//
+// What you'll find here:
+// - 'YYYY-MM-DD' strings: `parse`, `fmt`, `daysInMonth`, `addDays`, `dayDiff`, `dowOf`,
+//   `dateRange`.
+// - Weeks: `weekRange`, a week's first and last day under the week-start setting.
+// - Months: `shiftMonth` and `monthSeries`, for 'YYYY-MM' strings.
+// - Time zones: `todayInZone` and `hourInZone`, the local date and hour in a given zone.
+// - Deadlines: `DueStatus` and `dueStatus` (overdue, due today, upcoming or none).
+// - `isValidDateString`: rejects malformed strings and dates that do not exist.
+// - `localDateToString`, `localStringToDate`: convert a date picker's local `Date`s.
+//
+// Related: `src/lib/date.test.ts`, the unit tests for these helpers.
+
 // Pure, dependency-free date helpers shared across modules. Everything operates on
 // 'YYYY-MM-DD' strings (which compare lexicographically == chronologically, so no DST
 // hazard) plus a couple of timezone wall-date utilities. No DB, no `server-only` — so
