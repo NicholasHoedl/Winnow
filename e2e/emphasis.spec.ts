@@ -132,7 +132,7 @@ test("the budget page's one fill is Add", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Add", exact: true }),
   ).toBeVisible()
-  // The receipt reader lives in the AI panel below the ledger, which is only rendered
+  // The receipt reader lives in the AI panel above the ledger, which is only rendered
   // when the companion is configured — `ai.setup.ts` does that for the suite. Asserting it
   // is on screen keeps a silently-absent panel from making this test pass for free.
   await expect(

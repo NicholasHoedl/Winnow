@@ -1,5 +1,22 @@
 "use client"
 
+// About this file: the client view of the /budget ledger: the month's figures, quick
+// add, the AI tools, and the transaction list with the dialogs that change it.
+//
+// What you'll find here:
+// - `TransactionDialog`: the add and edit dialog, imported lazily.
+// - `Stat`: one labelled figure in the month's stats, with an optional hint.
+// - `BudgetView`: the exported component, which receives the month's data from the page.
+// - `handleDelete`: deletes a transaction and offers undo.
+// - `stopRepeating`: ends the schedule behind a repeating transaction.
+// - `openCreate` and `openEdit`: open the transaction dialog blank or on a row.
+// - The layout, top to bottom: `BudgetHeader` with the Add button, the stats (Income,
+//   Expenses, Net, and Budget when one is set), `BudgetQuickAdd`, the AI tools from the
+//   page, and the transaction list with `TransactionFilters` and `TransactionItem` rows.
+// - The dialogs: the transaction dialog and a "Stop repeating?" `ConfirmDialog`.
+//
+// Related: `transaction-dialog.tsx`, the form that adds and edits a transaction.
+
 import * as React from "react"
 import dynamic from "next/dynamic"
 import { Plus } from "lucide-react"
@@ -83,8 +100,8 @@ function Stat({
 }
 
 /**
- * The ledger: the month's stats, quick add, the transaction list with its filters, and
- * the AI import under it.
+ * The ledger: the month's stats, quick add, the AI tools, and the transaction list with
+ * its filters.
  *
  * Until T30 this was the whole Budget section — the by-category bars, both charts and
  * two editor dialogs behind a ⋮ menu sat here too. They are pages in the strip now
@@ -251,6 +268,11 @@ export function BudgetView({
         />
       </div>
 
+      {/* Above the ledger, so both tools are reachable without scrolling past the month's
+          rows, and what they propose lands in the list right below. The owner's choice
+          over Pass 3's placement under the list (docs/ux-review.md). */}
+      {aiTools && <div className="mt-6">{aiTools}</div>}
+
       <section className="mt-6">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold">Transactions</h2>
@@ -282,10 +304,6 @@ export function BudgetView({
           </div>
         )}
       </section>
-
-      {/* Under the ledger: it proposes rows for the list you just scrolled past, so it
-          reads in that order. */}
-      {aiTools && <div className="mt-6">{aiTools}</div>}
 
       {/* Mounted only once opened, so the module above is fetched on the first Add or
           Edit rather than with the ledger. */}

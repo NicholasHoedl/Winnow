@@ -147,8 +147,8 @@ Measured after: at 393 × 852 the New task dialog's Create button sits 85 px abo
 with the pickers folded and the dialog no longer scrolls; opened, it scrolls 46 px, about
 where it was before with one picker showing.
 
-Kept, with reasons: the two AI panels on `/budget` sit below the ledger, so they cost the daily
-flow nothing; the log food dialog's hand-entry fields stay visible because a search pick fills
+Kept, with reasons: the two AI panels on `/budget` sat below the ledger, so they cost the daily
+flow nothing (the owner moved them above the transactions list on 2026-09-15); the log food dialog's hand-entry fields stay visible because a search pick fills
 them; an event may have no end, and 09:00 is a fair start; `/activity` lists done tasks under
 the open ones by design; the two task entry points on the dashboard and the meals stack are
 order and emphasis questions, filed for Passes 3 and 5; carbs derived from the other macros,
