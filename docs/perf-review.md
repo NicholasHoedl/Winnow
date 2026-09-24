@@ -72,7 +72,9 @@ bundles (Next.js discussion 88767: Server Actions with `useTransition` hang in p
 builds about a third of the time, since a mid-2025 React canary upgrade; reporters say
 16.2.12 and 16.3.3 are still affected). The e2e suite never sees it because it runs the dev
 server. Bumping `react` in this repo cannot fix it; only a Next release with a fixed
-reconciler, or an app-level kick after each write, can. Open, with the owner.
+reconciler, or an app-level kick after each write, can. Fixed by T46, the upgrade to Next
+16.3.5: on the same harness, water settled 20 of 20 headless and 20 of 20 headed, p50 about
+55 ms and nothing over 252 ms, and the habit log 10 of 10 in under 90 ms.
 
 ## What T45 changed
 
@@ -100,10 +102,10 @@ reconciler, or an app-level kick after each write, can. Open, with the owner.
 
 ## Open
 
-- **The stuck commits after writes** (section 3): try the newest Next 16.3 and keep it only
-  if water lands 20 of 20 in the headed harness; otherwise a root-level component whose state
-  is bumped once after every write, held by a test against a production build through
-  `test:e2e:prod`.
+- **The stuck commits after writes** (section 3): resolved by T46's upgrade to Next 16.3.5,
+  measured 20 of 20 on the same harness. Nothing in the suite would catch a return of it,
+  since the suite runs the dev server; a write-settles check against a production build
+  through `test:e2e:prod` is the guard still worth adding.
 - **Deployment configuration**: HTTP/2 at the proxy (which lifts the six-connection cap that
   stretches the chunk tail and compresses the cookie headers), brotli, and a cookieless
   origin for `/_next/static`. Docker and Tailscale changes, not app code.

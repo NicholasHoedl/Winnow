@@ -1,13 +1,16 @@
 # Handoff
 
-Last updated: **2026-09-12**. T45 is a performance tranche measured on a production build
+Last updated: **2026-09-24**. T46 upgrades Next.js from 16.2.10 to 16.3.5, which fixes the
+one defect a person would meet daily on a production build: after a write, the revalidated
+state was intermittently never committed until something else re-rendered (a bug in the
+React that Next bundles, discussion 88767). Measured on the water card before and after: 14
+taps in 20 never settled, now 20 of 20 in about 55 ms. No migration. T45 is a performance
+tranche measured on a production build
 (`docs/perf-review.md`): compression was already right everywhere; the digest is computed on
 the server so the largest paint no longer waits a round trip; the calendar page runs its
 queries together; task delete and skip are optimistic; the mono font is no longer preloaded;
 prefetch is off on the rare strips; six dialogs load on demand so the validation library
-leaves two routes; the Activity payload is trimmed. **Open and important:** on production
-builds a write's revalidated state is intermittently never committed until something else
-re-renders (a Next.js reconciler bug, discussion 88767); see the perf review's "Open".
+leaves two routes; the Activity payload is trimmed.
 T44 is the review's tenth and last pass, progress and endings:
 every flow ends with a word that names what happened, a finished goal and a finished day say
 so, the last two bare empty states say what they are for, and the first-run panel replaces
@@ -81,8 +84,19 @@ between T23 and T24 deploys by a rebuild alone, T24 does not (runbook §4). Betw
 T24 there was a run of small fixes from real use — a
 time-aware greeting, Settings split into pages, the goal planner reopening an applied plan,
 practice grouped by cadence on the dashboard — shipped without entries here; `git log` has
-them. §1 still describes the deploy as of 2026-08-25 and nothing about the running stack
-was re-checked; the green baseline in §3 is as re-measured after T23.
+them. §1 still describes the deploy as of 2026-08-25. **The running stack was re-checked on
+2026-09-24 and does not match §1 or `deploy.md` §0:** there is no Docker Engine inside the
+Ubuntu distro (no `docker-ce` package, no unit, no socket); Docker Desktop is what runs
+every container on this machine, and its auto-start is off, which is the actual reason the
+app is down after a reboot. No production containers existed on the engine that day, only
+the dev Postgres and a `winnow-app:latest` image from the 2026-08-25 deploy, and the
+Tailscale address answered 502. Both compose files name their project `winnow` and their
+volume `pgdata`, so dev and production share one volume, `winnow_pgdata`, created
+2026-07-21: the database this repo is developed against is the deployed one, and it already
+carries every migration through `0046`, so the "port step" for `0041` to `0046` is moot.
+Never run both Postgres containers at once on that volume. How production comes back, and
+whether it gets its own project name, is the owner's decision; nothing here was started. The
+green baseline in §3 is as re-measured after T23.
 
 **The UX review is complete** (T35 to T44, 2026-09-11 and 12). `docs/ux-review.md` holds the
 order of its eleven passes, the flow tiers Pass 0 set, each pass's findings with the
@@ -654,6 +668,24 @@ additive columns on `user_preferences`. **ADR-0023 is the authority.**
   and `budget-trends` go to their pages; new `budget-tabs.spec` mirrors `activity-tabs`,
   including the month surviving a pill; `_layout.ts` sweeps the three routes; `pageAction`
   is Meals-only. Unit: `budget-pages.test.ts`.
+
+**T46 is shipped: Next.js 16.3.5.** No migration, no ADR. `next` and `eslint-config-next` move
+from 16.2.10 to 16.3.5; React stays at its pin, which the new Next accepts, and the lockfile
+changes are transitive (`sharp`, `postcss`, the `@next/swc` binaries). Two settings ride with
+it: `agentRules: false` in `next.config.ts`, because `next dev` under an AI tool otherwise
+writes `AGENTS.md` and `CLAUDE.md` into the repo root on every start; and `/.next*/` in
+`.gitignore`, because Tailwind v4 scans every file git does not ignore for class names, and a
+scratch `NEXT_DIST_DIR` that is not ignored gets its LZ4-compressed Turbopack cache read as
+source, which emits a garbage rule and 500s every dev page. (That trap is not new to 16.3;
+`/.next/` alone hid it.) Verified on a production build with the same harness that found
+the bug: water 20 of 20 headless and 20 of 20 headed, p50 about 55 ms; the dashboard's habit
+log 10 of 10 in under 90 ms, where it took 8 s before. Full e2e 290 passed and one flake that
+passed alone, in 57 minutes, well over the usual 15 to 35, front-loaded and not understood.
+The dev server now logs `The destination stream closed early` during the suite; not baselined
+against 16.2.10, and the suite was green. `next start` warns that it does not work with
+`output: standalone`; it served correctly for the measurement, and the Docker image uses the
+standalone server anyway. 16.3.3 also carried two security fixes for unauthenticated remote
+code execution, one for Windows-hosted servers.
 
 **T45 is shipped: the performance tranche.** No migration, no ADR; `docs/perf-review.md` has
 the method, the numbers and what is still open. To measure again, the recipe under T43

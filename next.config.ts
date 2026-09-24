@@ -90,6 +90,10 @@ const nextConfig: NextConfig = {
   // and sets this to `.next-e2e`, so the two processes do not race on the same build
   // artifacts while both are running. Nothing else sets it.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Since 16.3, `next dev` under an AI coding tool writes `AGENTS.md` and `CLAUDE.md` into
+  // the repo root on every start. The project's guidance lives elsewhere, and a generated
+  // file that dirties `git status` on each dev start is not wanted.
+  agentRules: false,
   // Pin the workspace root so Next doesn't infer it from stray lockfiles
   // higher up the filesystem (e.g. a package-lock.json in the home dir).
   turbopack: {

@@ -24,7 +24,13 @@
 /backups/
 
 # next.js
-/.next/
+# The glob, not only `/.next/`: Tailwind v4 scans the whole project for class names and
+# skips only what git ignores, so any build directory that is NOT ignored gets read as
+# source, Turbopack's LZ4-compressed cache under `<distDir>/dev/cache/turbopack/` included.
+# Decoded lossily that yields candidates such as `pb-[env(safe-area-8<NUL>4<NUL>)]`,
+# Tailwind emits a rule for each, and the rule fails Turbopack's CSS parser, which 500s
+# every page in dev. Any NEXT_DIST_DIR must match this line.
+/.next*/
 # The e2e suite's own build output — its dev server runs with NEXT_DIST_DIR set so it
 # does not race this one. See playwright.config.ts.
 /.next-e2e/
